@@ -1,0 +1,369 @@
+// Value types
+
+///|
+enum ValType {
+  I32
+  I64
+  F32
+  F64
+  V128
+  FuncRef
+  ExternRef
+} derive(Show)
+
+// Reference types
+
+///|
+enum RefType {
+  FuncRef
+  ExternRef
+}
+
+// Function type (signature)
+
+///|
+struct FuncType {
+  params : Array[ValType]
+  results : Array[ValType]
+}
+
+// Limits for tables and memories
+
+///|
+struct Limits {
+  min : UInt
+  max : UInt?
+}
+
+// Memory type
+
+///|
+struct MemType {
+  limits : Limits
+}
+
+// Table type
+
+///|
+struct TableType {
+  elem_type : RefType
+  limits : Limits
+}
+
+// Global type
+
+///|
+struct GlobalType {
+  val_type : ValType
+  mutable : Bool // mutable or not
+}
+
+// Import descriptor
+
+///|
+enum ImportDesc {
+  Func(UInt) // type index
+  Table(TableType)
+  Mem(MemType)
+  Global(GlobalType)
+}
+
+// Import
+
+///|
+struct Import {
+  module : String
+  name : String
+  desc : ImportDesc
+}
+
+// Export descriptor
+
+///|
+pub enum ExportDesc {
+  Func(UInt) // function index
+  Table(UInt) // table index
+  Mem(UInt) // memory index
+  Global(UInt) // global index
+}
+
+// Export
+
+///|
+struct Export {
+  name : String
+  desc : ExportDesc
+}
+
+// Global definition
+
+///|
+struct Global {
+  type_ : GlobalType
+  init : Expr
+}
+
+// Element segment (for table initialization)
+
+///|
+enum ElemKind {
+  FuncRef
+}
+
+///|
+struct Elem {
+  table_idx : UInt
+  offset : Expr
+  init : Array[UInt] // function indices
+}
+
+// Data segment (for memory initialization)
+
+///|
+struct Data {
+  mem_idx : UInt
+  offset : Expr
+  init : Bytes
+}
+
+// Instructions
+
+///|
+pub enum Instr {
+  // Control instructions
+  Unreachable
+  Nop
+  Block(ValType?, Array[Instr])
+  Loop(ValType?, Array[Instr])
+  If(ValType?, Array[Instr], Array[Instr])
+  Br(UInt)
+  BrIf(UInt)
+  BrTable(Array[UInt], UInt)
+  Return
+  Call(UInt)
+  CallIndirect(UInt, UInt)
+
+  // Parametric instructions
+  Drop
+  Select
+
+  // Variable instructions
+  LocalGet(UInt)
+  LocalSet(UInt)
+  LocalTee(UInt)
+  GlobalGet(UInt)
+  GlobalSet(UInt)
+
+  // Memory instructions
+  I32Load(UInt, UInt) // align, offset
+  I64Load(UInt, UInt)
+  F32Load(UInt, UInt)
+  F64Load(UInt, UInt)
+  I32Load8S(UInt, UInt)
+  I32Load8U(UInt, UInt)
+  I32Load16S(UInt, UInt)
+  I32Load16U(UInt, UInt)
+  I64Load8S(UInt, UInt)
+  I64Load8U(UInt, UInt)
+  I64Load16S(UInt, UInt)
+  I64Load16U(UInt, UInt)
+  I64Load32S(UInt, UInt)
+  I64Load32U(UInt, UInt)
+  I32Store(UInt, UInt)
+  I64Store(UInt, UInt)
+  F32Store(UInt, UInt)
+  F64Store(UInt, UInt)
+  I32Store8(UInt, UInt)
+  I32Store16(UInt, UInt)
+  I64Store8(UInt, UInt)
+  I64Store16(UInt, UInt)
+  I64Store32(UInt, UInt)
+  MemorySize
+  MemoryGrow
+
+  // Numeric instructions - constants
+  I32Const(UInt)
+  I64Const(UInt64)
+  F32Const(Float)
+  F64Const(Double)
+
+  // Numeric instructions - i32 operations
+  I32Eqz
+  I32Eq
+  I32Ne
+  I32LtS
+  I32LtU
+  I32GtS
+  I32GtU
+  I32LeS
+  I32LeU
+  I32GeS
+  I32GeU
+  I32Clz
+  I32Ctz
+  I32Popcnt
+  I32Add
+  I32Sub
+  I32Mul
+  I32DivS
+  I32DivU
+  I32RemS
+  I32RemU
+  I32And
+  I32Or
+  I32Xor
+  I32Shl
+  I32ShrS
+  I32ShrU
+  I32Rotl
+  I32Rotr
+
+  // Numeric instructions - i64 operations
+  I64Eqz
+  I64Eq
+  I64Ne
+  I64LtS
+  I64LtU
+  I64GtS
+  I64GtU
+  I64LeS
+  I64LeU
+  I64GeS
+  I64GeU
+  I64Clz
+  I64Ctz
+  I64Popcnt
+  I64Add
+  I64Sub
+  I64Mul
+  I64DivS
+  I64DivU
+  I64RemS
+  I64RemU
+  I64And
+  I64Or
+  I64Xor
+  I64Shl
+  I64ShrS
+  I64ShrU
+  I64Rotl
+  I64Rotr
+
+  // Numeric instructions - f32 operations
+  F32Eq
+  F32Ne
+  F32Lt
+  F32Gt
+  F32Le
+  F32Ge
+  F32Abs
+  F32Neg
+  F32Ceil
+  F32Floor
+  F32Trunc
+  F32Nearest
+  F32Sqrt
+  F32Add
+  F32Sub
+  F32Mul
+  F32Div
+  F32Min
+  F32Max
+  F32Copysign
+
+  // Numeric instructions - f64 operations
+  F64Eq
+  F64Ne
+  F64Lt
+  F64Gt
+  F64Le
+  F64Ge
+  F64Abs
+  F64Neg
+  F64Ceil
+  F64Floor
+  F64Trunc
+  F64Nearest
+  F64Sqrt
+  F64Add
+  F64Sub
+  F64Mul
+  F64Div
+  F64Min
+  F64Max
+  F64Copysign
+
+  // Conversion instructions
+  I32WrapI64
+  I32TruncF32S
+  I32TruncF32U
+  I32TruncF64S
+  I32TruncF64U
+  I64ExtendI32S
+  I64ExtendI32U
+  I64TruncF32S
+  I64TruncF32U
+  I64TruncF64S
+  I64TruncF64U
+  F32ConvertI32S
+  F32ConvertI32U
+  F32ConvertI64S
+  F32ConvertI64U
+  F32DemoteF64
+  F64ConvertI32S
+  F64ConvertI32U
+  F64ConvertI64S
+  F64ConvertI64U
+  F64PromoteF32
+  I32ReinterpretF32
+  I64ReinterpretF64
+  F32ReinterpretI32
+  F64ReinterpretI64
+
+  // Sign extension instructions
+  I32Extend8S
+  I32Extend16S
+  I64Extend8S
+  I64Extend16S
+  I64Extend32S
+} derive(Show)
+
+// Expression (sequence of instructions)
+
+///|
+pub struct Expr {
+  instrs : Array[Instr]
+}
+
+// Function code
+
+///|
+struct Code {
+  locals : Array[ValType]
+  body : Expr
+}
+
+// Function (combines type index with code)
+
+///|
+struct Func {
+  type_idx : UInt
+  locals : Array[ValType]
+  body : Expr
+}
+
+///|
+/// Module structure according to WASM specification
+pub struct Module {
+  types : Array[FuncType] // type section
+  funcs : Array[UInt] // function section (type indices)
+  tables : Array[TableType] // table section
+  mems : Array[MemType] // memory section
+  globals : Array[Global] // global section
+  elems : Array[Elem] // element section
+  datas : Array[Data] // data section
+  start : UInt? // start section (optional function index)
+  imports : Array[Import] // import section
+  exports : Array[Export] // export section
+  codes : Array[Code] // code section (function bodies)
+}

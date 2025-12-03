@@ -1,0 +1,9 @@
+{
+  "is-main": true,
+  "import": [
+    "moonbitlang/async/fs",
+    "moonbitlang/async/io",
+    "moonbitlang/async",
+    "Yu-zh/wasm5"
+  ]
+}
