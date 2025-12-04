@@ -396,7 +396,11 @@ fn parse_instrs(parser : Parser) -> Array[Instr] {
   fn read_loop(instrs : Array[Instr]) -> Array[Instr] {
     let opcode = parser.read_byte()
     if opcode == 0x0B {
-      // End marker
+      // End marker (0x0B)
+      instrs
+    } else if opcode == 0x05 {
+      // Else marker (0x05) - put it back for the if parser to handle
+      parser.pos = parser.pos - 1
       instrs
     } else {
       instrs.push(parse_instr(parser, opcode))

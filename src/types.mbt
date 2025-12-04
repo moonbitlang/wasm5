@@ -9,7 +9,7 @@ enum ValType {
   V128
   FuncRef
   ExternRef
-} derive(Show)
+} derive(Show, Eq)
 
 // Reference types
 

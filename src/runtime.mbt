@@ -1,4 +1,26 @@
 ///|
+/// Runtime error types
+pub suberror RuntimeError {
+  DivisionByZero
+  IntegerOverflow
+  StackUnderflow
+  MemoryOutOfBounds
+  InvalidType(String)
+  FunctionNotFound(String)
+}
+
+///|
+/// Validation error types
+pub suberror ValidationError {
+  TypeMismatch(String)
+  InvalidFunctionIndex(Int)
+  InvalidTypeIndex(Int)
+  InvalidLocalIndex(Int)
+  InvalidGlobalIndex(Int)
+  StackSizeMismatch(String)
+}
+
+///|
 /// Runtime value type
 pub(all) enum Value {
   I32(UInt)
@@ -26,7 +48,7 @@ pub fn Runtime::call(
   r : Runtime,
   func_name : Bytes,
   args : FixedArray[Value],
-) -> Value {
+) -> Value raise RuntimeError {
   // Find exported function by name
   let func_name_str = func_name.to_string()
   let mut func_idx : Int? = None
@@ -43,7 +65,7 @@ pub fn Runtime::call(
     }
   }
   match func_idx {
-    None => abort("exported function '\{func_name_str}' not found")
+    None => raise RuntimeError::FunctionNotFound(func_name_str)
     Some(idx) => {
       // Create execution context
       let ctx = ExecutionContext::new(r.module_)
@@ -133,42 +155,42 @@ fn ExecutionContext::push(self : ExecutionContext, value : Value) -> Unit {
 }
 
 ///|
-fn ExecutionContext::pop(self : ExecutionContext) -> Value {
+fn ExecutionContext::pop(self : ExecutionContext) -> Value raise RuntimeError {
   if self.stack.length() == 0 {
-    abort("stack underflow")
+    raise RuntimeError::StackUnderflow
   }
   self.stack.pop_exn()
 }
 
 ///|
-fn ExecutionContext::pop_i32(self : ExecutionContext) -> UInt {
+fn ExecutionContext::pop_i32(self : ExecutionContext) -> UInt raise RuntimeError {
   match self.pop() {
     I32(v) => v
-    _ => abort("expected i32")
+    _ => raise RuntimeError::InvalidType("expected i32")
   }
 }
 
 ///|
-fn ExecutionContext::pop_i64(self : ExecutionContext) -> UInt64 {
+fn ExecutionContext::pop_i64(self : ExecutionContext) -> UInt64 raise RuntimeError {
   match self.pop() {
     I64(v) => v
-    _ => abort("expected i64")
+    _ => raise RuntimeError::InvalidType("expected i64")
   }
 }
 
 ///|
-fn ExecutionContext::pop_f32(self : ExecutionContext) -> Float {
+fn ExecutionContext::pop_f32(self : ExecutionContext) -> Float raise RuntimeError {
   match self.pop() {
     F32(v) => v
-    _ => abort("expected f32")
+    _ => raise RuntimeError::InvalidType("expected f32")
   }
 }
 
 ///|
-fn ExecutionContext::pop_f64(self : ExecutionContext) -> Double {
+fn ExecutionContext::pop_f64(self : ExecutionContext) -> Double raise RuntimeError {
   match self.pop() {
     F64(v) => v
-    _ => abort("expected f64")
+    _ => raise RuntimeError::InvalidType("expected f64")
   }
 }
 
@@ -201,9 +223,9 @@ fn ExecutionContext::set_global(
 }
 
 ///|
-fn ExecutionContext::load_i32(self : ExecutionContext, addr : Int) -> UInt {
+fn ExecutionContext::load_i32(self : ExecutionContext, addr : Int) -> UInt raise RuntimeError {
   if addr + 4 > self.memory.length() {
-    abort("memory access out of bounds")
+    raise RuntimeError::MemoryOutOfBounds
   }
   let b0 = self.memory[addr].to_uint()
   let b1 = self.memory[addr + 1].to_uint()
@@ -217,9 +239,9 @@ fn ExecutionContext::store_i32(
   self : ExecutionContext,
   addr : Int,
   value : UInt,
-) -> Unit {
+) -> Unit raise RuntimeError {
   if addr + 4 > self.memory.length() {
-    abort("memory access out of bounds")
+    raise RuntimeError::MemoryOutOfBounds
   }
   self.memory[addr] = value.land(0xFF).to_byte()
   self.memory[addr + 1] = ((value >> 8).land(0xFF)).to_byte()
@@ -228,7 +250,7 @@ fn ExecutionContext::store_i32(
 }
 
 ///|
-fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool {
+fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeError {
   // Returns true if should continue, false if should return
   match instr {
     // Numeric constants
@@ -300,7 +322,11 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool {
       let b = ctx.pop_i32()
       let a = ctx.pop_i32()
       if b == 0 {
-        abort("division by zero")
+        raise RuntimeError::DivisionByZero
+      }
+      // Check for integer overflow: INT32_MIN / -1 = overflow
+      if a == 0x80000000U && b == 0xFFFFFFFFU {
+        raise RuntimeError::IntegerOverflow
       }
       // Signed division: reinterpret as signed, divide, reinterpret back
       let result = (a.reinterpret_as_int() / b.reinterpret_as_int()).reinterpret_as_uint()
@@ -311,10 +337,100 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool {
       let b = ctx.pop_i32()
       let a = ctx.pop_i32()
       if b == 0 {
-        abort("division by zero")
+        raise RuntimeError::DivisionByZero
       }
       // Unsigned division works directly on UInt
       ctx.push(I32(a / b))
+      true
+    }
+    I32RemS => {
+      let b = ctx.pop_i32()
+      let a = ctx.pop_i32()
+      if b == 0 {
+        raise RuntimeError::DivisionByZero
+      }
+      // Signed remainder: reinterpret as signed, compute remainder, reinterpret back
+      let result = (a.reinterpret_as_int() % b.reinterpret_as_int()).reinterpret_as_uint()
+      ctx.push(I32(result))
+      true
+    }
+    I32RemU => {
+      let b = ctx.pop_i32()
+      let a = ctx.pop_i32()
+      if b == 0 {
+        raise RuntimeError::DivisionByZero
+      }
+      // Unsigned remainder works directly on UInt
+      ctx.push(I32(a % b))
+      true
+    }
+
+    // i32 bitwise operations
+    I32And => {
+      let b = ctx.pop_i32()
+      let a = ctx.pop_i32()
+      ctx.push(I32(a.land(b)))
+      true
+    }
+    I32Or => {
+      let b = ctx.pop_i32()
+      let a = ctx.pop_i32()
+      ctx.push(I32(a.lor(b)))
+      true
+    }
+    I32Xor => {
+      let b = ctx.pop_i32()
+      let a = ctx.pop_i32()
+      ctx.push(I32(a.lxor(b)))
+      true
+    }
+
+    // i32 shift operations
+    I32Shl => {
+      let b = ctx.pop_i32()
+      let a = ctx.pop_i32()
+      // Shift amount is modulo 32
+      let shift = b.land(0x1F)
+      ctx.push(I32(a << shift.to_int()))
+      true
+    }
+    I32ShrS => {
+      let b = ctx.pop_i32()
+      let a = ctx.pop_i32()
+      // Shift amount is modulo 32
+      let shift = b.land(0x1F)
+      // Signed right shift: reinterpret as signed, shift, reinterpret back
+      let result = (a.reinterpret_as_int() >> shift.to_int()).reinterpret_as_uint()
+      ctx.push(I32(result))
+      true
+    }
+    I32ShrU => {
+      let b = ctx.pop_i32()
+      let a = ctx.pop_i32()
+      // Shift amount is modulo 32
+      let shift = b.land(0x1F)
+      // Unsigned right shift
+      ctx.push(I32(a.lsr(shift.to_int())))
+      true
+    }
+
+    // i32 rotation operations
+    I32Rotl => {
+      let b = ctx.pop_i32()
+      let a = ctx.pop_i32()
+      // Rotation amount is modulo 32
+      let rotation = b.land(0x1F).to_int()
+      let result = (a << rotation).lor(a.lsr(32 - rotation))
+      ctx.push(I32(result))
+      true
+    }
+    I32Rotr => {
+      let b = ctx.pop_i32()
+      let a = ctx.pop_i32()
+      // Rotation amount is modulo 32
+      let rotation = b.land(0x1F).to_int()
+      let result = a.lsr(rotation).lor(a << (32 - rotation))
+      ctx.push(I32(result))
       true
     }
 
@@ -359,6 +475,86 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool {
       ctx.push(I32(if a.reinterpret_as_int() >= b.reinterpret_as_int() { 1 } else { 0 }))
       true
     }
+    I32LtU => {
+      let b = ctx.pop_i32()
+      let a = ctx.pop_i32()
+      // Unsigned comparison
+      ctx.push(I32(if a < b { 1 } else { 0 }))
+      true
+    }
+    I32GtU => {
+      let b = ctx.pop_i32()
+      let a = ctx.pop_i32()
+      // Unsigned comparison
+      ctx.push(I32(if a > b { 1 } else { 0 }))
+      true
+    }
+    I32LeU => {
+      let b = ctx.pop_i32()
+      let a = ctx.pop_i32()
+      // Unsigned comparison
+      ctx.push(I32(if a <= b { 1 } else { 0 }))
+      true
+    }
+    I32GeU => {
+      let b = ctx.pop_i32()
+      let a = ctx.pop_i32()
+      // Unsigned comparison
+      ctx.push(I32(if a >= b { 1 } else { 0 }))
+      true
+    }
+
+    // i32 unary operations
+    I32Eqz => {
+      let a = ctx.pop_i32()
+      ctx.push(I32(if a == 0 { 1 } else { 0 }))
+      true
+    }
+    I32Clz => {
+      let a = ctx.pop_i32()
+      ctx.push(I32(a.clz().reinterpret_as_uint()))
+      true
+    }
+    I32Ctz => {
+      let a = ctx.pop_i32()
+      ctx.push(I32(a.ctz().reinterpret_as_uint()))
+      true
+    }
+    I32Popcnt => {
+      let a = ctx.pop_i32()
+      ctx.push(I32(a.popcnt().reinterpret_as_uint()))
+      true
+    }
+
+    // i32 sign extension operations
+    I32Extend8S => {
+      let a = ctx.pop_i32()
+      // Extract low 8 bits and sign extend
+      let byte = a.land(0xFF)
+      let result = if byte.land(0x80) != 0 {
+        // Negative: sign extend with 1s
+        byte.lor(0xFFFFFF00U)
+      } else {
+        // Positive: already correct
+        byte
+      }
+      ctx.push(I32(result))
+      true
+    }
+    I32Extend16S => {
+      let a = ctx.pop_i32()
+      // Extract low 16 bits and sign extend
+      let half = a.land(0xFFFF)
+      let result = if half.land(0x8000) != 0 {
+        // Negative: sign extend with 1s
+        half.lor(0xFFFF0000U)
+      } else {
+        // Positive: already correct
+        half
+      }
+      ctx.push(I32(result))
+      true
+    }
 
     // Memory operations
     I32Load(_align, offset) => {
@@ -390,7 +586,7 @@ fn execute_function(
   ctx : ExecutionContext,
   func_idx : Int,
   args : FixedArray[Value],
-) -> Value? {
+) -> Value? raise RuntimeError {
   // Get function type and code
   let mod = ctx.module_
   let type_idx = mod.funcs[func_idx].reinterpret_as_int()
