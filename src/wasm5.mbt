@@ -78,6 +78,45 @@ fn validate_instruction(
       stack.push(I32)
     }
 
+    // i64 binary operations
+    I64Add | I64Sub | I64Mul | I64DivS | I64DivU | I64RemS | I64RemU |
+    I64And | I64Or | I64Xor | I64Shl | I64ShrS | I64ShrU | I64Rotl | I64Rotr => {
+      if stack.length() < 2 {
+        raise ValidationError::TypeMismatch("expected at least 2 values on stack for binary op")
+      }
+      let b = stack.pop_exn()
+      let a = stack.pop_exn()
+      if a != I64 || b != I64 {
+        raise ValidationError::TypeMismatch("i64 binary operation requires i64 operands")
+      }
+      stack.push(I64)
+    }
+
+    // i64 comparison operations
+    I64Eq | I64Ne | I64LtS | I64LtU | I64GtS | I64GtU | I64LeS | I64LeU | I64GeS | I64GeU => {
+      if stack.length() < 2 {
+        raise ValidationError::TypeMismatch("expected at least 2 values on stack for comparison")
+      }
+      let b = stack.pop_exn()
+      let a = stack.pop_exn()
+      if a != I64 || b != I64 {
+        raise ValidationError::TypeMismatch("i64 comparison requires i64 operands")
+      }
+      stack.push(I32)
+    }
+
+    // i64 unary operations
+    I64Eqz | I64Clz | I64Ctz | I64Popcnt | I64Extend8S | I64Extend16S | I64Extend32S => {
+      if stack.length() < 1 {
+        raise ValidationError::TypeMismatch("expected at least 1 value on stack for unary op")
+      }
+      let a = stack.pop_exn()
+      if a != I64 {
+        raise ValidationError::TypeMismatch("i64 unary operation requires i64 operand")
+      }
+      stack.push(I64)
+    }
+
     // Local operations
     LocalGet(idx) => {
       let local_idx = idx.reinterpret_as_int()

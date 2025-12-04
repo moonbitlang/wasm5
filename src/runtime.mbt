@@ -556,6 +556,258 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
       true
     }
 
+    // i64 arithmetic
+    I64Add => {
+      let b = ctx.pop_i64()
+      let a = ctx.pop_i64()
+      ctx.push(I64(a + b))
+      true
+    }
+    I64Sub => {
+      let b = ctx.pop_i64()
+      let a = ctx.pop_i64()
+      ctx.push(I64(a - b))
+      true
+    }
+    I64Mul => {
+      let b = ctx.pop_i64()
+      let a = ctx.pop_i64()
+      ctx.push(I64(a * b))
+      true
+    }
+    I64DivS => {
+      let b = ctx.pop_i64()
+      let a = ctx.pop_i64()
+      if b == 0UL {
+        raise RuntimeError::DivisionByZero
+      }
+      // Check for overflow: INT64_MIN / -1
+      if a == 0x8000000000000000UL && b == 0xFFFFFFFFFFFFFFFFUL {
+        raise RuntimeError::IntegerOverflow
+      }
+      let result = (a.reinterpret_as_int64() / b.reinterpret_as_int64()).reinterpret_as_uint64()
+      ctx.push(I64(result))
+      true
+    }
+    I64DivU => {
+      let b = ctx.pop_i64()
+      let a = ctx.pop_i64()
+      if b == 0UL {
+        raise RuntimeError::DivisionByZero
+      }
+      ctx.push(I64(a / b))
+      true
+    }
+    I64RemS => {
+      let b = ctx.pop_i64()
+      let a = ctx.pop_i64()
+      if b == 0UL {
+        raise RuntimeError::DivisionByZero
+      }
+      let result = (a.reinterpret_as_int64() % b.reinterpret_as_int64()).reinterpret_as_uint64()
+      ctx.push(I64(result))
+      true
+    }
+    I64RemU => {
+      let b = ctx.pop_i64()
+      let a = ctx.pop_i64()
+      if b == 0UL {
+        raise RuntimeError::DivisionByZero
+      }
+      ctx.push(I64(a % b))
+      true
+    }
+
+    // i64 bitwise operations
+    I64And => {
+      let b = ctx.pop_i64()
+      let a = ctx.pop_i64()
+      ctx.push(I64(a.land(b)))
+      true
+    }
+    I64Or => {
+      let b = ctx.pop_i64()
+      let a = ctx.pop_i64()
+      ctx.push(I64(a.lor(b)))
+      true
+    }
+    I64Xor => {
+      let b = ctx.pop_i64()
+      let a = ctx.pop_i64()
+      ctx.push(I64(a.lxor(b)))
+      true
+    }
+
+    // i64 shift operations
+    I64Shl => {
+      let b = ctx.pop_i64()
+      let a = ctx.pop_i64()
+      let shift = b.land(0x3FUL)
+      ctx.push(I64(a << shift.to_int()))
+      true
+    }
+    I64ShrS => {
+      let b = ctx.pop_i64()
+      let a = ctx.pop_i64()
+      let shift = b.land(0x3FUL)
+      let result = (a.reinterpret_as_int64() >> shift.to_int()).reinterpret_as_uint64()
+      ctx.push(I64(result))
+      true
+    }
+    I64ShrU => {
+      let b = ctx.pop_i64()
+      let a = ctx.pop_i64()
+      let shift = b.land(0x3FUL)
+      ctx.push(I64(a.lsr(shift.to_int())))
+      true
+    }
+
+    // i64 rotation operations
+    I64Rotl => {
+      let b = ctx.pop_i64()
+      let a = ctx.pop_i64()
+      let rotation = b.land(0x3FUL).to_int()
+      let result = (a << rotation).lor(a.lsr(64 - rotation))
+      ctx.push(I64(result))
+      true
+    }
+    I64Rotr => {
+      let b = ctx.pop_i64()
+      let a = ctx.pop_i64()
+      let rotation = b.land(0x3FUL).to_int()
+      let result = a.lsr(rotation).lor(a << (64 - rotation))
+      ctx.push(I64(result))
+      true
+    }
+
+    // i64 comparison operations
+    I64Eq => {
+      let b = ctx.pop_i64()
+      let a = ctx.pop_i64()
+      ctx.push(I32(if a == b { 1U } else { 0U }))
+      true
+    }
+    I64Ne => {
+      let b = ctx.pop_i64()
+      let a = ctx.pop_i64()
+      ctx.push(I32(if a != b { 1U } else { 0U }))
+      true
+    }
+    I64LtS => {
+      let b = ctx.pop_i64()
+      let a = ctx.pop_i64()
+      ctx.push(I32(if a.reinterpret_as_int64() < b.reinterpret_as_int64() { 1U } else { 0U }))
+      true
+    }
+    I64LtU => {
+      let b = ctx.pop_i64()
+      let a = ctx.pop_i64()
+      ctx.push(I32(if a < b { 1U } else { 0U }))
+      true
+    }
+    I64GtS => {
+      let b = ctx.pop_i64()
+      let a = ctx.pop_i64()
+      ctx.push(I32(if a.reinterpret_as_int64() > b.reinterpret_as_int64() { 1U } else { 0U }))
+      true
+    }
+    I64GtU => {
+      let b = ctx.pop_i64()
+      let a = ctx.pop_i64()
+      ctx.push(I32(if a > b { 1U } else { 0U }))
+      true
+    }
+    I64LeS => {
+      let b = ctx.pop_i64()
+      let a = ctx.pop_i64()
+      ctx.push(I32(if a.reinterpret_as_int64() <= b.reinterpret_as_int64() { 1U } else { 0U }))
+      true
+    }
+    I64LeU => {
+      let b = ctx.pop_i64()
+      let a = ctx.pop_i64()
+      ctx.push(I32(if a <= b { 1U } else { 0U }))
+      true
+    }
+    I64GeS => {
+      let b = ctx.pop_i64()
+      let a = ctx.pop_i64()
+      ctx.push(I32(if a.reinterpret_as_int64() >= b.reinterpret_as_int64() { 1U } else { 0U }))
+      true
+    }
+    I64GeU => {
+      let b = ctx.pop_i64()
+      let a = ctx.pop_i64()
+      ctx.push(I32(if a >= b { 1U } else { 0U }))
+      true
+    }
+
+    // i64 unary operations
+    I64Eqz => {
+      let a = ctx.pop_i64()
+      ctx.push(I32(if a == 0UL { 1U } else { 0U }))
+      true
+    }
+    I64Clz => {
+      let a = ctx.pop_i64()
+      ctx.push(I64(a.clz().to_uint64()))
+      true
+    }
+    I64Ctz => {
+      let a = ctx.pop_i64()
+      ctx.push(I64(a.ctz().to_uint64()))
+      true
+    }
+    I64Popcnt => {
+      let a = ctx.pop_i64()
+      ctx.push(I64(a.popcnt().to_uint64()))
+      true
+    }
+
+    // i64 sign extension operations
+    I64Extend8S => {
+      let a = ctx.pop_i64()
+      // Extract low 8 bits and sign extend
+      let byte = a.land(0xFFUL)
+      let result = if byte.land(0x80UL) != 0UL {
+        // Negative: sign extend with 1s
+        byte.lor(0xFFFFFFFFFFFFFF00UL)
+      } else {
+        // Positive: already correct
+        byte
+      }
+      ctx.push(I64(result))
+      true
+    }
+    I64Extend16S => {
+      let a = ctx.pop_i64()
+      // Extract low 16 bits and sign extend
+      let half = a.land(0xFFFFUL)
+      let result = if half.land(0x8000UL) != 0UL {
+        // Negative: sign extend with 1s
+        half.lor(0xFFFFFFFFFFFF0000UL)
+      } else {
+        // Positive: already correct
+        half
+      }
+      ctx.push(I64(result))
+      true
+    }
+    I64Extend32S => {
+      let a = ctx.pop_i64()
+      // Extract low 32 bits and sign extend
+      let word = a.land(0xFFFFFFFFUL)
+      let result = if word.land(0x80000000UL) != 0UL {
+        // Negative: sign extend with 1s
+        word.lor(0xFFFFFFFF00000000UL)
+      } else {
+        // Positive: already correct
+        word
+      }
+      ctx.push(I64(result))
+      true
+    }
+
     // Memory operations
     I32Load(_align, offset) => {
       let addr = ctx.pop_i32()

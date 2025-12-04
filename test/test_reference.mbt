@@ -42,6 +42,10 @@ async fn process_meta(dir : String, json_file : String) -> Unit {
                       runtime_args.push(
                         @wasm5.Value::I32(@strconv.parse_uint(v)),
                       )
+                    { "type": "i64", "value": String(v), .. } =>
+                      runtime_args.push(
+                        @wasm5.Value::I64(@strconv.parse_uint64(v)),
+                      )
                     _ => fail("unsupported argument type")
                   }
                 }
@@ -55,6 +59,18 @@ async fn process_meta(dir : String, json_file : String) -> Unit {
                   [{ "type": "i32", "value": String(expected), .. }] => {
                     let expected_value = @wasm5.Value::I32(
                       @strconv.parse_uint(expected),
+                    )
+                    if result == expected_value {
+                      println("Test passed")
+                    } else {
+                      fail(
+                        "Test failed: expected \{expected_value}, got \{result}",
+                      )
+                    }
+                  }
+                  [{ "type": "i64", "value": String(expected), .. }] => {
+                    let expected_value = @wasm5.Value::I64(
+                      @strconv.parse_uint64(expected),
                     )
                     if result == expected_value {
                       println("Test passed")
@@ -91,6 +107,10 @@ async fn process_meta(dir : String, json_file : String) -> Unit {
                     { "type": "i32", "value": String(v), .. } =>
                       runtime_args.push(
                         @wasm5.Value::I32(@strconv.parse_uint(v)),
+                      )
+                    { "type": "i64", "value": String(v), .. } =>
+                      runtime_args.push(
+                        @wasm5.Value::I64(@strconv.parse_uint64(v)),
                       )
                     _ => fail("unsupported argument type")
                   }
@@ -188,6 +208,9 @@ async fn process_meta(dir : String, json_file : String) -> Unit {
 
 ///|
 async fn main {
-  let dir = "test/reference_tests/i32/"
-  process_meta(dir, "i32.json")
+  let i32_dir = "test/reference_tests/i32/"
+  process_meta(i32_dir, "i32.json")
+
+  let i64_dir = "test/reference_tests/i64/"
+  process_meta(i64_dir, "i64.json")
 }
