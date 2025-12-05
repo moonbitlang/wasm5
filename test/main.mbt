@@ -125,88 +125,87 @@ async fn process_meta(
                     })
                     continue
                   }
-                  Some(rt) => {
+                  Some(rt) =>
                     try {
                       let results = rt.call(
                         @encoding/utf8.encode(fn_name),
                         FixedArray::from_array(runtime_args),
                       )
-                  // Check expected results
-                  if expected.length() != results.length() {
-                    failures.push({
-                      line: i.to_int(),
-                      test_type: "assert_return",
-                      message: "expected \{expected.length()} results, got \{results.length()}",
-                      source_file,
-                    })
-                    continue
-                  }
-                  // Validate each result
-                  let mut has_error = false
-                  for idx = 0; idx < expected.length(); idx = idx + 1 {
-                    match expected[idx] {
-                      { "type": "i32", "value": String(expected_str), .. } => {
-                        let expected_value = @wasm5.Value::I32(
-                          @strconv.parse_uint(expected_str),
-                        )
-                        if results[idx] != expected_value {
-                          failures.push({
-                            line: i.to_int(),
-                            test_type: "assert_return",
-                            message: "at result \{idx}: expected \{expected_value}, got \{results[idx]}",
-                            source_file,
-                          })
-                          has_error = true
-                          break
-                        }
-                      }
-                      { "type": "i64", "value": String(expected_str), .. } => {
-                        let expected_value = @wasm5.Value::I64(
-                          @strconv.parse_uint64(expected_str),
-                        )
-                        if results[idx] != expected_value {
-                          failures.push({
-                            line: i.to_int(),
-                            test_type: "assert_return",
-                            message: "at result \{idx}: expected \{expected_value}, got \{results[idx]}",
-                            source_file,
-                          })
-                          has_error = true
-                          break
-                        }
-                      }
-                      _ => {
+                      // Check expected results
+                      if expected.length() != results.length() {
                         failures.push({
                           line: i.to_int(),
                           test_type: "assert_return",
-                          message: "unsupported expected result type",
+                          message: "expected \{expected.length()} results, got \{results.length()}",
                           source_file,
                         })
-                        has_error = true
-                        break
+                        continue
                       }
+                      // Validate each result
+                      let mut has_error = false
+                      for idx = 0; idx < expected.length(); idx = idx + 1 {
+                        match expected[idx] {
+                          { "type": "i32", "value": String(expected_str), .. } => {
+                            let expected_value = @wasm5.Value::I32(
+                              @strconv.parse_uint(expected_str),
+                            )
+                            if results[idx] != expected_value {
+                              failures.push({
+                                line: i.to_int(),
+                                test_type: "assert_return",
+                                message: "at result \{idx}: expected \{expected_value}, got \{results[idx]}",
+                                source_file,
+                              })
+                              has_error = true
+                              break
+                            }
+                          }
+                          { "type": "i64", "value": String(expected_str), .. } => {
+                            let expected_value = @wasm5.Value::I64(
+                              @strconv.parse_uint64(expected_str),
+                            )
+                            if results[idx] != expected_value {
+                              failures.push({
+                                line: i.to_int(),
+                                test_type: "assert_return",
+                                message: "at result \{idx}: expected \{expected_value}, got \{results[idx]}",
+                                source_file,
+                              })
+                              has_error = true
+                              break
+                            }
+                          }
+                          _ => {
+                            failures.push({
+                              line: i.to_int(),
+                              test_type: "assert_return",
+                              message: "unsupported expected result type",
+                              source_file,
+                            })
+                            has_error = true
+                            break
+                          }
+                        }
+                      }
+                      if has_error {
+                        continue
+                      }
+                    } catch {
+                      @wasm5.RuntimeError::UnimplementedInstruction(msg) =>
+                        failures.push({
+                          line: i.to_int(),
+                          test_type: "assert_return",
+                          message: "Unimplemented: \{msg}",
+                          source_file,
+                        })
+                      e =>
+                        failures.push({
+                          line: i.to_int(),
+                          test_type: "assert_return",
+                          message: "Test failed with error: \{e}",
+                          source_file,
+                        })
                     }
-                  }
-                  if has_error {
-                    continue
-                  }
-                } catch {
-                  @wasm5.RuntimeError::UnimplementedInstruction(msg) =>
-                    failures.push({
-                      line: i.to_int(),
-                      test_type: "assert_return",
-                      message: "Unimplemented: \{msg}",
-                      source_file,
-                    })
-                  e =>
-                    failures.push({
-                      line: i.to_int(),
-                      test_type: "assert_return",
-                      message: "Test failed with error: \{e}",
-                      source_file,
-                    })
-                }
-                  }
                 }
               }
               _ =>
@@ -267,7 +266,7 @@ async fn process_meta(
                     })
                     continue
                   }
-                  Some(rt) => {
+                  Some(rt) =>
                     try {
                       let _result = rt.call(
                         @encoding/utf8.encode(fn_name),
@@ -280,69 +279,68 @@ async fn process_meta(
                         source_file,
                       })
                     } catch {
-                  @wasm5.RuntimeError::DivisionByZero =>
-                    if not(expected_error.contains("divide by zero")) {
-                      failures.push({
-                        line: i.to_int(),
-                        test_type: "assert_trap",
-                        message: "expected trap '\{expected_error}' but got DivisionByZero",
-                        source_file,
-                      })
+                      @wasm5.RuntimeError::DivisionByZero =>
+                        if not(expected_error.contains("divide by zero")) {
+                          failures.push({
+                            line: i.to_int(),
+                            test_type: "assert_trap",
+                            message: "expected trap '\{expected_error}' but got DivisionByZero",
+                            source_file,
+                          })
+                        }
+                      @wasm5.RuntimeError::IntegerOverflow =>
+                        if not(expected_error.contains("overflow")) {
+                          failures.push({
+                            line: i.to_int(),
+                            test_type: "assert_trap",
+                            message: "expected trap '\{expected_error}' but got IntegerOverflow",
+                            source_file,
+                          })
+                        }
+                      @wasm5.RuntimeError::StackUnderflow =>
+                        failures.push({
+                          line: i.to_int(),
+                          test_type: "assert_trap",
+                          message: "expected trap '\{expected_error}' but got StackUnderflow",
+                          source_file,
+                        })
+                      @wasm5.RuntimeError::MemoryOutOfBounds =>
+                        failures.push({
+                          line: i.to_int(),
+                          test_type: "assert_trap",
+                          message: "expected trap '\{expected_error}' but got MemoryOutOfBounds",
+                          source_file,
+                        })
+                      @wasm5.RuntimeError::InvalidType(msg) =>
+                        failures.push({
+                          line: i.to_int(),
+                          test_type: "assert_trap",
+                          message: "expected trap '\{expected_error}' but got InvalidType: \{msg}",
+                          source_file,
+                        })
+                      @wasm5.RuntimeError::FunctionNotFound(name) =>
+                        failures.push({
+                          line: i.to_int(),
+                          test_type: "assert_trap",
+                          message: "expected trap '\{expected_error}' but got FunctionNotFound: \{name}",
+                          source_file,
+                        })
+                      @wasm5.RuntimeError::UnimplementedInstruction(msg) =>
+                        failures.push({
+                          line: i.to_int(),
+                          test_type: "assert_trap",
+                          message: "Unimplemented: \{msg}",
+                          source_file,
+                        })
+                      e =>
+                        failures.push({
+                          line: i.to_int(),
+                          test_type: "assert_trap",
+                          message: "expected trap '\{expected_error}' but got unexpected error: \{e}",
+                          source_file,
+                        })
                     }
-                  @wasm5.RuntimeError::IntegerOverflow =>
-                    if not(expected_error.contains("overflow")) {
-                      failures.push({
-                        line: i.to_int(),
-                        test_type: "assert_trap",
-                        message: "expected trap '\{expected_error}' but got IntegerOverflow",
-                        source_file,
-                      })
-                    }
-                  @wasm5.RuntimeError::StackUnderflow =>
-                    failures.push({
-                      line: i.to_int(),
-                      test_type: "assert_trap",
-                      message: "expected trap '\{expected_error}' but got StackUnderflow",
-                      source_file,
-                    })
-                  @wasm5.RuntimeError::MemoryOutOfBounds =>
-                    failures.push({
-                      line: i.to_int(),
-                      test_type: "assert_trap",
-                      message: "expected trap '\{expected_error}' but got MemoryOutOfBounds",
-                      source_file,
-                    })
-                  @wasm5.RuntimeError::InvalidType(msg) =>
-                    failures.push({
-                      line: i.to_int(),
-                      test_type: "assert_trap",
-                      message: "expected trap '\{expected_error}' but got InvalidType: \{msg}",
-                      source_file,
-                    })
-                  @wasm5.RuntimeError::FunctionNotFound(name) =>
-                    failures.push({
-                      line: i.to_int(),
-                      test_type: "assert_trap",
-                      message: "expected trap '\{expected_error}' but got FunctionNotFound: \{name}",
-                      source_file,
-                    })
-                  @wasm5.RuntimeError::UnimplementedInstruction(msg) =>
-                    failures.push({
-                      line: i.to_int(),
-                      test_type: "assert_trap",
-                      message: "Unimplemented: \{msg}",
-                      source_file,
-                    })
-                  e =>
-                    failures.push({
-                      line: i.to_int(),
-                      test_type: "assert_trap",
-                      message: "expected trap '\{expected_error}' but got unexpected error: \{e}",
-                      source_file,
-                    })
                 }
-                    }
-                  }
               }
               _ =>
                 failures.push({
@@ -453,14 +451,59 @@ async fn process_meta(
 }
 
 ///|
+async fn collect_wast_files(dir : String) -> Array[String] {
+  let wast_files = []
+  let entries = @fs.readdir(dir)
+  for entry in entries {
+    if entry.has_suffix(".wast") {
+      wast_files.push(entry)
+    }
+  }
+  wast_files
+}
+
+///|
+async fn process_wast_file(
+  wast_dir : String,
+  wast_file : String,
+) -> Array[TestFailure] {
+  guard wast_file.strip_suffix(".wast") is Some(base_name) else {
+    abort("Invalid wast file name: \{wast_file}")
+  }
+  let json_file = (base_name + ".json").to_string()
+  let target_dir = wast_dir + base_name.to_string() + "/"
+  if not(@fs.exists(target_dir)) {
+    @fs.mkdir(target_dir, permission=0o755)
+  }
+  // execute: wast2json xxx.wast -o xxx/xxx.json
+  guard @process.run("wast2json", [
+      wast_dir + wast_file,
+      "-o",
+      target_dir + json_file,
+    ])
+    is 0 else {
+    abort("Failed to convert \{wast_file} to JSON")
+  }
+  let test_result = []
+  process_meta(target_dir, json_file, test_result, wast_file)
+  @fs.rmdir(target_dir, recursive=true)
+  test_result
+}
+
+///|
 async fn main {
   let failures : Array[TestFailure] = []
-  let i32_dir = "test/reference_tests/i32/"
-  process_meta(i32_dir, "i32.json", failures, "i32.wast")
-  let i64_dir = "test/reference_tests/i64/"
-  process_meta(i64_dir, "i64.json", failures, "i64.wast")
-  let if_dir = "test/reference_tests/if/"
-  process_meta(if_dir, "if.json", failures, "if.wast")
+  let wast_files = collect_wast_files("test/reference_tests/")
+  for wast_file in wast_files {
+    let file_failures = process_wast_file("test/reference_tests/", wast_file)
+    failures.append(file_failures)
+  }
+  // let if_dir = "test/reference_tests/if/"
+  // process_meta(if_dir, "if.json", failures, "if.wast")
+  // let i64_dir = "test/reference_tests/i64/"
+  // process_meta(i64_dir, "i64.json", failures, "i64.wast")
+  // let i32_dir = "test/reference_tests/i32/"
+  // process_meta(i32_dir, "i32.json", failures, "i32.wast")
 
   // Print summary
   println("\n" + "=".repeat(60))
