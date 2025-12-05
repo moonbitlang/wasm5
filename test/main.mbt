@@ -30,51 +30,21 @@ async fn process_meta(
       let mut runtime = None
       for cmd in commands {
         match cmd {
-          {
-            "type": "module",
-            "filename": String(filename),
-            "line": Number(i, ..),
-            ..
-          } =>
+          { "type": "module", "filename": String(filename), "line"? : line, .. } => {
+            let line = if line is Some(Number(n, ..)) { n.to_int() } else { -1 }
             try {
               let module_ = parse_wasm_file(dir, filename)
               runtime = Some(@wasm5.Runtime::load(module_))
             } catch {
-              @wasm5.ValidationError::TypeMismatch(msg) =>
-                failures.push({
-                  line: i.to_int(),
-                  test_type: "module",
-                  message: "Validation error: \{msg}",
-                  source_file,
-                })
               e =>
                 failures.push({
-                  line: i.to_int(),
+                  line,
                   test_type: "module",
                   message: "Error loading module: \{e}",
                   source_file,
                 })
             }
-          { "type": "module", "filename": String(filename), .. } =>
-            try {
-              let module_ = parse_wasm_file(dir, filename)
-              runtime = Some(@wasm5.Runtime::load(module_))
-            } catch {
-              @wasm5.ValidationError::TypeMismatch(msg) =>
-                failures.push({
-                  line: -1,
-                  test_type: "module",
-                  message: "Validation error: \{msg}",
-                  source_file,
-                })
-              e =>
-                failures.push({
-                  line: -1,
-                  test_type: "module",
-                  message: "Error loading module: \{e}",
-                  source_file,
-                })
-            }
+          }
           {
             "type": "assert_return",
             "line": Number(i, ..),
