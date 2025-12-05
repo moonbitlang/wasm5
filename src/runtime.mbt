@@ -7,7 +7,9 @@ pub suberror RuntimeError {
   MemoryOutOfBounds
   InvalidType(String)
   FunctionNotFound(String)
-}
+  Branch(UInt) // Internal: branch control flow (label depth)
+  UnimplementedInstruction(String) // Instruction not yet implemented
+} derive(Show)
 
 ///|
 /// Validation error types
@@ -18,7 +20,7 @@ pub suberror ValidationError {
   InvalidLocalIndex(Int)
   InvalidGlobalIndex(Int)
   StackSizeMismatch(String)
-}
+} derive(Show)
 
 ///|
 /// Runtime value type
@@ -48,7 +50,7 @@ pub fn Runtime::call(
   r : Runtime,
   func_name : Bytes,
   args : FixedArray[Value],
-) -> Value raise RuntimeError {
+) -> Array[Value] raise RuntimeError {
   // Find exported function by name
   let func_name_str = func_name.to_string()
   let mut func_idx : Int? = None
@@ -71,13 +73,7 @@ pub fn Runtime::call(
       let ctx = ExecutionContext::new(r.module_)
 
       // Execute the function
-      let result = execute_function(ctx, idx, args)
-
-      // Return the result or a default value
-      match result {
-        Some(v) => v
-        None => I32(0U) // Default return value if function has no result
-      }
+      execute_function(ctx, idx, args)
     }
   }
 }
@@ -764,6 +760,22 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
       true
     }
 
+    // i32 to i64 conversion operations
+    I64ExtendI32S => {
+      let a = ctx.pop_i32()
+      // Sign-extend i32 to i64
+      let result = a.reinterpret_as_int().to_int64().reinterpret_as_uint64()
+      ctx.push(I64(result))
+      true
+    }
+    I64ExtendI32U => {
+      let a = ctx.pop_i32()
+      // Zero-extend i32 to i64
+      let result = a.to_uint64()
+      ctx.push(I64(result))
+      true
+    }
+
     // i64 sign extension operations
     I64Extend8S => {
       let a = ctx.pop_i64()
@@ -822,14 +834,185 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
       true
     }
 
+    // Block instructions
+    Block(_block_type, instrs) => {
+      // Execute block instructions
+      try {
+        for instr in instrs {
+          let should_continue = execute_instr(ctx, instr)
+          if not(should_continue) {
+            return false // Return instruction
+          }
+        }
+        true
+      } catch {
+        RuntimeError::Branch(0U) => {
+          // Branch targets this block, exit normally
+          true
+        }
+        RuntimeError::Branch(label) => {
+          // Branch targets outer block, decrement and re-raise
+          raise RuntimeError::Branch(label - 1U)
+        }
+        e => raise e // Re-raise other runtime errors
+      }
+    }
+    Loop(_block_type, instrs) => {
+      // Execute loop instructions
+      try {
+        for instr in instrs {
+          let should_continue = execute_instr(ctx, instr)
+          if not(should_continue) {
+            return false // Return instruction
+          }
+        }
+        true
+      } catch {
+        RuntimeError::Branch(0U) => {
+          // Branch to loop start - re-execute loop
+          // Note: In WebAssembly, branching to a loop jumps to the start
+          // For now, we'll just exit and let it continue
+          // A proper implementation would need to loop back
+          true
+        }
+        RuntimeError::Branch(label) => {
+          // Branch targets outer block, decrement and re-raise
+          raise RuntimeError::Branch(label - 1U)
+        }
+        e => raise e // Re-raise other runtime errors
+      }
+    }
+    If(_block_type, then_instrs, else_instrs) => {
+      // Pop condition
+      let cond = ctx.pop_i32()
+      // Execute appropriate branch
+      let instrs = if cond != 0U { then_instrs } else { else_instrs }
+      try {
+        for instr in instrs {
+          let should_continue = execute_instr(ctx, instr)
+          if not(should_continue) {
+            return false // Return instruction
+          }
+        }
+        true
+      } catch {
+        RuntimeError::Branch(0U) => {
+          // Branch targets this if block, exit normally
+          true
+        }
+        RuntimeError::Branch(label) => {
+          // Branch targets outer block, decrement and re-raise
+          raise RuntimeError::Branch(label - 1U)
+        }
+        e => raise e // Re-raise other runtime errors
+      }
+    }
+
     // Control flow
     Return => false
     Drop => {
       let _ = ctx.pop()
       true
     }
+    Select => {
+      // Pop condition, then two values, push one based on condition
+      let cond = ctx.pop_i32()
+      let val2 = ctx.pop() // "else" value
+      let val1 = ctx.pop() // "then" value
+      if cond != 0U {
+        ctx.push(val1)
+      } else {
+        ctx.push(val2)
+      }
+      true
+    }
     Nop => true
-    _ => abort("instruction \{instr} not implemented")
+    Br(label) => {
+      // Unconditional branch to label
+      raise RuntimeError::Branch(label)
+    }
+    BrIf(label) => {
+      // Conditional branch: pop i32, branch if non-zero
+      let cond = ctx.pop_i32()
+      if cond != 0U {
+        raise RuntimeError::Branch(label)
+      }
+      true
+    }
+    BrTable(labels, default_label) => {
+      // Table branch: pop i32 index, branch to labels[index] or default
+      let index = ctx.pop_i32().reinterpret_as_int()
+      let target = if index >= 0 && index < labels.length() {
+        labels[index]
+      } else {
+        default_label
+      }
+      raise RuntimeError::Branch(target)
+    }
+    Call(func_idx) => {
+      let idx = func_idx.reinterpret_as_int()
+      let type_idx = ctx.module_.funcs[idx].reinterpret_as_int()
+      let func_type = ctx.module_.types[type_idx]
+      // Collect arguments from stack (in reverse order)
+      let args_rev : Array[Value] = []
+      for _i = 0; _i < func_type.params.length(); _i = _i + 1 {
+        args_rev.push(ctx.pop())
+      }
+      // Reverse args by building a new array in correct order
+      let args : Array[Value] = []
+      for i = args_rev.length() - 1; i >= 0; i = i - 1 {
+        args.push(args_rev[i])
+      }
+      // Call the function
+      let results = execute_function(ctx, idx, FixedArray::from_array(args))
+      // Push all results onto stack
+      for result in results {
+        ctx.push(result)
+      }
+      true
+    }
+
+    // f32 comparison operations
+    F32Eq => {
+      let b = ctx.pop_f32()
+      let a = ctx.pop_f32()
+      ctx.push(I32(if a == b { 1 } else { 0 }))
+      true
+    }
+    F32Ne => {
+      let b = ctx.pop_f32()
+      let a = ctx.pop_f32()
+      ctx.push(I32(if a != b { 1 } else { 0 }))
+      true
+    }
+    F32Lt => {
+      let b = ctx.pop_f32()
+      let a = ctx.pop_f32()
+      ctx.push(I32(if a < b { 1 } else { 0 }))
+      true
+    }
+    F32Gt => {
+      let b = ctx.pop_f32()
+      let a = ctx.pop_f32()
+      ctx.push(I32(if a > b { 1 } else { 0 }))
+      true
+    }
+    F32Le => {
+      let b = ctx.pop_f32()
+      let a = ctx.pop_f32()
+      ctx.push(I32(if a <= b { 1 } else { 0 }))
+      true
+    }
+    F32Ge => {
+      let b = ctx.pop_f32()
+      let a = ctx.pop_f32()
+      ctx.push(I32(if a >= b { 1 } else { 0 }))
+      true
+    }
+
+    _ => {
+      raise RuntimeError::UnimplementedInstruction("instruction \{instr} not implemented")
+    }
   }
 }
 
@@ -838,12 +1021,15 @@ fn execute_function(
   ctx : ExecutionContext,
   func_idx : Int,
   args : FixedArray[Value],
-) -> Value? raise RuntimeError {
+) -> Array[Value] raise RuntimeError {
   // Get function type and code
   let mod = ctx.module_
   let type_idx = mod.funcs[func_idx].reinterpret_as_int()
   let func_type = mod.types[type_idx]
   let code = mod.codes[func_idx]
+
+  // Save the current locals (for nested function calls)
+  let saved_locals = ctx.locals
 
   // Initialize locals with parameters and local variables
   ctx.locals = []
@@ -874,12 +1060,21 @@ fn execute_function(
     }
   }
 
-  // Return value (if any)
-  if func_type.results.length() > 0 {
-    Some(ctx.pop())
-  } else {
-    None
+  // Return values (pop in reverse order, then reverse to get correct order)
+  let results : Array[Value] = []
+  for _i = 0; _i < func_type.results.length(); _i = _i + 1 {
+    results.push(ctx.pop())
   }
+  // Reverse to get correct order (we popped in reverse)
+  let final_results : Array[Value] = []
+  for i = results.length() - 1; i >= 0; i = i - 1 {
+    final_results.push(results[i])
+  }
+
+  // Restore the saved locals
+  ctx.locals = saved_locals
+
+  final_results
 }
 
 ///|

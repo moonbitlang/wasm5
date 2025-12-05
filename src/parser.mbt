@@ -168,8 +168,9 @@ fn Parser::read_name(self : Parser) -> String {
 // Parse value type
 
 ///|
-fn Parser::read_valtype(self : Parser) -> ValType {
-  match self.read_byte() {
+fn Parser::read_valtype(self : Parser) -> ValType raise ValidationError {
+  let byte = self.read_byte()
+  match byte {
     0x7F => I32
     0x7E => I64
     0x7D => F32
@@ -177,18 +178,19 @@ fn Parser::read_valtype(self : Parser) -> ValType {
     0x7B => V128
     0x70 => FuncRef
     0x6F => ExternRef
-    _ => abort("invalid value type")
+    _ => raise ValidationError::TypeMismatch("invalid value type: 0x\{byte.to_string()}")
   }
 }
 
 // Parse reference type
 
 ///|
-fn Parser::read_reftype(self : Parser) -> RefType {
-  match self.read_byte() {
+fn Parser::read_reftype(self : Parser) -> RefType raise ValidationError {
+  let byte = self.read_byte()
+  match byte {
     0x70 => FuncRef
     0x6F => ExternRef
-    _ => abort("invalid reference type")
+    _ => raise ValidationError::TypeMismatch("invalid reference type: 0x\{byte.to_string()}")
   }
 }
 
@@ -205,13 +207,13 @@ fn Parser::read_limits(self : Parser) -> Limits {
 // Section parsers
 
 ///|
-fn parse_type_section(parser : Parser) -> Array[FuncType] {
+fn parse_type_section(parser : Parser) -> Array[FuncType] raise ValidationError {
   let count = parser.read_u32_leb128().to_int()
   let types = []
   for i = 0; i < count; i = i + 1 {
     let tag = parser.read_byte()
     if tag != 0x60 {
-      abort("expected function type tag 0x60")
+      raise ValidationError::TypeMismatch("expected function type tag 0x60, got 0x\{tag.to_string()}")
     }
 
     // Read params
@@ -233,7 +235,7 @@ fn parse_type_section(parser : Parser) -> Array[FuncType] {
 }
 
 ///|
-fn parse_import_section(parser : Parser) -> Array[Import] {
+fn parse_import_section(parser : Parser) -> Array[Import] raise ValidationError {
   let count = parser.read_u32_leb128().to_int()
   let imports = []
   for i = 0; i < count; i = i + 1 {
@@ -253,7 +255,7 @@ fn parse_import_section(parser : Parser) -> Array[Import] {
         let mutable = parser.read_byte() == 0x01
         ImportDesc::Global({ val_type, mutable })
       }
-      _ => abort("invalid import descriptor tag")
+      _ => raise ValidationError::TypeMismatch("invalid import descriptor tag: 0x\{desc_tag.to_string()}")
     }
     imports.push({ module, name, desc })
   }
@@ -271,7 +273,7 @@ fn parse_function_section(parser : Parser) -> Array[UInt] {
 }
 
 ///|
-fn parse_table_section(parser : Parser) -> Array[TableType] {
+fn parse_table_section(parser : Parser) -> Array[TableType] raise ValidationError {
   let count = parser.read_u32_leb128().to_int()
   let tables = []
   for i = 0; i < count; i = i + 1 {
@@ -294,7 +296,7 @@ fn parse_memory_section(parser : Parser) -> Array[MemType] {
 }
 
 ///|
-fn parse_global_section(parser : Parser) -> Array[Global] {
+fn parse_global_section(parser : Parser) -> Array[Global] raise ValidationError {
   let count = parser.read_u32_leb128().to_int()
   let globals = []
   for i = 0; i < count; i = i + 1 {
@@ -307,7 +309,7 @@ fn parse_global_section(parser : Parser) -> Array[Global] {
 }
 
 ///|
-fn parse_export_section(parser : Parser) -> Array[Export] {
+fn parse_export_section(parser : Parser) -> Array[Export] raise ValidationError {
   let count = parser.read_u32_leb128().to_int()
   let exports = []
   for i = 0; i < count; i = i + 1 {
@@ -318,7 +320,7 @@ fn parse_export_section(parser : Parser) -> Array[Export] {
       0x01 => ExportDesc::Table(parser.read_u32_leb128())
       0x02 => ExportDesc::Mem(parser.read_u32_leb128())
       0x03 => ExportDesc::Global(parser.read_u32_leb128())
-      _ => abort("invalid export descriptor tag")
+      _ => raise ValidationError::TypeMismatch("invalid export descriptor tag: 0x\{desc_tag.to_string()}")
     }
     exports.push({ name, desc })
   }
@@ -326,7 +328,7 @@ fn parse_export_section(parser : Parser) -> Array[Export] {
 }
 
 ///|
-fn parse_element_section(parser : Parser) -> Array[Elem] {
+fn parse_element_section(parser : Parser) -> Array[Elem] raise ValidationError {
   let count = parser.read_u32_leb128().to_int()
   let elems = []
   for i = 0; i < count; i = i + 1 {
@@ -343,7 +345,7 @@ fn parse_element_section(parser : Parser) -> Array[Elem] {
 }
 
 ///|
-fn parse_code_section(parser : Parser) -> Array[Code] {
+fn parse_code_section(parser : Parser) -> Array[Code] raise ValidationError {
   let count = parser.read_u32_leb128().to_int()
   let codes = []
   for i = 0; i < count; i = i + 1 {
@@ -368,7 +370,7 @@ fn parse_code_section(parser : Parser) -> Array[Code] {
 }
 
 ///|
-fn parse_data_section(parser : Parser) -> Array[Data] {
+fn parse_data_section(parser : Parser) -> Array[Data] raise ValidationError {
   let count = parser.read_u32_leb128().to_int()
   let datas = []
   for i = 0; i < count; i = i + 1 {
@@ -384,7 +386,7 @@ fn parse_data_section(parser : Parser) -> Array[Data] {
 // Parse expression (sequence of instructions ending with 0x0B)
 
 ///|
-fn parse_expr(parser : Parser) -> Expr {
+fn parse_expr(parser : Parser) -> Expr raise ValidationError {
   let instrs = parse_instrs(parser)
   { instrs, }
 }
@@ -392,8 +394,8 @@ fn parse_expr(parser : Parser) -> Expr {
 // Parse instructions until 0x0B (end marker)
 
 ///|
-fn parse_instrs(parser : Parser) -> Array[Instr] {
-  fn read_loop(instrs : Array[Instr]) -> Array[Instr] {
+fn parse_instrs(parser : Parser) -> Array[Instr] raise ValidationError {
+  fn read_loop(instrs : Array[Instr]) -> Array[Instr] raise ValidationError {
     let opcode = parser.read_byte()
     if opcode == 0x0B {
       // End marker (0x0B)
@@ -414,7 +416,7 @@ fn parse_instrs(parser : Parser) -> Array[Instr] {
 // Parse a single instruction
 
 ///|
-fn parse_instr(parser : Parser, opcode : Int) -> Instr {
+fn parse_instr(parser : Parser, opcode : Int) -> Instr raise ValidationError {
   match opcode {
     // Control instructions
     0x00 => Unreachable
@@ -749,25 +751,31 @@ fn parse_instr(parser : Parser, opcode : Int) -> Instr {
     0xC2 => I64Extend8S
     0xC3 => I64Extend16S
     0xC4 => I64Extend32S
-    _ => abort("unknown opcode: \{opcode}")
+    _ => raise ValidationError::TypeMismatch("unknown opcode: 0x\{opcode.to_string().to_upper()}")
   }
 }
 
 // Parse block type (can be empty, a value type, or a type index)
 
 ///|
-fn parse_blocktype(parser : Parser) -> ValType? {
+fn parse_blocktype(parser : Parser) -> BlockType {
   let byte = parser.read_byte()
   match byte {
-    0x40 => None // empty block type
-    0x7F => Some(I32)
-    0x7E => Some(I64)
-    0x7D => Some(F32)
-    0x7C => Some(F64)
-    0x7B => Some(V128)
-    0x70 => Some(FuncRef)
-    0x6F => Some(ExternRef)
-    _ => abort("invalid block type")
+    0x40 => Empty // empty block type
+    0x7F => Value(I32)
+    0x7E => Value(I64)
+    0x7D => Value(F32)
+    0x7C => Value(F64)
+    0x7B => Value(V128)
+    0x70 => Value(FuncRef)
+    0x6F => Value(ExternRef)
+    _ => {
+      // Type index encoded as signed LEB128
+      // Put the byte back and read as signed LEB128
+      parser.pos = parser.pos - 1
+      let type_idx = parser.read_i32_leb128()
+      TypeIndex(type_idx)
+    }
   }
 }
 

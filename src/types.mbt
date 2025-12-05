@@ -27,6 +27,15 @@ struct FuncType {
   results : Array[ValType]
 }
 
+// Block type (can be empty, single value, or type index to function type)
+
+///|
+enum BlockType {
+  Empty // no params, no results
+  Value(ValType) // no params, single result
+  TypeIndex(Int) // index into types section (can have params and/or multiple results)
+} derive(Show)
+
 // Limits for tables and memories
 
 ///|
@@ -133,9 +142,9 @@ pub enum Instr {
   // Control instructions
   Unreachable
   Nop
-  Block(ValType?, Array[Instr])
-  Loop(ValType?, Array[Instr])
-  If(ValType?, Array[Instr], Array[Instr])
+  Block(BlockType, Array[Instr])
+  Loop(BlockType, Array[Instr])
+  If(BlockType, Array[Instr], Array[Instr])
   Br(UInt)
   BrIf(UInt)
   BrTable(Array[UInt], UInt)

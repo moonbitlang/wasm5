@@ -24,14 +24,70 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
 }
 
 ///|
+/// Get the function type signature for a block type
+fn get_block_type(
+  module : Module,
+  block_type : BlockType
+) -> (Array[ValType], Array[ValType]) {
+  match block_type {
+    Empty => ([], [])
+    Value(t) => ([], [t])
+    TypeIndex(idx) => {
+      let func_type = module.types[idx]
+      (func_type.params, func_type.results)
+    }
+  }
+}
+
+/// Validation context that tracks both the type stack and unreachable state
+struct ValidationCtx {
+  stack : Array[ValType]
+  mut unreachable : Bool
+  // Stack of control frames - each frame tracks the expected result types
+  // For br validation, we need to know what types the target label expects
+  control_stack : Array[(Array[ValType], Array[ValType])] // (params, results) for each control frame
+}
+
+fn ValidationCtx::new() -> ValidationCtx {
+  { stack: [], unreachable: false, control_stack: [] }
+}
+
+fn ValidationCtx::push_control(
+  self : ValidationCtx,
+  params : Array[ValType],
+  results : Array[ValType]
+) -> Unit {
+  self.control_stack.push((params, results))
+}
+
+fn ValidationCtx::pop_control(self : ValidationCtx) -> (Array[ValType], Array[ValType]) {
+  self.control_stack.pop_exn()
+}
+
+fn ValidationCtx::get_label_types(
+  self : ValidationCtx,
+  label : UInt
+) -> Array[ValType] {
+  // Labels are relative depth: 0 is innermost, 1 is next outer, etc.
+  let idx = self.control_stack.length() - 1 - label.reinterpret_as_int()
+  if idx >= 0 && idx < self.control_stack.length() {
+    let (_, results) = self.control_stack[idx]
+    results
+  } else {
+    []
+  }
+}
+
+///|
 /// Helper function to validate a single instruction
 fn validate_instruction(
   module : Module,
   func_type : FuncType,
   code : Code,
-  stack : Array[ValType],
+  ctx : ValidationCtx,
   instr : Instr
 ) -> Unit raise ValidationError {
+  let stack = ctx.stack
   match instr {
     // Constants
     I32Const(_) => stack.push(I32)
@@ -105,8 +161,20 @@ fn validate_instruction(
       stack.push(I32)
     }
 
-    // i64 unary operations
-    I64Eqz | I64Clz | I64Ctz | I64Popcnt | I64Extend8S | I64Extend16S | I64Extend32S => {
+    // i64 test operation (returns i32)
+    I64Eqz => {
+      if stack.length() < 1 {
+        raise ValidationError::TypeMismatch("expected at least 1 value on stack for unary op")
+      }
+      let a = stack.pop_exn()
+      if a != I64 {
+        raise ValidationError::TypeMismatch("i64.eqz requires i64 operand")
+      }
+      stack.push(I32)
+    }
+
+    // i64 unary operations (return i64)
+    I64Clz | I64Ctz | I64Popcnt | I64Extend8S | I64Extend16S | I64Extend32S => {
       if stack.length() < 1 {
         raise ValidationError::TypeMismatch("expected at least 1 value on stack for unary op")
       }
@@ -115,6 +183,31 @@ fn validate_instruction(
         raise ValidationError::TypeMismatch("i64 unary operation requires i64 operand")
       }
       stack.push(I64)
+    }
+
+    // i32 to i64 conversion operations
+    I64ExtendI32S | I64ExtendI32U => {
+      if stack.length() < 1 {
+        raise ValidationError::TypeMismatch("expected i32 on stack for i64 extension")
+      }
+      let a = stack.pop_exn()
+      if a != I32 {
+        raise ValidationError::TypeMismatch("i64 extension requires i32 operand")
+      }
+      stack.push(I64)
+    }
+
+    // f32 comparison operations
+    F32Eq | F32Ne | F32Lt | F32Gt | F32Le | F32Ge => {
+      if stack.length() < 2 {
+        raise ValidationError::TypeMismatch("expected at least 2 values on stack for comparison")
+      }
+      let b = stack.pop_exn()
+      let a = stack.pop_exn()
+      if a != F32 || b != F32 {
+        raise ValidationError::TypeMismatch("f32 comparison requires f32 operands")
+      }
+      stack.push(I32)
     }
 
     // Local operations
@@ -192,47 +285,116 @@ fn validate_instruction(
     }
 
     // Block instructions
-    Block(result_type, instrs) => {
-      let block_stack : Array[ValType] = []
-      for block_instr in instrs {
-        validate_instruction(module, func_type, code, block_stack, block_instr)
+    Block(block_type, instrs) => {
+      let (params, results) = get_block_type(module, block_type)
+      // Pop parameters from parent stack and push onto block stack
+      for i = params.length() - 1; i >= 0; i = i - 1 {
+        if stack.length() < 1 {
+          raise ValidationError::TypeMismatch("block expects parameters on stack")
+        }
+        let param = stack.pop_exn()
+        if param != params[i] {
+          raise ValidationError::TypeMismatch("block parameter type mismatch")
+        }
       }
-      match result_type {
-        None => ()
-        Some(t) => {
-          if block_stack.length() < 1 {
-            raise ValidationError::TypeMismatch("block expects result value on stack")
-          }
-          let result = block_stack.pop_exn()
-          if result != t {
+      // Create new validation context for block
+      let block_ctx = ValidationCtx::new()
+      // Add parameters to block stack in correct order
+      for param in params {
+        block_ctx.stack.push(param)
+      }
+      // Copy parent control stack and add this block's frame
+      for frame in ctx.control_stack {
+        block_ctx.control_stack.push(frame)
+      }
+      block_ctx.push_control(params, results)
+      // Validate block body
+      for block_instr in instrs {
+        validate_instruction(module, func_type, code, block_ctx, block_instr)
+      }
+      let _ = block_ctx.pop_control()
+      // Check block produces correct results
+      if block_ctx.unreachable {
+        // Unreachable code - valid, push expected results
+        for result in results {
+          stack.push(result)
+        }
+      } else if block_ctx.stack.length() != results.length() {
+        // Not unreachable and not exact match - this is a type mismatch
+        raise ValidationError::TypeMismatch(
+          "block: expected \{results.length()} values, got \{block_ctx.stack.length()}",
+        )
+      } else {
+        // Exact match - validate result types
+        for i = 0; i < results.length(); i = i + 1 {
+          if block_ctx.stack[i] != results[i] {
             raise ValidationError::TypeMismatch("block result type mismatch")
           }
-          stack.push(t)
+        }
+        // Push results onto parent stack
+        for result in results {
+          stack.push(result)
         }
       }
     }
 
-    Loop(result_type, instrs) => {
-      let loop_stack : Array[ValType] = []
-      for loop_instr in instrs {
-        validate_instruction(module, func_type, code, loop_stack, loop_instr)
+    Loop(block_type, instrs) => {
+      let (params, results) = get_block_type(module, block_type)
+      // Pop parameters from parent stack and push onto loop stack
+      for i = params.length() - 1; i >= 0; i = i - 1 {
+        if stack.length() < 1 {
+          raise ValidationError::TypeMismatch("loop expects parameters on stack")
+        }
+        let param = stack.pop_exn()
+        if param != params[i] {
+          raise ValidationError::TypeMismatch("loop parameter type mismatch")
+        }
       }
-      match result_type {
-        None => ()
-        Some(t) => {
-          if loop_stack.length() < 1 {
-            raise ValidationError::TypeMismatch("loop expects result value on stack")
-          }
-          let result = loop_stack.pop_exn()
-          if result != t {
+      // Create new validation context for loop
+      let loop_ctx = ValidationCtx::new()
+      // Add parameters to loop stack in correct order
+      for param in params {
+        loop_ctx.stack.push(param)
+      }
+      // Copy parent control stack and add this loop's frame
+      // Note: For loops, br targets the beginning (params), not the end (results)
+      for frame in ctx.control_stack {
+        loop_ctx.control_stack.push(frame)
+      }
+      loop_ctx.push_control(params, params) // Loop's br target uses params, not results
+      // Validate loop body
+      for loop_instr in instrs {
+        validate_instruction(module, func_type, code, loop_ctx, loop_instr)
+      }
+      let _ = loop_ctx.pop_control()
+      // Check loop produces correct results
+      if loop_ctx.unreachable {
+        // Unreachable code - valid
+        for result in results {
+          stack.push(result)
+        }
+      } else if loop_ctx.stack.length() != results.length() {
+        // Not unreachable and not exact match - type mismatch
+        raise ValidationError::TypeMismatch(
+          "loop: expected \{results.length()} values, got \{loop_ctx.stack.length()}",
+        )
+      } else {
+        // Exact match - validate result types
+        for i = 0; i < results.length(); i = i + 1 {
+          if loop_ctx.stack[i] != results[i] {
             raise ValidationError::TypeMismatch("loop result type mismatch")
           }
-          stack.push(t)
+        }
+        // Push results onto parent stack
+        for result in results {
+          stack.push(result)
         }
       }
     }
 
-    If(result_type, then_instrs, else_instrs) => {
+    If(block_type, then_instrs, else_instrs) => {
+      let (params, results) = get_block_type(module, block_type)
+      // Pop condition
       if stack.length() < 1 {
         raise ValidationError::TypeMismatch("if expects condition on stack")
       }
@@ -240,36 +402,151 @@ fn validate_instruction(
       if cond != I32 {
         raise ValidationError::TypeMismatch("if condition must be i32")
       }
-      let then_stack : Array[ValType] = []
-      for then_instr in then_instrs {
-        validate_instruction(module, func_type, code, then_stack, then_instr)
-      }
-      let else_stack : Array[ValType] = []
-      for else_instr in else_instrs {
-        validate_instruction(module, func_type, code, else_stack, else_instr)
-      }
-      match result_type {
-        None => ()
-        Some(t) => {
-          if then_stack.length() < 1 || else_stack.length() < 1 {
-            raise ValidationError::TypeMismatch("if branches expect result value")
-          }
-          let then_result = then_stack[then_stack.length() - 1]
-          let else_result = else_stack[else_stack.length() - 1]
-          if then_result != t || else_result != t {
-            raise ValidationError::TypeMismatch("if branch result type mismatch")
-          }
-          stack.push(t)
+      // Pop parameters from parent stack
+      for i = params.length() - 1; i >= 0; i = i - 1 {
+        if stack.length() < 1 {
+          raise ValidationError::TypeMismatch("if expects parameters on stack")
         }
+        let param = stack.pop_exn()
+        if param != params[i] {
+          raise ValidationError::TypeMismatch("if parameter type mismatch")
+        }
+      }
+      // Validate then branch
+      let then_ctx = ValidationCtx::new()
+      for param in params {
+        then_ctx.stack.push(param)
+      }
+      // Copy parent control stack and add this if's frame
+      for frame in ctx.control_stack {
+        then_ctx.control_stack.push(frame)
+      }
+      then_ctx.push_control(params, results)
+      for then_instr in then_instrs {
+        validate_instruction(module, func_type, code, then_ctx, then_instr)
+      }
+      let _ = then_ctx.pop_control()
+      // Check then branch produces correct results
+      if then_ctx.unreachable {
+        // Unreachable - valid
+      } else if then_ctx.stack.length() != results.length() {
+        raise ValidationError::TypeMismatch(
+          "if then branch: expected \{results.length()} values, got \{then_ctx.stack.length()}",
+        )
+      } else {
+        // Exact match - validate result types
+        for i = 0; i < results.length(); i = i + 1 {
+          if then_ctx.stack[i] != results[i] {
+            raise ValidationError::TypeMismatch("if then branch result type mismatch")
+          }
+        }
+      }
+      // Validate else branch
+      let else_ctx = ValidationCtx::new()
+      for param in params {
+        else_ctx.stack.push(param)
+      }
+      // Copy parent control stack and add this if's frame
+      for frame in ctx.control_stack {
+        else_ctx.control_stack.push(frame)
+      }
+      else_ctx.push_control(params, results)
+      for else_instr in else_instrs {
+        validate_instruction(module, func_type, code, else_ctx, else_instr)
+      }
+      let _ = else_ctx.pop_control()
+      // Check else branch produces correct results
+      if else_ctx.unreachable {
+        // Unreachable - valid
+      } else if else_ctx.stack.length() != results.length() {
+        raise ValidationError::TypeMismatch(
+          "if else branch: expected \{results.length()} values, got \{else_ctx.stack.length()}",
+        )
+      } else {
+        // Exact match - validate result types
+        for i = 0; i < results.length(); i = i + 1 {
+          if else_ctx.stack[i] != results[i] {
+            raise ValidationError::TypeMismatch("if else branch result type mismatch")
+          }
+        }
+      }
+      // Push results onto parent stack
+      for result in results {
+        stack.push(result)
       }
     }
 
     // Control flow
     Return => {
-      stack.clear()
-      if func_type.results.length() > 0 {
-        stack.push(func_type.results[0])
+      // Check we have the right values on stack for function return
+      if stack.length() < func_type.results.length() {
+        raise ValidationError::TypeMismatch(
+          "return: expected \{func_type.results.length()} values on stack",
+        )
       }
+      // Validate result types
+      for i = 0; i < func_type.results.length(); i = i + 1 {
+        let stack_idx = stack.length() - func_type.results.length() + i
+        if stack[stack_idx] != func_type.results[i] {
+          raise ValidationError::TypeMismatch("return: result type mismatch")
+        }
+      }
+      // Mark as unreachable and clear stack
+      ctx.unreachable = true
+      stack.clear()
+    }
+
+    Br(label) => {
+      // Unconditional branch - validate we have required values for target
+      let target_types = ctx.get_label_types(label)
+      if stack.length() < target_types.length() {
+        raise ValidationError::TypeMismatch(
+          "br: expected \{target_types.length()} values on stack for branch target",
+        )
+      }
+      // Validate types for the branch target
+      for i = 0; i < target_types.length(); i = i + 1 {
+        let stack_idx = stack.length() - target_types.length() + i
+        if stack[stack_idx] != target_types[i] {
+          raise ValidationError::TypeMismatch("br: branch target type mismatch")
+        }
+      }
+      // Mark as unreachable and clear stack
+      ctx.unreachable = true
+      stack.clear()
+    }
+
+    BrIf(_label) => {
+      // Conditional branch - pop i32 condition
+      if stack.length() < 1 {
+        raise ValidationError::TypeMismatch("br_if expects i32 condition on stack")
+      }
+      let cond = stack.pop_exn()
+      if cond != I32 {
+        raise ValidationError::TypeMismatch("br_if condition must be i32")
+      }
+      // Stack continues after (not unreachable)
+    }
+
+    BrTable(_labels, default_label) => {
+      // Table branch - pop i32 index
+      if stack.length() < 1 {
+        raise ValidationError::TypeMismatch("br_table expects i32 index on stack")
+      }
+      let index = stack.pop_exn()
+      if index != I32 {
+        raise ValidationError::TypeMismatch("br_table index must be i32")
+      }
+      // Validate we have required values for branch targets
+      let target_types = ctx.get_label_types(default_label)
+      if stack.length() < target_types.length() {
+        raise ValidationError::TypeMismatch(
+          "br_table: expected \{target_types.length()} values on stack for branch target",
+        )
+      }
+      // Code after is unreachable
+      ctx.unreachable = true
+      stack.clear()
     }
 
     Drop => {
@@ -279,7 +556,79 @@ fn validate_instruction(
       let _ = stack.pop_exn()
     }
 
+    Select => {
+      // Pop condition (i32), then two values of same type, push one back
+      if stack.length() < 3 {
+        raise ValidationError::TypeMismatch("select expects 3 values on stack")
+      }
+      let cond = stack.pop_exn()
+      if cond != I32 {
+        raise ValidationError::TypeMismatch("select condition must be i32")
+      }
+      let val2 = stack.pop_exn()
+      let val1 = stack.pop_exn()
+      // Both values should be same type
+      if val1 != val2 {
+        raise ValidationError::TypeMismatch("select values must have same type")
+      }
+      // Push the selected value type back
+      stack.push(val1)
+    }
+
     Nop => ()
+
+    Call(func_idx) => {
+      let idx = func_idx.reinterpret_as_int()
+      if idx < 0 || idx >= module.funcs.length() {
+        raise ValidationError::InvalidFunctionIndex(idx)
+      }
+      let type_idx = module.funcs[idx].reinterpret_as_int()
+      let func_type_called = module.types[type_idx]
+      // Pop arguments from stack
+      for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
+        if stack.length() < 1 {
+          raise ValidationError::TypeMismatch("call expects arguments on stack")
+        }
+        let arg = stack.pop_exn()
+        if arg != func_type_called.params[i] {
+          raise ValidationError::TypeMismatch("call argument type mismatch")
+        }
+      }
+      // Push results onto stack
+      for result in func_type_called.results {
+        stack.push(result)
+      }
+    }
+
+    CallIndirect(type_idx, _table_idx) => {
+      let idx = type_idx.reinterpret_as_int()
+      if idx < 0 || idx >= module.types.length() {
+        raise ValidationError::InvalidTypeIndex(idx)
+      }
+      let func_type_called = module.types[idx]
+      // Pop table index
+      if stack.length() < 1 {
+        raise ValidationError::TypeMismatch("call_indirect expects table index on stack")
+      }
+      let table_index = stack.pop_exn()
+      if table_index != I32 {
+        raise ValidationError::TypeMismatch("call_indirect table index must be i32")
+      }
+      // Pop arguments from stack
+      for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
+        if stack.length() < 1 {
+          raise ValidationError::TypeMismatch("call_indirect expects arguments on stack")
+        }
+        let arg = stack.pop_exn()
+        if arg != func_type_called.params[i] {
+          raise ValidationError::TypeMismatch("call_indirect argument type mismatch")
+        }
+      }
+      // Push results onto stack
+      for result in func_type_called.results {
+        stack.push(result)
+      }
+    }
 
     _ => ()
   }
@@ -292,20 +641,41 @@ fn validate_function(
   func_type : FuncType,
   code : Code
 ) -> Unit raise ValidationError {
-  // Simple stack-based type checking
-  let stack : Array[ValType] = []
+  // Create validation context
+  let ctx = ValidationCtx::new()
+  // Push function-level control frame with empty params and function results
+  ctx.push_control([], func_type.results)
 
   // Validate each instruction in the function body
   for instr in code.body.instrs {
-    validate_instruction(module, func_type, code, stack, instr)
+    validate_instruction(module, func_type, code, ctx, instr)
   }
 
   // Check final stack matches return type
-  if func_type.results.length() == 0 {
-    ()
-  } else if func_type.results.length() == 1 {
-    if stack.length() < 1 {
-      raise ValidationError::StackSizeMismatch("expected return value on stack")
+  let stack = ctx.stack
+  if ctx.unreachable {
+    // Unreachable code - valid regardless of stack
+  } else if stack.length() != func_type.results.length() {
+    // Stack size doesn't match expected return values
+    if stack.length() < func_type.results.length() {
+      raise ValidationError::StackSizeMismatch(
+        "function: expected \{func_type.results.length()} return values, got \{stack.length()}",
+      )
+    } else if func_type.results.length() == 0 && stack.length() > 0 {
+      raise ValidationError::StackSizeMismatch(
+        "function: void function should not have values on stack, got \{stack.length()}",
+      )
+    } else {
+      raise ValidationError::StackSizeMismatch(
+        "function: expected \{func_type.results.length()} return values, got \{stack.length()}",
+      )
+    }
+  } else {
+    // Check types from top of stack
+    for i = 0; i < func_type.results.length(); i = i + 1 {
+      if stack[i] != func_type.results[i] {
+        raise ValidationError::TypeMismatch("function return type mismatch")
+      }
     }
   }
 }
@@ -363,7 +733,10 @@ pub fn parse(b : Bytes) -> Module raise ValidationError {
       0 =>
         // Custom section - skip
         parser.pos = section_start + section_size.to_int()
-      _ => abort("unknown section id: \{section_id}")
+      _ => {
+        // Unknown section - skip it
+        parser.pos = section_start + section_size.to_int()
+      }
     }
   }
 
