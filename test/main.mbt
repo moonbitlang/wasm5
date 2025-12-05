@@ -21,7 +21,7 @@ fn TestContext::fail(
   self : TestContext,
   line : Int,
   test_type : String,
-  message : String
+  message : String,
 ) -> Unit {
   self.failures.push({ line, test_type, message, source_file: self.source_file })
 }
@@ -37,74 +37,30 @@ async fn parse_wasm_file(dir : String, file_name : String) -> @wasm5.Module {
 ///|
 /// Parse JSON arguments array into runtime values
 /// Returns None if there was an error (failure already recorded)
-fn parse_args(
-  ctx : TestContext,
-  args : Array[Json],
-  line : Int,
-  test_type : String
-) -> Array[@wasm5.Value]? {
+fn parse_args(args : Array[Json]) -> Array[@wasm5.Value] raise {
   let runtime_args : Array[@wasm5.Value] = []
   for arg in args {
     match arg {
       { "type": "i32", "value": String(v), .. } =>
-        try {
-          runtime_args.push(@wasm5.Value::I32(@strconv.parse_uint(v)))
-        } catch {
-          _ => {
-            ctx.fail(line, test_type, "invalid i32 value: \{v}")
-            return None
-          }
-        }
+        runtime_args.push(@wasm5.Value::I32(@strconv.parse_uint(v)))
       { "type": "i64", "value": String(v), .. } =>
-        try {
-          runtime_args.push(@wasm5.Value::I64(@strconv.parse_uint64(v)))
-        } catch {
-          _ => {
-            ctx.fail(line, test_type, "invalid i64 value: \{v}")
-            return None
-          }
-        }
-      _ => {
-        ctx.fail(line, test_type, "unsupported argument type")
-        return None
-      }
+        runtime_args.push(@wasm5.Value::I64(@strconv.parse_uint64(v)))
+      _ => fail("unsupported argument type")
     }
   }
-  Some(runtime_args)
+  runtime_args
 }
 
 ///|
 /// Parse a JSON value as an expected result
 /// Returns None if unsupported type (failure already recorded)
-fn parse_expected_value(
-  ctx : TestContext,
-  expected : Json,
-  line : Int,
-  test_type : String
-) -> @wasm5.Value? {
+fn parse_expected_value(expected : Json) -> @wasm5.Value raise {
   match expected {
     { "type": "i32", "value": String(v), .. } =>
-      try {
-        Some(@wasm5.Value::I32(@strconv.parse_uint(v)))
-      } catch {
-        _ => {
-          ctx.fail(line, test_type, "invalid expected i32 value: \{v}")
-          None
-        }
-      }
+      @wasm5.Value::I32(@strconv.parse_uint(v))
     { "type": "i64", "value": String(v), .. } =>
-      try {
-        Some(@wasm5.Value::I64(@strconv.parse_uint64(v)))
-      } catch {
-        _ => {
-          ctx.fail(line, test_type, "invalid expected i64 value: \{v}")
-          None
-        }
-      }
-    _ => {
-      ctx.fail(line, test_type, "unsupported expected result type")
-      None
-    }
+      @wasm5.Value::I64(@strconv.parse_uint64(v))
+    _ => fail("unsupported expected value type")
   }
 }
 
@@ -114,7 +70,7 @@ fn check_trap_error(
   ctx : TestContext,
   error : @wasm5.RuntimeError,
   expected_error : String,
-  line : Int
+  line : Int,
 ) -> Unit {
   match error {
     @wasm5.RuntimeError::DivisionByZero =>
@@ -174,7 +130,7 @@ fn check_validation_error(
   ctx : TestContext,
   error : @wasm5.ValidationError,
   expected_error : String,
-  line : Int
+  line : Int,
 ) -> Unit {
   match error {
     @wasm5.ValidationError::TypeMismatch(_) =>
@@ -222,7 +178,11 @@ fn check_validation_error(
 
 ///|
 /// Handle "module" command - load a module
-async fn handle_module(ctx : TestContext, filename : String, line : Int) -> Unit {
+async fn handle_module(
+  ctx : TestContext,
+  filename : String,
+  line : Int,
+) -> Unit {
   try {
     let module_ = parse_wasm_file(ctx.dir, filename)
     ctx.runtime = Some(@wasm5.Runtime::load(module_))
@@ -238,14 +198,13 @@ fn handle_assert_return(
   fn_name : String,
   args : Array[Json],
   expected : Array[Json],
-  line : Int
-) -> Unit {
-  guard parse_args(ctx, args, line, "assert_return") is Some(runtime_args) else {
-    return
-  }
+  line : Int,
+) -> Unit raise {
+  let runtime_args = parse_args(args)
   guard ctx.runtime is Some(rt) else {
-    ctx.fail(line, "assert_return", "no module loaded (previous module failed to load)")
-    return
+    ctx.fail(
+      line, "assert_return", "no module loaded (previous module failed to load)",
+    )
   }
   try {
     let results = rt.call(
@@ -259,26 +218,19 @@ fn handle_assert_return(
         "assert_return",
         "expected \{expected.length()} results, got \{results.length()}",
       )
-      return
     }
     // Validate each result
-    for idx = 0; idx < expected.length(); idx = idx + 1 {
-      guard parse_expected_value(ctx, expected[idx], line, "assert_return")
-        is Some(expected_value) else {
-        return
-      }
+    for idx in 0..<expected.length() {
+      let expected_value = parse_expected_value(expected[idx])
       if results[idx] != expected_value {
         ctx.fail(
           line,
           "assert_return",
           "at result \{idx}: expected \{expected_value}, got \{results[idx]}",
         )
-        return
       }
     }
   } catch {
-    @wasm5.RuntimeError::UnimplementedInstruction(msg) =>
-      ctx.fail(line, "assert_return", "Unimplemented: \{msg}")
     e => ctx.fail(line, "assert_return", "Test failed with error: \{e}")
   }
 }
@@ -290,13 +242,13 @@ fn handle_assert_trap(
   fn_name : String,
   args : Array[Json],
   expected_error : String,
-  line : Int
-) -> Unit {
-  guard parse_args(ctx, args, line, "assert_trap") is Some(runtime_args) else {
-    return
-  }
+  line : Int,
+) -> Unit raise {
+  let runtime_args = parse_args(args)
   guard ctx.runtime is Some(rt) else {
-    ctx.fail(line, "assert_trap", "no module loaded (previous module failed to load)")
+    ctx.fail(
+      line, "assert_trap", "no module loaded (previous module failed to load)",
+    )
     return
   }
   try {
@@ -320,7 +272,7 @@ async fn handle_assert_invalid(
   ctx : TestContext,
   filename : String,
   expected_error : String,
-  line : Int
+  line : Int,
 ) -> Unit {
   try {
     let _ = parse_wasm_file(ctx.dir, filename)
@@ -356,7 +308,7 @@ async fn handle_assert_invalid(
 async fn process_command(ctx : TestContext, cmd : Json) -> Unit {
   match cmd {
     // Load module
-    { "type": "module", "filename": String(filename), "line"?: line, .. } => {
+    { "type": "module", "filename": String(filename), "line"? : line, .. } => {
       let line = if line is Some(Number(n, ..)) { n.to_int() } else { -1 }
       handle_module(ctx, filename, line)
     }
@@ -364,35 +316,42 @@ async fn process_command(ctx : TestContext, cmd : Json) -> Unit {
     {
       "type": "assert_return",
       "line": Number(line, ..),
-      "action": { "type": "invoke", "field": String(fn_name), "args": Array(args), .. },
+      "action": {
+        "type": "invoke",
+        "field": String(fn_name),
+        "args": Array(args),
+        ..
+      },
       "expected": Array(expected),
       ..
-    } =>
-      handle_assert_return(ctx, fn_name, args, expected, line.to_int())
+    } => handle_assert_return(ctx, fn_name, args, expected, line.to_int())
     // Assert function returns (unsupported action type)
     { "type": "assert_return", "line": Number(line, ..), "action": action, .. } =>
-      ctx.fail(line.to_int(), "assert_return", "unsupported action type: \{action}")
+      ctx.fail(
+        line.to_int(),
+        "assert_return",
+        "unsupported action type: \{action}",
+      )
     // Assert function traps
     {
       "type": "assert_trap",
       "line": Number(line, ..),
-      "action": { "type": "invoke", "field": String(fn_name), "args": Array(args), .. },
+      "action": {
+        "type": "invoke",
+        "field": String(fn_name),
+        "args": Array(args),
+        ..
+      },
       "text": String(expected_error),
       ..
-    } =>
-      handle_assert_trap(ctx, fn_name, args, expected_error, line.to_int())
-    // Assert function traps (unsupported action type)
-    { "type": "assert_trap", "line": Number(line, ..), "action": action, .. } =>
-      ctx.fail(line.to_int(), "assert_trap", "unsupported action type: \{action}")
-    // Assert module is invalid
+    } => handle_assert_trap(ctx, fn_name, args, expected_error, line.to_int())
     {
       "type": "assert_invalid",
       "line": Number(line, ..),
       "filename": String(filename),
       "text": String(expected_error),
       ..
-    } =>
-      handle_assert_invalid(ctx, filename, expected_error, line.to_int())
+    } => handle_assert_invalid(ctx, filename, expected_error, line.to_int())
     // Skip malformed tests (WAT parser not implemented)
     { "type": "assert_malformed", .. } => ()
     // Unknown command type
@@ -407,7 +366,7 @@ async fn process_meta(
   dir : String,
   json_file : String,
   failures : Array[TestFailure],
-  source_file : String
+  source_file : String,
 ) -> Unit {
   let file = @fs.open(dir + json_file, mode=ReadOnly)
   defer file.close()
@@ -444,7 +403,7 @@ async fn collect_wast_files(dir : String) -> Array[String] {
 ///|
 async fn process_wast_file(
   wast_dir : String,
-  wast_file : String
+  wast_file : String,
 ) -> Array[TestFailure] {
   guard wast_file.strip_suffix(".wast") is Some(base_name) else {
     abort("Invalid wast file name: \{wast_file}")
