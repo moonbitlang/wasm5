@@ -27,7 +27,7 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
 /// Get the function type signature for a block type
 fn get_block_type(
   module : Module,
-  block_type : BlockType
+  block_type : BlockType,
 ) -> (Array[ValType], Array[ValType]) {
   match block_type {
     Empty => ([], [])
@@ -39,6 +39,7 @@ fn get_block_type(
   }
 }
 
+///|
 /// Validation context that tracks both the type stack and unreachable state
 struct ValidationCtx {
   stack : Array[ValType]
@@ -48,25 +49,31 @@ struct ValidationCtx {
   control_stack : Array[(Array[ValType], Array[ValType])] // (params, results) for each control frame
 }
 
+///|
 fn ValidationCtx::new() -> ValidationCtx {
   { stack: [], unreachable: false, control_stack: [] }
 }
 
+///|
 fn ValidationCtx::push_control(
   self : ValidationCtx,
   params : Array[ValType],
-  results : Array[ValType]
+  results : Array[ValType],
 ) -> Unit {
   self.control_stack.push((params, results))
 }
 
-fn ValidationCtx::pop_control(self : ValidationCtx) -> (Array[ValType], Array[ValType]) {
+///|
+fn ValidationCtx::pop_control(
+  self : ValidationCtx,
+) -> (Array[ValType], Array[ValType]) {
   self.control_stack.pop_exn()
 }
 
+///|
 fn ValidationCtx::get_label_types(
   self : ValidationCtx,
-  label : UInt
+  label : UInt,
 ) -> Array[ValType] {
   // Labels are relative depth: 0 is innermost, 1 is next outer, etc.
   let idx = self.control_stack.length() - 1 - label.reinterpret_as_int()
@@ -85,7 +92,7 @@ fn validate_instruction(
   func_type : FuncType,
   code : Code,
   ctx : ValidationCtx,
-  instr : Instr
+  instr : Instr,
 ) -> Unit raise ValidationError {
   let stack = ctx.stack
   match instr {
@@ -96,28 +103,58 @@ fn validate_instruction(
     F64Const(_) => stack.push(F64)
 
     // Binary operations
-    I32Add | I32Sub | I32Mul | I32DivS | I32DivU | I32RemS | I32RemU |
-    I32And | I32Or | I32Xor | I32Shl | I32ShrS | I32ShrU | I32Rotl | I32Rotr => {
+    I32Add
+    | I32Sub
+    | I32Mul
+    | I32DivS
+    | I32DivU
+    | I32RemS
+    | I32RemU
+    | I32And
+    | I32Or
+    | I32Xor
+    | I32Shl
+    | I32ShrS
+    | I32ShrU
+    | I32Rotl
+    | I32Rotr => {
       if stack.length() < 2 {
-        raise ValidationError::TypeMismatch("expected at least 2 values on stack for binary op")
+        raise ValidationError::TypeMismatch(
+          "expected at least 2 values on stack for binary op",
+        )
       }
       let b = stack.pop_exn()
       let a = stack.pop_exn()
       if a != I32 || b != I32 {
-        raise ValidationError::TypeMismatch("i32 binary operation requires i32 operands")
+        raise ValidationError::TypeMismatch(
+          "i32 binary operation requires i32 operands",
+        )
       }
       stack.push(I32)
     }
 
     // Comparison operations
-    I32Eq | I32Ne | I32LtS | I32LtU | I32GtS | I32GtU | I32LeS | I32LeU | I32GeS | I32GeU => {
+    I32Eq
+    | I32Ne
+    | I32LtS
+    | I32LtU
+    | I32GtS
+    | I32GtU
+    | I32LeS
+    | I32LeU
+    | I32GeS
+    | I32GeU => {
       if stack.length() < 2 {
-        raise ValidationError::TypeMismatch("expected at least 2 values on stack for comparison")
+        raise ValidationError::TypeMismatch(
+          "expected at least 2 values on stack for comparison",
+        )
       }
       let b = stack.pop_exn()
       let a = stack.pop_exn()
       if a != I32 || b != I32 {
-        raise ValidationError::TypeMismatch("i32 comparison requires i32 operands")
+        raise ValidationError::TypeMismatch(
+          "i32 comparison requires i32 operands",
+        )
       }
       stack.push(I32)
     }
@@ -125,38 +162,72 @@ fn validate_instruction(
     // Unary operations
     I32Eqz | I32Clz | I32Ctz | I32Popcnt | I32Extend8S | I32Extend16S => {
       if stack.length() < 1 {
-        raise ValidationError::TypeMismatch("expected at least 1 value on stack for unary op")
+        raise ValidationError::TypeMismatch(
+          "expected at least 1 value on stack for unary op",
+        )
       }
       let a = stack.pop_exn()
       if a != I32 {
-        raise ValidationError::TypeMismatch("i32 unary operation requires i32 operand")
+        raise ValidationError::TypeMismatch(
+          "i32 unary operation requires i32 operand",
+        )
       }
       stack.push(I32)
     }
 
     // i64 binary operations
-    I64Add | I64Sub | I64Mul | I64DivS | I64DivU | I64RemS | I64RemU |
-    I64And | I64Or | I64Xor | I64Shl | I64ShrS | I64ShrU | I64Rotl | I64Rotr => {
+    I64Add
+    | I64Sub
+    | I64Mul
+    | I64DivS
+    | I64DivU
+    | I64RemS
+    | I64RemU
+    | I64And
+    | I64Or
+    | I64Xor
+    | I64Shl
+    | I64ShrS
+    | I64ShrU
+    | I64Rotl
+    | I64Rotr => {
       if stack.length() < 2 {
-        raise ValidationError::TypeMismatch("expected at least 2 values on stack for binary op")
+        raise ValidationError::TypeMismatch(
+          "expected at least 2 values on stack for binary op",
+        )
       }
       let b = stack.pop_exn()
       let a = stack.pop_exn()
       if a != I64 || b != I64 {
-        raise ValidationError::TypeMismatch("i64 binary operation requires i64 operands")
+        raise ValidationError::TypeMismatch(
+          "i64 binary operation requires i64 operands",
+        )
       }
       stack.push(I64)
     }
 
     // i64 comparison operations
-    I64Eq | I64Ne | I64LtS | I64LtU | I64GtS | I64GtU | I64LeS | I64LeU | I64GeS | I64GeU => {
+    I64Eq
+    | I64Ne
+    | I64LtS
+    | I64LtU
+    | I64GtS
+    | I64GtU
+    | I64LeS
+    | I64LeU
+    | I64GeS
+    | I64GeU => {
       if stack.length() < 2 {
-        raise ValidationError::TypeMismatch("expected at least 2 values on stack for comparison")
+        raise ValidationError::TypeMismatch(
+          "expected at least 2 values on stack for comparison",
+        )
       }
       let b = stack.pop_exn()
       let a = stack.pop_exn()
       if a != I64 || b != I64 {
-        raise ValidationError::TypeMismatch("i64 comparison requires i64 operands")
+        raise ValidationError::TypeMismatch(
+          "i64 comparison requires i64 operands",
+        )
       }
       stack.push(I32)
     }
@@ -164,7 +235,9 @@ fn validate_instruction(
     // i64 test operation (returns i32)
     I64Eqz => {
       if stack.length() < 1 {
-        raise ValidationError::TypeMismatch("expected at least 1 value on stack for unary op")
+        raise ValidationError::TypeMismatch(
+          "expected at least 1 value on stack for unary op",
+        )
       }
       let a = stack.pop_exn()
       if a != I64 {
@@ -176,11 +249,15 @@ fn validate_instruction(
     // i64 unary operations (return i64)
     I64Clz | I64Ctz | I64Popcnt | I64Extend8S | I64Extend16S | I64Extend32S => {
       if stack.length() < 1 {
-        raise ValidationError::TypeMismatch("expected at least 1 value on stack for unary op")
+        raise ValidationError::TypeMismatch(
+          "expected at least 1 value on stack for unary op",
+        )
       }
       let a = stack.pop_exn()
       if a != I64 {
-        raise ValidationError::TypeMismatch("i64 unary operation requires i64 operand")
+        raise ValidationError::TypeMismatch(
+          "i64 unary operation requires i64 operand",
+        )
       }
       stack.push(I64)
     }
@@ -188,11 +265,15 @@ fn validate_instruction(
     // i32 to i64 conversion operations
     I64ExtendI32S | I64ExtendI32U => {
       if stack.length() < 1 {
-        raise ValidationError::TypeMismatch("expected i32 on stack for i64 extension")
+        raise ValidationError::TypeMismatch(
+          "expected i32 on stack for i64 extension",
+        )
       }
       let a = stack.pop_exn()
       if a != I32 {
-        raise ValidationError::TypeMismatch("i64 extension requires i32 operand")
+        raise ValidationError::TypeMismatch(
+          "i64 extension requires i32 operand",
+        )
       }
       stack.push(I64)
     }
@@ -200,12 +281,16 @@ fn validate_instruction(
     // f32 comparison operations
     F32Eq | F32Ne | F32Lt | F32Gt | F32Le | F32Ge => {
       if stack.length() < 2 {
-        raise ValidationError::TypeMismatch("expected at least 2 values on stack for comparison")
+        raise ValidationError::TypeMismatch(
+          "expected at least 2 values on stack for comparison",
+        )
       }
       let b = stack.pop_exn()
       let a = stack.pop_exn()
       if a != F32 || b != F32 {
-        raise ValidationError::TypeMismatch("f32 comparison requires f32 operands")
+        raise ValidationError::TypeMismatch(
+          "f32 comparison requires f32 operands",
+        )
       }
       stack.push(I32)
     }
@@ -224,7 +309,6 @@ fn validate_instruction(
       }
       stack.push(local_type)
     }
-
     LocalSet(idx) | LocalTee(idx) => {
       let local_idx = idx.reinterpret_as_int()
       let total_locals = func_type.params.length() + code.locals.length()
@@ -232,7 +316,9 @@ fn validate_instruction(
         raise ValidationError::InvalidLocalIndex(local_idx)
       }
       if stack.length() < 1 {
-        raise ValidationError::TypeMismatch("expected value on stack for local.set")
+        raise ValidationError::TypeMismatch(
+          "expected value on stack for local.set",
+        )
       }
       let val_type = stack.pop_exn()
       match instr {
@@ -249,22 +335,26 @@ fn validate_instruction(
       }
       stack.push(module.globals[global_idx].type_.val_type)
     }
-
     GlobalSet(idx) => {
       let global_idx = idx.reinterpret_as_int()
       if global_idx < 0 || global_idx >= module.globals.length() {
         raise ValidationError::InvalidGlobalIndex(global_idx)
       }
       if stack.length() < 1 {
-        raise ValidationError::TypeMismatch("expected value on stack for global.set")
+        raise ValidationError::TypeMismatch(
+          "expected value on stack for global.set",
+        )
       }
       let _ = stack.pop_exn()
+
     }
 
     // Memory operations
     I32Load(_, _) => {
       if stack.length() < 1 {
-        raise ValidationError::TypeMismatch("expected address on stack for i32.load")
+        raise ValidationError::TypeMismatch(
+          "expected address on stack for i32.load",
+        )
       }
       let addr = stack.pop_exn()
       if addr != I32 {
@@ -272,15 +362,18 @@ fn validate_instruction(
       }
       stack.push(I32)
     }
-
     I32Store(_, _) => {
       if stack.length() < 2 {
-        raise ValidationError::TypeMismatch("expected address and value on stack for i32.store")
+        raise ValidationError::TypeMismatch(
+          "expected address and value on stack for i32.store",
+        )
       }
       let value = stack.pop_exn()
       let addr = stack.pop_exn()
       if addr != I32 || value != I32 {
-        raise ValidationError::TypeMismatch("i32.store requires i32 address and value")
+        raise ValidationError::TypeMismatch(
+          "i32.store requires i32 address and value",
+        )
       }
     }
 
@@ -290,7 +383,9 @@ fn validate_instruction(
       // Pop parameters from parent stack and push onto block stack
       for i = params.length() - 1; i >= 0; i = i - 1 {
         if stack.length() < 1 {
-          raise ValidationError::TypeMismatch("block expects parameters on stack")
+          raise ValidationError::TypeMismatch(
+            "block expects parameters on stack",
+          )
         }
         let param = stack.pop_exn()
         if param != params[i] {
@@ -337,13 +432,14 @@ fn validate_instruction(
         }
       }
     }
-
     Loop(block_type, instrs) => {
       let (params, results) = get_block_type(module, block_type)
       // Pop parameters from parent stack and push onto loop stack
       for i = params.length() - 1; i >= 0; i = i - 1 {
         if stack.length() < 1 {
-          raise ValidationError::TypeMismatch("loop expects parameters on stack")
+          raise ValidationError::TypeMismatch(
+            "loop expects parameters on stack",
+          )
         }
         let param = stack.pop_exn()
         if param != params[i] {
@@ -391,7 +487,6 @@ fn validate_instruction(
         }
       }
     }
-
     If(block_type, then_instrs, else_instrs) => {
       let (params, results) = get_block_type(module, block_type)
       // Pop condition
@@ -437,7 +532,9 @@ fn validate_instruction(
         // Exact match - validate result types
         for i = 0; i < results.length(); i = i + 1 {
           if then_ctx.stack[i] != results[i] {
-            raise ValidationError::TypeMismatch("if then branch result type mismatch")
+            raise ValidationError::TypeMismatch(
+              "if then branch result type mismatch",
+            )
           }
         }
       }
@@ -466,7 +563,9 @@ fn validate_instruction(
         // Exact match - validate result types
         for i = 0; i < results.length(); i = i + 1 {
           if else_ctx.stack[i] != results[i] {
-            raise ValidationError::TypeMismatch("if else branch result type mismatch")
+            raise ValidationError::TypeMismatch(
+              "if else branch result type mismatch",
+            )
           }
         }
       }
@@ -495,7 +594,6 @@ fn validate_instruction(
       ctx.unreachable = true
       stack.clear()
     }
-
     Br(label) => {
       // Unconditional branch - validate we have required values for target
       let target_types = ctx.get_label_types(label)
@@ -515,11 +613,12 @@ fn validate_instruction(
       ctx.unreachable = true
       stack.clear()
     }
-
     BrIf(_label) => {
       // Conditional branch - pop i32 condition
       if stack.length() < 1 {
-        raise ValidationError::TypeMismatch("br_if expects i32 condition on stack")
+        raise ValidationError::TypeMismatch(
+          "br_if expects i32 condition on stack",
+        )
       }
       let cond = stack.pop_exn()
       if cond != I32 {
@@ -527,11 +626,12 @@ fn validate_instruction(
       }
       // Stack continues after (not unreachable)
     }
-
     BrTable(_labels, default_label) => {
       // Table branch - pop i32 index
       if stack.length() < 1 {
-        raise ValidationError::TypeMismatch("br_table expects i32 index on stack")
+        raise ValidationError::TypeMismatch(
+          "br_table expects i32 index on stack",
+        )
       }
       let index = stack.pop_exn()
       if index != I32 {
@@ -548,14 +648,13 @@ fn validate_instruction(
       ctx.unreachable = true
       stack.clear()
     }
-
     Drop => {
       if stack.length() < 1 {
         raise ValidationError::TypeMismatch("expected value on stack for drop")
       }
       let _ = stack.pop_exn()
-    }
 
+    }
     Select => {
       // Pop condition (i32), then two values of same type, push one back
       if stack.length() < 3 {
@@ -574,9 +673,7 @@ fn validate_instruction(
       // Push the selected value type back
       stack.push(val1)
     }
-
     Nop => ()
-
     Call(func_idx) => {
       let idx = func_idx.reinterpret_as_int()
       if idx < 0 || idx >= module.funcs.length() {
@@ -599,7 +696,6 @@ fn validate_instruction(
         stack.push(result)
       }
     }
-
     CallIndirect(type_idx, _table_idx) => {
       let idx = type_idx.reinterpret_as_int()
       if idx < 0 || idx >= module.types.length() {
@@ -608,20 +704,28 @@ fn validate_instruction(
       let func_type_called = module.types[idx]
       // Pop table index
       if stack.length() < 1 {
-        raise ValidationError::TypeMismatch("call_indirect expects table index on stack")
+        raise ValidationError::TypeMismatch(
+          "call_indirect expects table index on stack",
+        )
       }
       let table_index = stack.pop_exn()
       if table_index != I32 {
-        raise ValidationError::TypeMismatch("call_indirect table index must be i32")
+        raise ValidationError::TypeMismatch(
+          "call_indirect table index must be i32",
+        )
       }
       // Pop arguments from stack
       for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
         if stack.length() < 1 {
-          raise ValidationError::TypeMismatch("call_indirect expects arguments on stack")
+          raise ValidationError::TypeMismatch(
+            "call_indirect expects arguments on stack",
+          )
         }
         let arg = stack.pop_exn()
         if arg != func_type_called.params[i] {
-          raise ValidationError::TypeMismatch("call_indirect argument type mismatch")
+          raise ValidationError::TypeMismatch(
+            "call_indirect argument type mismatch",
+          )
         }
       }
       // Push results onto stack
@@ -629,7 +733,6 @@ fn validate_instruction(
         stack.push(result)
       }
     }
-
     _ => ()
   }
 }
@@ -639,7 +742,7 @@ fn validate_instruction(
 fn validate_function(
   module : Module,
   func_type : FuncType,
-  code : Code
+  code : Code,
 ) -> Unit raise ValidationError {
   // Create validation context
   let ctx = ValidationCtx::new()
@@ -680,6 +783,7 @@ fn validate_function(
   }
 }
 
+///|
 pub fn parse(b : Bytes) -> Module raise ValidationError {
   let parser = Parser::new(b)
 
@@ -713,7 +817,6 @@ pub fn parse(b : Bytes) -> Module raise ValidationError {
   let mut imports : Array[Import] = []
   let mut exports : Array[Export] = []
   let mut codes : Array[Code] = []
-
   while not(parser.eof()) {
     let section_id = parser.read_byte()
     let section_size = parser.read_u32_leb128()
@@ -733,13 +836,11 @@ pub fn parse(b : Bytes) -> Module raise ValidationError {
       0 =>
         // Custom section - skip
         parser.pos = section_start + section_size.to_int()
-      _ => {
+      _ =>
         // Unknown section - skip it
         parser.pos = section_start + section_size.to_int()
-      }
     }
   }
-
   let module_ = Module::{
     types,
     funcs,
@@ -756,6 +857,5 @@ pub fn parse(b : Bytes) -> Module raise ValidationError {
 
   // Validate the module
   validate_module(module_)
-
   module_
 }

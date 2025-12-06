@@ -114,45 +114,24 @@ fn Parser::read_i64_leb128(self : Parser) -> Int64 {
 
 ///|
 fn Parser::read_f32(self : Parser) -> Float {
-  let b0 = self.read_byte()
-  let b1 = self.read_byte()
-  let b2 = self.read_byte()
-  let b3 = self.read_byte()
-  let bits = b0 | b1.lsl(8) | b2.lsl(16) | b3.lsl(24)
-  // Placeholder: need from_bits function
-  reinterpret_i32_as_f32(bits)
+  match self.bytes[self.pos:] {
+    [u32le(bits), ..] => {
+      self.pos = self.pos + 4
+      Float::reinterpret_from_uint(bits)
+    }
+    _ => abort("unexpected end of file")
+  }
 }
 
 ///|
 fn Parser::read_f64(self : Parser) -> Double {
-  let b0 = self.read_byte().to_int64()
-  let b1 = self.read_byte().to_int64()
-  let b2 = self.read_byte().to_int64()
-  let b3 = self.read_byte().to_int64()
-  let b4 = self.read_byte().to_int64()
-  let b5 = self.read_byte().to_int64()
-  let b6 = self.read_byte().to_int64()
-  let b7 = self.read_byte().to_int64()
-  let bits = b0 |
-    b1.lsl(8) |
-    b2.lsl(16) |
-    b3.lsl(24) |
-    b4.lsl(32) |
-    b5.lsl(40) |
-    b6.lsl(48) |
-    b7.lsl(56)
-  // Placeholder: need from_bits function
-  reinterpret_i64_as_f64(bits)
-}
-
-///|
-fn reinterpret_i32_as_f32(bits : Int) -> Float {
-  Float::reinterpret_from_int(bits)
-}
-
-///|
-fn reinterpret_i64_as_f64(bits : Int64) -> Double {
-  bits.reinterpret_as_double()
+  match self.bytes[self.pos:] {
+    [u64le(bits), ..] => {
+      self.pos = self.pos + 8
+      UInt64::reinterpret_as_double(bits)
+    }
+    _ => abort("unexpected end of file")
+  }
 }
 
 // Read name (length-prefixed UTF-8 string)
@@ -178,7 +157,10 @@ fn Parser::read_valtype(self : Parser) -> ValType raise ValidationError {
     0x7B => V128
     0x70 => FuncRef
     0x6F => ExternRef
-    _ => raise ValidationError::TypeMismatch("invalid value type: 0x\{byte.to_string()}")
+    _ =>
+      raise ValidationError::TypeMismatch(
+        "invalid value type: 0x\{byte.to_string()}",
+      )
   }
 }
 
@@ -190,7 +172,10 @@ fn Parser::read_reftype(self : Parser) -> RefType raise ValidationError {
   match byte {
     0x70 => FuncRef
     0x6F => ExternRef
-    _ => raise ValidationError::TypeMismatch("invalid reference type: 0x\{byte.to_string()}")
+    _ =>
+      raise ValidationError::TypeMismatch(
+        "invalid reference type: 0x\{byte.to_string()}",
+      )
   }
 }
 
@@ -213,7 +198,9 @@ fn parse_type_section(parser : Parser) -> Array[FuncType] raise ValidationError 
   for i = 0; i < count; i = i + 1 {
     let tag = parser.read_byte()
     if tag != 0x60 {
-      raise ValidationError::TypeMismatch("expected function type tag 0x60, got 0x\{tag.to_string()}")
+      raise ValidationError::TypeMismatch(
+        "expected function type tag 0x60, got 0x\{tag.to_string()}",
+      )
     }
 
     // Read params
@@ -255,7 +242,10 @@ fn parse_import_section(parser : Parser) -> Array[Import] raise ValidationError 
         let mutable = parser.read_byte() == 0x01
         ImportDesc::Global({ val_type, mutable })
       }
-      _ => raise ValidationError::TypeMismatch("invalid import descriptor tag: 0x\{desc_tag.to_string()}")
+      _ =>
+        raise ValidationError::TypeMismatch(
+          "invalid import descriptor tag: 0x\{desc_tag.to_string()}",
+        )
     }
     imports.push({ module, name, desc })
   }
@@ -273,7 +263,9 @@ fn parse_function_section(parser : Parser) -> Array[UInt] {
 }
 
 ///|
-fn parse_table_section(parser : Parser) -> Array[TableType] raise ValidationError {
+fn parse_table_section(
+  parser : Parser,
+) -> Array[TableType] raise ValidationError {
   let count = parser.read_u32_leb128().to_int()
   let tables = []
   for i = 0; i < count; i = i + 1 {
@@ -320,7 +312,10 @@ fn parse_export_section(parser : Parser) -> Array[Export] raise ValidationError 
       0x01 => ExportDesc::Table(parser.read_u32_leb128())
       0x02 => ExportDesc::Mem(parser.read_u32_leb128())
       0x03 => ExportDesc::Global(parser.read_u32_leb128())
-      _ => raise ValidationError::TypeMismatch("invalid export descriptor tag: 0x\{desc_tag.to_string()}")
+      _ =>
+        raise ValidationError::TypeMismatch(
+          "invalid export descriptor tag: 0x\{desc_tag.to_string()}",
+        )
     }
     exports.push({ name, desc })
   }
@@ -751,7 +746,10 @@ fn parse_instr(parser : Parser, opcode : Int) -> Instr raise ValidationError {
     0xC2 => I64Extend8S
     0xC3 => I64Extend16S
     0xC4 => I64Extend32S
-    _ => raise ValidationError::TypeMismatch("unknown opcode: 0x\{opcode.to_string().to_upper()}")
+    _ =>
+      raise ValidationError::TypeMismatch(
+        "unknown opcode: 0x\{opcode.to_string().to_upper()}",
+      )
   }
 }
 

@@ -159,7 +159,9 @@ fn ExecutionContext::pop(self : ExecutionContext) -> Value raise RuntimeError {
 }
 
 ///|
-fn ExecutionContext::pop_i32(self : ExecutionContext) -> UInt raise RuntimeError {
+fn ExecutionContext::pop_i32(
+  self : ExecutionContext,
+) -> UInt raise RuntimeError {
   match self.pop() {
     I32(v) => v
     _ => raise RuntimeError::InvalidType("expected i32")
@@ -167,7 +169,9 @@ fn ExecutionContext::pop_i32(self : ExecutionContext) -> UInt raise RuntimeError
 }
 
 ///|
-fn ExecutionContext::pop_i64(self : ExecutionContext) -> UInt64 raise RuntimeError {
+fn ExecutionContext::pop_i64(
+  self : ExecutionContext,
+) -> UInt64 raise RuntimeError {
   match self.pop() {
     I64(v) => v
     _ => raise RuntimeError::InvalidType("expected i64")
@@ -175,7 +179,9 @@ fn ExecutionContext::pop_i64(self : ExecutionContext) -> UInt64 raise RuntimeErr
 }
 
 ///|
-fn ExecutionContext::pop_f32(self : ExecutionContext) -> Float raise RuntimeError {
+fn ExecutionContext::pop_f32(
+  self : ExecutionContext,
+) -> Float raise RuntimeError {
   match self.pop() {
     F32(v) => v
     _ => raise RuntimeError::InvalidType("expected f32")
@@ -183,7 +189,9 @@ fn ExecutionContext::pop_f32(self : ExecutionContext) -> Float raise RuntimeErro
 }
 
 ///|
-fn ExecutionContext::pop_f64(self : ExecutionContext) -> Double raise RuntimeError {
+fn ExecutionContext::pop_f64(
+  self : ExecutionContext,
+) -> Double raise RuntimeError {
   match self.pop() {
     F64(v) => v
     _ => raise RuntimeError::InvalidType("expected f64")
@@ -219,7 +227,10 @@ fn ExecutionContext::set_global(
 }
 
 ///|
-fn ExecutionContext::load_i32(self : ExecutionContext, addr : Int) -> UInt raise RuntimeError {
+fn ExecutionContext::load_i32(
+  self : ExecutionContext,
+  addr : Int,
+) -> UInt raise RuntimeError {
   if addr + 4 > self.memory.length() {
     raise RuntimeError::MemoryOutOfBounds
   }
@@ -240,13 +251,16 @@ fn ExecutionContext::store_i32(
     raise RuntimeError::MemoryOutOfBounds
   }
   self.memory[addr] = value.land(0xFF).to_byte()
-  self.memory[addr + 1] = ((value >> 8).land(0xFF)).to_byte()
-  self.memory[addr + 2] = ((value >> 16).land(0xFF)).to_byte()
-  self.memory[addr + 3] = ((value >> 24).land(0xFF)).to_byte()
+  self.memory[addr + 1] = (value >> 8).land(0xFF).to_byte()
+  self.memory[addr + 2] = (value >> 16).land(0xFF).to_byte()
+  self.memory[addr + 3] = (value >> 24).land(0xFF).to_byte()
 }
 
 ///|
-fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeError {
+fn execute_instr(
+  ctx : ExecutionContext,
+  instr : Instr,
+) -> Bool raise RuntimeError {
   // Returns true if should continue, false if should return
   match instr {
     // Numeric constants
@@ -365,19 +379,19 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
     I32And => {
       let b = ctx.pop_i32()
       let a = ctx.pop_i32()
-      ctx.push(I32(a.land(b)))
+      ctx.push(I32(a & b))
       true
     }
     I32Or => {
       let b = ctx.pop_i32()
       let a = ctx.pop_i32()
-      ctx.push(I32(a.lor(b)))
+      ctx.push(I32(a | b))
       true
     }
     I32Xor => {
       let b = ctx.pop_i32()
       let a = ctx.pop_i32()
-      ctx.push(I32(a.lxor(b)))
+      ctx.push(I32(a ^ b))
       true
     }
 
@@ -386,7 +400,7 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
       let b = ctx.pop_i32()
       let a = ctx.pop_i32()
       // Shift amount is modulo 32
-      let shift = b.land(0x1F)
+      let shift = b & 0x1F
       ctx.push(I32(a << shift.to_int()))
       true
     }
@@ -394,7 +408,7 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
       let b = ctx.pop_i32()
       let a = ctx.pop_i32()
       // Shift amount is modulo 32
-      let shift = b.land(0x1F)
+      let shift = b & 0x1F
       // Signed right shift: reinterpret as signed, shift, reinterpret back
       let result = (a.reinterpret_as_int() >> shift.to_int()).reinterpret_as_uint()
       ctx.push(I32(result))
@@ -404,7 +418,7 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
       let b = ctx.pop_i32()
       let a = ctx.pop_i32()
       // Shift amount is modulo 32
-      let shift = b.land(0x1F)
+      let shift = b & 0x1F
       // Unsigned right shift
       ctx.push(I32(a.lsr(shift.to_int())))
       true
@@ -416,7 +430,7 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
       let a = ctx.pop_i32()
       // Rotation amount is modulo 32
       let rotation = b.land(0x1F).to_int()
-      let result = (a << rotation).lor(a.lsr(32 - rotation))
+      let result = (a << rotation) | a.lsr(32 - rotation)
       ctx.push(I32(result))
       true
     }
@@ -425,7 +439,7 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
       let a = ctx.pop_i32()
       // Rotation amount is modulo 32
       let rotation = b.land(0x1F).to_int()
-      let result = a.lsr(rotation).lor(a << (32 - rotation))
+      let result = a.lsr(rotation) | (a << (32 - rotation))
       ctx.push(I32(result))
       true
     }
@@ -447,28 +461,48 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
       let b = ctx.pop_i32()
       let a = ctx.pop_i32()
       // Signed comparison: reinterpret as signed Int
-      ctx.push(I32(if a.reinterpret_as_int() < b.reinterpret_as_int() { 1 } else { 0 }))
+      ctx.push(
+        I32(if a.reinterpret_as_int() < b.reinterpret_as_int() { 1 } else { 0 }),
+      )
       true
     }
     I32GtS => {
       let b = ctx.pop_i32()
       let a = ctx.pop_i32()
       // Signed comparison: reinterpret as signed Int
-      ctx.push(I32(if a.reinterpret_as_int() > b.reinterpret_as_int() { 1 } else { 0 }))
+      ctx.push(
+        I32(if a.reinterpret_as_int() > b.reinterpret_as_int() { 1 } else { 0 }),
+      )
       true
     }
     I32LeS => {
       let b = ctx.pop_i32()
       let a = ctx.pop_i32()
       // Signed comparison: reinterpret as signed Int
-      ctx.push(I32(if a.reinterpret_as_int() <= b.reinterpret_as_int() { 1 } else { 0 }))
+      ctx.push(
+        I32(
+          if a.reinterpret_as_int() <= b.reinterpret_as_int() {
+            1
+          } else {
+            0
+          },
+        ),
+      )
       true
     }
     I32GeS => {
       let b = ctx.pop_i32()
       let a = ctx.pop_i32()
       // Signed comparison: reinterpret as signed Int
-      ctx.push(I32(if a.reinterpret_as_int() >= b.reinterpret_as_int() { 1 } else { 0 }))
+      ctx.push(
+        I32(
+          if a.reinterpret_as_int() >= b.reinterpret_as_int() {
+            1
+          } else {
+            0
+          },
+        ),
+      )
       true
     }
     I32LtU => {
@@ -526,10 +560,10 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
     I32Extend8S => {
       let a = ctx.pop_i32()
       // Extract low 8 bits and sign extend
-      let byte = a.land(0xFF)
-      let result = if byte.land(0x80) != 0 {
+      let byte = a & 0xFF
+      let result = if (byte & 0x80) != 0 {
         // Negative: sign extend with 1s
-        byte.lor(0xFFFFFF00U)
+        byte | 0xFFFFFF00U
       } else {
         // Positive: already correct
         byte
@@ -540,10 +574,10 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
     I32Extend16S => {
       let a = ctx.pop_i32()
       // Extract low 16 bits and sign extend
-      let half = a.land(0xFFFF)
-      let result = if half.land(0x8000) != 0 {
+      let half = a & 0xFFFF
+      let result = if (half & 0x8000) != 0 {
         // Negative: sign extend with 1s
-        half.lor(0xFFFF0000U)
+        half | 0xFFFF0000U
       } else {
         // Positive: already correct
         half
@@ -618,19 +652,19 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
     I64And => {
       let b = ctx.pop_i64()
       let a = ctx.pop_i64()
-      ctx.push(I64(a.land(b)))
+      ctx.push(I64(a & b))
       true
     }
     I64Or => {
       let b = ctx.pop_i64()
       let a = ctx.pop_i64()
-      ctx.push(I64(a.lor(b)))
+      ctx.push(I64(a | b))
       true
     }
     I64Xor => {
       let b = ctx.pop_i64()
       let a = ctx.pop_i64()
-      ctx.push(I64(a.lxor(b)))
+      ctx.push(I64(a ^ b))
       true
     }
 
@@ -638,14 +672,14 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
     I64Shl => {
       let b = ctx.pop_i64()
       let a = ctx.pop_i64()
-      let shift = b.land(0x3FUL)
+      let shift = b & 0x3FUL
       ctx.push(I64(a << shift.to_int()))
       true
     }
     I64ShrS => {
       let b = ctx.pop_i64()
       let a = ctx.pop_i64()
-      let shift = b.land(0x3FUL)
+      let shift = b & 0x3FUL
       let result = (a.reinterpret_as_int64() >> shift.to_int()).reinterpret_as_uint64()
       ctx.push(I64(result))
       true
@@ -653,7 +687,7 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
     I64ShrU => {
       let b = ctx.pop_i64()
       let a = ctx.pop_i64()
-      let shift = b.land(0x3FUL)
+      let shift = b & 0x3FUL
       ctx.push(I64(a.lsr(shift.to_int())))
       true
     }
@@ -663,7 +697,7 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
       let b = ctx.pop_i64()
       let a = ctx.pop_i64()
       let rotation = b.land(0x3FUL).to_int()
-      let result = (a << rotation).lor(a.lsr(64 - rotation))
+      let result = (a << rotation) | a.lsr(64 - rotation)
       ctx.push(I64(result))
       true
     }
@@ -671,7 +705,7 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
       let b = ctx.pop_i64()
       let a = ctx.pop_i64()
       let rotation = b.land(0x3FUL).to_int()
-      let result = a.lsr(rotation).lor(a << (64 - rotation))
+      let result = a.lsr(rotation) | (a << (64 - rotation))
       ctx.push(I64(result))
       true
     }
@@ -692,7 +726,15 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
     I64LtS => {
       let b = ctx.pop_i64()
       let a = ctx.pop_i64()
-      ctx.push(I32(if a.reinterpret_as_int64() < b.reinterpret_as_int64() { 1U } else { 0U }))
+      ctx.push(
+        I32(
+          if a.reinterpret_as_int64() < b.reinterpret_as_int64() {
+            1U
+          } else {
+            0U
+          },
+        ),
+      )
       true
     }
     I64LtU => {
@@ -704,7 +746,15 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
     I64GtS => {
       let b = ctx.pop_i64()
       let a = ctx.pop_i64()
-      ctx.push(I32(if a.reinterpret_as_int64() > b.reinterpret_as_int64() { 1U } else { 0U }))
+      ctx.push(
+        I32(
+          if a.reinterpret_as_int64() > b.reinterpret_as_int64() {
+            1U
+          } else {
+            0U
+          },
+        ),
+      )
       true
     }
     I64GtU => {
@@ -716,7 +766,15 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
     I64LeS => {
       let b = ctx.pop_i64()
       let a = ctx.pop_i64()
-      ctx.push(I32(if a.reinterpret_as_int64() <= b.reinterpret_as_int64() { 1U } else { 0U }))
+      ctx.push(
+        I32(
+          if a.reinterpret_as_int64() <= b.reinterpret_as_int64() {
+            1U
+          } else {
+            0U
+          },
+        ),
+      )
       true
     }
     I64LeU => {
@@ -728,7 +786,15 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
     I64GeS => {
       let b = ctx.pop_i64()
       let a = ctx.pop_i64()
-      ctx.push(I32(if a.reinterpret_as_int64() >= b.reinterpret_as_int64() { 1U } else { 0U }))
+      ctx.push(
+        I32(
+          if a.reinterpret_as_int64() >= b.reinterpret_as_int64() {
+            1U
+          } else {
+            0U
+          },
+        ),
+      )
       true
     }
     I64GeU => {
@@ -780,10 +846,10 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
     I64Extend8S => {
       let a = ctx.pop_i64()
       // Extract low 8 bits and sign extend
-      let byte = a.land(0xFFUL)
-      let result = if byte.land(0x80UL) != 0UL {
+      let byte = a & 0xFFUL
+      let result = if (byte & 0x80UL) != 0UL {
         // Negative: sign extend with 1s
-        byte.lor(0xFFFFFFFFFFFFFF00UL)
+        byte | 0xFFFFFFFFFFFFFF00UL
       } else {
         // Positive: already correct
         byte
@@ -794,10 +860,10 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
     I64Extend16S => {
       let a = ctx.pop_i64()
       // Extract low 16 bits and sign extend
-      let half = a.land(0xFFFFUL)
-      let result = if half.land(0x8000UL) != 0UL {
+      let half = a & 0xFFFFUL
+      let result = if (half & 0x8000UL) != 0UL {
         // Negative: sign extend with 1s
-        half.lor(0xFFFFFFFFFFFF0000UL)
+        half | 0xFFFFFFFFFFFF0000UL
       } else {
         // Positive: already correct
         half
@@ -808,10 +874,10 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
     I64Extend32S => {
       let a = ctx.pop_i64()
       // Extract low 32 bits and sign extend
-      let word = a.land(0xFFFFFFFFUL)
-      let result = if word.land(0x80000000UL) != 0UL {
+      let word = a & 0xFFFFFFFFUL
+      let result = if (word & 0x80000000UL) != 0UL {
         // Negative: sign extend with 1s
-        word.lor(0xFFFFFFFF00000000UL)
+        word | 0xFFFFFFFF00000000UL
       } else {
         // Positive: already correct
         word
@@ -823,19 +889,24 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
     // Memory operations
     I32Load(_align, offset) => {
       let addr = ctx.pop_i32()
-      let value = ctx.load_i32(addr.reinterpret_as_int() + offset.reinterpret_as_int())
+      let value = ctx.load_i32(
+        addr.reinterpret_as_int() + offset.reinterpret_as_int(),
+      )
       ctx.push(I32(value))
       true
     }
     I32Store(_align, offset) => {
       let value = ctx.pop_i32()
       let addr = ctx.pop_i32()
-      ctx.store_i32(addr.reinterpret_as_int() + offset.reinterpret_as_int(), value)
+      ctx.store_i32(
+        addr.reinterpret_as_int() + offset.reinterpret_as_int(),
+        value,
+      )
       true
     }
 
     // Block instructions
-    Block(_block_type, instrs) => {
+    Block(_block_type, instrs) =>
       // Execute block instructions
       try {
         for instr in instrs {
@@ -846,18 +917,15 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
         }
         true
       } catch {
-        RuntimeError::Branch(0U) => {
+        RuntimeError::Branch(0U) =>
           // Branch targets this block, exit normally
           true
-        }
-        RuntimeError::Branch(label) => {
+        RuntimeError::Branch(label) =>
           // Branch targets outer block, decrement and re-raise
           raise RuntimeError::Branch(label - 1U)
-        }
         e => raise e // Re-raise other runtime errors
       }
-    }
-    Loop(_block_type, instrs) => {
+    Loop(_block_type, instrs) =>
       // Execute loop instructions
       try {
         for instr in instrs {
@@ -868,20 +936,17 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
         }
         true
       } catch {
-        RuntimeError::Branch(0U) => {
+        RuntimeError::Branch(0U) =>
           // Branch to loop start - re-execute loop
           // Note: In WebAssembly, branching to a loop jumps to the start
           // For now, we'll just exit and let it continue
           // A proper implementation would need to loop back
           true
-        }
-        RuntimeError::Branch(label) => {
+        RuntimeError::Branch(label) =>
           // Branch targets outer block, decrement and re-raise
           raise RuntimeError::Branch(label - 1U)
-        }
         e => raise e // Re-raise other runtime errors
       }
-    }
     If(_block_type, then_instrs, else_instrs) => {
       // Pop condition
       let cond = ctx.pop_i32()
@@ -896,14 +961,12 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
         }
         true
       } catch {
-        RuntimeError::Branch(0U) => {
+        RuntimeError::Branch(0U) =>
           // Branch targets this if block, exit normally
           true
-        }
-        RuntimeError::Branch(label) => {
+        RuntimeError::Branch(label) =>
           // Branch targets outer block, decrement and re-raise
           raise RuntimeError::Branch(label - 1U)
-        }
         e => raise e // Re-raise other runtime errors
       }
     }
@@ -927,10 +990,9 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
       true
     }
     Nop => true
-    Br(label) => {
+    Br(label) =>
       // Unconditional branch to label
       raise RuntimeError::Branch(label)
-    }
     BrIf(label) => {
       // Conditional branch: pop i32, branch if non-zero
       let cond = ctx.pop_i32()
@@ -1009,10 +1071,10 @@ fn execute_instr(ctx : ExecutionContext, instr : Instr) -> Bool raise RuntimeErr
       ctx.push(I32(if a >= b { 1 } else { 0 }))
       true
     }
-
-    _ => {
-      raise RuntimeError::UnimplementedInstruction("instruction \{instr} not implemented")
-    }
+    _ =>
+      raise RuntimeError::UnimplementedInstruction(
+        "instruction \{instr} not implemented",
+      )
   }
 }
 
@@ -1073,7 +1135,6 @@ fn execute_function(
 
   // Restore the saved locals
   ctx.locals = saved_locals
-
   final_results
 }
 
