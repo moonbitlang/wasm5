@@ -13,6 +13,9 @@ moon build --target native
 
 # Run tests
 moon run test --target native
+
+# Run a WebAssembly module -- invoking "_start" function
+moon run cmd/main --target native -- run test/simple/fib.wasm
 ```
 
 ## Project Structure
