@@ -89,10 +89,10 @@ priv struct ExecutionContext {
 }
 
 ///|
-fn ExecutionContext::new(module : Module) -> ExecutionContext {
+fn ExecutionContext::new(module_ : Module) -> ExecutionContext {
   // Initialize memory
-  let memory_size = if module.mems.length() > 0 {
-    module.mems[0].limits.min.reinterpret_as_int() * 65536 // Pages to bytes
+  let memory_size = if module_.mems.length() > 0 {
+    module_.mems[0].limits.min.reinterpret_as_int() * 65536 // Pages to bytes
   } else {
     0
   }
@@ -100,16 +100,16 @@ fn ExecutionContext::new(module : Module) -> ExecutionContext {
 
   // Initialize globals
   let globals = []
-  for i = 0; i < module.globals.length(); i = i + 1 {
-    let global = module.globals[i]
+  for i = 0; i < module_.globals.length(); i = i + 1 {
+    let global = module_.globals[i]
     // Evaluate init expression
     let value = eval_const_expr(global.init, [])
     globals.push(value)
   }
 
   // Apply data segments
-  for i = 0; i < module.datas.length(); i = i + 1 {
-    let data = module.datas[i]
+  for i = 0; i < module_.datas.length(); i = i + 1 {
+    let data = module_.datas[i]
     let offset = eval_const_expr(data.offset, [])
     match offset {
       I32(off) => {
@@ -121,7 +121,7 @@ fn ExecutionContext::new(module : Module) -> ExecutionContext {
       _ => abort("data offset must be i32")
     }
   }
-  { module_: module, stack: [], locals: [], memory, globals, pc: 0 }
+  { module_, stack: [], locals: [], memory, globals, pc: 0 }
 }
 
 ///|
@@ -135,12 +135,13 @@ fn eval_const_expr(expr : Expr, globals : Array[Value]) -> Value {
     I64Const(v) => I64(v)
     F32Const(v) => F32(v)
     F64Const(v) => F64(v)
-    GlobalGet(idx) =>
-      if idx.to_int() < globals.length() {
-        globals[idx.to_int()]
-      } else {
+    GlobalGet(idx) => {
+      let idx_int = idx.reinterpret_as_int()
+      guard idx_int >= 0 && idx_int < globals.length() else {
         abort("global index out of bounds in init expression")
       }
+      globals[idx_int]
+    }
     _ => abort("unsupported init expression")
   }
 }
@@ -155,7 +156,7 @@ fn ExecutionContext::pop(self : ExecutionContext) -> Value raise RuntimeError {
   if self.stack.length() == 0 {
     raise RuntimeError::StackUnderflow
   }
-  self.stack.pop_exn()
+  self.stack.unsafe_pop()
 }
 
 ///|
@@ -185,16 +186,6 @@ fn ExecutionContext::pop_f32(
   match self.pop() {
     F32(v) => v
     _ => raise RuntimeError::InvalidType("expected f32")
-  }
-}
-
-///|
-fn ExecutionContext::pop_f64(
-  self : ExecutionContext,
-) -> Double raise RuntimeError {
-  match self.pop() {
-    F64(v) => v
-    _ => raise RuntimeError::InvalidType("expected f64")
   }
 }
 
@@ -400,17 +391,17 @@ fn execute_instr(
       let b = ctx.pop_i32()
       let a = ctx.pop_i32()
       // Shift amount is modulo 32
-      let shift = b & 0x1F
-      ctx.push(I32(a << shift.to_int()))
+      let shift = (b & 0x1F).reinterpret_as_int()
+      ctx.push(I32(a << shift))
       true
     }
     I32ShrS => {
       let b = ctx.pop_i32()
       let a = ctx.pop_i32()
       // Shift amount is modulo 32
-      let shift = b & 0x1F
+      let shift = (b & 0x1F).reinterpret_as_int()
       // Signed right shift: reinterpret as signed, shift, reinterpret back
-      let result = (a.reinterpret_as_int() >> shift.to_int()).reinterpret_as_uint()
+      let result = (a.reinterpret_as_int() >> shift).reinterpret_as_uint()
       ctx.push(I32(result))
       true
     }
@@ -418,9 +409,9 @@ fn execute_instr(
       let b = ctx.pop_i32()
       let a = ctx.pop_i32()
       // Shift amount is modulo 32
-      let shift = b & 0x1F
+      let shift = (b & 0x1F).reinterpret_as_int()
       // Unsigned right shift
-      ctx.push(I32(a.lsr(shift.to_int())))
+      ctx.push(I32(a >> shift))
       true
     }
 
@@ -429,8 +420,8 @@ fn execute_instr(
       let b = ctx.pop_i32()
       let a = ctx.pop_i32()
       // Rotation amount is modulo 32
-      let rotation = b.land(0x1F).to_int()
-      let result = (a << rotation) | a.lsr(32 - rotation)
+      let rotation = (b & 0x1F).reinterpret_as_int()
+      let result = (a << rotation) | (a >> (32 - rotation))
       ctx.push(I32(result))
       true
     }
@@ -438,8 +429,8 @@ fn execute_instr(
       let b = ctx.pop_i32()
       let a = ctx.pop_i32()
       // Rotation amount is modulo 32
-      let rotation = b.land(0x1F).to_int()
-      let result = a.lsr(rotation) | (a << (32 - rotation))
+      let rotation = (b & 0x1F).reinterpret_as_int()
+      let result = (a >> rotation) | (a << (32 - rotation))
       ctx.push(I32(result))
       true
     }
@@ -687,8 +678,8 @@ fn execute_instr(
     I64ShrU => {
       let b = ctx.pop_i64()
       let a = ctx.pop_i64()
-      let shift = b & 0x3FUL
-      ctx.push(I64(a.lsr(shift.to_int())))
+      let shift = (b & 0x3FUL).to_int()
+      ctx.push(I64(a >> shift))
       true
     }
 
@@ -696,16 +687,16 @@ fn execute_instr(
     I64Rotl => {
       let b = ctx.pop_i64()
       let a = ctx.pop_i64()
-      let rotation = b.land(0x3FUL).to_int()
-      let result = (a << rotation) | a.lsr(64 - rotation)
+      let rotation = (b & 0x3FUL).to_int()
+      let result = (a << rotation) | (a >> (64 - rotation))
       ctx.push(I64(result))
       true
     }
     I64Rotr => {
       let b = ctx.pop_i64()
       let a = ctx.pop_i64()
-      let rotation = b.land(0x3FUL).to_int()
-      let result = a.lsr(rotation) | (a << (64 - rotation))
+      let rotation = (b & 0x3FUL).to_int()
+      let result = (a >> rotation) | (a << (64 - rotation))
       ctx.push(I64(result))
       true
     }
