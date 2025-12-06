@@ -15,18 +15,18 @@ fn Parser::eof(self : Parser) -> Bool {
 }
 
 ///|
-fn Parser::peek(self : Parser) -> Int {
+fn Parser::peek(self : Parser) -> Byte {
   if self.pos < self.bytes.length() {
-    self.bytes[self.pos].to_int()
+    self.bytes.unsafe_get(self.pos)
   } else {
     abort("unexpected end of file")
   }
 }
 
 ///|
-fn Parser::read_byte(self : Parser) -> Int {
+fn Parser::read_byte(self : Parser) -> Byte {
   if self.pos < self.bytes.length() {
-    let byte = self.bytes[self.pos].to_int()
+    let byte = self.bytes.unsafe_get(self.pos)
     self.pos = self.pos + 1
     byte
   } else {
@@ -51,7 +51,7 @@ fn Parser::read_bytes(self : Parser, n : Int) -> Bytes {
 fn Parser::read_u32_leb128(self : Parser) -> UInt {
   fn read_loop(shift : Int, result : UInt) -> UInt {
     let byte = self.read_byte()
-    let value = byte.land(0x7f).to_uint().lsl(shift)
+    let value = byte.land(0x7f).to_uint() << shift
     let new_result = result | value
     if (byte & 0x80) == 0 {
       new_result
@@ -65,22 +65,22 @@ fn Parser::read_u32_leb128(self : Parser) -> UInt {
 
 ///|
 fn Parser::read_i32_leb128(self : Parser) -> Int {
-  fn read_loop(shift : Int, result : Int) -> (Int, Int) {
-    let byte = self.read_byte()
-    let value = byte.land(0x7f).lsl(shift)
+  // Returns (result, shift, last_byte) where last_byte is the final 7-bit chunk
+  fn read_loop(shift : Int, result : Int) -> (Int, Int, Int) {
+    let byte = self.read_byte().to_int()
+    let value = (byte & 0x7f) << shift
     let new_result = result | value
     if (byte & 0x80) == 0 {
-      (new_result, shift)
+      (new_result, shift, byte & 0x7f)
     } else {
       read_loop(shift + 7, new_result)
     }
   }
 
-  let (result, shift) = read_loop(0, 0)
-  let byte = result.lsr(shift) & 0x7f
-  // Sign extend if needed
-  if shift < 32 && (byte & 0x40) != 0 {
-    result | (-1).lsl(shift + 7)
+  let (result, shift, last_byte) = read_loop(0, 0)
+  // Sign extend if the sign bit (bit 6 of last 7-bit chunk) is set
+  if shift < 32 && (last_byte & 0x40) != 0 {
+    result | (-1 << (shift + 7))
   } else {
     result
   }
@@ -88,29 +88,26 @@ fn Parser::read_i32_leb128(self : Parser) -> Int {
 
 ///|
 fn Parser::read_i64_leb128(self : Parser) -> Int64 {
-  fn read_loop(shift : Int, result : Int64) -> (Int64, Int) {
+  // Returns (result, shift, last_byte) where last_byte is the final 7-bit chunk
+  fn read_loop(shift : Int, result : Int64) -> (Int64, Int, Int) {
     let byte = self.read_byte()
-    let value = byte.land(0x7f).to_int64().lsl(shift)
+    let value = byte.land(0x7f).to_int64() << shift
     let new_result = result | value
     if (byte & 0x80) == 0 {
-      (new_result, shift)
+      (new_result, shift, byte.land(0x7f).to_int())
     } else {
       read_loop(shift + 7, new_result)
     }
   }
 
-  let (result, shift) = read_loop(0, 0L)
-  let byte = result.lsr(shift).land(0x7fL).to_int()
-  // Sign extend if needed
-  if shift < 64 && (byte & 0x40) != 0 {
-    result | (-1L).lsl(shift + 7)
+  let (result, shift, last_byte) = read_loop(0, 0L)
+  // Sign extend if the sign bit (bit 6 of last 7-bit chunk) is set
+  if shift < 64 && (last_byte & 0x40) != 0 {
+    result | (-1L << (shift + 7))
   } else {
     result
   }
 }
-
-// Read f32 and f64 (little-endian IEEE 754)
-// TODO: Need proper from_bits implementation
 
 ///|
 fn Parser::read_f32(self : Parser) -> Float {
@@ -138,7 +135,7 @@ fn Parser::read_f64(self : Parser) -> Double {
 
 ///|
 fn Parser::read_name(self : Parser) -> String {
-  let len = self.read_u32_leb128().to_int()
+  let len = self.read_u32_leb128().reinterpret_as_int()
   let bytes = self.read_bytes(len)
   // For now, assume UTF-8 is valid
   bytes.to_string()
@@ -411,7 +408,7 @@ fn parse_instrs(parser : Parser) -> Array[Instr] raise ValidationError {
 // Parse a single instruction
 
 ///|
-fn parse_instr(parser : Parser, opcode : Int) -> Instr raise ValidationError {
+fn parse_instr(parser : Parser, opcode : Byte) -> Instr raise ValidationError {
   match opcode {
     // Control instructions
     0x00 => Unreachable
