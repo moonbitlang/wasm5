@@ -81,7 +81,7 @@ enum ImportDesc {
 
 ///|
 struct Import {
-  module : String
+  module_ : String
   name : String
   desc : ImportDesc
 }
@@ -132,7 +132,7 @@ struct Elem {
 struct Data {
   mem_idx : UInt
   offset : Expr
-  init : Bytes
+  init : BytesView
 }
 
 // Instructions

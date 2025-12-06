@@ -35,10 +35,12 @@ fn Parser::read_byte(self : Parser) -> Byte {
 }
 
 ///|
-fn Parser::read_bytes(self : Parser, n : Int) -> Bytes {
-  if self.pos + n <= self.bytes.length() {
-    let result = self.bytes[self.pos:self.pos + n].to_bytes()
-    self.pos = self.pos + n
+fn Parser::read_bytes(self : Parser, n : UInt) -> BytesView {
+  let n_int = UInt::reinterpret_as_int(n)
+  guard n_int >= 0 else { abort("bytes length beyond Int max value") }
+  if self.pos + n_int <= self.bytes.length() {
+    let result = self.bytes[self.pos:self.pos + n_int]
+    self.pos = self.pos + n_int
     result
   } else {
     abort("unexpected end of file")
@@ -135,7 +137,7 @@ fn Parser::read_f64(self : Parser) -> Double {
 
 ///|
 fn Parser::read_name(self : Parser) -> String {
-  let len = self.read_u32_leb128().reinterpret_as_int()
+  let len = self.read_u32_leb128()
   let bytes = self.read_bytes(len)
   // For now, assume UTF-8 is valid
   bytes.to_string()
@@ -190,9 +192,9 @@ fn Parser::read_limits(self : Parser) -> Limits {
 
 ///|
 fn parse_type_section(parser : Parser) -> Array[FuncType] raise ValidationError {
-  let count = parser.read_u32_leb128().to_int()
+  let count = parser.read_u32_leb128()
   let types = []
-  for i = 0; i < count; i = i + 1 {
+  for i in 0U..<count {
     let tag = parser.read_byte()
     if tag != 0x60 {
       raise ValidationError::TypeMismatch(
@@ -201,16 +203,16 @@ fn parse_type_section(parser : Parser) -> Array[FuncType] raise ValidationError 
     }
 
     // Read params
-    let param_count = parser.read_u32_leb128().to_int()
+    let param_count = parser.read_u32_leb128()
     let params = []
-    for j = 0; j < param_count; j = j + 1 {
+    for j in 0U..<param_count {
       params.push(parser.read_valtype())
     }
 
     // Read results
-    let result_count = parser.read_u32_leb128().to_int()
+    let result_count = parser.read_u32_leb128()
     let results = []
-    for j = 0; j < result_count; j = j + 1 {
+    for j in 0U..<result_count {
       results.push(parser.read_valtype())
     }
     types.push({ params, results })
@@ -220,10 +222,10 @@ fn parse_type_section(parser : Parser) -> Array[FuncType] raise ValidationError 
 
 ///|
 fn parse_import_section(parser : Parser) -> Array[Import] raise ValidationError {
-  let count = parser.read_u32_leb128().to_int()
+  let count = parser.read_u32_leb128()
   let imports = []
-  for i = 0; i < count; i = i + 1 {
-    let module = parser.read_name()
+  for i in 0U..<count {
+    let module_ = parser.read_name()
     let name = parser.read_name()
     let desc_tag = parser.read_byte()
     let desc = match desc_tag {
@@ -244,16 +246,16 @@ fn parse_import_section(parser : Parser) -> Array[Import] raise ValidationError 
           "invalid import descriptor tag: 0x\{desc_tag.to_string()}",
         )
     }
-    imports.push({ module, name, desc })
+    imports.push({ module_, name, desc })
   }
   imports
 }
 
 ///|
 fn parse_function_section(parser : Parser) -> Array[UInt] {
-  let count = parser.read_u32_leb128().to_int()
+  let count = parser.read_u32_leb128()
   let funcs = []
-  for i = 0; i < count; i = i + 1 {
+  for i in 0U..<count {
     funcs.push(parser.read_u32_leb128())
   }
   funcs
@@ -263,9 +265,9 @@ fn parse_function_section(parser : Parser) -> Array[UInt] {
 fn parse_table_section(
   parser : Parser,
 ) -> Array[TableType] raise ValidationError {
-  let count = parser.read_u32_leb128().to_int()
+  let count = parser.read_u32_leb128()
   let tables = []
-  for i = 0; i < count; i = i + 1 {
+  for i in 0U..<count {
     let elem_type = parser.read_reftype()
     let limits = parser.read_limits()
     tables.push({ elem_type, limits })
@@ -275,9 +277,9 @@ fn parse_table_section(
 
 ///|
 fn parse_memory_section(parser : Parser) -> Array[MemType] {
-  let count = parser.read_u32_leb128().to_int()
+  let count = parser.read_u32_leb128()
   let mems = []
-  for i = 0; i < count; i = i + 1 {
+  for i in 0U..<count {
     let limits = parser.read_limits()
     mems.push({ limits, })
   }
@@ -286,9 +288,9 @@ fn parse_memory_section(parser : Parser) -> Array[MemType] {
 
 ///|
 fn parse_global_section(parser : Parser) -> Array[Global] raise ValidationError {
-  let count = parser.read_u32_leb128().to_int()
+  let count = parser.read_u32_leb128()
   let globals = []
-  for i = 0; i < count; i = i + 1 {
+  for i in 0U..<count {
     let val_type = parser.read_valtype()
     let mutable = parser.read_byte() == 0x01
     let init = parse_expr(parser)
@@ -299,9 +301,9 @@ fn parse_global_section(parser : Parser) -> Array[Global] raise ValidationError 
 
 ///|
 fn parse_export_section(parser : Parser) -> Array[Export] raise ValidationError {
-  let count = parser.read_u32_leb128().to_int()
+  let count = parser.read_u32_leb128()
   let exports = []
-  for i = 0; i < count; i = i + 1 {
+  for i in 0U..<count {
     let name = parser.read_name()
     let desc_tag = parser.read_byte()
     let desc = match desc_tag {
@@ -321,14 +323,14 @@ fn parse_export_section(parser : Parser) -> Array[Export] raise ValidationError 
 
 ///|
 fn parse_element_section(parser : Parser) -> Array[Elem] raise ValidationError {
-  let count = parser.read_u32_leb128().to_int()
+  let count = parser.read_u32_leb128()
   let elems = []
-  for i = 0; i < count; i = i + 1 {
+  for i in 0U..<count {
     let table_idx = parser.read_u32_leb128()
     let offset = parse_expr(parser)
-    let init_count = parser.read_u32_leb128().to_int()
+    let init_count = parser.read_u32_leb128()
     let init = []
-    for j = 0; j < init_count; j = j + 1 {
+    for j in 0U..<init_count {
       init.push(parser.read_u32_leb128())
     }
     elems.push({ table_idx, offset, init })
@@ -338,18 +340,18 @@ fn parse_element_section(parser : Parser) -> Array[Elem] raise ValidationError {
 
 ///|
 fn parse_code_section(parser : Parser) -> Array[Code] raise ValidationError {
-  let count = parser.read_u32_leb128().to_int()
+  let count = parser.read_u32_leb128()
   let codes = []
-  for i = 0; i < count; i = i + 1 {
-    let code_size = parser.read_u32_leb128()
+  for i in 0U..<count {
+    let _code_size = parser.read_u32_leb128()
 
     // Parse locals
-    let locals_count = parser.read_u32_leb128().to_int()
+    let locals_count = parser.read_u32_leb128()
     let locals = []
-    for j = 0; j < locals_count; j = j + 1 {
-      let n = parser.read_u32_leb128().to_int()
+    for j in 0U..<locals_count {
+      let n = parser.read_u32_leb128()
       let val_type = parser.read_valtype()
-      for k = 0; k < n; k = k + 1 {
+      for k in 0U..<n {
         locals.push(val_type)
       }
     }
@@ -363,12 +365,12 @@ fn parse_code_section(parser : Parser) -> Array[Code] raise ValidationError {
 
 ///|
 fn parse_data_section(parser : Parser) -> Array[Data] raise ValidationError {
-  let count = parser.read_u32_leb128().to_int()
+  let count = parser.read_u32_leb128()
   let datas = []
-  for i = 0; i < count; i = i + 1 {
+  for i in 0U..<count {
     let mem_idx = parser.read_u32_leb128()
     let offset = parse_expr(parser)
-    let init_len = parser.read_u32_leb128().to_int()
+    let init_len = parser.read_u32_leb128()
     let init = parser.read_bytes(init_len)
     datas.push({ mem_idx, offset, init })
   }
@@ -438,9 +440,9 @@ fn parse_instr(parser : Parser, opcode : Byte) -> Instr raise ValidationError {
     0x0C => Br(parser.read_u32_leb128())
     0x0D => BrIf(parser.read_u32_leb128())
     0x0E => {
-      let count = parser.read_u32_leb128().to_int()
+      let count = parser.read_u32_leb128()
       let labels = []
-      for i = 0; i < count; i = i + 1 {
+      for i in 0U..<count {
         labels.push(parser.read_u32_leb128())
       }
       let default_label = parser.read_u32_leb128()
