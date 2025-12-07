@@ -41,12 +41,39 @@ pub struct Runtime {
   mut locals : Array[Value]
   mut pc : Int
   call_stack : Array[CallFrame]
+  branch_targets : Array[Int] // Stack of branch target PCs (for br instructions)
+  memory : Array[Byte] // Linear memory
+  globals : Array[Value] // Global variables
 }
 
 ///|
 /// Load a WebAssembly module into the runtime
 pub fn Runtime::load(m : Module) -> Runtime {
-  Runtime::{ module_: m, ops: [], stack: [], locals: [], pc: 0, call_stack: [] }
+  // Initialize memory
+  let memory_size = if m.mems.length() > 0 {
+    m.mems[0].limits.min.reinterpret_as_int() * 65536 // Pages to bytes
+  } else {
+    0
+  }
+  let memory = Array::make(memory_size, b'\x00')
+  // Initialize globals
+  let globals : Array[Value] = []
+  for i = 0; i < m.globals.length(); i = i + 1 {
+    let global = m.globals[i]
+    let value = eval_const_expr(global.init, [])
+    globals.push(value)
+  }
+  Runtime::{
+    module_: m,
+    ops: [],
+    stack: [],
+    locals: [],
+    pc: 0,
+    call_stack: [],
+    branch_targets: [],
+    memory,
+    globals,
+  }
 }
 
 ///|
