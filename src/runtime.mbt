@@ -40,12 +40,13 @@ pub struct Runtime {
   stack : Array[Value]
   mut locals : Array[Value]
   mut pc : Int
+  call_stack : Array[CallFrame]
 }
 
 ///|
 /// Load a WebAssembly module into the runtime
 pub fn Runtime::load(m : Module) -> Runtime {
-  Runtime::{ module_: m, ops: [], stack: [], locals: [], pc: 0 }
+  Runtime::{ module_: m, ops: [], stack: [], locals: [], pc: 0, call_stack: [] }
 }
 
 ///|
