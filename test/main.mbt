@@ -47,6 +47,19 @@ fn parse_args(args : Array[Json]) -> Array[@wasm5.Value] raise {
         runtime_args.push(@wasm5.Value::I32(@strconv.parse_uint(v)))
       { "type": "i64", "value": String(v), .. } =>
         runtime_args.push(@wasm5.Value::I64(@strconv.parse_uint64(v)))
+      // wast2json outputs floats as their bit representation (integer string)
+      { "type": "f32", "value": String(v), .. } =>
+        runtime_args.push(
+          @wasm5.Value::F32(
+            Float::reinterpret_from_uint(@strconv.parse_uint(v)),
+          ),
+        )
+      { "type": "f64", "value": String(v), .. } =>
+        runtime_args.push(
+          @wasm5.Value::F64(
+            UInt64::reinterpret_as_double(@strconv.parse_uint64(v)),
+          ),
+        )
       _ => fail("unsupported argument type")
     }
   }
@@ -61,6 +74,11 @@ fn parse_expected_value(expected : Json) -> @wasm5.Value raise {
       @wasm5.Value::I32(@strconv.parse_uint(v))
     { "type": "i64", "value": String(v), .. } =>
       @wasm5.Value::I64(@strconv.parse_uint64(v))
+    // wast2json outputs floats as their bit representation (integer string)
+    { "type": "f32", "value": String(v), .. } =>
+      @wasm5.Value::F32(Float::reinterpret_from_uint(@strconv.parse_uint(v)))
+    { "type": "f64", "value": String(v), .. } =>
+      @wasm5.Value::F64(UInt64::reinterpret_as_double(@strconv.parse_uint64(v)))
     _ => fail("unsupported expected value type")
   }
 }
@@ -96,10 +114,7 @@ fn handle_assert_return(
     )
   }
   try {
-    let results = rt.call_compiled(
-      @encoding/utf8.encode(fn_name),
-      runtime_args,
-    )
+    let results = rt.call_compiled(@encoding/utf8.encode(fn_name), runtime_args)
     // Check result count
     if expected.length() != results.length() {
       ctx.fail(
@@ -141,10 +156,7 @@ fn handle_assert_trap(
     return
   }
   try {
-    let _ = rt.call_compiled(
-      @encoding/utf8.encode(fn_name),
-      runtime_args,
-    )
+    let _ = rt.call_compiled(@encoding/utf8.encode(fn_name), runtime_args)
     ctx.fail(
       line,
       "assert_trap",
@@ -368,19 +380,11 @@ async fn collect_wast_files(dir : String) -> Array[String] {
 ///|
 async fn main {
   let failures : Array[TestFailure] = []
-  // Test i32.wast, i64.wast, and if.wast
-  for wast_file in ["i32.wast", "i64.wast", "if.wast"] {
+  let wast_files = collect_wast_files("test/reference_tests/")
+  for wast_file in wast_files {
     let file_failures = process_wast_file("test/reference_tests/", wast_file)
     failures.append(file_failures)
   }
-
-  // Uncomment to test all wast files:
-  // let wast_files = collect_wast_files("test/reference_tests/")
-  // for wast_file in wast_files {
-  //   let file_failures = process_wast_file("test/reference_tests/", wast_file)
-  //   failures.append(file_failures)
-  // }
-
   print_summary(failures)
   if failures.length() > 0 {
     fail("Tests failed")

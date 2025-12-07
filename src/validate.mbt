@@ -295,6 +295,235 @@ fn validate_instruction(
       stack.push(I32)
     }
 
+    // f64 comparison operations
+    F64Eq | F64Ne | F64Lt | F64Gt | F64Le | F64Ge => {
+      if stack.length() < 2 {
+        raise ValidationError::TypeMismatch(
+          "expected at least 2 values on stack for comparison",
+        )
+      }
+      let b = stack.unsafe_pop()
+      let a = stack.unsafe_pop()
+      if a != F64 || b != F64 {
+        raise ValidationError::TypeMismatch(
+          "f64 comparison requires f64 operands",
+        )
+      }
+      stack.push(I32)
+    }
+
+    // f32 unary operations
+    F32Abs | F32Neg | F32Ceil | F32Floor | F32Trunc | F32Nearest | F32Sqrt => {
+      if stack.length() < 1 {
+        raise ValidationError::TypeMismatch(
+          "expected at least 1 value on stack for f32 unary op",
+        )
+      }
+      let a = stack.unsafe_pop()
+      if a != F32 {
+        raise ValidationError::TypeMismatch("f32 unary op requires f32 operand")
+      }
+      stack.push(F32)
+    }
+
+    // f64 unary operations
+    F64Abs | F64Neg | F64Ceil | F64Floor | F64Trunc | F64Nearest | F64Sqrt => {
+      if stack.length() < 1 {
+        raise ValidationError::TypeMismatch(
+          "expected at least 1 value on stack for f64 unary op",
+        )
+      }
+      let a = stack.unsafe_pop()
+      if a != F64 {
+        raise ValidationError::TypeMismatch("f64 unary op requires f64 operand")
+      }
+      stack.push(F64)
+    }
+
+    // f32 binary operations
+    F32Add | F32Sub | F32Mul | F32Div | F32Min | F32Max | F32Copysign => {
+      if stack.length() < 2 {
+        raise ValidationError::TypeMismatch(
+          "expected at least 2 values on stack for f32 binary op",
+        )
+      }
+      let b = stack.unsafe_pop()
+      let a = stack.unsafe_pop()
+      if a != F32 || b != F32 {
+        raise ValidationError::TypeMismatch(
+          "f32 binary op requires f32 operands",
+        )
+      }
+      stack.push(F32)
+    }
+
+    // f64 binary operations
+    F64Add | F64Sub | F64Mul | F64Div | F64Min | F64Max | F64Copysign => {
+      if stack.length() < 2 {
+        raise ValidationError::TypeMismatch(
+          "expected at least 2 values on stack for f64 binary op",
+        )
+      }
+      let b = stack.unsafe_pop()
+      let a = stack.unsafe_pop()
+      if a != F64 || b != F64 {
+        raise ValidationError::TypeMismatch(
+          "f64 binary op requires f64 operands",
+        )
+      }
+      stack.push(F64)
+    }
+
+    // Conversion operations: i32 -> f32/f64
+    F32ConvertI32S | F32ConvertI32U => {
+      if stack.length() < 1 {
+        raise ValidationError::TypeMismatch("expected i32 for convert")
+      }
+      let a = stack.unsafe_pop()
+      if a != I32 {
+        raise ValidationError::TypeMismatch("f32.convert_i32 requires i32")
+      }
+      stack.push(F32)
+    }
+    F64ConvertI32S | F64ConvertI32U => {
+      if stack.length() < 1 {
+        raise ValidationError::TypeMismatch("expected i32 for convert")
+      }
+      let a = stack.unsafe_pop()
+      if a != I32 {
+        raise ValidationError::TypeMismatch("f64.convert_i32 requires i32")
+      }
+      stack.push(F64)
+    }
+
+    // Conversion operations: i64 -> f32/f64
+    F32ConvertI64S | F32ConvertI64U => {
+      if stack.length() < 1 {
+        raise ValidationError::TypeMismatch("expected i64 for convert")
+      }
+      let a = stack.unsafe_pop()
+      if a != I64 {
+        raise ValidationError::TypeMismatch("f32.convert_i64 requires i64")
+      }
+      stack.push(F32)
+    }
+    F64ConvertI64S | F64ConvertI64U => {
+      if stack.length() < 1 {
+        raise ValidationError::TypeMismatch("expected i64 for convert")
+      }
+      let a = stack.unsafe_pop()
+      if a != I64 {
+        raise ValidationError::TypeMismatch("f64.convert_i64 requires i64")
+      }
+      stack.push(F64)
+    }
+
+    // Promotion/demotion: f32 <-> f64
+    F64PromoteF32 => {
+      if stack.length() < 1 {
+        raise ValidationError::TypeMismatch("expected f32 for promote")
+      }
+      let a = stack.unsafe_pop()
+      if a != F32 {
+        raise ValidationError::TypeMismatch("f64.promote_f32 requires f32")
+      }
+      stack.push(F64)
+    }
+    F32DemoteF64 => {
+      if stack.length() < 1 {
+        raise ValidationError::TypeMismatch("expected f64 for demote")
+      }
+      let a = stack.unsafe_pop()
+      if a != F64 {
+        raise ValidationError::TypeMismatch("f32.demote_f64 requires f64")
+      }
+      stack.push(F32)
+    }
+
+    // Truncation: f32/f64 -> i32/i64
+    I32TruncF32S | I32TruncF32U => {
+      if stack.length() < 1 {
+        raise ValidationError::TypeMismatch("expected f32 for trunc")
+      }
+      let a = stack.unsafe_pop()
+      if a != F32 {
+        raise ValidationError::TypeMismatch("i32.trunc_f32 requires f32")
+      }
+      stack.push(I32)
+    }
+    I32TruncF64S | I32TruncF64U => {
+      if stack.length() < 1 {
+        raise ValidationError::TypeMismatch("expected f64 for trunc")
+      }
+      let a = stack.unsafe_pop()
+      if a != F64 {
+        raise ValidationError::TypeMismatch("i32.trunc_f64 requires f64")
+      }
+      stack.push(I32)
+    }
+    I64TruncF32S | I64TruncF32U => {
+      if stack.length() < 1 {
+        raise ValidationError::TypeMismatch("expected f32 for trunc")
+      }
+      let a = stack.unsafe_pop()
+      if a != F32 {
+        raise ValidationError::TypeMismatch("i64.trunc_f32 requires f32")
+      }
+      stack.push(I64)
+    }
+    I64TruncF64S | I64TruncF64U => {
+      if stack.length() < 1 {
+        raise ValidationError::TypeMismatch("expected f64 for trunc")
+      }
+      let a = stack.unsafe_pop()
+      if a != F64 {
+        raise ValidationError::TypeMismatch("i64.trunc_f64 requires f64")
+      }
+      stack.push(I64)
+    }
+
+    // Reinterpret operations
+    F32ReinterpretI32 => {
+      if stack.length() < 1 {
+        raise ValidationError::TypeMismatch("expected i32 for reinterpret")
+      }
+      let a = stack.unsafe_pop()
+      if a != I32 {
+        raise ValidationError::TypeMismatch("f32.reinterpret_i32 requires i32")
+      }
+      stack.push(F32)
+    }
+    F64ReinterpretI64 => {
+      if stack.length() < 1 {
+        raise ValidationError::TypeMismatch("expected i64 for reinterpret")
+      }
+      let a = stack.unsafe_pop()
+      if a != I64 {
+        raise ValidationError::TypeMismatch("f64.reinterpret_i64 requires i64")
+      }
+      stack.push(F64)
+    }
+    I32ReinterpretF32 => {
+      if stack.length() < 1 {
+        raise ValidationError::TypeMismatch("expected f32 for reinterpret")
+      }
+      let a = stack.unsafe_pop()
+      if a != F32 {
+        raise ValidationError::TypeMismatch("i32.reinterpret_f32 requires f32")
+      }
+      stack.push(I32)
+    }
+    I64ReinterpretF64 => {
+      if stack.length() < 1 {
+        raise ValidationError::TypeMismatch("expected f64 for reinterpret")
+      }
+      let a = stack.unsafe_pop()
+      if a != F64 {
+        raise ValidationError::TypeMismatch("i64.reinterpret_f64 requires f64")
+      }
+      stack.push(I64)
+    }
+
     // Local operations
     LocalGet(idx) => {
       let local_idx = idx.reinterpret_as_int()

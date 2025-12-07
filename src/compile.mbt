@@ -911,6 +911,57 @@ fn op_f64_ge(rt : Runtime) -> ControlFlow {
   Next
 }
 
+// Float unary operations
+fn op_f32_neg(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f32()
+  rt.stack.push(Value::F32(-a))
+  Next
+}
+
+fn op_f64_neg(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f64()
+  rt.stack.push(Value::F64(-a))
+  Next
+}
+
+// Float binary operations
+fn op_f64_add(rt : Runtime) -> ControlFlow {
+  let (a, b) = rt.pop_two_f64()
+  rt.stack.push(Value::F64(a + b))
+  Next
+}
+
+// Float conversion operations
+fn op_f64_convert_i64_u(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_i64()
+  rt.stack.push(Value::F64(a.to_double()))
+  Next
+}
+
+fn op_f64_convert_i64_s(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_i64().reinterpret_as_int64()
+  rt.stack.push(Value::F64(a.to_double()))
+  Next
+}
+
+fn op_f64_convert_i32_u(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_i32()
+  rt.stack.push(Value::F64(a.to_double()))
+  Next
+}
+
+fn op_f64_convert_i32_s(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_i32().reinterpret_as_int()
+  rt.stack.push(Value::F64(a.to_double()))
+  Next
+}
+
+fn op_f64_promote_f32(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f32()
+  rt.stack.push(Value::F64(a.to_double()))
+  Next
+}
+
 // Global operations
 fn op_global_get(rt : Runtime) -> ControlFlow {
   let idx = rt.read_imm_idx()
@@ -1041,6 +1092,17 @@ fn Runtime::compile_wasm_instr(self : Runtime, instr : Instr) -> Unit {
     F64Gt => self.emit(WasmInstr(op_f64_gt))
     F64Le => self.emit(WasmInstr(op_f64_le))
     F64Ge => self.emit(WasmInstr(op_f64_ge))
+    // Float unary
+    F32Neg => self.emit(WasmInstr(op_f32_neg))
+    F64Neg => self.emit(WasmInstr(op_f64_neg))
+    // Float binary
+    F64Add => self.emit(WasmInstr(op_f64_add))
+    // Float conversions
+    F64ConvertI64U => self.emit(WasmInstr(op_f64_convert_i64_u))
+    F64ConvertI64S => self.emit(WasmInstr(op_f64_convert_i64_s))
+    F64ConvertI32U => self.emit(WasmInstr(op_f64_convert_i32_u))
+    F64ConvertI32S => self.emit(WasmInstr(op_f64_convert_i32_s))
+    F64PromoteF32 => self.emit(WasmInstr(op_f64_promote_f32))
     // Locals
     LocalGet(idx) => {
       self.emit(WasmInstr(op_local_get))
