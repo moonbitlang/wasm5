@@ -358,7 +358,7 @@ fn parse_code_section(parser : Parser) -> Array[Code] raise ValidationError {
 
     // Parse body
     let body = parse_expr(parser)
-    codes.push({ locals, body })
+    codes.push({ locals, body, compiled: None })
   }
   codes
 }

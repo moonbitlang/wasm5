@@ -350,6 +350,7 @@ pub struct Expr {
 struct Code {
   locals : Array[ValType]
   body : Expr
+  mut compiled : Int?
 }
 
 // Function (combines type index with code)

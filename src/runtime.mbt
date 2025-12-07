@@ -36,12 +36,16 @@ pub(all) enum Value {
 /// Runtime structure that holds a loaded WebAssembly module
 pub struct Runtime {
   module_ : Module
+  ops : Array[MInstr]
+  stack : Array[Value]
+  mut locals : Array[Value]
+  mut pc : Int
 }
 
 ///|
 /// Load a WebAssembly module into the runtime
 pub fn Runtime::load(m : Module) -> Runtime {
-  Runtime::{ module_: m }
+  Runtime::{ module_: m, ops: [], stack: [], locals: [], pc: 0 }
 }
 
 ///|
