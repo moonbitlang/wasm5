@@ -962,6 +962,55 @@ fn op_f64_promote_f32(rt : Runtime) -> ControlFlow {
   Next
 }
 
+// Truncation operations
+fn op_i64_trunc_f64_s(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f64()
+  rt.stack.push(Value::I64(a.to_int64().reinterpret_as_uint64()))
+  Next
+}
+
+fn op_i64_trunc_f64_u(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f64()
+  rt.stack.push(Value::I64(a.to_uint64()))
+  Next
+}
+
+fn op_i32_trunc_f32_s(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f32()
+  rt.stack.push(Value::I32(a.to_int().reinterpret_as_uint()))
+  Next
+}
+
+fn op_i32_trunc_f32_u(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f32()
+  rt.stack.push(Value::I32(a.to_int().reinterpret_as_uint()))
+  Next
+}
+
+fn op_i32_trunc_f64_s(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f64()
+  rt.stack.push(Value::I32(a.to_int().reinterpret_as_uint()))
+  Next
+}
+
+fn op_i32_trunc_f64_u(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f64()
+  rt.stack.push(Value::I32(a.to_int().reinterpret_as_uint()))
+  Next
+}
+
+fn op_i64_trunc_f32_s(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f32()
+  rt.stack.push(Value::I64(a.to_double().to_int64().reinterpret_as_uint64()))
+  Next
+}
+
+fn op_i64_trunc_f32_u(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f32()
+  rt.stack.push(Value::I64(a.to_double().to_uint64()))
+  Next
+}
+
 // Global operations
 fn op_global_get(rt : Runtime) -> ControlFlow {
   let idx = rt.read_imm_idx()
@@ -1103,6 +1152,15 @@ fn Runtime::compile_wasm_instr(self : Runtime, instr : Instr) -> Unit {
     F64ConvertI32U => self.emit(WasmInstr(op_f64_convert_i32_u))
     F64ConvertI32S => self.emit(WasmInstr(op_f64_convert_i32_s))
     F64PromoteF32 => self.emit(WasmInstr(op_f64_promote_f32))
+    // Truncations
+    I64TruncF64S => self.emit(WasmInstr(op_i64_trunc_f64_s))
+    I64TruncF64U => self.emit(WasmInstr(op_i64_trunc_f64_u))
+    I32TruncF32S => self.emit(WasmInstr(op_i32_trunc_f32_s))
+    I32TruncF32U => self.emit(WasmInstr(op_i32_trunc_f32_u))
+    I32TruncF64S => self.emit(WasmInstr(op_i32_trunc_f64_s))
+    I32TruncF64U => self.emit(WasmInstr(op_i32_trunc_f64_u))
+    I64TruncF32S => self.emit(WasmInstr(op_i64_trunc_f32_s))
+    I64TruncF32U => self.emit(WasmInstr(op_i64_trunc_f32_u))
     // Locals
     LocalGet(idx) => {
       self.emit(WasmInstr(op_local_get))

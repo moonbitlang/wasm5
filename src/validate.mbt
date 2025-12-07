@@ -549,7 +549,17 @@ fn validate_instruction(
           "expected value on stack for local.set",
         )
       }
+      let local_type = if local_idx < func_type.params.length() {
+        func_type.params[local_idx]
+      } else {
+        code.locals[local_idx - func_type.params.length()]
+      }
       let val_type = stack.unsafe_pop()
+      if val_type != local_type {
+        raise ValidationError::TypeMismatch(
+          "local.set type mismatch: expected \{local_type}, got \{val_type}",
+        )
+      }
       match instr {
         LocalTee(_) => stack.push(val_type)
         _ => ()
