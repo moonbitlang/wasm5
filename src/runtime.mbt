@@ -9,6 +9,19 @@ pub suberror RuntimeError {
   FunctionNotFound(String)
   Branch(UInt) // Internal: branch control flow (label depth)
   UnimplementedInstruction(String) // Instruction not yet implemented
+  Unreachable // Unreachable instruction executed
+  FunctionNotCompiled(String) // Function not compiled
+  UnsupportedLocalType(String) // Unsupported local type
+  UnsupportedInitExpression(String) // Unsupported init expression
+} derive(Show)
+
+///|
+/// Parse error types
+pub suberror ParseError {
+  UnexpectedEof // Unexpected end of file
+  InvalidMagic // Invalid magic number
+  UnsupportedVersion // Unsupported version
+  InvalidFormat(String) // Invalid format
 } derive(Show)
 
 ///|
@@ -48,7 +61,7 @@ pub struct Runtime {
 
 ///|
 /// Load a WebAssembly module into the runtime
-pub fn Runtime::load(m : Module) -> Runtime {
+pub fn Runtime::load(m : Module) -> Runtime raise RuntimeError {
   // Initialize memory
   let memory_size = if m.mems.length() > 0 {
     m.mems[0].limits.min.reinterpret_as_int() * 65536 // Pages to bytes
@@ -77,10 +90,13 @@ pub fn Runtime::load(m : Module) -> Runtime {
 }
 
 ///|
-fn eval_const_expr(expr : Expr, globals : Array[Value]) -> Value {
+fn eval_const_expr(
+  expr : Expr,
+  globals : Array[Value],
+) -> Value raise RuntimeError {
   // Simple constant expression evaluator for init expressions
   if expr.instrs.length() == 0 {
-    abort("empty init expression")
+    raise RuntimeError::UnsupportedInitExpression("empty init expression")
   }
   match expr.instrs[0] {
     I32Const(v) => I32(v)
@@ -90,10 +106,15 @@ fn eval_const_expr(expr : Expr, globals : Array[Value]) -> Value {
     GlobalGet(idx) => {
       let idx_int = idx.reinterpret_as_int()
       guard idx_int >= 0 && idx_int < globals.length() else {
-        abort("global index out of bounds in init expression")
+        raise RuntimeError::UnsupportedInitExpression(
+          "global index out of bounds in init expression",
+        )
       }
       globals[idx_int]
     }
-    _ => abort("unsupported init expression")
+    _ =>
+      raise RuntimeError::UnsupportedInitExpression(
+        "unsupported init expression: \{expr.instrs[0]}",
+      )
   }
 }

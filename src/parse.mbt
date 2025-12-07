@@ -15,43 +15,45 @@ fn Parser::eof(self : Parser) -> Bool {
 }
 
 ///|
-fn Parser::peek(self : Parser) -> Byte {
+fn Parser::peek(self : Parser) -> Byte raise ParseError {
   if self.pos < self.bytes.length() {
     self.bytes.unsafe_get(self.pos)
   } else {
-    abort("unexpected end of file")
+    raise ParseError::UnexpectedEof
   }
 }
 
 ///|
-fn Parser::read_byte(self : Parser) -> Byte {
+fn Parser::read_byte(self : Parser) -> Byte raise ParseError {
   if self.pos < self.bytes.length() {
     let byte = self.bytes.unsafe_get(self.pos)
     self.pos = self.pos + 1
     byte
   } else {
-    abort("unexpected end of file")
+    raise ParseError::UnexpectedEof
   }
 }
 
 ///|
-fn Parser::read_bytes(self : Parser, n : UInt) -> BytesView {
+fn Parser::read_bytes(self : Parser, n : UInt) -> BytesView raise ParseError {
   let n_int = UInt::reinterpret_as_int(n)
-  guard n_int >= 0 else { abort("bytes length beyond Int max value") }
+  guard n_int >= 0 else {
+    raise ParseError::InvalidFormat("bytes length beyond Int max value")
+  }
   if self.pos + n_int <= self.bytes.length() {
     let result = self.bytes[self.pos:self.pos + n_int]
     self.pos = self.pos + n_int
     result
   } else {
-    abort("unexpected end of file")
+    raise ParseError::UnexpectedEof
   }
 }
 
 // LEB128 decoding
 
 ///|
-fn Parser::read_u32_leb128(self : Parser) -> UInt {
-  fn read_loop(shift : Int, result : UInt) -> UInt {
+fn Parser::read_u32_leb128(self : Parser) -> UInt raise ParseError {
+  fn read_loop(shift : Int, result : UInt) -> UInt raise ParseError {
     let byte = self.read_byte()
     let value = byte.land(0x7f).to_uint() << shift
     let new_result = result | value
@@ -66,9 +68,9 @@ fn Parser::read_u32_leb128(self : Parser) -> UInt {
 }
 
 ///|
-fn Parser::read_i32_leb128(self : Parser) -> Int {
+fn Parser::read_i32_leb128(self : Parser) -> Int raise ParseError {
   // Returns (result, shift, last_byte) where last_byte is the final 7-bit chunk
-  fn read_loop(shift : Int, result : Int) -> (Int, Int, Int) {
+  fn read_loop(shift : Int, result : Int) -> (Int, Int, Int) raise ParseError {
     let byte = self.read_byte().to_int()
     let value = (byte & 0x7f) << shift
     let new_result = result | value
@@ -89,9 +91,9 @@ fn Parser::read_i32_leb128(self : Parser) -> Int {
 }
 
 ///|
-fn Parser::read_i64_leb128(self : Parser) -> Int64 {
+fn Parser::read_i64_leb128(self : Parser) -> Int64 raise ParseError {
   // Returns (result, shift, last_byte) where last_byte is the final 7-bit chunk
-  fn read_loop(shift : Int, result : Int64) -> (Int64, Int, Int) {
+  fn read_loop(shift : Int, result : Int64) -> (Int64, Int, Int) raise ParseError {
     let byte = self.read_byte()
     let value = byte.land(0x7f).to_int64() << shift
     let new_result = result | value
@@ -112,31 +114,31 @@ fn Parser::read_i64_leb128(self : Parser) -> Int64 {
 }
 
 ///|
-fn Parser::read_f32(self : Parser) -> Float {
+fn Parser::read_f32(self : Parser) -> Float raise ParseError {
   match self.bytes[self.pos:] {
     [u32le(bits), ..] => {
       self.pos = self.pos + 4
       Float::reinterpret_from_uint(bits)
     }
-    _ => abort("unexpected end of file")
+    _ => raise ParseError::UnexpectedEof
   }
 }
 
 ///|
-fn Parser::read_f64(self : Parser) -> Double {
+fn Parser::read_f64(self : Parser) -> Double raise ParseError {
   match self.bytes[self.pos:] {
     [u64le(bits), ..] => {
       self.pos = self.pos + 8
       UInt64::reinterpret_as_double(bits)
     }
-    _ => abort("unexpected end of file")
+    _ => raise ParseError::UnexpectedEof
   }
 }
 
 // Read name (length-prefixed UTF-8 string)
 
 ///|
-fn Parser::read_name(self : Parser) -> String {
+fn Parser::read_name(self : Parser) -> String raise ParseError {
   let len = self.read_u32_leb128()
   let bytes = self.read_bytes(len)
   // For now, assume UTF-8 is valid
@@ -146,7 +148,7 @@ fn Parser::read_name(self : Parser) -> String {
 // Parse value type
 
 ///|
-fn Parser::read_valtype(self : Parser) -> ValType raise ValidationError {
+fn Parser::read_valtype(self : Parser) -> ValType raise {
   let byte = self.read_byte()
   match byte {
     0x7F => I32
@@ -166,7 +168,7 @@ fn Parser::read_valtype(self : Parser) -> ValType raise ValidationError {
 // Parse reference type
 
 ///|
-fn Parser::read_reftype(self : Parser) -> RefType raise ValidationError {
+fn Parser::read_reftype(self : Parser) -> RefType raise {
   let byte = self.read_byte()
   match byte {
     0x70 => FuncRef
@@ -181,7 +183,7 @@ fn Parser::read_reftype(self : Parser) -> RefType raise ValidationError {
 // Parse limits
 
 ///|
-fn Parser::read_limits(self : Parser) -> Limits {
+fn Parser::read_limits(self : Parser) -> Limits raise ParseError {
   let flags = self.read_byte()
   let min = self.read_u32_leb128()
   let max = if flags == 0x01 { Some(self.read_u32_leb128()) } else { None }
@@ -191,7 +193,7 @@ fn Parser::read_limits(self : Parser) -> Limits {
 // Section parsers
 
 ///|
-fn parse_type_section(parser : Parser) -> Array[FuncType] raise ValidationError {
+fn parse_type_section(parser : Parser) -> Array[FuncType] raise {
   let count = parser.read_u32_leb128()
   let types = []
   for i in 0U..<count {
@@ -221,7 +223,7 @@ fn parse_type_section(parser : Parser) -> Array[FuncType] raise ValidationError 
 }
 
 ///|
-fn parse_import_section(parser : Parser) -> Array[Import] raise ValidationError {
+fn parse_import_section(parser : Parser) -> Array[Import] raise {
   let count = parser.read_u32_leb128()
   let imports = []
   for i in 0U..<count {
@@ -252,7 +254,7 @@ fn parse_import_section(parser : Parser) -> Array[Import] raise ValidationError 
 }
 
 ///|
-fn parse_function_section(parser : Parser) -> Array[UInt] {
+fn parse_function_section(parser : Parser) -> Array[UInt] raise ParseError {
   let count = parser.read_u32_leb128()
   let funcs = []
   for i in 0U..<count {
@@ -264,7 +266,7 @@ fn parse_function_section(parser : Parser) -> Array[UInt] {
 ///|
 fn parse_table_section(
   parser : Parser,
-) -> Array[TableType] raise ValidationError {
+) -> Array[TableType] raise {
   let count = parser.read_u32_leb128()
   let tables = []
   for i in 0U..<count {
@@ -276,7 +278,7 @@ fn parse_table_section(
 }
 
 ///|
-fn parse_memory_section(parser : Parser) -> Array[MemType] {
+fn parse_memory_section(parser : Parser) -> Array[MemType] raise ParseError {
   let count = parser.read_u32_leb128()
   let mems = []
   for i in 0U..<count {
@@ -287,7 +289,7 @@ fn parse_memory_section(parser : Parser) -> Array[MemType] {
 }
 
 ///|
-fn parse_global_section(parser : Parser) -> Array[Global] raise ValidationError {
+fn parse_global_section(parser : Parser) -> Array[Global] raise {
   let count = parser.read_u32_leb128()
   let globals = []
   for i in 0U..<count {
@@ -300,7 +302,7 @@ fn parse_global_section(parser : Parser) -> Array[Global] raise ValidationError 
 }
 
 ///|
-fn parse_export_section(parser : Parser) -> Array[Export] raise ValidationError {
+fn parse_export_section(parser : Parser) -> Array[Export] raise {
   let count = parser.read_u32_leb128()
   let exports = []
   for i in 0U..<count {
@@ -322,7 +324,7 @@ fn parse_export_section(parser : Parser) -> Array[Export] raise ValidationError 
 }
 
 ///|
-fn parse_element_section(parser : Parser) -> Array[Elem] raise ValidationError {
+fn parse_element_section(parser : Parser) -> Array[Elem] raise {
   let count = parser.read_u32_leb128()
   let elems = []
   for i in 0U..<count {
@@ -339,7 +341,7 @@ fn parse_element_section(parser : Parser) -> Array[Elem] raise ValidationError {
 }
 
 ///|
-fn parse_code_section(parser : Parser) -> Array[Code] raise ValidationError {
+fn parse_code_section(parser : Parser) -> Array[Code] raise {
   let count = parser.read_u32_leb128()
   let codes = []
   for i in 0U..<count {
@@ -364,7 +366,7 @@ fn parse_code_section(parser : Parser) -> Array[Code] raise ValidationError {
 }
 
 ///|
-fn parse_data_section(parser : Parser) -> Array[Data] raise ValidationError {
+fn parse_data_section(parser : Parser) -> Array[Data] raise {
   let count = parser.read_u32_leb128()
   let datas = []
   for i in 0U..<count {
@@ -380,7 +382,7 @@ fn parse_data_section(parser : Parser) -> Array[Data] raise ValidationError {
 // Parse expression (sequence of instructions ending with 0x0B)
 
 ///|
-fn parse_expr(parser : Parser) -> Expr raise ValidationError {
+fn parse_expr(parser : Parser) -> Expr raise {
   let instrs = parse_instrs(parser)
   { instrs, }
 }
@@ -388,8 +390,8 @@ fn parse_expr(parser : Parser) -> Expr raise ValidationError {
 // Parse instructions until 0x0B (end marker)
 
 ///|
-fn parse_instrs(parser : Parser) -> Array[Instr] raise ValidationError {
-  fn read_loop(instrs : Array[Instr]) -> Array[Instr] raise ValidationError {
+fn parse_instrs(parser : Parser) -> Array[Instr] raise {
+  fn read_loop(instrs : Array[Instr]) -> Array[Instr] raise {
     let opcode = parser.read_byte()
     if opcode == 0x0B {
       // End marker (0x0B)
@@ -410,7 +412,7 @@ fn parse_instrs(parser : Parser) -> Array[Instr] raise ValidationError {
 // Parse a single instruction
 
 ///|
-fn parse_instr(parser : Parser, opcode : Byte) -> Instr raise ValidationError {
+fn parse_instr(parser : Parser, opcode : Byte) -> Instr raise {
   match opcode {
     // Control instructions
     0x00 => Unreachable
@@ -755,7 +757,7 @@ fn parse_instr(parser : Parser, opcode : Byte) -> Instr raise ValidationError {
 // Parse block type (can be empty, a value type, or a type index)
 
 ///|
-fn parse_blocktype(parser : Parser) -> BlockType {
+fn parse_blocktype(parser : Parser) -> BlockType raise ParseError {
   let byte = parser.read_byte()
   match byte {
     0x40 => Empty // empty block type
@@ -779,7 +781,7 @@ fn parse_blocktype(parser : Parser) -> BlockType {
 ///|
 
 ///|
-pub fn parse(b : Bytes) -> Module raise ValidationError {
+pub fn parse(b : Bytes) -> Module raise {
   let parser = Parser::new(b)
 
   // Parse magic number
@@ -788,7 +790,7 @@ pub fn parse(b : Bytes) -> Module raise ValidationError {
     magic[1].to_int() != 0x61 ||
     magic[2].to_int() != 0x73 ||
     magic[3].to_int() != 0x6D {
-    abort("invalid magic number")
+    raise ParseError::InvalidMagic
   }
 
   // Parse version
@@ -797,7 +799,7 @@ pub fn parse(b : Bytes) -> Module raise ValidationError {
     version[1].to_int() != 0x00 ||
     version[2].to_int() != 0x00 ||
     version[3].to_int() != 0x00 {
-    abort("unsupported version")
+    raise ParseError::UnsupportedVersion
   }
 
   // Parse sections

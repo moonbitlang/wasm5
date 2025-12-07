@@ -664,6 +664,13 @@ fn op_push_loop_target(rt : Runtime) -> ControlFlow {
 fn op_br(rt : Runtime) -> ControlFlow {
   let label = rt.read_imm_idx()
   let target_idx = rt.branch_targets.length() - 1 - label
+  if target_idx < 0 || target_idx >= rt.branch_targets.length() {
+    return Trap(
+      RuntimeError::InvalidType(
+        "br: invalid branch target index \{target_idx} (label=\{label}, targets=\{rt.branch_targets.length()})",
+      ),
+    )
+  }
   let target_pc = rt.branch_targets[target_idx]
   // Pop all targets up to and including the target
   for _i = 0; _i <= label; _i = _i + 1 {
@@ -677,6 +684,13 @@ fn op_br_if(rt : Runtime) -> ControlFlow {
   let cond = rt.pop_i32()
   if cond != 0U {
     let target_idx = rt.branch_targets.length() - 1 - label
+    if target_idx < 0 || target_idx >= rt.branch_targets.length() {
+      return Trap(
+        RuntimeError::InvalidType(
+          "br_if: invalid branch target index \{target_idx} (label=\{label}, targets=\{rt.branch_targets.length()})",
+        ),
+      )
+    }
     let target_pc = rt.branch_targets[target_idx]
     // Pop all targets up to and including the target
     for _i = 0; _i <= label; _i = _i + 1 {
@@ -703,6 +717,13 @@ fn op_br_table(rt : Runtime) -> ControlFlow {
     }
   }
   let target_idx = rt.branch_targets.length() - 1 - target_label
+  if target_idx < 0 || target_idx >= rt.branch_targets.length() {
+    return Trap(
+      RuntimeError::InvalidType(
+        "br_table: invalid branch target index \{target_idx}",
+      ),
+    )
+  }
   let target_pc = rt.branch_targets[target_idx]
   // Pop all targets up to and including the target
   for _i = 0; _i <= target_label; _i = _i + 1 {
@@ -718,7 +739,7 @@ fn op_call(rt : Runtime) -> ControlFlow {
   let code = rt.module_.codes[func_idx]
 
   guard code.compiled is Some(callee_pc) else {
-    abort("Function not compiled: \{func_idx}")
+    return Trap(RuntimeError::FunctionNotCompiled("Function not compiled: \{func_idx}"))
   }
 
   // Pop arguments
@@ -742,7 +763,10 @@ fn op_call(rt : Runtime) -> ControlFlow {
       ValType::I64 => rt.locals.push(Value::I64(0UL))
       ValType::F32 => rt.locals.push(Value::F32(0.0))
       ValType::F64 => rt.locals.push(Value::F64(0.0))
-      _ => abort("Unsupported local type")
+      _ =>
+        return Trap(
+          RuntimeError::UnsupportedLocalType("Unsupported local type: \{local_type}"),
+        )
     }
   }
 
@@ -780,7 +804,7 @@ fn op_nop(_rt : Runtime) -> ControlFlow {
 }
 
 fn op_unreachable(_rt : Runtime) -> ControlFlow {
-  abort("unreachable executed")
+  Trap(RuntimeError::Unreachable)
 }
 
 // Memory operations
@@ -1029,7 +1053,10 @@ fn op_global_set(rt : Runtime) -> ControlFlow {
 // Compilation
 // ============================================================================
 
-fn Runtime::compile_wasm_instr(self : Runtime, instr : Instr) -> Unit {
+fn Runtime::compile_wasm_instr(
+  self : Runtime,
+  instr : Instr,
+) -> Unit raise RuntimeError {
   match instr {
     // Constants
     I32Const(value) => {
@@ -1279,11 +1306,17 @@ fn Runtime::compile_wasm_instr(self : Runtime, instr : Instr) -> Unit {
     // Unsupported instructions - emit trap
     CallIndirect(_, _) => self.emit(WasmInstr(op_unsupported))
     MemoryGrow(_) => self.emit(WasmInstr(op_unsupported))
-    _ => abort("Unimplemented instruction in compiler: \{instr}")
+    _ =>
+      raise RuntimeError::UnimplementedInstruction(
+        "Unimplemented instruction: \{instr}",
+      )
   }
 }
 
-fn Runtime::compile_func(self : Runtime, code : Code) -> Unit {
+fn Runtime::compile_func(
+  self : Runtime,
+  code : Code,
+) -> Unit raise RuntimeError {
   let start_pc = self.ops.length()
   for instr in code.body.instrs {
     self.compile_wasm_instr(instr)
@@ -1292,7 +1325,7 @@ fn Runtime::compile_func(self : Runtime, code : Code) -> Unit {
   code.compiled = Some(start_pc)
 }
 
-pub fn Runtime::compile(self : Runtime) -> Unit {
+pub fn Runtime::compile(self : Runtime) -> Unit raise RuntimeError {
   for code in self.module_.codes {
     self.compile_func(code)
   }
@@ -1301,7 +1334,9 @@ pub fn Runtime::compile(self : Runtime) -> Unit {
 fn Runtime::execute(self : Runtime) -> Unit raise RuntimeError {
   while true {
     guard self.ops.unsafe_get(self.pc) is WasmInstr(f) else {
-      abort("Expected instruction at PC \{self.pc}")
+      raise RuntimeError::UnimplementedInstruction(
+        "Expected instruction at PC \{self.pc}",
+      )
     }
     match f(self) {
       Next => self.pc += 1
@@ -1330,14 +1365,16 @@ pub fn Runtime::call_compiled(
       }
     }
   }
-  guard func_idx is Some(idx) else { abort("Function not found: \{func_name}") }
+  guard func_idx is Some(idx) else {
+    raise RuntimeError::FunctionNotFound("Function not found: \{func_name}")
+  }
 
   let type_idx = self.module_.funcs[idx].reinterpret_as_int()
   let func_type = self.module_.types[type_idx]
   let code = self.module_.codes[idx]
 
   guard code.compiled is Some(start_pc) else {
-    abort("Function not compiled: \{func_name}")
+    raise RuntimeError::FunctionNotCompiled("Function not compiled: \{func_name}")
   }
 
   self.locals = []
@@ -1350,7 +1387,10 @@ pub fn Runtime::call_compiled(
       ValType::I64 => self.locals.push(Value::I64(0UL))
       ValType::F32 => self.locals.push(Value::F32(0.0))
       ValType::F64 => self.locals.push(Value::F64(0.0))
-      _ => abort("Unsupported local type")
+      _ =>
+        raise RuntimeError::UnsupportedLocalType(
+          "Unsupported local type: \{local_type}",
+        )
     }
   }
 
