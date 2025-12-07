@@ -1205,6 +1205,49 @@ fn op_i64_store32(rt : Runtime) -> ControlFlow {
   Next
 }
 
+// Memory size and grow operations
+// WebAssembly memory is measured in pages of 64KB (65536 bytes)
+let wasm_page_size : Int = 65536
+
+fn op_memory_size(rt : Runtime) -> ControlFlow {
+  // Return current memory size in pages
+  let size_in_pages = rt.memory.length() / wasm_page_size
+  rt.stack.push(Value::I32(size_in_pages.reinterpret_as_uint()))
+  Next
+}
+
+fn op_memory_grow(rt : Runtime) -> ControlFlow {
+  let delta_pages = rt.pop_i32().reinterpret_as_int()
+  let old_size_pages = rt.memory.length() / wasm_page_size
+
+  // Check for overflow or negative delta
+  if delta_pages < 0 {
+    rt.stack.push(Value::I32(0xFFFFFFFFU)) // -1 indicates failure
+    return Next
+  }
+
+  let new_size_pages = old_size_pages + delta_pages
+
+  // Check against maximum memory limit (if defined in module)
+  // For now, use a reasonable default max of 256 pages (16MB)
+  // TODO: Read actual max from module's memory type
+  let max_pages = 256
+  if new_size_pages > max_pages {
+    rt.stack.push(Value::I32(0xFFFFFFFFU)) // -1 indicates failure
+    return Next
+  }
+
+  // Grow the memory by appending zero bytes
+  let bytes_to_add = delta_pages * wasm_page_size
+  for i = 0; i < bytes_to_add; i = i + 1 {
+    rt.memory.push(b'\x00')
+  }
+
+  // Return old size in pages (success)
+  rt.stack.push(Value::I32(old_size_pages.reinterpret_as_uint()))
+  Next
+}
+
 // Float operations
 fn Runtime::pop_f32(self : Runtime) -> Float {
   match self.stack.unsafe_pop() {
@@ -2042,9 +2085,11 @@ fn Runtime::compile_wasm_instr(
       self.emit(WasmInstr(op_global_set))
       self.emit(ImmediateIdx(idx.reinterpret_as_int()))
     }
+    // Memory size and grow
+    MemorySize(_) => self.emit(WasmInstr(op_memory_size))
+    MemoryGrow(_) => self.emit(WasmInstr(op_memory_grow))
     // Unsupported instructions - emit trap
     CallIndirect(_, _) => self.emit(WasmInstr(op_unsupported))
-    MemoryGrow(_) => self.emit(WasmInstr(op_unsupported))
     _ =>
       raise RuntimeError::UnimplementedInstruction(
         "Unimplemented instruction: \{instr}",
