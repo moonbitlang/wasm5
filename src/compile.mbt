@@ -1,3 +1,57 @@
+// =============================================================================
+// NaN Canonicalization for WebAssembly Compliance
+// =============================================================================
+//
+// WebAssembly requires that when a floating-point operation produces a NaN
+// result, it must be a "canonical NaN" with a specific bit pattern:
+//
+//   - f64 canonical NaN: 0x7FF8000000000000 (positive quiet NaN)
+//   - f32 canonical NaN: 0x7FC00000 (positive quiet NaN)
+//
+// The sign bit must be 0 (positive), and the payload must be the canonical
+// quiet NaN pattern.
+//
+// WHY THIS MATTERS:
+// Native floating-point hardware may produce different NaN bit patterns when
+// propagating NaN through operations. For example:
+//   - Adding -0.0 + (-NaN) might produce a negative NaN (sign bit = 1)
+//   - Different CPUs may set different payload bits
+//
+// The WebAssembly spec tests (wast files) check for exact bit patterns in
+// "nan:canonical" assertions, so we must canonicalize all NaN results.
+//
+// WHICH OPERATIONS NEED CANONICALIZATION:
+// Any operation that can produce NaN as a result needs canonicalization:
+//   - Arithmetic: add, sub, mul, div (when operands include NaN or produce NaN)
+//   - Unary: sqrt (negative input), ceil, floor, trunc, nearest (NaN passthrough)
+//   - Min/max: when either operand is NaN
+//
+// Note: Operations like neg, abs, and copysign have special NaN handling
+// defined by the spec and don't use canonicalization.
+// =============================================================================
+
+///|
+/// Canonical NaN values for WebAssembly
+/// f64 canonical NaN: 0x7FF8000000000000
+let canonical_nan_f64 : Double = 0x7ff8_0000_0000_0000UL.reinterpret_as_double()
+
+/// f32 canonical NaN: 0x7FC00000
+let canonical_nan_f32 : Float = Float::reinterpret_from_uint(0x7fc0_0000U)
+
+///|
+/// Canonicalize NaN values - if value is NaN, return canonical NaN.
+/// This ensures WebAssembly spec compliance for NaN bit patterns.
+fn canonicalize_f64(v : Double) -> Double {
+  if v.is_nan() { canonical_nan_f64 } else { v }
+}
+
+///|
+/// Canonicalize NaN values - if value is NaN, return canonical NaN.
+/// This ensures WebAssembly spec compliance for NaN bit patterns.
+fn canonicalize_f32(v : Float) -> Float {
+  if v.is_nan() { canonical_nan_f32 } else { v }
+}
+
 ///|
 /// Intermediate instruction for threaded interpreter
 enum MInstr {
@@ -807,11 +861,31 @@ fn op_unreachable(_rt : Runtime) -> ControlFlow {
   Trap(RuntimeError::Unreachable)
 }
 
-// Memory operations
+// =============================================================================
+// Memory Operations - Bounds Checking
+// =============================================================================
+//
+// IMPORTANT: Memory address bounds checking must check for BOTH:
+//   1. addr < 0 (negative addresses)
+//   2. addr + size > memory.length() (overflow past end)
+//
+// WHY NEGATIVE ADDRESS CHECK IS NEEDED:
+// WebAssembly addresses are unsigned 32-bit values, but when we convert them
+// to signed integers for array indexing (via reinterpret_as_int()), large
+// unsigned values (>= 2^31) become negative signed values.
+//
+// For example:
+//   - Address 0xFFFFFFFF (u32 max) becomes -1 when reinterpreted as signed
+//   - Without the addr < 0 check, this would cause an array index out of bounds
+//     crash instead of a proper WebAssembly trap
+//
+// The check `addr < 0` catches these cases and returns MemoryOutOfBounds trap.
+// =============================================================================
+
 fn op_i32_load(rt : Runtime) -> ControlFlow {
   let offset = rt.read_imm_idx()
   let addr = rt.pop_i32().reinterpret_as_int() + offset
-  if addr + 4 > rt.memory.length() {
+  if addr < 0 || addr + 4 > rt.memory.length() {
     return Trap(RuntimeError::MemoryOutOfBounds)
   }
   let b0 = rt.memory[addr].to_uint()
@@ -826,13 +900,308 @@ fn op_i32_store(rt : Runtime) -> ControlFlow {
   let offset = rt.read_imm_idx()
   let value = rt.pop_i32()
   let addr = rt.pop_i32().reinterpret_as_int() + offset
-  if addr + 4 > rt.memory.length() {
+  if addr < 0 || addr + 4 > rt.memory.length() {
     return Trap(RuntimeError::MemoryOutOfBounds)
   }
   rt.memory[addr] = (value & 0xFFU).to_byte()
   rt.memory[addr + 1] = ((value >> 8) & 0xFFU).to_byte()
   rt.memory[addr + 2] = ((value >> 16) & 0xFFU).to_byte()
   rt.memory[addr + 3] = ((value >> 24) & 0xFFU).to_byte()
+  Next
+}
+
+// Additional memory load operations
+fn op_i32_load8_s(rt : Runtime) -> ControlFlow {
+  let offset = rt.read_imm_idx()
+  let addr = rt.pop_i32().reinterpret_as_int() + offset
+  if addr < 0 || addr + 1 > rt.memory.length() {
+    return Trap(RuntimeError::MemoryOutOfBounds)
+  }
+  let b = rt.memory[addr].to_int()
+  // Sign extend from 8 bits
+  let value = if b >= 128 { b - 256 } else { b }
+  rt.stack.push(Value::I32(value.reinterpret_as_uint()))
+  Next
+}
+
+fn op_i32_load8_u(rt : Runtime) -> ControlFlow {
+  let offset = rt.read_imm_idx()
+  let addr = rt.pop_i32().reinterpret_as_int() + offset
+  if addr < 0 || addr + 1 > rt.memory.length() {
+    return Trap(RuntimeError::MemoryOutOfBounds)
+  }
+  rt.stack.push(Value::I32(rt.memory[addr].to_uint()))
+  Next
+}
+
+fn op_i32_load16_s(rt : Runtime) -> ControlFlow {
+  let offset = rt.read_imm_idx()
+  let addr = rt.pop_i32().reinterpret_as_int() + offset
+  if addr < 0 || addr + 2 > rt.memory.length() {
+    return Trap(RuntimeError::MemoryOutOfBounds)
+  }
+  let b0 = rt.memory[addr].to_int()
+  let b1 = rt.memory[addr + 1].to_int()
+  let value16 = b0 | (b1 << 8)
+  // Sign extend from 16 bits
+  let value = if value16 >= 32768 { value16 - 65536 } else { value16 }
+  rt.stack.push(Value::I32(value.reinterpret_as_uint()))
+  Next
+}
+
+fn op_i32_load16_u(rt : Runtime) -> ControlFlow {
+  let offset = rt.read_imm_idx()
+  let addr = rt.pop_i32().reinterpret_as_int() + offset
+  if addr < 0 || addr + 2 > rt.memory.length() {
+    return Trap(RuntimeError::MemoryOutOfBounds)
+  }
+  let b0 = rt.memory[addr].to_uint()
+  let b1 = rt.memory[addr + 1].to_uint()
+  rt.stack.push(Value::I32(b0 | (b1 << 8)))
+  Next
+}
+
+fn op_i64_load(rt : Runtime) -> ControlFlow {
+  let offset = rt.read_imm_idx()
+  let addr = rt.pop_i32().reinterpret_as_int() + offset
+  if addr < 0 || addr + 8 > rt.memory.length() {
+    return Trap(RuntimeError::MemoryOutOfBounds)
+  }
+  let b0 = rt.memory[addr].to_uint64()
+  let b1 = rt.memory[addr + 1].to_uint64()
+  let b2 = rt.memory[addr + 2].to_uint64()
+  let b3 = rt.memory[addr + 3].to_uint64()
+  let b4 = rt.memory[addr + 4].to_uint64()
+  let b5 = rt.memory[addr + 5].to_uint64()
+  let b6 = rt.memory[addr + 6].to_uint64()
+  let b7 = rt.memory[addr + 7].to_uint64()
+  rt.stack.push(Value::I64(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24) | (b4 << 32) | (b5 << 40) | (b6 << 48) | (b7 << 56)))
+  Next
+}
+
+fn op_i64_store(rt : Runtime) -> ControlFlow {
+  let offset = rt.read_imm_idx()
+  let value = rt.pop_i64()
+  let addr = rt.pop_i32().reinterpret_as_int() + offset
+  if addr < 0 || addr + 8 > rt.memory.length() {
+    return Trap(RuntimeError::MemoryOutOfBounds)
+  }
+  rt.memory[addr] = (value & 0xFFUL).to_byte()
+  rt.memory[addr + 1] = ((value >> 8) & 0xFFUL).to_byte()
+  rt.memory[addr + 2] = ((value >> 16) & 0xFFUL).to_byte()
+  rt.memory[addr + 3] = ((value >> 24) & 0xFFUL).to_byte()
+  rt.memory[addr + 4] = ((value >> 32) & 0xFFUL).to_byte()
+  rt.memory[addr + 5] = ((value >> 40) & 0xFFUL).to_byte()
+  rt.memory[addr + 6] = ((value >> 48) & 0xFFUL).to_byte()
+  rt.memory[addr + 7] = ((value >> 56) & 0xFFUL).to_byte()
+  Next
+}
+
+fn op_i64_load8_s(rt : Runtime) -> ControlFlow {
+  let offset = rt.read_imm_idx()
+  let addr = rt.pop_i32().reinterpret_as_int() + offset
+  if addr < 0 || addr + 1 > rt.memory.length() {
+    return Trap(RuntimeError::MemoryOutOfBounds)
+  }
+  let b = rt.memory[addr].to_int64()
+  // Sign extend from 8 bits
+  let value = if b >= 128L { b - 256L } else { b }
+  rt.stack.push(Value::I64(value.reinterpret_as_uint64()))
+  Next
+}
+
+fn op_i64_load8_u(rt : Runtime) -> ControlFlow {
+  let offset = rt.read_imm_idx()
+  let addr = rt.pop_i32().reinterpret_as_int() + offset
+  if addr < 0 || addr + 1 > rt.memory.length() {
+    return Trap(RuntimeError::MemoryOutOfBounds)
+  }
+  rt.stack.push(Value::I64(rt.memory[addr].to_uint64()))
+  Next
+}
+
+fn op_i64_load16_s(rt : Runtime) -> ControlFlow {
+  let offset = rt.read_imm_idx()
+  let addr = rt.pop_i32().reinterpret_as_int() + offset
+  if addr < 0 || addr + 2 > rt.memory.length() {
+    return Trap(RuntimeError::MemoryOutOfBounds)
+  }
+  let b0 = rt.memory[addr].to_int64()
+  let b1 = rt.memory[addr + 1].to_int64()
+  let value16 = b0 | (b1 << 8)
+  // Sign extend from 16 bits
+  let value = if value16 >= 32768L { value16 - 65536L } else { value16 }
+  rt.stack.push(Value::I64(value.reinterpret_as_uint64()))
+  Next
+}
+
+fn op_i64_load16_u(rt : Runtime) -> ControlFlow {
+  let offset = rt.read_imm_idx()
+  let addr = rt.pop_i32().reinterpret_as_int() + offset
+  if addr < 0 || addr + 2 > rt.memory.length() {
+    return Trap(RuntimeError::MemoryOutOfBounds)
+  }
+  let b0 = rt.memory[addr].to_uint64()
+  let b1 = rt.memory[addr + 1].to_uint64()
+  rt.stack.push(Value::I64(b0 | (b1 << 8)))
+  Next
+}
+
+fn op_i64_load32_s(rt : Runtime) -> ControlFlow {
+  let offset = rt.read_imm_idx()
+  let addr = rt.pop_i32().reinterpret_as_int() + offset
+  if addr < 0 || addr + 4 > rt.memory.length() {
+    return Trap(RuntimeError::MemoryOutOfBounds)
+  }
+  let b0 = rt.memory[addr].to_int64()
+  let b1 = rt.memory[addr + 1].to_int64()
+  let b2 = rt.memory[addr + 2].to_int64()
+  let b3 = rt.memory[addr + 3].to_int64()
+  let value32 = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
+  // Sign extend from 32 bits
+  let value = if value32 >= 0x80000000L { value32 - 0x100000000L } else { value32 }
+  rt.stack.push(Value::I64(value.reinterpret_as_uint64()))
+  Next
+}
+
+fn op_i64_load32_u(rt : Runtime) -> ControlFlow {
+  let offset = rt.read_imm_idx()
+  let addr = rt.pop_i32().reinterpret_as_int() + offset
+  if addr < 0 || addr + 4 > rt.memory.length() {
+    return Trap(RuntimeError::MemoryOutOfBounds)
+  }
+  let b0 = rt.memory[addr].to_uint64()
+  let b1 = rt.memory[addr + 1].to_uint64()
+  let b2 = rt.memory[addr + 2].to_uint64()
+  let b3 = rt.memory[addr + 3].to_uint64()
+  rt.stack.push(Value::I64(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)))
+  Next
+}
+
+fn op_f32_load(rt : Runtime) -> ControlFlow {
+  let offset = rt.read_imm_idx()
+  let addr = rt.pop_i32().reinterpret_as_int() + offset
+  if addr < 0 || addr + 4 > rt.memory.length() {
+    return Trap(RuntimeError::MemoryOutOfBounds)
+  }
+  let b0 = rt.memory[addr].to_uint()
+  let b1 = rt.memory[addr + 1].to_uint()
+  let b2 = rt.memory[addr + 2].to_uint()
+  let b3 = rt.memory[addr + 3].to_uint()
+  let bits = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
+  rt.stack.push(Value::F32(Float::reinterpret_from_uint(bits)))
+  Next
+}
+
+fn op_f64_load(rt : Runtime) -> ControlFlow {
+  let offset = rt.read_imm_idx()
+  let addr = rt.pop_i32().reinterpret_as_int() + offset
+  if addr < 0 || addr + 8 > rt.memory.length() {
+    return Trap(RuntimeError::MemoryOutOfBounds)
+  }
+  let b0 = rt.memory[addr].to_uint64()
+  let b1 = rt.memory[addr + 1].to_uint64()
+  let b2 = rt.memory[addr + 2].to_uint64()
+  let b3 = rt.memory[addr + 3].to_uint64()
+  let b4 = rt.memory[addr + 4].to_uint64()
+  let b5 = rt.memory[addr + 5].to_uint64()
+  let b6 = rt.memory[addr + 6].to_uint64()
+  let b7 = rt.memory[addr + 7].to_uint64()
+  let bits = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24) | (b4 << 32) | (b5 << 40) | (b6 << 48) | (b7 << 56)
+  rt.stack.push(Value::F64(bits.reinterpret_as_double()))
+  Next
+}
+
+fn op_f32_store(rt : Runtime) -> ControlFlow {
+  let offset = rt.read_imm_idx()
+  let value = rt.pop_f32().reinterpret_as_uint()
+  let addr = rt.pop_i32().reinterpret_as_int() + offset
+  if addr < 0 || addr + 4 > rt.memory.length() {
+    return Trap(RuntimeError::MemoryOutOfBounds)
+  }
+  rt.memory[addr] = (value & 0xFFU).to_byte()
+  rt.memory[addr + 1] = ((value >> 8) & 0xFFU).to_byte()
+  rt.memory[addr + 2] = ((value >> 16) & 0xFFU).to_byte()
+  rt.memory[addr + 3] = ((value >> 24) & 0xFFU).to_byte()
+  Next
+}
+
+fn op_f64_store(rt : Runtime) -> ControlFlow {
+  let offset = rt.read_imm_idx()
+  let value = rt.pop_f64().reinterpret_as_uint64()
+  let addr = rt.pop_i32().reinterpret_as_int() + offset
+  if addr < 0 || addr + 8 > rt.memory.length() {
+    return Trap(RuntimeError::MemoryOutOfBounds)
+  }
+  rt.memory[addr] = (value & 0xFFUL).to_byte()
+  rt.memory[addr + 1] = ((value >> 8) & 0xFFUL).to_byte()
+  rt.memory[addr + 2] = ((value >> 16) & 0xFFUL).to_byte()
+  rt.memory[addr + 3] = ((value >> 24) & 0xFFUL).to_byte()
+  rt.memory[addr + 4] = ((value >> 32) & 0xFFUL).to_byte()
+  rt.memory[addr + 5] = ((value >> 40) & 0xFFUL).to_byte()
+  rt.memory[addr + 6] = ((value >> 48) & 0xFFUL).to_byte()
+  rt.memory[addr + 7] = ((value >> 56) & 0xFFUL).to_byte()
+  Next
+}
+
+// Narrow store operations
+fn op_i32_store8(rt : Runtime) -> ControlFlow {
+  let offset = rt.read_imm_idx()
+  let value = rt.pop_i32()
+  let addr = rt.pop_i32().reinterpret_as_int() + offset
+  if addr < 0 || addr + 1 > rt.memory.length() {
+    return Trap(RuntimeError::MemoryOutOfBounds)
+  }
+  rt.memory[addr] = (value & 0xFFU).to_byte()
+  Next
+}
+
+fn op_i32_store16(rt : Runtime) -> ControlFlow {
+  let offset = rt.read_imm_idx()
+  let value = rt.pop_i32()
+  let addr = rt.pop_i32().reinterpret_as_int() + offset
+  if addr < 0 || addr + 2 > rt.memory.length() {
+    return Trap(RuntimeError::MemoryOutOfBounds)
+  }
+  rt.memory[addr] = (value & 0xFFU).to_byte()
+  rt.memory[addr + 1] = ((value >> 8) & 0xFFU).to_byte()
+  Next
+}
+
+fn op_i64_store8(rt : Runtime) -> ControlFlow {
+  let offset = rt.read_imm_idx()
+  let value = rt.pop_i64()
+  let addr = rt.pop_i32().reinterpret_as_int() + offset
+  if addr < 0 || addr + 1 > rt.memory.length() {
+    return Trap(RuntimeError::MemoryOutOfBounds)
+  }
+  rt.memory[addr] = (value & 0xFFUL).to_byte()
+  Next
+}
+
+fn op_i64_store16(rt : Runtime) -> ControlFlow {
+  let offset = rt.read_imm_idx()
+  let value = rt.pop_i64()
+  let addr = rt.pop_i32().reinterpret_as_int() + offset
+  if addr < 0 || addr + 2 > rt.memory.length() {
+    return Trap(RuntimeError::MemoryOutOfBounds)
+  }
+  rt.memory[addr] = (value & 0xFFUL).to_byte()
+  rt.memory[addr + 1] = ((value >> 8) & 0xFFUL).to_byte()
+  Next
+}
+
+fn op_i64_store32(rt : Runtime) -> ControlFlow {
+  let offset = rt.read_imm_idx()
+  let value = rt.pop_i64()
+  let addr = rt.pop_i32().reinterpret_as_int() + offset
+  if addr < 0 || addr + 4 > rt.memory.length() {
+    return Trap(RuntimeError::MemoryOutOfBounds)
+  }
+  rt.memory[addr] = (value & 0xFFUL).to_byte()
+  rt.memory[addr + 1] = ((value >> 8) & 0xFFUL).to_byte()
+  rt.memory[addr + 2] = ((value >> 16) & 0xFFUL).to_byte()
+  rt.memory[addr + 3] = ((value >> 24) & 0xFFUL).to_byte()
   Next
 }
 
@@ -942,6 +1311,42 @@ fn op_f32_neg(rt : Runtime) -> ControlFlow {
   Next
 }
 
+fn op_f32_abs(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f32()
+  rt.stack.push(Value::F32(a.abs()))
+  Next
+}
+
+fn op_f32_sqrt(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f32()
+  rt.stack.push(Value::F32(canonicalize_f32(a.sqrt())))
+  Next
+}
+
+fn op_f32_ceil(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f32()
+  rt.stack.push(Value::F32(canonicalize_f32(a.ceil())))
+  Next
+}
+
+fn op_f32_floor(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f32()
+  rt.stack.push(Value::F32(canonicalize_f32(a.floor())))
+  Next
+}
+
+fn op_f32_trunc(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f32()
+  rt.stack.push(Value::F32(canonicalize_f32(a.trunc())))
+  Next
+}
+
+fn op_f32_nearest(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f32()
+  rt.stack.push(Value::F32(canonicalize_f32(a.round())))
+  Next
+}
+
 fn op_f64_neg(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f64()
   rt.stack.push(Value::F64(-a))
@@ -949,9 +1354,162 @@ fn op_f64_neg(rt : Runtime) -> ControlFlow {
 }
 
 // Float binary operations
+fn op_f32_add(rt : Runtime) -> ControlFlow {
+  let (a, b) = rt.pop_two_f32()
+  rt.stack.push(Value::F32(canonicalize_f32(a + b)))
+  Next
+}
+
+fn op_f32_sub(rt : Runtime) -> ControlFlow {
+  let (a, b) = rt.pop_two_f32()
+  rt.stack.push(Value::F32(canonicalize_f32(a - b)))
+  Next
+}
+
+fn op_f32_mul(rt : Runtime) -> ControlFlow {
+  let (a, b) = rt.pop_two_f32()
+  rt.stack.push(Value::F32(canonicalize_f32(a * b)))
+  Next
+}
+
+fn op_f32_div(rt : Runtime) -> ControlFlow {
+  let (a, b) = rt.pop_two_f32()
+  rt.stack.push(Value::F32(canonicalize_f32(a / b)))
+  Next
+}
+
+fn op_f32_min(rt : Runtime) -> ControlFlow {
+  let (a, b) = rt.pop_two_f32()
+  let result = if a.is_nan() || b.is_nan() {
+    canonical_nan_f32
+  } else if a < b {
+    a
+  } else {
+    b
+  }
+  rt.stack.push(Value::F32(result))
+  Next
+}
+
+fn op_f32_max(rt : Runtime) -> ControlFlow {
+  let (a, b) = rt.pop_two_f32()
+  let result = if a.is_nan() || b.is_nan() {
+    canonical_nan_f32
+  } else if a > b {
+    a
+  } else {
+    b
+  }
+  rt.stack.push(Value::F32(result))
+  Next
+}
+
+fn op_f32_copysign(rt : Runtime) -> ControlFlow {
+  let (a, b) = rt.pop_two_f32()
+  let a_bits = a.reinterpret_as_uint()
+  let b_bits = b.reinterpret_as_uint()
+  let sign_mask = 0x8000_0000U
+  let result_bits = (a_bits & sign_mask.lnot()) | (b_bits & sign_mask)
+  rt.stack.push(Value::F32(Float::reinterpret_from_uint(result_bits)))
+  Next
+}
+
 fn op_f64_add(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f64()
-  rt.stack.push(Value::F64(a + b))
+  rt.stack.push(Value::F64(canonicalize_f64(a + b)))
+  Next
+}
+
+fn op_f64_sub(rt : Runtime) -> ControlFlow {
+  let (a, b) = rt.pop_two_f64()
+  rt.stack.push(Value::F64(canonicalize_f64(a - b)))
+  Next
+}
+
+fn op_f64_mul(rt : Runtime) -> ControlFlow {
+  let (a, b) = rt.pop_two_f64()
+  rt.stack.push(Value::F64(canonicalize_f64(a * b)))
+  Next
+}
+
+fn op_f64_div(rt : Runtime) -> ControlFlow {
+  let (a, b) = rt.pop_two_f64()
+  rt.stack.push(Value::F64(canonicalize_f64(a / b)))
+  Next
+}
+
+fn op_f64_min(rt : Runtime) -> ControlFlow {
+  let (a, b) = rt.pop_two_f64()
+  // WebAssembly min semantics: if either is NaN, return canonical NaN
+  let result = if a.is_nan() || b.is_nan() {
+    canonical_nan_f64
+  } else if a < b {
+    a
+  } else {
+    b
+  }
+  rt.stack.push(Value::F64(result))
+  Next
+}
+
+fn op_f64_max(rt : Runtime) -> ControlFlow {
+  let (a, b) = rt.pop_two_f64()
+  // WebAssembly max semantics: if either is NaN, return canonical NaN
+  let result = if a.is_nan() || b.is_nan() {
+    canonical_nan_f64
+  } else if a > b {
+    a
+  } else {
+    b
+  }
+  rt.stack.push(Value::F64(result))
+  Next
+}
+
+fn op_f64_copysign(rt : Runtime) -> ControlFlow {
+  let (a, b) = rt.pop_two_f64()
+  let a_bits = a.reinterpret_as_uint64()
+  let b_bits = b.reinterpret_as_uint64()
+  let sign_mask = 0x8000_0000_0000_0000UL
+  let result_bits = (a_bits & sign_mask.lnot()) | (b_bits & sign_mask)
+  rt.stack.push(Value::F64(result_bits.reinterpret_as_double()))
+  Next
+}
+
+// Float unary operations
+fn op_f64_abs(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f64()
+  rt.stack.push(Value::F64(a.abs()))
+  Next
+}
+
+fn op_f64_sqrt(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f64()
+  rt.stack.push(Value::F64(canonicalize_f64(a.sqrt())))
+  Next
+}
+
+fn op_f64_ceil(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f64()
+  rt.stack.push(Value::F64(canonicalize_f64(a.ceil())))
+  Next
+}
+
+fn op_f64_floor(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f64()
+  rt.stack.push(Value::F64(canonicalize_f64(a.floor())))
+  Next
+}
+
+fn op_f64_trunc(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f64()
+  rt.stack.push(Value::F64(canonicalize_f64(a.trunc())))
+  Next
+}
+
+fn op_f64_nearest(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f64()
+  rt.stack.push(Value::F64(canonicalize_f64(a.round())))
   Next
 }
 
@@ -983,6 +1541,43 @@ fn op_f64_convert_i32_s(rt : Runtime) -> ControlFlow {
 fn op_f64_promote_f32(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f32()
   rt.stack.push(Value::F64(a.to_double()))
+  Next
+}
+
+fn op_f32_demote_f64(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f64()
+  rt.stack.push(Value::F32(a.to_float()))
+  Next
+}
+
+fn op_f32_convert_i32_s(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_i32().reinterpret_as_int()
+  rt.stack.push(Value::F32(a.to_float()))
+  Next
+}
+
+fn op_f32_convert_i32_u(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_i32()
+  rt.stack.push(Value::F32(a.to_double().to_float()))
+  Next
+}
+
+fn op_f32_convert_i64_s(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_i64().reinterpret_as_int64()
+  rt.stack.push(Value::F32(a.to_double().to_float()))
+  Next
+}
+
+fn op_f32_convert_i64_u(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_i64()
+  // For unsigned i64 to float, handle large values carefully
+  let f = if a.reinterpret_as_int64() >= 0L {
+    a.reinterpret_as_int64().to_double()
+  } else {
+    // For values >= 2^63, convert via double
+    (a >> 1).reinterpret_as_int64().to_double() * 2.0 + (a & 1UL).to_double()
+  }
+  rt.stack.push(Value::F32(f.to_float()))
   Next
 }
 
@@ -1032,6 +1627,31 @@ fn op_i64_trunc_f32_s(rt : Runtime) -> ControlFlow {
 fn op_i64_trunc_f32_u(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f32()
   rt.stack.push(Value::I64(a.to_double().to_uint64()))
+  Next
+}
+
+// Reinterpret operations
+fn op_i32_reinterpret_f32(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f32()
+  rt.stack.push(Value::I32(a.reinterpret_as_uint()))
+  Next
+}
+
+fn op_i64_reinterpret_f64(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f64()
+  rt.stack.push(Value::I64(a.reinterpret_as_uint64()))
+  Next
+}
+
+fn op_f32_reinterpret_i32(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_i32()
+  rt.stack.push(Value::F32(Float::reinterpret_from_uint(a)))
+  Next
+}
+
+fn op_f64_reinterpret_i64(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_i64()
+  rt.stack.push(Value::F64(a.reinterpret_as_double()))
   Next
 }
 
@@ -1170,15 +1790,45 @@ fn Runtime::compile_wasm_instr(
     F64Ge => self.emit(WasmInstr(op_f64_ge))
     // Float unary
     F32Neg => self.emit(WasmInstr(op_f32_neg))
+    F32Abs => self.emit(WasmInstr(op_f32_abs))
+    F32Sqrt => self.emit(WasmInstr(op_f32_sqrt))
+    F32Ceil => self.emit(WasmInstr(op_f32_ceil))
+    F32Floor => self.emit(WasmInstr(op_f32_floor))
+    F32Trunc => self.emit(WasmInstr(op_f32_trunc))
+    F32Nearest => self.emit(WasmInstr(op_f32_nearest))
     F64Neg => self.emit(WasmInstr(op_f64_neg))
+    F64Abs => self.emit(WasmInstr(op_f64_abs))
+    F64Sqrt => self.emit(WasmInstr(op_f64_sqrt))
+    F64Ceil => self.emit(WasmInstr(op_f64_ceil))
+    F64Floor => self.emit(WasmInstr(op_f64_floor))
+    F64Trunc => self.emit(WasmInstr(op_f64_trunc))
+    F64Nearest => self.emit(WasmInstr(op_f64_nearest))
     // Float binary
+    F32Add => self.emit(WasmInstr(op_f32_add))
+    F32Sub => self.emit(WasmInstr(op_f32_sub))
+    F32Mul => self.emit(WasmInstr(op_f32_mul))
+    F32Div => self.emit(WasmInstr(op_f32_div))
+    F32Min => self.emit(WasmInstr(op_f32_min))
+    F32Max => self.emit(WasmInstr(op_f32_max))
+    F32Copysign => self.emit(WasmInstr(op_f32_copysign))
     F64Add => self.emit(WasmInstr(op_f64_add))
+    F64Sub => self.emit(WasmInstr(op_f64_sub))
+    F64Mul => self.emit(WasmInstr(op_f64_mul))
+    F64Div => self.emit(WasmInstr(op_f64_div))
+    F64Min => self.emit(WasmInstr(op_f64_min))
+    F64Max => self.emit(WasmInstr(op_f64_max))
+    F64Copysign => self.emit(WasmInstr(op_f64_copysign))
     // Float conversions
     F64ConvertI64U => self.emit(WasmInstr(op_f64_convert_i64_u))
     F64ConvertI64S => self.emit(WasmInstr(op_f64_convert_i64_s))
     F64ConvertI32U => self.emit(WasmInstr(op_f64_convert_i32_u))
     F64ConvertI32S => self.emit(WasmInstr(op_f64_convert_i32_s))
     F64PromoteF32 => self.emit(WasmInstr(op_f64_promote_f32))
+    F32DemoteF64 => self.emit(WasmInstr(op_f32_demote_f64))
+    F32ConvertI32S => self.emit(WasmInstr(op_f32_convert_i32_s))
+    F32ConvertI32U => self.emit(WasmInstr(op_f32_convert_i32_u))
+    F32ConvertI64S => self.emit(WasmInstr(op_f32_convert_i64_s))
+    F32ConvertI64U => self.emit(WasmInstr(op_f32_convert_i64_u))
     // Truncations
     I64TruncF64S => self.emit(WasmInstr(op_i64_trunc_f64_s))
     I64TruncF64U => self.emit(WasmInstr(op_i64_trunc_f64_u))
@@ -1188,6 +1838,11 @@ fn Runtime::compile_wasm_instr(
     I32TruncF64U => self.emit(WasmInstr(op_i32_trunc_f64_u))
     I64TruncF32S => self.emit(WasmInstr(op_i64_trunc_f32_s))
     I64TruncF32U => self.emit(WasmInstr(op_i64_trunc_f32_u))
+    // Reinterpret
+    I32ReinterpretF32 => self.emit(WasmInstr(op_i32_reinterpret_f32))
+    I64ReinterpretF64 => self.emit(WasmInstr(op_i64_reinterpret_f64))
+    F32ReinterpretI32 => self.emit(WasmInstr(op_f32_reinterpret_i32))
+    F64ReinterpretI64 => self.emit(WasmInstr(op_f64_reinterpret_i64))
     // Locals
     LocalGet(idx) => {
       self.emit(WasmInstr(op_local_get))
@@ -1292,6 +1947,90 @@ fn Runtime::compile_wasm_instr(
     }
     I32Store(_align, offset) => {
       self.emit(WasmInstr(op_i32_store))
+      self.emit(ImmediateIdx(offset.reinterpret_as_int()))
+    }
+    I32Load8S(_align, offset) => {
+      self.emit(WasmInstr(op_i32_load8_s))
+      self.emit(ImmediateIdx(offset.reinterpret_as_int()))
+    }
+    I32Load8U(_align, offset) => {
+      self.emit(WasmInstr(op_i32_load8_u))
+      self.emit(ImmediateIdx(offset.reinterpret_as_int()))
+    }
+    I32Load16S(_align, offset) => {
+      self.emit(WasmInstr(op_i32_load16_s))
+      self.emit(ImmediateIdx(offset.reinterpret_as_int()))
+    }
+    I32Load16U(_align, offset) => {
+      self.emit(WasmInstr(op_i32_load16_u))
+      self.emit(ImmediateIdx(offset.reinterpret_as_int()))
+    }
+    I32Store8(_align, offset) => {
+      self.emit(WasmInstr(op_i32_store8))
+      self.emit(ImmediateIdx(offset.reinterpret_as_int()))
+    }
+    I32Store16(_align, offset) => {
+      self.emit(WasmInstr(op_i32_store16))
+      self.emit(ImmediateIdx(offset.reinterpret_as_int()))
+    }
+    I64Load(_align, offset) => {
+      self.emit(WasmInstr(op_i64_load))
+      self.emit(ImmediateIdx(offset.reinterpret_as_int()))
+    }
+    I64Store(_align, offset) => {
+      self.emit(WasmInstr(op_i64_store))
+      self.emit(ImmediateIdx(offset.reinterpret_as_int()))
+    }
+    I64Load8S(_align, offset) => {
+      self.emit(WasmInstr(op_i64_load8_s))
+      self.emit(ImmediateIdx(offset.reinterpret_as_int()))
+    }
+    I64Load8U(_align, offset) => {
+      self.emit(WasmInstr(op_i64_load8_u))
+      self.emit(ImmediateIdx(offset.reinterpret_as_int()))
+    }
+    I64Load16S(_align, offset) => {
+      self.emit(WasmInstr(op_i64_load16_s))
+      self.emit(ImmediateIdx(offset.reinterpret_as_int()))
+    }
+    I64Load16U(_align, offset) => {
+      self.emit(WasmInstr(op_i64_load16_u))
+      self.emit(ImmediateIdx(offset.reinterpret_as_int()))
+    }
+    I64Load32S(_align, offset) => {
+      self.emit(WasmInstr(op_i64_load32_s))
+      self.emit(ImmediateIdx(offset.reinterpret_as_int()))
+    }
+    I64Load32U(_align, offset) => {
+      self.emit(WasmInstr(op_i64_load32_u))
+      self.emit(ImmediateIdx(offset.reinterpret_as_int()))
+    }
+    I64Store8(_align, offset) => {
+      self.emit(WasmInstr(op_i64_store8))
+      self.emit(ImmediateIdx(offset.reinterpret_as_int()))
+    }
+    I64Store16(_align, offset) => {
+      self.emit(WasmInstr(op_i64_store16))
+      self.emit(ImmediateIdx(offset.reinterpret_as_int()))
+    }
+    I64Store32(_align, offset) => {
+      self.emit(WasmInstr(op_i64_store32))
+      self.emit(ImmediateIdx(offset.reinterpret_as_int()))
+    }
+    F32Load(_align, offset) => {
+      self.emit(WasmInstr(op_f32_load))
+      self.emit(ImmediateIdx(offset.reinterpret_as_int()))
+    }
+    F32Store(_align, offset) => {
+      self.emit(WasmInstr(op_f32_store))
+      self.emit(ImmediateIdx(offset.reinterpret_as_int()))
+    }
+    F64Load(_align, offset) => {
+      self.emit(WasmInstr(op_f64_load))
+      self.emit(ImmediateIdx(offset.reinterpret_as_int()))
+    }
+    F64Store(_align, offset) => {
+      self.emit(WasmInstr(op_f64_store))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
     // Global instructions

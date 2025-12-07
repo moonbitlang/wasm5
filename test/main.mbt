@@ -27,10 +27,7 @@ fn TestContext::fail(
 }
 
 ///|
-async fn parse_and_compile(
-  dir : String,
-  file_name : String,
-) -> @wasm5.Runtime raise {
+async fn parse_and_compile(dir : String, file_name : String) -> @wasm5.Runtime {
   let file = @fs.open(dir + file_name, mode=ReadOnly)
   defer file.close()
   let content = file.read_all().binary()
@@ -47,6 +44,71 @@ suberror TestUnsupported {
   UnsupportedExpectedType(String)
 }
 
+// =============================================================================
+// NaN Handling in WebAssembly Spec Tests
+// =============================================================================
+//
+// The wast2json tool outputs floating-point values as their integer bit
+// representations. For NaN values, it uses special string formats:
+//
+//   - "nan:canonical" - Must match the exact canonical NaN bit pattern
+//     (f64: 0x7FF8000000000000, f32: 0x7FC00000)
+//
+//   - "nan:arithmetic" - Any NaN value is acceptable (used when the spec
+//     allows implementation-defined NaN payloads)
+//
+// For ARGUMENTS (inputs to functions):
+//   Both "nan:canonical" and "nan:arithmetic" are parsed as the canonical NaN,
+//   since the actual input NaN bit pattern doesn't affect the test semantics.
+//
+// For EXPECTED VALUES (outputs from functions):
+//   - "nan:canonical" -> Exact bit pattern match required
+//   - "nan:arithmetic" -> Any NaN is acceptable (use AnyF32Nan/AnyF64Nan)
+//
+// FLOAT COMPARISON:
+//   Floating-point values must be compared by their bit patterns, not by ==,
+//   because IEEE 754 defines NaN != NaN (even for identical bit patterns).
+//   We use reinterpret_as_uint64()/reinterpret_as_uint() for comparison.
+// =============================================================================
+
+///|
+/// Special expected value that represents "any NaN"
+enum ExpectedValue {
+  Exact(@wasm5.Value)
+  AnyF32Nan // nan:arithmetic for f32 - any NaN value is acceptable
+  AnyF64Nan // nan:arithmetic for f64 - any NaN value is acceptable
+} derive(Show)
+
+///|
+/// Parse f64 value string, handling nan:canonical and nan:arithmetic
+fn parse_f64_value(v : String) -> Double raise {
+  if v == "nan:canonical" {
+    // Canonical NaN for f64: 0x7FF8000000000000
+    0x7ff8_0000_0000_0000UL.reinterpret_as_double()
+  } else if v.has_prefix("nan:arithmetic") {
+    // For arguments, use canonical NaN (actual NaN value doesn't matter for input)
+    0x7ff8_0000_0000_0000UL.reinterpret_as_double()
+  } else {
+    // Regular integer bit representation
+    UInt64::reinterpret_as_double(@strconv.parse_uint64(v))
+  }
+}
+
+///|
+/// Parse f32 value string, handling nan:canonical and nan:arithmetic
+fn parse_f32_value(v : String) -> Float raise {
+  if v == "nan:canonical" {
+    // Canonical NaN for f32: 0x7FC00000
+    Float::reinterpret_from_uint(0x7fc0_0000U)
+  } else if v.has_prefix("nan:arithmetic") {
+    // For arguments, use canonical NaN
+    Float::reinterpret_from_uint(0x7fc0_0000U)
+  } else {
+    // Regular integer bit representation
+    Float::reinterpret_from_uint(@strconv.parse_uint(v))
+  }
+}
+
 ///|
 /// Parse JSON arguments array into runtime values
 fn parse_args(args : Array[Json]) -> Array[@wasm5.Value] raise {
@@ -58,18 +120,11 @@ fn parse_args(args : Array[Json]) -> Array[@wasm5.Value] raise {
       { "type": "i64", "value": String(v), .. } =>
         runtime_args.push(@wasm5.Value::I64(@strconv.parse_uint64(v)))
       // wast2json outputs floats as their bit representation (integer string)
+      // or special nan values like "nan:canonical", "nan:arithmetic"
       { "type": "f32", "value": String(v), .. } =>
-        runtime_args.push(
-          @wasm5.Value::F32(
-            Float::reinterpret_from_uint(@strconv.parse_uint(v)),
-          ),
-        )
+        runtime_args.push(@wasm5.Value::F32(parse_f32_value(v)))
       { "type": "f64", "value": String(v), .. } =>
-        runtime_args.push(
-          @wasm5.Value::F64(
-            UInt64::reinterpret_as_double(@strconv.parse_uint64(v)),
-          ),
-        )
+        runtime_args.push(@wasm5.Value::F64(parse_f64_value(v)))
       _ => raise TestUnsupported::UnsupportedArgType("\{arg}")
     }
   }
@@ -78,18 +133,81 @@ fn parse_args(args : Array[Json]) -> Array[@wasm5.Value] raise {
 
 ///|
 /// Parse a JSON value as an expected result
-fn parse_expected_value(expected : Json) -> @wasm5.Value raise {
+fn parse_expected_value(expected : Json) -> ExpectedValue raise {
   match expected {
     { "type": "i32", "value": String(v), .. } =>
-      @wasm5.Value::I32(@strconv.parse_uint(v))
+      Exact(@wasm5.Value::I32(@strconv.parse_uint(v)))
     { "type": "i64", "value": String(v), .. } =>
-      @wasm5.Value::I64(@strconv.parse_uint64(v))
+      Exact(@wasm5.Value::I64(@strconv.parse_uint64(v)))
     // wast2json outputs floats as their bit representation (integer string)
+    // or special nan values like "nan:canonical", "nan:arithmetic"
     { "type": "f32", "value": String(v), .. } =>
-      @wasm5.Value::F32(Float::reinterpret_from_uint(@strconv.parse_uint(v)))
+      if v.has_prefix("nan:arithmetic") {
+        AnyF32Nan
+      } else {
+        Exact(@wasm5.Value::F32(parse_f32_value(v)))
+      }
     { "type": "f64", "value": String(v), .. } =>
-      @wasm5.Value::F64(UInt64::reinterpret_as_double(@strconv.parse_uint64(v)))
+      if v.has_prefix("nan:arithmetic") {
+        AnyF64Nan
+      } else {
+        Exact(@wasm5.Value::F64(parse_f64_value(v)))
+      }
     _ => raise TestUnsupported::UnsupportedExpectedType("\{expected}")
+  }
+}
+
+///|
+/// Format a value with bit pattern for debugging NaN issues
+fn format_value_with_bits(v : @wasm5.Value) -> String {
+  match v {
+    @wasm5.Value::F64(f) => {
+      let bits = f.reinterpret_as_uint64()
+      "F64(\{f}) [bits: \{bits}]"
+    }
+    @wasm5.Value::F32(f) => {
+      let bits = f.reinterpret_as_uint()
+      "F32(\{f}) [bits: \{bits}]"
+    }
+    _ => v.to_string()
+  }
+}
+
+///|
+/// Format expected value with bit pattern for debugging
+fn format_expected_with_bits(e : ExpectedValue) -> String {
+  match e {
+    Exact(v) => format_value_with_bits(v)
+    AnyF32Nan => "AnyF32Nan"
+    AnyF64Nan => "AnyF64Nan"
+  }
+}
+
+///|
+/// Check if actual value matches expected value (handling NaN cases)
+fn values_match(actual : @wasm5.Value, expected : ExpectedValue) -> Bool {
+  match expected {
+    Exact(exp) =>
+      // Need special handling for floats to compare NaN bit patterns
+      match (actual, exp) {
+        (@wasm5.Value::F64(a), @wasm5.Value::F64(e)) =>
+          // Compare bit patterns for exact match (including NaN patterns)
+          a.reinterpret_as_uint64() == e.reinterpret_as_uint64()
+        (@wasm5.Value::F32(a), @wasm5.Value::F32(e)) =>
+          // Compare bit patterns for exact match (including NaN patterns)
+          a.reinterpret_as_uint() == e.reinterpret_as_uint()
+        _ => actual == exp
+      }
+    AnyF32Nan =>
+      match actual {
+        @wasm5.Value::F32(v) => v.is_nan()
+        _ => false
+      }
+    AnyF64Nan =>
+      match actual {
+        @wasm5.Value::F64(v) => v.is_nan()
+        _ => false
+      }
   }
 }
 
@@ -138,11 +256,11 @@ fn handle_assert_return(
     // Validate each result
     for idx in 0..<expected.length() {
       let expected_value = parse_expected_value(expected[idx])
-      if results[idx] != expected_value {
+      if not(values_match(results[idx], expected_value)) {
         ctx.fail(
           line,
           "assert_return",
-          "at result \{idx}: expected \{expected_value}, got \{results[idx]}",
+          "at result \{idx}: expected \{format_expected_with_bits(expected_value)}, got \{format_value_with_bits(results[idx])}",
         )
       }
     }
@@ -160,9 +278,7 @@ fn handle_assert_trap(
   expected_error : String,
   line : Int,
 ) -> Unit {
-  let runtime_args = try {
-    parse_args(args)
-  } catch {
+  let runtime_args = parse_args(args) catch {
     e => {
       ctx.fail(line, "assert_trap", "Failed to parse args: \{e}")
       return
@@ -345,10 +461,11 @@ async fn process_wast_file(
   }
   // execute: wast2json xxx.wast -o xxx/xxx.json
   let test_result : Array[TestFailure] = []
-  let exit_code = @process.run(
-    "wast2json",
-    [wast_dir + wast_file, "-o", target_dir + json_file],
-  )
+  let exit_code = @process.run("wast2json", [
+    wast_dir + wast_file,
+    "-o",
+    target_dir + json_file,
+  ])
   if exit_code != 0 {
     // wast2json failed - record as test failure and skip this file
     test_result.push({
@@ -397,50 +514,31 @@ fn print_summary(failures : Array[TestFailure]) -> Unit {
 /// Blacklist of wast files that use unsupported syntax (wast2json fails on them)
 let blacklisted_wast_files : Array[String] = [
   // Module definition/instance syntax not supported by wast2json
-  "instance.wast",
-  "memory.wast",
-  "type-equivalence.wast",
+  "instance.wast", "memory.wast", "type-equivalence.wast",
   // Reference types not yet supported (ref $t, ref null, etc.)
-  "ref_null.wast",
-  "local_init.wast",
-  "br_on_non_null.wast",
-  "br_on_null.wast",
-  "ref_as_non_null.wast",
-  "call_ref.wast",
-  "func.wast",
-  "ref.wast",
-  "ref_is_null.wast",
-  "select.wast",
-  "elem.wast",
-  "br_table.wast", // ref null syntax in some tests
+   "ref_null.wast", "local_init.wast", "br_on_non_null.wast", "br_on_null.wast",
+  "ref_as_non_null.wast", "call_ref.wast", "func.wast", "ref.wast", "ref_is_null.wast",
+  "select.wast", "elem.wast", "br_table.wast", // ref null syntax in some tests
   // Return call (tail call) not yet supported
-  "return_call_indirect.wast",
-  "return_call.wast",
-  "return_call_ref.wast",
+   "return_call_indirect.wast", "return_call.wast", "return_call_ref.wast",
   // Linking/imports not yet supported
-  "linking.wast",
-  "imports.wast",
+   "linking.wast", "imports.wast",
   // Large offset values cause parsing issues
-  "align.wast",
+   "align.wast",
   // Unreachable validation edge cases
-  "unreached-invalid.wast",
+   "unreached-invalid.wast",
   // Tags/exceptions not yet supported
-  "exports.wast",
+   "exports.wast",
   // Annotations not enabled
-  "annotations.wast",
+   "annotations.wast",
   // Quoted identifiers syntax
-  "id.wast",
+   "id.wast",
   // Recursive types not supported
-  "type-rec.wast",
-  "type-canon.wast",
+   "type-rec.wast", "type-canon.wast",
   // ref null $t syntax in local_tee
-  "local_tee.wast",
+   "local_tee.wast",
   // wast2json syntax issues
-  "br_if.wast",
-  "unreached-valid.wast",
-  "data.wast",
-  "global.wast",
-  "table.wast",
+   "br_if.wast", "unreached-valid.wast", "data.wast", "global.wast", "table.wast",
 ]
 
 ///|
