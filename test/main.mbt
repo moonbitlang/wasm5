@@ -89,12 +89,12 @@ fn parse_i32_value(v : String) -> UInt {
       let signed = @strconv.parse_int(v)
       signed.reinterpret_as_uint()
     } catch {
-      _ => 0U
+      _ => abort("Invalid i32 value: \{v}")
     }
   } else {
     // Unsigned value
     @strconv.parse_uint(v) catch {
-      _ => 0U
+      _ => abort("Invalid i32 value: \{v}")
     }
   }
 }
@@ -108,12 +108,12 @@ fn parse_i64_value(v : String) -> UInt64 {
       let signed = @strconv.parse_int64(v)
       signed.reinterpret_as_uint64()
     } catch {
-      _ => 0UL
+      _ => abort("Invalid i64 value: \{v}")
     }
   } else {
     // Unsigned value
     @strconv.parse_uint64(v) catch {
-      _ => 0UL
+      _ => abort("Invalid i64 value: \{v}")
     }
   }
 }
@@ -677,42 +677,8 @@ fn print_summary(failures : Array[TestFailure]) -> Unit {
 }
 
 ///|
-/// Blacklist of wast files that use unsupported syntax (wast2json fails on them)
-let blacklisted_wast_files : Array[String] = [
-  // Module definition/instance syntax not supported by wast2json
-  "instance.wast", "memory.wast", "type-equivalence.wast",
-  // Reference types not yet supported (ref $t, ref null, etc.)
-   "ref_null.wast", "local_init.wast", "br_on_non_null.wast", "br_on_null.wast",
-  "ref_as_non_null.wast", "call_ref.wast", "func.wast", "ref.wast", "ref_is_null.wast",
-  "select.wast", "elem.wast", "br_table.wast", // ref null syntax in some tests
-  // Return call (tail call) not yet supported
-   "return_call_indirect.wast", "return_call.wast", "return_call_ref.wast",
-  // Linking/imports not yet supported
-   "linking.wast", "imports.wast",
-  // Large offset values cause parsing issues
-   "align.wast",
-  // Unreachable validation edge cases
-   "unreached-invalid.wast",
-  // Tags/exceptions not yet supported
-   "exports.wast",
-  // Annotations not enabled
-   "annotations.wast",
-  // Quoted identifiers syntax
-   "id.wast",
-  // Recursive types not supported
-   "type-rec.wast", "type-canon.wast",
-  // ref null $t syntax in local_tee
-   "local_tee.wast",
-  // wast2json syntax issues
-   "br_if.wast", "unreached-valid.wast", "data.wast", "global.wast", "table.wast",
-  // Saturating truncation instructions (0xFC prefix) not yet supported
-  // These instructions (i32.trunc_sat_f32_s, etc.) use a multi-byte opcode format
-  // where 0xFC is followed by a LEB128-encoded sub-opcode. Implementing this requires:
-  //   1. Parser support for the 0xFC prefix and sub-opcode decoding
-  //   2. 8 new instruction types (i32/i64 × f32/f64 × signed/unsigned)
-  //   3. Saturating semantics (clamp to min/max instead of trap on overflow)
-   "conversions.wast",
-]
+/// Blacklist of wast files that cause runtime crashes
+let blacklisted_wast_files : Array[String] = ["elem.wast"] // Causes call_indirect stack overflow
 
 ///|
 async fn collect_wast_files(dir : String) -> Array[String] {
