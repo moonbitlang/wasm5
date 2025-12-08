@@ -340,6 +340,30 @@ fn handle_assert_trap(
             "expected trap '\{expected_error}' but got table out of bounds",
           )
         }
+      } else if msg.contains("undefined element") {
+        if not(expected_error.contains("undefined element")) {
+          ctx.fail(
+            line,
+            "assert_trap",
+            "expected trap '\{expected_error}' but got undefined element",
+          )
+        }
+      } else if msg.contains("uninitialized element") {
+        if not(expected_error.contains("uninitialized element")) {
+          ctx.fail(
+            line,
+            "assert_trap",
+            "expected trap '\{expected_error}' but got uninitialized element",
+          )
+        }
+      } else if msg.contains("indirect call type mismatch") {
+        if not(expected_error.contains("indirect call type mismatch")) {
+          ctx.fail(
+            line,
+            "assert_trap",
+            "expected trap '\{expected_error}' but got indirect call type mismatch",
+          )
+        }
       } else {
         ctx.fail(
           line,

@@ -845,6 +845,90 @@ fn op_return(rt : Runtime) -> ControlFlow {
   Jump(frame.return_pc + 1)
 }
 
+fn op_call_indirect(rt : Runtime) -> ControlFlow {
+  let type_idx = rt.read_imm_idx()
+  let table_idx = rt.read_imm_idx()
+
+  // Pop the function index from the stack
+  let elem_idx = rt.pop_i32().reinterpret_as_int()
+
+  // Check table bounds
+  if table_idx < 0 || table_idx >= rt.tables.length() {
+    return Trap(RuntimeError::InvalidType("call_indirect: invalid table index"))
+  }
+  let table = rt.tables[table_idx].data
+  if elem_idx < 0 || elem_idx >= table.length() {
+    return Trap(RuntimeError::InvalidType("undefined element"))
+  }
+
+  // Get function reference from table
+  let func_ref = table[elem_idx]
+  guard func_ref is Some(func_idx) else {
+    return Trap(RuntimeError::InvalidType("uninitialized element"))
+  }
+
+  // Check function index bounds
+  if func_idx < 0 || func_idx >= rt.module_.codes.length() {
+    return Trap(RuntimeError::InvalidType("call_indirect: invalid function index"))
+  }
+
+  // Get the expected type and actual function type
+  let expected_type = rt.module_.types[type_idx]
+  let actual_type_idx = rt.module_.funcs[func_idx].reinterpret_as_int()
+  let actual_type = rt.module_.types[actual_type_idx]
+
+  // Check type signature matches
+  if expected_type.params.length() != actual_type.params.length() ||
+     expected_type.results.length() != actual_type.results.length() {
+    return Trap(RuntimeError::InvalidType("indirect call type mismatch"))
+  }
+  for i = 0; i < expected_type.params.length(); i = i + 1 {
+    if expected_type.params[i] != actual_type.params[i] {
+      return Trap(RuntimeError::InvalidType("indirect call type mismatch"))
+    }
+  }
+  for i = 0; i < expected_type.results.length(); i = i + 1 {
+    if expected_type.results[i] != actual_type.results[i] {
+      return Trap(RuntimeError::InvalidType("indirect call type mismatch"))
+    }
+  }
+
+  let code = rt.module_.codes[func_idx]
+  guard code.compiled is Some(callee_pc) else {
+    return Trap(RuntimeError::FunctionNotCompiled("Function not compiled: \{func_idx}"))
+  }
+
+  // Pop arguments
+  let num_params = actual_type.params.length()
+  let args : Array[Value] = Array::make(num_params, Value::I32(0U))
+  for i = num_params - 1; i >= 0; i = i - 1 {
+    args[i] = rt.stack.unsafe_pop()
+  }
+
+  // Save frame
+  rt.call_stack.push(CallFrame::{ return_pc: rt.pc, locals: rt.locals })
+
+  // Set up new locals
+  rt.locals = []
+  for arg in args {
+    rt.locals.push(arg)
+  }
+  for local_type in code.locals {
+    match local_type {
+      ValType::I32 => rt.locals.push(Value::I32(0U))
+      ValType::I64 => rt.locals.push(Value::I64(0UL))
+      ValType::F32 => rt.locals.push(Value::F32(0.0))
+      ValType::F64 => rt.locals.push(Value::F64(0.0))
+      _ =>
+        return Trap(
+          RuntimeError::UnsupportedLocalType("Unsupported local type: \{local_type}"),
+        )
+    }
+  }
+
+  Jump(callee_pc)
+}
+
 fn op_unsupported(_rt : Runtime) -> ControlFlow {
   Trap(RuntimeError::UnimplementedInstruction("unsupported instruction"))
 }
@@ -2243,8 +2327,12 @@ fn Runtime::compile_wasm_instr(
       self.emit(ImmediateIdx(func_idx.reinterpret_as_int()))
     }
     RefIsNull => self.emit(WasmInstr(op_ref_is_null))
-    // Unsupported instructions - emit trap
-    CallIndirect(_, _) => self.emit(WasmInstr(op_unsupported))
+    // Indirect call
+    CallIndirect(type_idx, table_idx) => {
+      self.emit(WasmInstr(op_call_indirect))
+      self.emit(ImmediateIdx(type_idx.reinterpret_as_int()))
+      self.emit(ImmediateIdx(table_idx.reinterpret_as_int()))
+    }
     _ =>
       raise RuntimeError::UnimplementedInstruction(
         "Unimplemented instruction: \{instr}",
