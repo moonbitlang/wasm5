@@ -80,8 +80,47 @@ enum ExpectedValue {
 } derive(Show)
 
 ///|
+/// Parse i32 value string, handling both signed and unsigned representations
+/// wasm-tools outputs signed numbers (e.g., "-1") while wabt outputs unsigned (e.g., "4294967295")
+fn parse_i32_value(v : String) -> UInt {
+  if v.has_prefix("-") {
+    // Signed value - parse as signed and reinterpret as unsigned
+    try {
+      let signed = @strconv.parse_int(v)
+      signed.reinterpret_as_uint()
+    } catch {
+      _ => 0U
+    }
+  } else {
+    // Unsigned value
+    @strconv.parse_uint(v) catch {
+      _ => 0U
+    }
+  }
+}
+
+///|
+/// Parse i64 value string, handling both signed and unsigned representations
+fn parse_i64_value(v : String) -> UInt64 {
+  if v.has_prefix("-") {
+    // Signed value - parse as signed and reinterpret as unsigned
+    try {
+      let signed = @strconv.parse_int64(v)
+      signed.reinterpret_as_uint64()
+    } catch {
+      _ => 0UL
+    }
+  } else {
+    // Unsigned value
+    @strconv.parse_uint64(v) catch {
+      _ => 0UL
+    }
+  }
+}
+
+///|
 /// Parse f64 value string, handling nan:canonical and nan:arithmetic
-fn parse_f64_value(v : String) -> Double raise {
+fn parse_f64_value(v : String) -> Double {
   if v == "nan:canonical" {
     // Canonical NaN for f64: 0x7FF8000000000000
     0x7ff8_0000_0000_0000UL.reinterpret_as_double()
@@ -89,14 +128,14 @@ fn parse_f64_value(v : String) -> Double raise {
     // For arguments, use canonical NaN (actual NaN value doesn't matter for input)
     0x7ff8_0000_0000_0000UL.reinterpret_as_double()
   } else {
-    // Regular integer bit representation
-    UInt64::reinterpret_as_double(@strconv.parse_uint64(v))
+    // Regular integer bit representation (may be signed from wasm-tools)
+    UInt64::reinterpret_as_double(parse_i64_value(v))
   }
 }
 
 ///|
 /// Parse f32 value string, handling nan:canonical and nan:arithmetic
-fn parse_f32_value(v : String) -> Float raise {
+fn parse_f32_value(v : String) -> Float {
   if v == "nan:canonical" {
     // Canonical NaN for f32: 0x7FC00000
     Float::reinterpret_from_uint(0x7fc0_0000U)
@@ -104,8 +143,8 @@ fn parse_f32_value(v : String) -> Float raise {
     // For arguments, use canonical NaN
     Float::reinterpret_from_uint(0x7fc0_0000U)
   } else {
-    // Regular integer bit representation
-    Float::reinterpret_from_uint(@strconv.parse_uint(v))
+    // Regular integer bit representation (may be signed from wasm-tools)
+    Float::reinterpret_from_uint(parse_i32_value(v))
   }
 }
 
@@ -116,9 +155,9 @@ fn parse_args(args : Array[Json]) -> Array[@wasm5.Value] raise {
   for arg in args {
     match arg {
       { "type": "i32", "value": String(v), .. } =>
-        runtime_args.push(@wasm5.Value::I32(@strconv.parse_uint(v)))
+        runtime_args.push(@wasm5.Value::I32(parse_i32_value(v)))
       { "type": "i64", "value": String(v), .. } =>
-        runtime_args.push(@wasm5.Value::I64(@strconv.parse_uint64(v)))
+        runtime_args.push(@wasm5.Value::I64(parse_i64_value(v)))
       // wast2json outputs floats as their bit representation (integer string)
       // or special nan values like "nan:canonical", "nan:arithmetic"
       { "type": "f32", "value": String(v), .. } =>
@@ -130,14 +169,18 @@ fn parse_args(args : Array[Json]) -> Array[@wasm5.Value] raise {
         if v == "null" {
           runtime_args.push(@wasm5.Value::Ref(None))
         } else {
-          runtime_args.push(@wasm5.Value::Ref(Some(@strconv.parse(v))))
+          runtime_args.push(
+            @wasm5.Value::Ref(Some(parse_i32_value(v).reinterpret_as_int())),
+          )
         }
       // funcref: "null" for null, otherwise an integer function index
       { "type": "funcref", "value": String(v), .. } =>
         if v == "null" {
           runtime_args.push(@wasm5.Value::Ref(None))
         } else {
-          runtime_args.push(@wasm5.Value::Ref(Some(@strconv.parse(v))))
+          runtime_args.push(
+            @wasm5.Value::Ref(Some(parse_i32_value(v).reinterpret_as_int())),
+          )
         }
       _ => raise TestUnsupported::UnsupportedArgType("\{arg}")
     }
@@ -150,9 +193,9 @@ fn parse_args(args : Array[Json]) -> Array[@wasm5.Value] raise {
 fn parse_expected_value(expected : Json) -> ExpectedValue raise {
   match expected {
     { "type": "i32", "value": String(v), .. } =>
-      Exact(@wasm5.Value::I32(@strconv.parse_uint(v)))
+      Exact(@wasm5.Value::I32(parse_i32_value(v)))
     { "type": "i64", "value": String(v), .. } =>
-      Exact(@wasm5.Value::I64(@strconv.parse_uint64(v)))
+      Exact(@wasm5.Value::I64(parse_i64_value(v)))
     // wast2json outputs floats as their bit representation (integer string)
     // or special nan values like "nan:canonical", "nan:arithmetic"
     { "type": "f32", "value": String(v), .. } =>
@@ -172,14 +215,14 @@ fn parse_expected_value(expected : Json) -> ExpectedValue raise {
       if v == "null" {
         Exact(@wasm5.Value::Ref(None))
       } else {
-        Exact(@wasm5.Value::Ref(Some(@strconv.parse(v))))
+        Exact(@wasm5.Value::Ref(Some(parse_i32_value(v).reinterpret_as_int())))
       }
     // funcref: "null" for null, otherwise an integer function index
     { "type": "funcref", "value": String(v), .. } =>
       if v == "null" {
         Exact(@wasm5.Value::Ref(None))
       } else {
-        Exact(@wasm5.Value::Ref(Some(@strconv.parse(v))))
+        Exact(@wasm5.Value::Ref(Some(parse_i32_value(v).reinterpret_as_int())))
       }
     _ => raise TestUnsupported::UnsupportedExpectedType("\{expected}")
   }
@@ -448,6 +491,29 @@ async fn handle_assert_invalid(
 }
 
 ///|
+/// Handle "action" command - call function for side effects only (no expected result)
+fn handle_action(
+  ctx : TestContext,
+  fn_name : String,
+  args : Array[Json],
+  line : Int,
+) -> Unit {
+  try {
+    let runtime_args = parse_args(args)
+    guard ctx.runtime is Some(rt) else {
+      ctx.fail(
+        line, "action", "no module loaded (previous module failed to load)",
+      )
+      return
+    }
+    let _ = rt.call_compiled(@encoding/utf8.encode(fn_name), runtime_args)
+
+  } catch {
+    e => ctx.fail(line, "action", "Action failed with error: \{e}")
+  }
+}
+
+///|
 /// Process a single command from the test metadata
 async fn process_command(ctx : TestContext, cmd : Json) -> Unit {
   match cmd {
@@ -496,6 +562,18 @@ async fn process_command(ctx : TestContext, cmd : Json) -> Unit {
       "text": String(expected_error),
       ..
     } => handle_assert_invalid(ctx, filename, expected_error, line.to_int())
+    // Handle "action" command - invoke function for side effects only (no expected result)
+    {
+      "type": "action",
+      "line": Number(line, ..),
+      "action": {
+        "type": "invoke",
+        "field": String(fn_name),
+        "args": Array(args),
+        ..
+      },
+      ..
+    } => handle_action(ctx, fn_name, args, line.to_int())
     // Skip malformed tests (WAT parser not implemented)
     { "type": "assert_malformed", .. } => ()
     // Unknown command type - skip silently for now
