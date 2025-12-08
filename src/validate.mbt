@@ -256,6 +256,12 @@ fn validate_instruction(
       stack.push(I64)
     }
 
+    // i64 to i32 conversion (wrap)
+    I32WrapI64 => {
+      ctx.poly_pop_expect(I64, "i32.wrap_i64")
+      stack.push(I32)
+    }
+
     // f32 comparison operations
     F32Eq | F32Ne | F32Lt | F32Gt | F32Le | F32Ge => {
       ctx.poly_pop_expect(F32, "f32 comparison")
