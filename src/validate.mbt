@@ -411,14 +411,47 @@ fn validate_instruction(
       ctx.poly_pop_expect(global_type, "global.set")
     }
 
-    // Memory operations
-    I32Load(_, _) => {
+    // Memory operations - loads (all take i32 address and push the loaded value)
+    I32Load(_, _) | I32Load8S(_, _) | I32Load8U(_, _) | I32Load16S(_, _) | I32Load16U(_, _) => {
       ctx.poly_pop_expect(I32, "i32.load address")
       stack.push(I32)
     }
-    I32Store(_, _) => {
+    I64Load(_, _) | I64Load8S(_, _) | I64Load8U(_, _) | I64Load16S(_, _) | I64Load16U(_, _) | I64Load32S(_, _) | I64Load32U(_, _) => {
+      ctx.poly_pop_expect(I32, "i64.load address")
+      stack.push(I64)
+    }
+    F32Load(_, _) => {
+      ctx.poly_pop_expect(I32, "f32.load address")
+      stack.push(F32)
+    }
+    F64Load(_, _) => {
+      ctx.poly_pop_expect(I32, "f64.load address")
+      stack.push(F64)
+    }
+    // Memory operations - stores (all take i32 address and value, push nothing)
+    I32Store(_, _) | I32Store8(_, _) | I32Store16(_, _) => {
       ctx.poly_pop_expect(I32, "i32.store value")
       ctx.poly_pop_expect(I32, "i32.store address")
+    }
+    I64Store(_, _) | I64Store8(_, _) | I64Store16(_, _) | I64Store32(_, _) => {
+      ctx.poly_pop_expect(I64, "i64.store value")
+      ctx.poly_pop_expect(I32, "i64.store address")
+    }
+    F32Store(_, _) => {
+      ctx.poly_pop_expect(F32, "f32.store value")
+      ctx.poly_pop_expect(I32, "f32.store address")
+    }
+    F64Store(_, _) => {
+      ctx.poly_pop_expect(F64, "f64.store value")
+      ctx.poly_pop_expect(I32, "f64.store address")
+    }
+    // Memory size and grow
+    MemorySize(_) => {
+      stack.push(I32)
+    }
+    MemoryGrow(_) => {
+      ctx.poly_pop_expect(I32, "memory.grow delta")
+      stack.push(I32)
     }
 
     // Block instructions
