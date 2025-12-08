@@ -322,6 +322,14 @@ fn handle_assert_trap(
           "expected trap '\{expected_error}' but got MemoryOutOfBounds",
         )
       }
+    @wasm5.RuntimeError::Unreachable =>
+      if not(expected_error.contains("unreachable")) {
+        ctx.fail(
+          line,
+          "assert_trap",
+          "expected trap '\{expected_error}' but got Unreachable",
+        )
+      }
     e =>
       ctx.fail(
         line,
