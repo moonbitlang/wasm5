@@ -834,10 +834,40 @@ fn validate_instruction(
     }
     Call(func_idx) => {
       let idx = func_idx.reinterpret_as_int()
-      if idx < 0 || idx >= module_.funcs.length() {
+      // Count imported functions first
+      let mut num_imported_funcs = 0
+      for imp in module_.imports {
+        match imp.desc {
+          ImportDesc::Func(_) => num_imported_funcs += 1
+          _ => ()
+        }
+      }
+      let total_funcs = num_imported_funcs + module_.funcs.length()
+      if idx < 0 || idx >= total_funcs {
         raise ValidationError::InvalidFunctionIndex(idx)
       }
-      let type_idx = module_.funcs[idx].reinterpret_as_int()
+      // Get the function type
+      let type_idx = if idx < num_imported_funcs {
+        // It's an imported function - find the type index from imports
+        let mut import_func_idx = 0
+        let mut found_type_idx = 0
+        for imp in module_.imports {
+          match imp.desc {
+            ImportDesc::Func(t) => {
+              if import_func_idx == idx {
+                found_type_idx = t.reinterpret_as_int()
+                break
+              }
+              import_func_idx += 1
+            }
+            _ => ()
+          }
+        }
+        found_type_idx
+      } else {
+        // It's a local function
+        module_.funcs[idx - num_imported_funcs].reinterpret_as_int()
+      }
       let func_type_called = module_.types[type_idx]
       // Pop arguments from stack (in reverse order)
       for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {

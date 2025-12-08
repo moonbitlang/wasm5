@@ -946,9 +946,30 @@ fn op_br_table(rt : Runtime) -> ControlFlow {
 ///|
 fn op_call(rt : Runtime) -> ControlFlow {
   let func_idx = rt.read_imm_idx()
-  let type_idx = rt.module_.funcs[func_idx].reinterpret_as_int()
+
+  // Count imported functions
+  let mut num_imported_funcs = 0
+  for imp in rt.module_.imports {
+    match imp.desc {
+      ImportDesc::Func(_) => num_imported_funcs += 1
+      _ => ()
+    }
+  }
+
+  // Check if calling an imported function
+  if func_idx < num_imported_funcs {
+    // Imported functions are not supported for direct calls yet
+    // They need special handling (host function callbacks)
+    return Trap(
+      RuntimeError::FunctionNotCompiled("Imported function calls not yet supported: \{func_idx}"),
+    )
+  }
+
+  // Adjust index for local functions
+  let local_func_idx = func_idx - num_imported_funcs
+  let type_idx = rt.module_.funcs[local_func_idx].reinterpret_as_int()
   let func_type = rt.module_.types[type_idx]
-  let code = rt.module_.codes[func_idx]
+  let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     return Trap(
       RuntimeError::FunctionNotCompiled("Function not compiled: \{func_idx}"),
@@ -1031,8 +1052,27 @@ fn op_call_indirect(rt : Runtime) -> ControlFlow {
     return Trap(RuntimeError::InvalidType("uninitialized element"))
   }
 
+  // Count imported functions
+  let mut num_imported_funcs = 0
+  for imp in rt.module_.imports {
+    match imp.desc {
+      ImportDesc::Func(_) => num_imported_funcs += 1
+      _ => ()
+    }
+  }
+
+  // Check if calling an imported function
+  if func_idx < num_imported_funcs {
+    return Trap(
+      RuntimeError::FunctionNotCompiled("Imported function calls not yet supported via call_indirect: \{func_idx}"),
+    )
+  }
+
+  // Adjust to local function index
+  let local_func_idx = func_idx - num_imported_funcs
+
   // Check function index bounds
-  if func_idx < 0 || func_idx >= rt.module_.codes.length() {
+  if local_func_idx < 0 || local_func_idx >= rt.module_.codes.length() {
     return Trap(
       RuntimeError::InvalidType("call_indirect: invalid function index"),
     )
@@ -1040,7 +1080,7 @@ fn op_call_indirect(rt : Runtime) -> ControlFlow {
 
   // Get the expected type and actual function type
   let expected_type = rt.module_.types[type_idx]
-  let actual_type_idx = rt.module_.funcs[func_idx].reinterpret_as_int()
+  let actual_type_idx = rt.module_.funcs[local_func_idx].reinterpret_as_int()
   let actual_type = rt.module_.types[actual_type_idx]
 
   // Check type signature matches
@@ -1058,7 +1098,7 @@ fn op_call_indirect(rt : Runtime) -> ControlFlow {
       return Trap(RuntimeError::InvalidType("indirect call type mismatch"))
     }
   }
-  let code = rt.module_.codes[func_idx]
+  let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     return Trap(
       RuntimeError::FunctionNotCompiled("Function not compiled: \{func_idx}"),
@@ -2815,9 +2855,28 @@ pub fn Runtime::call_compiled(
   guard func_idx is Some(idx) else {
     raise RuntimeError::FunctionNotFound("Function not found: \{func_name}")
   }
-  let type_idx = self.module_.funcs[idx].reinterpret_as_int()
+
+  // Count imported functions to calculate local function index
+  let mut num_imported_funcs = 0
+  for imp in self.module_.imports {
+    match imp.desc {
+      ImportDesc::Func(_) => num_imported_funcs += 1
+      _ => ()
+    }
+  }
+
+  // Check if it's an imported function (can't call those directly)
+  if idx < num_imported_funcs {
+    raise RuntimeError::FunctionNotCompiled(
+      "Cannot call imported function directly: \{func_name}",
+    )
+  }
+
+  // Adjust to local function index
+  let local_idx = idx - num_imported_funcs
+  let type_idx = self.module_.funcs[local_idx].reinterpret_as_int()
   let func_type = self.module_.types[type_idx]
-  let code = self.module_.codes[idx]
+  let code = self.module_.codes[local_idx]
   guard code.compiled is Some(start_pc) else {
     raise RuntimeError::FunctionNotCompiled(
       "Function not compiled: \{func_name}",
