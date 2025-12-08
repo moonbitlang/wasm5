@@ -52,6 +52,9 @@ fn canonicalize_f32(v : Float) -> Float {
   if v.is_nan() { canonical_nan_f32 } else { v }
 }
 
+pub extern "C" fn rint(x : Double) -> Double = "rint"
+pub extern "C" fn rintf(x : Float) -> Float = "rintf"
+
 ///|
 /// Intermediate instruction for threaded interpreter
 enum MInstr {
@@ -1645,7 +1648,7 @@ fn op_f32_trunc(rt : Runtime) -> ControlFlow {
 
 fn op_f32_nearest(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f32()
-  rt.stack.push(Value::F32(canonicalize_f32(a.round())))
+  rt.stack.push(Value::F32(canonicalize_f32(rintf(a))))
   Next
 }
 
@@ -1686,8 +1689,21 @@ fn op_f32_min(rt : Runtime) -> ControlFlow {
     canonical_nan_f32
   } else if a < b {
     a
-  } else {
+  } else if b < a {
     b
+  } else {
+    // a == b, but we need to handle signed zeros
+    // -0.0 is considered "smaller" than +0.0 for min
+    // Check sign bits: if either is negative zero, return negative zero
+    let a_bits = a.reinterpret_as_uint()
+    let b_bits = b.reinterpret_as_uint()
+    let sign_mask = 0x8000_0000U
+    if (a_bits & sign_mask) != 0U || (b_bits & sign_mask) != 0U {
+      // At least one is negative, return the one with negative sign
+      if (a_bits & sign_mask) != 0U { a } else { b }
+    } else {
+      a // Both positive, return either
+    }
   }
   rt.stack.push(Value::F32(result))
   Next
@@ -1699,8 +1715,21 @@ fn op_f32_max(rt : Runtime) -> ControlFlow {
     canonical_nan_f32
   } else if a > b {
     a
-  } else {
+  } else if b > a {
     b
+  } else {
+    // a == b, but we need to handle signed zeros
+    // +0.0 is considered "larger" than -0.0 for max
+    // Check sign bits: if either is positive zero, return positive zero
+    let a_bits = a.reinterpret_as_uint()
+    let b_bits = b.reinterpret_as_uint()
+    let sign_mask = 0x8000_0000U
+    if (a_bits & sign_mask) == 0U || (b_bits & sign_mask) == 0U {
+      // At least one is positive, return the one with positive sign
+      if (a_bits & sign_mask) == 0U { a } else { b }
+    } else {
+      a // Both negative, return either
+    }
   }
   rt.stack.push(Value::F32(result))
   Next
@@ -1747,8 +1776,20 @@ fn op_f64_min(rt : Runtime) -> ControlFlow {
     canonical_nan_f64
   } else if a < b {
     a
-  } else {
+  } else if b < a {
     b
+  } else {
+    // a == b, but we need to handle signed zeros
+    // -0.0 is considered "smaller" than +0.0 for min
+    let a_bits = a.reinterpret_as_uint64()
+    let b_bits = b.reinterpret_as_uint64()
+    let sign_mask = 0x8000_0000_0000_0000UL
+    if (a_bits & sign_mask) != 0UL || (b_bits & sign_mask) != 0UL {
+      // At least one is negative, return the one with negative sign
+      if (a_bits & sign_mask) != 0UL { a } else { b }
+    } else {
+      a // Both positive, return either
+    }
   }
   rt.stack.push(Value::F64(result))
   Next
@@ -1761,8 +1802,20 @@ fn op_f64_max(rt : Runtime) -> ControlFlow {
     canonical_nan_f64
   } else if a > b {
     a
-  } else {
+  } else if b > a {
     b
+  } else {
+    // a == b, but we need to handle signed zeros
+    // +0.0 is considered "larger" than -0.0 for max
+    let a_bits = a.reinterpret_as_uint64()
+    let b_bits = b.reinterpret_as_uint64()
+    let sign_mask = 0x8000_0000_0000_0000UL
+    if (a_bits & sign_mask) == 0UL || (b_bits & sign_mask) == 0UL {
+      // At least one is positive, return the one with positive sign
+      if (a_bits & sign_mask) == 0UL { a } else { b }
+    } else {
+      a // Both negative, return either
+    }
   }
   rt.stack.push(Value::F64(result))
   Next
@@ -1811,7 +1864,7 @@ fn op_f64_trunc(rt : Runtime) -> ControlFlow {
 
 fn op_f64_nearest(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f64()
-  rt.stack.push(Value::F64(canonicalize_f64(a.round())))
+  rt.stack.push(Value::F64(canonicalize_f64(rint(a))))
   Next
 }
 
