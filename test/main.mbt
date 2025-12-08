@@ -544,12 +544,15 @@ async fn process_wast_file(
   if not(@fs.exists(target_dir)) {
     @fs.mkdir(target_dir, permission=0o755)
   }
-  // execute: wast2json xxx.wast -o xxx/xxx.json
+  // execute: wasm-tools wast2json xxx.wast -o xxx/xxx.json --wasm-dir xxx/
   let test_result : Array[TestFailure] = []
-  let exit_code = @process.run("wast2json", [
+  let exit_code = @process.run("wasm-tools", [
+    "wast2json",
     wast_dir + wast_file,
     "-o",
     target_dir + json_file,
+    "--wasm-dir",
+    target_dir,
   ])
   if exit_code != 0 {
     // wast2json failed - record as test failure and skip this file
