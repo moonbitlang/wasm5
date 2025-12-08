@@ -454,6 +454,78 @@ fn validate_instruction(
       stack.push(I32)
     }
 
+    // Table instructions
+    TableSize(_) => {
+      stack.push(I32)
+    }
+    TableGet(table_idx) => {
+      ctx.poly_pop_expect(I32, "table.get index")
+      // Look up table's element type
+      let elem_type = if table_idx.reinterpret_as_int() < module_.tables.length() {
+        let table = module_.tables[table_idx.reinterpret_as_int()]
+        match table.elem_type {
+          RefType::FuncRef => ValType::FuncRef
+          RefType::ExternRef => ValType::ExternRef
+        }
+      } else {
+        ValType::FuncRef // Default if table not found
+      }
+      stack.push(elem_type)
+    }
+    TableSet(_) => {
+      // Pop funcref value, then i32 index
+      // For now, we accept any ref type (simplified validation)
+      if ctx.is_unreachable && stack.length() == 0 {
+        // Polymorphic - allow
+      } else if stack.length() < 1 {
+        raise ValidationError::TypeMismatch("table.set expects value on stack")
+      } else {
+        let _ = stack.unsafe_pop() // Pop the ref value
+      }
+      ctx.poly_pop_expect(I32, "table.set index")
+    }
+    TableGrow(_) => {
+      ctx.poly_pop_expect(I32, "table.grow delta")
+      // Pop init value (funcref)
+      if ctx.is_unreachable && stack.length() == 0 {
+        // Polymorphic - allow
+      } else if stack.length() < 1 {
+        raise ValidationError::TypeMismatch(
+          "table.grow expects init value on stack",
+        )
+      } else {
+        let _ = stack.unsafe_pop() // Pop the ref value
+      }
+      stack.push(I32) // Returns old size
+    }
+
+    // Reference instructions
+    RefNull(ref_type) => {
+      // ref.null pushes a null reference of the given type
+      // Convert RefType to ValType
+      let val_type : ValType = match ref_type {
+        RefType::FuncRef => ValType::FuncRef
+        RefType::ExternRef => ValType::ExternRef
+      }
+      stack.push(val_type)
+    }
+    RefFunc(_) => {
+      // ref.func pushes a funcref
+      stack.push(ValType::FuncRef)
+    }
+    RefIsNull => {
+      // ref.is_null pops a reference type and pushes i32
+      // In polymorphic context, allow any type on stack
+      if ctx.is_unreachable && stack.length() == 0 {
+        // Unreachable - stack is polymorphic, don't pop anything
+      } else if stack.length() < 1 {
+        raise ValidationError::TypeMismatch("ref.is_null expects reference on stack")
+      } else {
+        let _ = stack.unsafe_pop() // Pop the reference
+      }
+      stack.push(I32) // Push result
+    }
+
     // Block instructions
     Block(block_type, instrs) => {
       let (params, results) = get_block_type(module_, block_type)

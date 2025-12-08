@@ -328,12 +328,57 @@ fn parse_element_section(parser : Parser) -> Array[Elem] raise {
   let count = parser.read_u32_leb128()
   let elems = []
   for i in 0U..<count {
-    let table_idx = parser.read_u32_leb128()
-    let offset = parse_expr(parser)
+    let flags = parser.read_u32_leb128()
+    // Element segment format depends on flags:
+    // flags=0: active, table 0, offset expr, vec of funcidx
+    // flags=1: passive, elemkind, vec of funcidx
+    // flags=2: active, tableidx, offset expr, elemkind, vec of funcidx
+    // flags=3: declarative, elemkind, vec of funcidx
+    // flags=4: active, table 0, offset expr, vec of expr
+    // flags=5: passive, reftype, vec of expr
+    // flags=6: active, tableidx, offset expr, reftype, vec of expr
+    // flags=7: declarative, reftype, vec of expr
+    let table_idx : UInt = match flags {
+      0 | 4 => 0U // implicit table 0
+      2 | 6 => parser.read_u32_leb128() // explicit table index
+      _ => 0U // passive/declarative segments have no table
+    }
+    let offset : Expr = match flags {
+      0 | 2 | 4 | 6 => parse_expr(parser) // active segments have offset
+      _ => { instrs: [I32Const(0U)] } // dummy offset for passive/declarative
+    }
+    // Read elemkind or reftype for certain flags
+    match flags {
+      1 | 3 => {
+        let _ = parser.read_byte() // elemkind (0x00 = funcref)
+      }
+      2 => {
+        let _ = parser.read_byte() // elemkind
+      }
+      5 | 7 => {
+        let _ = parser.read_reftype() // reftype
+      }
+      6 => {
+        let _ = parser.read_reftype() // reftype
+      }
+      _ => ()
+    }
+    // Read init vector
     let init_count = parser.read_u32_leb128()
     let init = []
+    let uses_exprs = flags >= 4
     for j in 0U..<init_count {
-      init.push(parser.read_u32_leb128())
+      if uses_exprs {
+        // Parse expression (ref.func idx or ref.null)
+        let expr = parse_expr(parser)
+        // Extract function index from expression if it's ref.func
+        match expr.instrs.get(0) {
+          Some(RefFunc(idx)) => init.push(idx)
+          _ => init.push(0U) // ref.null or other
+        }
+      } else {
+        init.push(parser.read_u32_leb128())
+      }
     }
     elems.push({ table_idx, offset, init })
   }
@@ -585,13 +630,39 @@ fn parse_instr(parser : Parser, opcode : Byte) -> Instr raise {
       let offset = parser.read_u32_leb128()
       I64Store32(align, offset)
     }
+    0x25 => {
+      let table_idx = parser.read_u32_leb128()
+      TableGet(table_idx)
+    }
+    0x26 => {
+      let table_idx = parser.read_u32_leb128()
+      TableSet(table_idx)
+    }
     0x3F => {
-      let _ = parser.read_byte() // reserved byte (must be 0x00)
-      MemorySize
+      let mem_idx = parser.read_byte() // memory index (usually 0x00)
+      MemorySize(mem_idx.to_uint())
     }
     0x40 => {
-      let _ = parser.read_byte() // reserved byte (must be 0x00)
-      MemoryGrow
+      let mem_idx = parser.read_byte() // memory index (usually 0x00)
+      MemoryGrow(mem_idx.to_uint())
+    }
+
+    // Reference instructions
+    0xD0 => {
+      // ref.null heaptype
+      let heap_type = parser.read_byte()
+      let ref_type : RefType = match heap_type {
+        0x70 => RefType::FuncRef
+        0x6F => RefType::ExternRef
+        _ => RefType::FuncRef // Default to funcref for other types
+      }
+      RefNull(ref_type)
+    }
+    0xD1 => RefIsNull // ref.is_null
+    0xD2 => {
+      // ref.func funcidx
+      let func_idx = parser.read_u32_leb128()
+      RefFunc(func_idx)
     }
 
     // Numeric instructions - constants
@@ -747,6 +818,26 @@ fn parse_instr(parser : Parser, opcode : Byte) -> Instr raise {
     0xC2 => I64Extend8S
     0xC3 => I64Extend16S
     0xC4 => I64Extend32S
+    // Multi-byte instructions (0xFC prefix)
+    0xFC => {
+      let sub_opcode = parser.read_u32_leb128()
+      match sub_opcode {
+        // table.grow
+        0x0F => {
+          let table_idx = parser.read_u32_leb128()
+          TableGrow(table_idx)
+        }
+        // table.size
+        0x10 => {
+          let table_idx = parser.read_u32_leb128()
+          TableSize(table_idx)
+        }
+        _ =>
+          raise ValidationError::TypeMismatch(
+            "unknown 0xFC sub-opcode: \{sub_opcode}",
+          )
+      }
+    }
     _ =>
       raise ValidationError::TypeMismatch(
         "unknown opcode: 0x\{opcode.to_string().to_upper()}",

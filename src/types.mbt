@@ -17,7 +17,7 @@ enum ValType {
 enum RefType {
   FuncRef
   ExternRef
-}
+} derive(Show)
 
 // Function type (signature)
 
@@ -187,8 +187,19 @@ pub enum Instr {
   I64Store8(UInt, UInt)
   I64Store16(UInt, UInt)
   I64Store32(UInt, UInt)
-  MemorySize
-  MemoryGrow
+  MemorySize(UInt) // memory index (usually 0)
+  MemoryGrow(UInt) // memory index (usually 0)
+
+  // Table instructions
+  TableGet(UInt) // table index
+  TableSet(UInt) // table index
+  TableSize(UInt) // table index
+  TableGrow(UInt) // table index
+
+  // Reference instructions
+  RefNull(RefType) // ref.null with heap type
+  RefFunc(UInt) // ref.func with function index
+  RefIsNull // ref.is_null - check if reference is null
 
   // Numeric instructions - constants
   I32Const(UInt)

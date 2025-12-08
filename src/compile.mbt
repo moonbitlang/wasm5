@@ -1248,6 +1248,129 @@ fn op_memory_grow(rt : Runtime) -> ControlFlow {
   Next
 }
 
+// =============================================================================
+// Table operations
+// =============================================================================
+
+fn op_table_size(rt : Runtime) -> ControlFlow {
+  let table_idx = rt.read_imm_idx()
+  if table_idx < 0 || table_idx >= rt.tables.length() {
+    return Trap(RuntimeError::InvalidType("table index out of bounds"))
+  }
+  let size = rt.tables[table_idx].data.length()
+  rt.stack.push(Value::I32(size.reinterpret_as_uint()))
+  Next
+}
+
+fn op_table_get(rt : Runtime) -> ControlFlow {
+  let table_idx = rt.read_imm_idx()
+  if table_idx < 0 || table_idx >= rt.tables.length() {
+    return Trap(RuntimeError::InvalidType("table index out of bounds"))
+  }
+  let elem_idx = rt.pop_i32().reinterpret_as_int()
+  let table = rt.tables[table_idx].data
+  if elem_idx < 0 || elem_idx >= table.length() {
+    return Trap(RuntimeError::InvalidType("table element index out of bounds"))
+  }
+  // Return the function reference (or null)
+  rt.stack.push(Value::Ref(table[elem_idx]))
+  Next
+}
+
+fn op_table_set(rt : Runtime) -> ControlFlow {
+  let table_idx = rt.read_imm_idx()
+  if table_idx < 0 || table_idx >= rt.tables.length() {
+    return Trap(RuntimeError::InvalidType("table index out of bounds"))
+  }
+  let ref_value = match rt.stack.unsafe_pop() {
+    Value::Ref(r) => r
+    _ => return Trap(RuntimeError::InvalidType("expected funcref for table.set"))
+  }
+  let elem_idx = rt.pop_i32().reinterpret_as_int()
+  let table = rt.tables[table_idx].data
+  if elem_idx < 0 || elem_idx >= table.length() {
+    return Trap(RuntimeError::InvalidType("table element index out of bounds"))
+  }
+  table[elem_idx] = ref_value
+  Next
+}
+
+fn op_table_grow(rt : Runtime) -> ControlFlow {
+  let table_idx = rt.read_imm_idx()
+  if table_idx < 0 || table_idx >= rt.tables.length() {
+    rt.stack.push(Value::I32(0xFFFFFFFFU)) // -1 indicates failure
+    return Next
+  }
+  let delta = rt.pop_i32().reinterpret_as_int()
+  let init_value = match rt.stack.unsafe_pop() {
+    Value::Ref(r) => r
+    _ => {
+      rt.stack.push(Value::I32(0xFFFFFFFFU))
+      return Next
+    }
+  }
+  let runtime_table = rt.tables[table_idx]
+  let table = runtime_table.data
+  let old_size = table.length()
+
+  if delta < 0 {
+    rt.stack.push(Value::I32(0xFFFFFFFFU)) // -1 indicates failure
+    return Next
+  }
+
+  let new_size = old_size + delta
+
+  // Check max limit
+  match runtime_table.max {
+    Some(max) =>
+      if new_size > max.reinterpret_as_int() {
+        // Would exceed max - return -1 (failure)
+        rt.stack.push(Value::I32(0xFFFFFFFFU))
+        return Next
+      }
+    None => () // No max limit
+  }
+
+  // Grow the table
+  for i = 0; i < delta; i = i + 1 {
+    table.push(init_value)
+  }
+
+  rt.stack.push(Value::I32(old_size.reinterpret_as_uint()))
+  Next
+}
+
+// =============================================================================
+// Reference operations
+// =============================================================================
+
+fn op_ref_null(rt : Runtime) -> ControlFlow {
+  // ref.null pushes a null reference onto the stack
+  // The heap type is encoded in the immediate but we don't need it at runtime
+  let _ = rt.read_imm_idx() // Skip the heap type encoding
+  rt.stack.push(Value::Ref(None))
+  Next
+}
+
+fn op_ref_func(rt : Runtime) -> ControlFlow {
+  // ref.func pushes a reference to the given function onto the stack
+  let func_idx = rt.read_imm_idx()
+  rt.stack.push(Value::Ref(Some(func_idx)))
+  Next
+}
+
+fn op_ref_is_null(rt : Runtime) -> ControlFlow {
+  // ref.is_null tests whether a reference is null
+  let ref_val = rt.stack.unsafe_pop()
+  let is_null = match ref_val {
+    Value::Ref(None) => 1U
+    Value::Ref(Some(_)) => 0U
+    _ => 0U // Non-ref values are considered not null
+  }
+  rt.stack.push(Value::I32(is_null))
+  Next
+}
+
 // Float operations
 fn Runtime::pop_f32(self : Runtime) -> Float {
   match self.stack.unsafe_pop() {
@@ -2088,6 +2211,38 @@ fn Runtime::compile_wasm_instr(
     // Memory size and grow
     MemorySize(_) => self.emit(WasmInstr(op_memory_size))
     MemoryGrow(_) => self.emit(WasmInstr(op_memory_grow))
+    // Table instructions
+    TableSize(table_idx) => {
+      self.emit(WasmInstr(op_table_size))
+      self.emit(ImmediateIdx(table_idx.reinterpret_as_int()))
+    }
+    TableGet(table_idx) => {
+      self.emit(WasmInstr(op_table_get))
+      self.emit(ImmediateIdx(table_idx.reinterpret_as_int()))
+    }
+    TableSet(table_idx) => {
+      self.emit(WasmInstr(op_table_set))
+      self.emit(ImmediateIdx(table_idx.reinterpret_as_int()))
+    }
+    TableGrow(table_idx) => {
+      self.emit(WasmInstr(op_table_grow))
+      self.emit(ImmediateIdx(table_idx.reinterpret_as_int()))
+    }
+    // Reference instructions
+    RefNull(ref_type) => {
+      self.emit(WasmInstr(op_ref_null))
+      // Encode the ref type as an immediate (0 for funcref, 1 for externref)
+      let type_idx = match ref_type {
+        FuncRef => 0
+        ExternRef => 1
+      }
+      self.emit(ImmediateIdx(type_idx))
+    }
+    RefFunc(func_idx) => {
+      self.emit(WasmInstr(op_ref_func))
+      self.emit(ImmediateIdx(func_idx.reinterpret_as_int()))
+    }
+    RefIsNull => self.emit(WasmInstr(op_ref_is_null))
     // Unsupported instructions - emit trap
     CallIndirect(_, _) => self.emit(WasmInstr(op_unsupported))
     _ =>

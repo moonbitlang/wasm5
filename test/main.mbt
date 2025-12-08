@@ -330,6 +330,23 @@ fn handle_assert_trap(
           "expected trap '\{expected_error}' but got Unreachable",
         )
       }
+    @wasm5.RuntimeError::InvalidType(msg) =>
+      // Handle table out of bounds errors
+      if msg.contains("table") && msg.contains("out of bounds") {
+        if not(expected_error.contains("out of bounds table access")) {
+          ctx.fail(
+            line,
+            "assert_trap",
+            "expected trap '\{expected_error}' but got table out of bounds",
+          )
+        }
+      } else {
+        ctx.fail(
+          line,
+          "assert_trap",
+          "expected trap '\{expected_error}' but got: InvalidType(\{msg})",
+        )
+      }
     e =>
       ctx.fail(
         line,

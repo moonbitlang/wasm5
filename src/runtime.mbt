@@ -46,6 +46,13 @@ pub(all) enum Value {
 } derive(Eq, Show)
 
 ///|
+/// Table with its limits
+struct RuntimeTable {
+  data : Array[Int?] // Table data (function indices, None = null ref)
+  max : UInt? // Maximum size limit (None = no limit)
+}
+
+///|
 /// Runtime structure that holds a loaded WebAssembly module
 pub struct Runtime {
   module_ : Module
@@ -57,6 +64,7 @@ pub struct Runtime {
   branch_targets : Array[Int] // Stack of branch target PCs (for br instructions)
   memory : Array[Byte] // Linear memory
   globals : Array[Value] // Global variables
+  tables : Array[RuntimeTable] // Tables with limits
 }
 
 ///|
@@ -95,6 +103,37 @@ pub fn Runtime::load(m : Module) -> Runtime raise RuntimeError {
       }
     }
   }
+  // Initialize tables
+  let tables : Array[RuntimeTable] = []
+  for table in m.tables {
+    let table_size = table.limits.min.reinterpret_as_int()
+    // Initialize table with null references
+    let table_data : Array[Int?] = Array::make(table_size, None)
+    tables.push({ data: table_data, max: table.limits.max })
+  }
+  // Initialize element segments (copy function references into tables)
+  for elem in m.elems {
+    let table_idx = elem.table_idx.reinterpret_as_int()
+    if table_idx >= 0 && table_idx < tables.length() {
+      // Evaluate offset expression
+      let offset_value = eval_const_expr(elem.offset, globals)
+      let offset = match offset_value {
+        I32(v) => v.reinterpret_as_int()
+        _ =>
+          raise RuntimeError::UnsupportedInitExpression(
+            "elem segment offset must be i32",
+          )
+      }
+      // Copy function indices into table
+      let table = tables[table_idx]
+      for i = 0; i < elem.init.length(); i = i + 1 {
+        let addr = offset + i
+        if addr >= 0 && addr < table.data.length() {
+          table.data[addr] = Some(elem.init[i].reinterpret_as_int())
+        }
+      }
+    }
+  }
   Runtime::{
     module_: m,
     ops: [],
@@ -105,6 +144,7 @@ pub fn Runtime::load(m : Module) -> Runtime raise RuntimeError {
     branch_targets: [],
     memory,
     globals,
+    tables,
   }
 }
 
