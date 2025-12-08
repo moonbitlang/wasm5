@@ -494,7 +494,7 @@ fn validate_instruction(
         raise ValidationError::TypeMismatch("table.set expects value on stack")
       } else {
         let _ = stack.unsafe_pop()
-         // Pop the ref value
+        // Pop the ref value
       }
       ctx.poly_pop_expect(I32, "table.set index")
     }
@@ -552,7 +552,7 @@ fn validate_instruction(
         )
       } else {
         let _ = stack.unsafe_pop()
-         // Pop the reference
+        // Pop the reference
       }
       stack.push(I32) // Push result
     }

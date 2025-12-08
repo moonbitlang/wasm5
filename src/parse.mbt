@@ -352,19 +352,19 @@ fn parse_element_section(parser : Parser) -> Array[Elem] raise {
     match flags {
       1 | 3 => {
         let _ = parser.read_byte()
-         // elemkind (0x00 = funcref)
+        // elemkind (0x00 = funcref)
       }
       2 => {
         let _ = parser.read_byte()
-         // elemkind
+        // elemkind
       }
       5 | 7 => {
         let _ = parser.read_reftype()
-         // reftype
+        // reftype
       }
       6 => {
         let _ = parser.read_reftype()
-         // reftype
+        // reftype
       }
       _ => ()
     }

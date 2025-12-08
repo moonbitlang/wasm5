@@ -961,7 +961,9 @@ fn op_call(rt : Runtime) -> ControlFlow {
     // Imported functions are not supported for direct calls yet
     // They need special handling (host function callbacks)
     return Trap(
-      RuntimeError::FunctionNotCompiled("Imported function calls not yet supported: \{func_idx}"),
+      RuntimeError::FunctionNotCompiled(
+        "Imported function calls not yet supported: \{func_idx}",
+      ),
     )
   }
 
@@ -1064,7 +1066,9 @@ fn op_call_indirect(rt : Runtime) -> ControlFlow {
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
     return Trap(
-      RuntimeError::FunctionNotCompiled("Imported function calls not yet supported via call_indirect: \{func_idx}"),
+      RuntimeError::FunctionNotCompiled(
+        "Imported function calls not yet supported via call_indirect: \{func_idx}",
+      ),
     )
   }
 
