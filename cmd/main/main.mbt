@@ -3,14 +3,12 @@ async fn main {
   let args = @env.args()
   match args {
     [_, "run", wasm_path] => run_wasm(wasm_path)
-    _ => {
-      println("Usage: wasm5 run <wasm-file>")
-    }
+    _ => println("Usage: wasm5 run <wasm-file>")
   }
 }
 
 ///|
-async fn run_wasm(wasm_path : String) -> Unit raise {
+async fn run_wasm(wasm_path : String) -> Unit {
   let wasm_bytes = @fs.read_file(wasm_path).binary()
   let module_ = @wasm5.parse(wasm_bytes)
   let runtime = @wasm5.Runtime::load(module_)

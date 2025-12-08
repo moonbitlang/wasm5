@@ -35,6 +35,7 @@
 /// f64 canonical NaN: 0x7FF8000000000000
 let canonical_nan_f64 : Double = 0x7ff8_0000_0000_0000UL.reinterpret_as_double()
 
+///|
 /// f32 canonical NaN: 0x7FC00000
 let canonical_nan_f32 : Float = Float::reinterpret_from_uint(0x7fc0_0000U)
 
@@ -42,17 +43,28 @@ let canonical_nan_f32 : Float = Float::reinterpret_from_uint(0x7fc0_0000U)
 /// Canonicalize NaN values - if value is NaN, return canonical NaN.
 /// This ensures WebAssembly spec compliance for NaN bit patterns.
 fn canonicalize_f64(v : Double) -> Double {
-  if v.is_nan() { canonical_nan_f64 } else { v }
+  if v.is_nan() {
+    canonical_nan_f64
+  } else {
+    v
+  }
 }
 
 ///|
 /// Canonicalize NaN values - if value is NaN, return canonical NaN.
 /// This ensures WebAssembly spec compliance for NaN bit patterns.
 fn canonicalize_f32(v : Float) -> Float {
-  if v.is_nan() { canonical_nan_f32 } else { v }
+  if v.is_nan() {
+    canonical_nan_f32
+  } else {
+    v
+  }
 }
 
+///|
 pub extern "C" fn rint(x : Double) -> Double = "rint"
+
+///|
 pub extern "C" fn rintf(x : Float) -> Float = "rintf"
 
 ///|
@@ -105,6 +117,7 @@ fn Runtime::read_imm_idx(self : Runtime) -> Int {
 // Helper to pop two i32 values
 // ============================================================================
 
+///|
 fn Runtime::pop_two_i32(self : Runtime) -> (UInt, UInt) {
   let b = self.stack.unsafe_pop()
   let a = self.stack.unsafe_pop()
@@ -114,6 +127,7 @@ fn Runtime::pop_two_i32(self : Runtime) -> (UInt, UInt) {
   }
 }
 
+///|
 fn Runtime::pop_i32(self : Runtime) -> UInt {
   match self.stack.unsafe_pop() {
     Value::I32(v) => v
@@ -125,30 +139,35 @@ fn Runtime::pop_i32(self : Runtime) -> UInt {
 // i32 instruction implementations
 // ============================================================================
 
+///|
 fn op_i32_const(rt : Runtime) -> ControlFlow {
   let value = rt.read_imm_i32()
   rt.stack.push(Value::I32(value))
   Next
 }
 
+///|
 fn op_i32_add(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(a + b))
   Next
 }
 
+///|
 fn op_i32_sub(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(a - b))
   Next
 }
 
+///|
 fn op_i32_mul(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(a * b))
   Next
 }
 
+///|
 fn op_i32_div_s(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i32()
   if b == 0U {
@@ -162,6 +181,7 @@ fn op_i32_div_s(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i32_div_u(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i32()
   if b == 0U {
@@ -171,6 +191,7 @@ fn op_i32_div_u(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i32_rem_s(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i32()
   if b == 0U {
@@ -181,6 +202,7 @@ fn op_i32_rem_s(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i32_rem_u(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i32()
   if b == 0U {
@@ -190,24 +212,28 @@ fn op_i32_rem_u(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i32_and(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(a & b))
   Next
 }
 
+///|
 fn op_i32_or(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(a | b))
   Next
 }
 
+///|
 fn op_i32_xor(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(a ^ b))
   Next
 }
 
+///|
 fn op_i32_shl(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i32()
   let shift = (b & 0x1FU).reinterpret_as_int()
@@ -215,6 +241,7 @@ fn op_i32_shl(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i32_shr_s(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i32()
   let shift = (b & 0x1FU).reinterpret_as_int()
@@ -223,6 +250,7 @@ fn op_i32_shr_s(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i32_shr_u(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i32()
   let shift = (b & 0x1FU).reinterpret_as_int()
@@ -230,6 +258,7 @@ fn op_i32_shr_u(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i32_rotl(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i32()
   let rotation = (b & 0x1FU).reinterpret_as_int()
@@ -238,6 +267,7 @@ fn op_i32_rotl(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i32_rotr(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i32()
   let rotation = (b & 0x1FU).reinterpret_as_int()
@@ -247,64 +277,91 @@ fn op_i32_rotr(rt : Runtime) -> ControlFlow {
 }
 
 // Comparison operations
+
+///|
 fn op_i32_eq(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(if a == b { 1U } else { 0U }))
   Next
 }
 
+///|
 fn op_i32_ne(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(if a != b { 1U } else { 0U }))
   Next
 }
 
+///|
 fn op_i32_lt_s(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i32()
-  let result = if a.reinterpret_as_int() < b.reinterpret_as_int() { 1U } else { 0U }
+  let result = if a.reinterpret_as_int() < b.reinterpret_as_int() {
+    1U
+  } else {
+    0U
+  }
   rt.stack.push(Value::I32(result))
   Next
 }
 
+///|
 fn op_i32_lt_u(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(if a < b { 1U } else { 0U }))
   Next
 }
 
+///|
 fn op_i32_gt_s(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i32()
-  let result = if a.reinterpret_as_int() > b.reinterpret_as_int() { 1U } else { 0U }
+  let result = if a.reinterpret_as_int() > b.reinterpret_as_int() {
+    1U
+  } else {
+    0U
+  }
   rt.stack.push(Value::I32(result))
   Next
 }
 
+///|
 fn op_i32_gt_u(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(if a > b { 1U } else { 0U }))
   Next
 }
 
+///|
 fn op_i32_le_s(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i32()
-  let result = if a.reinterpret_as_int() <= b.reinterpret_as_int() { 1U } else { 0U }
+  let result = if a.reinterpret_as_int() <= b.reinterpret_as_int() {
+    1U
+  } else {
+    0U
+  }
   rt.stack.push(Value::I32(result))
   Next
 }
 
+///|
 fn op_i32_le_u(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(if a <= b { 1U } else { 0U }))
   Next
 }
 
+///|
 fn op_i32_ge_s(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i32()
-  let result = if a.reinterpret_as_int() >= b.reinterpret_as_int() { 1U } else { 0U }
+  let result = if a.reinterpret_as_int() >= b.reinterpret_as_int() {
+    1U
+  } else {
+    0U
+  }
   rt.stack.push(Value::I32(result))
   Next
 }
 
+///|
 fn op_i32_ge_u(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(if a >= b { 1U } else { 0U }))
@@ -312,30 +369,36 @@ fn op_i32_ge_u(rt : Runtime) -> ControlFlow {
 }
 
 // Unary operations
+
+///|
 fn op_i32_eqz(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i32()
   rt.stack.push(Value::I32(if a == 0U { 1U } else { 0U }))
   Next
 }
 
+///|
 fn op_i32_clz(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i32()
   rt.stack.push(Value::I32(a.clz().reinterpret_as_uint()))
   Next
 }
 
+///|
 fn op_i32_ctz(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i32()
   rt.stack.push(Value::I32(a.ctz().reinterpret_as_uint()))
   Next
 }
 
+///|
 fn op_i32_popcnt(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i32()
   rt.stack.push(Value::I32(a.popcnt().reinterpret_as_uint()))
   Next
 }
 
+///|
 fn op_i32_extend8_s(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i32()
   let byte = a & 0xFFU
@@ -344,6 +407,7 @@ fn op_i32_extend8_s(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i32_extend16_s(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i32()
   let half = a & 0xFFFFU
@@ -352,6 +416,7 @@ fn op_i32_extend16_s(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i32_wrap_i64(rt : Runtime) -> ControlFlow {
   match rt.stack.unsafe_pop() {
     Value::I64(v) => rt.stack.push(Value::I32((v & 0xFFFFFFFFUL).to_uint()))
@@ -364,6 +429,7 @@ fn op_i32_wrap_i64(rt : Runtime) -> ControlFlow {
 // i64 instruction implementations
 // ============================================================================
 
+///|
 fn Runtime::pop_two_i64(self : Runtime) -> (UInt64, UInt64) {
   let b = self.stack.unsafe_pop()
   let a = self.stack.unsafe_pop()
@@ -373,6 +439,7 @@ fn Runtime::pop_two_i64(self : Runtime) -> (UInt64, UInt64) {
   }
 }
 
+///|
 fn Runtime::pop_i64(self : Runtime) -> UInt64 {
   match self.stack.unsafe_pop() {
     Value::I64(v) => v
@@ -380,6 +447,7 @@ fn Runtime::pop_i64(self : Runtime) -> UInt64 {
   }
 }
 
+///|
 fn op_i64_const(rt : Runtime) -> ControlFlow {
   // Read two i32 immediates to form i64
   let low = rt.read_imm_i32()
@@ -389,12 +457,14 @@ fn op_i64_const(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_f32_const(rt : Runtime) -> ControlFlow {
   let bits = rt.read_imm_i32()
   rt.stack.push(Value::F32(Float::reinterpret_from_uint(bits)))
   Next
 }
 
+///|
 fn op_f64_const(rt : Runtime) -> ControlFlow {
   let low = rt.read_imm_i32()
   let high = rt.read_imm_i32()
@@ -403,24 +473,28 @@ fn op_f64_const(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i64_add(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I64(a + b))
   Next
 }
 
+///|
 fn op_i64_sub(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I64(a - b))
   Next
 }
 
+///|
 fn op_i64_mul(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I64(a * b))
   Next
 }
 
+///|
 fn op_i64_div_s(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i64()
   if b == 0UL {
@@ -434,6 +508,7 @@ fn op_i64_div_s(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i64_div_u(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i64()
   if b == 0UL {
@@ -443,6 +518,7 @@ fn op_i64_div_u(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i64_rem_s(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i64()
   if b == 0UL {
@@ -453,6 +529,7 @@ fn op_i64_rem_s(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i64_rem_u(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i64()
   if b == 0UL {
@@ -462,24 +539,28 @@ fn op_i64_rem_u(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i64_and(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I64(a & b))
   Next
 }
 
+///|
 fn op_i64_or(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I64(a | b))
   Next
 }
 
+///|
 fn op_i64_xor(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I64(a ^ b))
   Next
 }
 
+///|
 fn op_i64_shl(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i64()
   let shift = (b & 0x3FUL).to_int()
@@ -487,6 +568,7 @@ fn op_i64_shl(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i64_shr_s(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i64()
   let shift = (b & 0x3FUL).to_int()
@@ -495,6 +577,7 @@ fn op_i64_shr_s(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i64_shr_u(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i64()
   let shift = (b & 0x3FUL).to_int()
@@ -502,6 +585,7 @@ fn op_i64_shr_u(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i64_rotl(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i64()
   let rotation = (b & 0x3FUL).to_int()
@@ -510,6 +594,7 @@ fn op_i64_rotl(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i64_rotr(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i64()
   let rotation = (b & 0x3FUL).to_int()
@@ -519,64 +604,91 @@ fn op_i64_rotr(rt : Runtime) -> ControlFlow {
 }
 
 // i64 comparison operations
+
+///|
 fn op_i64_eq(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I32(if a == b { 1U } else { 0U }))
   Next
 }
 
+///|
 fn op_i64_ne(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I32(if a != b { 1U } else { 0U }))
   Next
 }
 
+///|
 fn op_i64_lt_s(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i64()
-  let result = if a.reinterpret_as_int64() < b.reinterpret_as_int64() { 1U } else { 0U }
+  let result = if a.reinterpret_as_int64() < b.reinterpret_as_int64() {
+    1U
+  } else {
+    0U
+  }
   rt.stack.push(Value::I32(result))
   Next
 }
 
+///|
 fn op_i64_lt_u(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I32(if a < b { 1U } else { 0U }))
   Next
 }
 
+///|
 fn op_i64_gt_s(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i64()
-  let result = if a.reinterpret_as_int64() > b.reinterpret_as_int64() { 1U } else { 0U }
+  let result = if a.reinterpret_as_int64() > b.reinterpret_as_int64() {
+    1U
+  } else {
+    0U
+  }
   rt.stack.push(Value::I32(result))
   Next
 }
 
+///|
 fn op_i64_gt_u(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I32(if a > b { 1U } else { 0U }))
   Next
 }
 
+///|
 fn op_i64_le_s(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i64()
-  let result = if a.reinterpret_as_int64() <= b.reinterpret_as_int64() { 1U } else { 0U }
+  let result = if a.reinterpret_as_int64() <= b.reinterpret_as_int64() {
+    1U
+  } else {
+    0U
+  }
   rt.stack.push(Value::I32(result))
   Next
 }
 
+///|
 fn op_i64_le_u(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I32(if a <= b { 1U } else { 0U }))
   Next
 }
 
+///|
 fn op_i64_ge_s(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i64()
-  let result = if a.reinterpret_as_int64() >= b.reinterpret_as_int64() { 1U } else { 0U }
+  let result = if a.reinterpret_as_int64() >= b.reinterpret_as_int64() {
+    1U
+  } else {
+    0U
+  }
   rt.stack.push(Value::I32(result))
   Next
 }
 
+///|
 fn op_i64_ge_u(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I32(if a >= b { 1U } else { 0U }))
@@ -584,54 +696,75 @@ fn op_i64_ge_u(rt : Runtime) -> ControlFlow {
 }
 
 // i64 unary operations
+
+///|
 fn op_i64_eqz(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i64()
   rt.stack.push(Value::I32(if a == 0UL { 1U } else { 0U }))
   Next
 }
 
+///|
 fn op_i64_clz(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i64()
   rt.stack.push(Value::I64(a.clz().to_uint64()))
   Next
 }
 
+///|
 fn op_i64_ctz(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i64()
   rt.stack.push(Value::I64(a.ctz().to_uint64()))
   Next
 }
 
+///|
 fn op_i64_popcnt(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i64()
   rt.stack.push(Value::I64(a.popcnt().to_uint64()))
   Next
 }
 
+///|
 fn op_i64_extend8_s(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i64()
   let byte = a & 0xFFUL
-  let result = if (byte & 0x80UL) != 0UL { byte | 0xFFFFFFFFFFFFFF00UL } else { byte }
+  let result = if (byte & 0x80UL) != 0UL {
+    byte | 0xFFFFFFFFFFFFFF00UL
+  } else {
+    byte
+  }
   rt.stack.push(Value::I64(result))
   Next
 }
 
+///|
 fn op_i64_extend16_s(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i64()
   let half = a & 0xFFFFUL
-  let result = if (half & 0x8000UL) != 0UL { half | 0xFFFFFFFFFFFF0000UL } else { half }
+  let result = if (half & 0x8000UL) != 0UL {
+    half | 0xFFFFFFFFFFFF0000UL
+  } else {
+    half
+  }
   rt.stack.push(Value::I64(result))
   Next
 }
 
+///|
 fn op_i64_extend32_s(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i64()
   let word = a & 0xFFFFFFFFUL
-  let result = if (word & 0x80000000UL) != 0UL { word | 0xFFFFFFFF00000000UL } else { word }
+  let result = if (word & 0x80000000UL) != 0UL {
+    word | 0xFFFFFFFF00000000UL
+  } else {
+    word
+  }
   rt.stack.push(Value::I64(result))
   Next
 }
 
+///|
 fn op_i64_extend_i32_s(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i32()
   let result = a.reinterpret_as_int().to_int64().reinterpret_as_uint64()
@@ -639,6 +772,7 @@ fn op_i64_extend_i32_s(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i64_extend_i32_u(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i32()
   rt.stack.push(Value::I64(a.to_uint64()))
@@ -649,12 +783,14 @@ fn op_i64_extend_i32_u(rt : Runtime) -> ControlFlow {
 // Local/Global variable operations
 // ============================================================================
 
+///|
 fn op_local_get(rt : Runtime) -> ControlFlow {
   let idx = rt.read_imm_idx()
   rt.stack.push(rt.locals[idx])
   Next
 }
 
+///|
 fn op_local_set(rt : Runtime) -> ControlFlow {
   let idx = rt.read_imm_idx()
   let value = rt.stack.unsafe_pop()
@@ -662,6 +798,7 @@ fn op_local_set(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_local_tee(rt : Runtime) -> ControlFlow {
   let idx = rt.read_imm_idx()
   let value = rt.stack[rt.stack.length() - 1]
@@ -673,11 +810,13 @@ fn op_local_tee(rt : Runtime) -> ControlFlow {
 // Stack operations
 // ============================================================================
 
+///|
 fn op_drop(rt : Runtime) -> ControlFlow {
   let _ = rt.stack.unsafe_pop()
   Next
 }
 
+///|
 fn op_select(rt : Runtime) -> ControlFlow {
   let cond = rt.pop_i32()
   let val2 = rt.stack.unsafe_pop()
@@ -690,34 +829,44 @@ fn op_select(rt : Runtime) -> ControlFlow {
 // Control flow operations
 // ============================================================================
 
+///|
 fn op_if(rt : Runtime) -> ControlFlow {
   let else_pc = rt.read_imm_idx()
   let cond = rt.pop_i32()
-  if cond != 0U { Next } else { Jump(else_pc) }
+  if cond != 0U {
+    Next
+  } else {
+    Jump(else_pc)
+  }
 }
 
+///|
 fn op_else(rt : Runtime) -> ControlFlow {
   let end_pc = rt.read_imm_idx()
   Jump(end_pc)
 }
 
+///|
 fn op_end_block(rt : Runtime) -> ControlFlow {
   let _ = rt.branch_targets.unsafe_pop()
   Next
 }
 
+///|
 fn op_push_block_target(rt : Runtime) -> ControlFlow {
   let target_pc = rt.read_imm_idx()
   rt.branch_targets.push(target_pc)
   Next
 }
 
+///|
 fn op_push_loop_target(rt : Runtime) -> ControlFlow {
   let target_pc = rt.read_imm_idx()
   rt.branch_targets.push(target_pc)
   Next
 }
 
+///|
 fn op_br(rt : Runtime) -> ControlFlow {
   let label = rt.read_imm_idx()
   let target_idx = rt.branch_targets.length() - 1 - label
@@ -732,10 +881,12 @@ fn op_br(rt : Runtime) -> ControlFlow {
   // Pop all targets up to and including the target
   for _i = 0; _i <= label; _i = _i + 1 {
     let _ = rt.branch_targets.unsafe_pop()
+
   }
   Jump(target_pc)
 }
 
+///|
 fn op_br_if(rt : Runtime) -> ControlFlow {
   let label = rt.read_imm_idx()
   let cond = rt.pop_i32()
@@ -752,6 +903,7 @@ fn op_br_if(rt : Runtime) -> ControlFlow {
     // Pop all targets up to and including the target
     for _i = 0; _i <= label; _i = _i + 1 {
       let _ = rt.branch_targets.unsafe_pop()
+
     }
     Jump(target_pc)
   } else {
@@ -759,6 +911,7 @@ fn op_br_if(rt : Runtime) -> ControlFlow {
   }
 }
 
+///|
 fn op_br_table(rt : Runtime) -> ControlFlow {
   let num_labels = rt.read_imm_idx()
   let index = rt.pop_i32().reinterpret_as_int()
@@ -785,18 +938,21 @@ fn op_br_table(rt : Runtime) -> ControlFlow {
   // Pop all targets up to and including the target
   for _i = 0; _i <= target_label; _i = _i + 1 {
     let _ = rt.branch_targets.unsafe_pop()
+
   }
   Jump(target_pc)
 }
 
+///|
 fn op_call(rt : Runtime) -> ControlFlow {
   let func_idx = rt.read_imm_idx()
   let type_idx = rt.module_.funcs[func_idx].reinterpret_as_int()
   let func_type = rt.module_.types[type_idx]
   let code = rt.module_.codes[func_idx]
-
   guard code.compiled is Some(callee_pc) else {
-    return Trap(RuntimeError::FunctionNotCompiled("Function not compiled: \{func_idx}"))
+    return Trap(
+      RuntimeError::FunctionNotCompiled("Function not compiled: \{func_idx}"),
+    )
   }
 
   // Pop arguments
@@ -824,14 +980,16 @@ fn op_call(rt : Runtime) -> ControlFlow {
       ValType::ExternRef => rt.locals.push(Value::Ref(None))
       _ =>
         return Trap(
-          RuntimeError::UnsupportedLocalType("Unsupported local type: \{local_type}"),
+          RuntimeError::UnsupportedLocalType(
+            "Unsupported local type: \{local_type}",
+          ),
         )
     }
   }
-
   Jump(callee_pc)
 }
 
+///|
 fn op_return(rt : Runtime) -> ControlFlow {
   if rt.call_stack.length() == 0 {
     return End
@@ -850,6 +1008,7 @@ fn op_return(rt : Runtime) -> ControlFlow {
   Jump(frame.return_pc + 1)
 }
 
+///|
 fn op_call_indirect(rt : Runtime) -> ControlFlow {
   let type_idx = rt.read_imm_idx()
   let table_idx = rt.read_imm_idx()
@@ -874,7 +1033,9 @@ fn op_call_indirect(rt : Runtime) -> ControlFlow {
 
   // Check function index bounds
   if func_idx < 0 || func_idx >= rt.module_.codes.length() {
-    return Trap(RuntimeError::InvalidType("call_indirect: invalid function index"))
+    return Trap(
+      RuntimeError::InvalidType("call_indirect: invalid function index"),
+    )
   }
 
   // Get the expected type and actual function type
@@ -884,7 +1045,7 @@ fn op_call_indirect(rt : Runtime) -> ControlFlow {
 
   // Check type signature matches
   if expected_type.params.length() != actual_type.params.length() ||
-     expected_type.results.length() != actual_type.results.length() {
+    expected_type.results.length() != actual_type.results.length() {
     return Trap(RuntimeError::InvalidType("indirect call type mismatch"))
   }
   for i = 0; i < expected_type.params.length(); i = i + 1 {
@@ -897,10 +1058,11 @@ fn op_call_indirect(rt : Runtime) -> ControlFlow {
       return Trap(RuntimeError::InvalidType("indirect call type mismatch"))
     }
   }
-
   let code = rt.module_.codes[func_idx]
   guard code.compiled is Some(callee_pc) else {
-    return Trap(RuntimeError::FunctionNotCompiled("Function not compiled: \{func_idx}"))
+    return Trap(
+      RuntimeError::FunctionNotCompiled("Function not compiled: \{func_idx}"),
+    )
   }
 
   // Pop arguments
@@ -928,26 +1090,35 @@ fn op_call_indirect(rt : Runtime) -> ControlFlow {
       ValType::ExternRef => rt.locals.push(Value::Ref(None))
       _ =>
         return Trap(
-          RuntimeError::UnsupportedLocalType("Unsupported local type: \{local_type}"),
+          RuntimeError::UnsupportedLocalType(
+            "Unsupported local type: \{local_type}",
+          ),
         )
     }
   }
-
   Jump(callee_pc)
 }
 
+///|
 fn op_unsupported(_rt : Runtime) -> ControlFlow {
   Trap(RuntimeError::UnimplementedInstruction("unsupported instruction"))
 }
 
+///|
 fn op_end(rt : Runtime) -> ControlFlow {
-  if rt.call_stack.length() > 0 { op_return(rt) } else { End }
+  if rt.call_stack.length() > 0 {
+    op_return(rt)
+  } else {
+    End
+  }
 }
 
+///|
 fn op_nop(_rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_unreachable(_rt : Runtime) -> ControlFlow {
   Trap(RuntimeError::Unreachable)
 }
@@ -973,6 +1144,7 @@ fn op_unreachable(_rt : Runtime) -> ControlFlow {
 // The check `addr < 0` catches these cases and returns MemoryOutOfBounds trap.
 // =============================================================================
 
+///|
 fn op_i32_load(rt : Runtime) -> ControlFlow {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   // Use 64-bit arithmetic to detect overflow
@@ -991,6 +1163,7 @@ fn op_i32_load(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i32_store(rt : Runtime) -> ControlFlow {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let value = rt.pop_i32()
@@ -1008,6 +1181,8 @@ fn op_i32_store(rt : Runtime) -> ControlFlow {
 }
 
 // Additional memory load operations
+
+///|
 fn op_i32_load8_s(rt : Runtime) -> ControlFlow {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
@@ -1023,6 +1198,7 @@ fn op_i32_load8_s(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i32_load8_u(rt : Runtime) -> ControlFlow {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
@@ -1035,6 +1211,7 @@ fn op_i32_load8_u(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i32_load16_s(rt : Runtime) -> ControlFlow {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
@@ -1052,6 +1229,7 @@ fn op_i32_load16_s(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i32_load16_u(rt : Runtime) -> ControlFlow {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
@@ -1066,6 +1244,7 @@ fn op_i32_load16_u(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i64_load(rt : Runtime) -> ControlFlow {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
@@ -1082,10 +1261,22 @@ fn op_i64_load(rt : Runtime) -> ControlFlow {
   let b5 = rt.memory[addr + 5].to_uint64()
   let b6 = rt.memory[addr + 6].to_uint64()
   let b7 = rt.memory[addr + 7].to_uint64()
-  rt.stack.push(Value::I64(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24) | (b4 << 32) | (b5 << 40) | (b6 << 48) | (b7 << 56)))
+  rt.stack.push(
+    Value::I64(
+      b0 |
+      (b1 << 8) |
+      (b2 << 16) |
+      (b3 << 24) |
+      (b4 << 32) |
+      (b5 << 40) |
+      (b6 << 48) |
+      (b7 << 56),
+    ),
+  )
   Next
 }
 
+///|
 fn op_i64_store(rt : Runtime) -> ControlFlow {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let value = rt.pop_i64()
@@ -1106,6 +1297,7 @@ fn op_i64_store(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i64_load8_s(rt : Runtime) -> ControlFlow {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
@@ -1121,6 +1313,7 @@ fn op_i64_load8_s(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i64_load8_u(rt : Runtime) -> ControlFlow {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
@@ -1133,6 +1326,7 @@ fn op_i64_load8_u(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i64_load16_s(rt : Runtime) -> ControlFlow {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
@@ -1150,6 +1344,7 @@ fn op_i64_load16_s(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i64_load16_u(rt : Runtime) -> ControlFlow {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
@@ -1164,6 +1359,7 @@ fn op_i64_load16_u(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i64_load32_s(rt : Runtime) -> ControlFlow {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
@@ -1178,11 +1374,16 @@ fn op_i64_load32_s(rt : Runtime) -> ControlFlow {
   let b3 = rt.memory[addr + 3].to_int64()
   let value32 = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
   // Sign extend from 32 bits
-  let value = if value32 >= 0x80000000L { value32 - 0x100000000L } else { value32 }
+  let value = if value32 >= 0x80000000L {
+    value32 - 0x100000000L
+  } else {
+    value32
+  }
   rt.stack.push(Value::I64(value.reinterpret_as_uint64()))
   Next
 }
 
+///|
 fn op_i64_load32_u(rt : Runtime) -> ControlFlow {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
@@ -1199,6 +1400,7 @@ fn op_i64_load32_u(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_f32_load(rt : Runtime) -> ControlFlow {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
@@ -1216,6 +1418,7 @@ fn op_f32_load(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_f64_load(rt : Runtime) -> ControlFlow {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
@@ -1232,11 +1435,19 @@ fn op_f64_load(rt : Runtime) -> ControlFlow {
   let b5 = rt.memory[addr + 5].to_uint64()
   let b6 = rt.memory[addr + 6].to_uint64()
   let b7 = rt.memory[addr + 7].to_uint64()
-  let bits = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24) | (b4 << 32) | (b5 << 40) | (b6 << 48) | (b7 << 56)
+  let bits = b0 |
+    (b1 << 8) |
+    (b2 << 16) |
+    (b3 << 24) |
+    (b4 << 32) |
+    (b5 << 40) |
+    (b6 << 48) |
+    (b7 << 56)
   rt.stack.push(Value::F64(bits.reinterpret_as_double()))
   Next
 }
 
+///|
 fn op_f32_store(rt : Runtime) -> ControlFlow {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let value = rt.pop_f32().reinterpret_as_uint()
@@ -1253,6 +1464,7 @@ fn op_f32_store(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_f64_store(rt : Runtime) -> ControlFlow {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let value = rt.pop_f64().reinterpret_as_uint64()
@@ -1274,6 +1486,8 @@ fn op_f64_store(rt : Runtime) -> ControlFlow {
 }
 
 // Narrow store operations
+
+///|
 fn op_i32_store8(rt : Runtime) -> ControlFlow {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let value = rt.pop_i32()
@@ -1287,6 +1501,7 @@ fn op_i32_store8(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i32_store16(rt : Runtime) -> ControlFlow {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let value = rt.pop_i32()
@@ -1301,6 +1516,7 @@ fn op_i32_store16(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i64_store8(rt : Runtime) -> ControlFlow {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let value = rt.pop_i64()
@@ -1314,6 +1530,7 @@ fn op_i64_store8(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i64_store16(rt : Runtime) -> ControlFlow {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let value = rt.pop_i64()
@@ -1328,6 +1545,7 @@ fn op_i64_store16(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_i64_store32(rt : Runtime) -> ControlFlow {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let value = rt.pop_i64()
@@ -1346,8 +1564,11 @@ fn op_i64_store32(rt : Runtime) -> ControlFlow {
 
 // Memory size and grow operations
 // WebAssembly memory is measured in pages of 64KB (65536 bytes)
+
+///|
 let wasm_page_size : Int = 65536
 
+///|
 fn op_memory_size(rt : Runtime) -> ControlFlow {
   // Return current memory size in pages
   let size_in_pages = rt.memory.length() / wasm_page_size
@@ -1355,6 +1576,7 @@ fn op_memory_size(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_memory_grow(rt : Runtime) -> ControlFlow {
   let delta_pages = rt.pop_i32().reinterpret_as_int()
   let old_size_pages = rt.memory.length() / wasm_page_size
@@ -1364,7 +1586,6 @@ fn op_memory_grow(rt : Runtime) -> ControlFlow {
     rt.stack.push(Value::I32(0xFFFFFFFFU)) // -1 indicates failure
     return Next
   }
-
   let new_size_pages = old_size_pages + delta_pages
 
   // Check against maximum memory limit (if defined in module)
@@ -1391,6 +1612,7 @@ fn op_memory_grow(rt : Runtime) -> ControlFlow {
 // Table operations
 // =============================================================================
 
+///|
 fn op_table_size(rt : Runtime) -> ControlFlow {
   let table_idx = rt.read_imm_idx()
   if table_idx < 0 || table_idx >= rt.tables.length() {
@@ -1401,6 +1623,7 @@ fn op_table_size(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_table_get(rt : Runtime) -> ControlFlow {
   let table_idx = rt.read_imm_idx()
   if table_idx < 0 || table_idx >= rt.tables.length() {
@@ -1416,6 +1639,7 @@ fn op_table_get(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_table_set(rt : Runtime) -> ControlFlow {
   let table_idx = rt.read_imm_idx()
   if table_idx < 0 || table_idx >= rt.tables.length() {
@@ -1423,7 +1647,8 @@ fn op_table_set(rt : Runtime) -> ControlFlow {
   }
   let ref_value = match rt.stack.unsafe_pop() {
     Value::Ref(r) => r
-    _ => return Trap(RuntimeError::InvalidType("expected funcref for table.set"))
+    _ =>
+      return Trap(RuntimeError::InvalidType("expected funcref for table.set"))
   }
   let elem_idx = rt.pop_i32().reinterpret_as_int()
   let table = rt.tables[table_idx].data
@@ -1434,6 +1659,7 @@ fn op_table_set(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_table_grow(rt : Runtime) -> ControlFlow {
   let table_idx = rt.read_imm_idx()
   if table_idx < 0 || table_idx >= rt.tables.length() {
@@ -1451,12 +1677,10 @@ fn op_table_grow(rt : Runtime) -> ControlFlow {
   let runtime_table = rt.tables[table_idx]
   let table = runtime_table.data
   let old_size = table.length()
-
   if delta < 0 {
     rt.stack.push(Value::I32(0xFFFFFFFFU)) // -1 indicates failure
     return Next
   }
-
   let new_size = old_size + delta
 
   // Check max limit
@@ -1474,7 +1698,6 @@ fn op_table_grow(rt : Runtime) -> ControlFlow {
   for i = 0; i < delta; i = i + 1 {
     table.push(init_value)
   }
-
   rt.stack.push(Value::I32(old_size.reinterpret_as_uint()))
   Next
 }
@@ -1483,6 +1706,7 @@ fn op_table_grow(rt : Runtime) -> ControlFlow {
 // Reference operations
 // =============================================================================
 
+///|
 fn op_ref_null(rt : Runtime) -> ControlFlow {
   // ref.null pushes a null reference onto the stack
   // The heap type is encoded in the immediate but we don't need it at runtime
@@ -1491,6 +1715,7 @@ fn op_ref_null(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_ref_func(rt : Runtime) -> ControlFlow {
   // ref.func pushes a reference to the given function onto the stack
   let func_idx = rt.read_imm_idx()
@@ -1498,6 +1723,7 @@ fn op_ref_func(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_ref_is_null(rt : Runtime) -> ControlFlow {
   // ref.is_null tests whether a reference is null
   let ref_val = rt.stack.unsafe_pop()
@@ -1511,6 +1737,8 @@ fn op_ref_is_null(rt : Runtime) -> ControlFlow {
 }
 
 // Float operations
+
+///|
 fn Runtime::pop_f32(self : Runtime) -> Float {
   match self.stack.unsafe_pop() {
     Value::F32(v) => v
@@ -1518,12 +1746,14 @@ fn Runtime::pop_f32(self : Runtime) -> Float {
   }
 }
 
+///|
 fn Runtime::pop_two_f32(self : Runtime) -> (Float, Float) {
   let b = self.pop_f32()
   let a = self.pop_f32()
   (a, b)
 }
 
+///|
 fn Runtime::pop_f64(self : Runtime) -> Double {
   match self.stack.unsafe_pop() {
     Value::F64(v) => v
@@ -1531,78 +1761,91 @@ fn Runtime::pop_f64(self : Runtime) -> Double {
   }
 }
 
+///|
 fn Runtime::pop_two_f64(self : Runtime) -> (Double, Double) {
   let b = self.pop_f64()
   let a = self.pop_f64()
   (a, b)
 }
 
+///|
 fn op_f32_eq(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::I32(if a == b { 1U } else { 0U }))
   Next
 }
 
+///|
 fn op_f32_ne(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::I32(if a != b { 1U } else { 0U }))
   Next
 }
 
+///|
 fn op_f32_lt(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::I32(if a < b { 1U } else { 0U }))
   Next
 }
 
+///|
 fn op_f32_gt(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::I32(if a > b { 1U } else { 0U }))
   Next
 }
 
+///|
 fn op_f32_le(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::I32(if a <= b { 1U } else { 0U }))
   Next
 }
 
+///|
 fn op_f32_ge(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::I32(if a >= b { 1U } else { 0U }))
   Next
 }
 
+///|
 fn op_f64_eq(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::I32(if a == b { 1U } else { 0U }))
   Next
 }
 
+///|
 fn op_f64_ne(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::I32(if a != b { 1U } else { 0U }))
   Next
 }
 
+///|
 fn op_f64_lt(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::I32(if a < b { 1U } else { 0U }))
   Next
 }
 
+///|
 fn op_f64_gt(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::I32(if a > b { 1U } else { 0U }))
   Next
 }
 
+///|
 fn op_f64_le(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::I32(if a <= b { 1U } else { 0U }))
   Next
 }
 
+///|
 fn op_f64_ge(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::I32(if a >= b { 1U } else { 0U }))
@@ -1610,48 +1853,57 @@ fn op_f64_ge(rt : Runtime) -> ControlFlow {
 }
 
 // Float unary operations
+
+///|
 fn op_f32_neg(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f32()
   rt.stack.push(Value::F32(-a))
   Next
 }
 
+///|
 fn op_f32_abs(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f32()
   rt.stack.push(Value::F32(a.abs()))
   Next
 }
 
+///|
 fn op_f32_sqrt(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a.sqrt())))
   Next
 }
 
+///|
 fn op_f32_ceil(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a.ceil())))
   Next
 }
 
+///|
 fn op_f32_floor(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a.floor())))
   Next
 }
 
+///|
 fn op_f32_trunc(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a.trunc())))
   Next
 }
 
+///|
 fn op_f32_nearest(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f32()
   rt.stack.push(Value::F32(canonicalize_f32(rintf(a))))
   Next
 }
 
+///|
 fn op_f64_neg(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f64()
   rt.stack.push(Value::F64(-a))
@@ -1659,30 +1911,36 @@ fn op_f64_neg(rt : Runtime) -> ControlFlow {
 }
 
 // Float binary operations
+
+///|
 fn op_f32_add(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a + b)))
   Next
 }
 
+///|
 fn op_f32_sub(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a - b)))
   Next
 }
 
+///|
 fn op_f32_mul(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a * b)))
   Next
 }
 
+///|
 fn op_f32_div(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a / b)))
   Next
 }
 
+///|
 fn op_f32_min(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f32()
   let result = if a.is_nan() || b.is_nan() {
@@ -1700,7 +1958,11 @@ fn op_f32_min(rt : Runtime) -> ControlFlow {
     let sign_mask = 0x8000_0000U
     if (a_bits & sign_mask) != 0U || (b_bits & sign_mask) != 0U {
       // At least one is negative, return the one with negative sign
-      if (a_bits & sign_mask) != 0U { a } else { b }
+      if (a_bits & sign_mask) != 0U {
+        a
+      } else {
+        b
+      }
     } else {
       a // Both positive, return either
     }
@@ -1709,6 +1971,7 @@ fn op_f32_min(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_f32_max(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f32()
   let result = if a.is_nan() || b.is_nan() {
@@ -1726,7 +1989,11 @@ fn op_f32_max(rt : Runtime) -> ControlFlow {
     let sign_mask = 0x8000_0000U
     if (a_bits & sign_mask) == 0U || (b_bits & sign_mask) == 0U {
       // At least one is positive, return the one with positive sign
-      if (a_bits & sign_mask) == 0U { a } else { b }
+      if (a_bits & sign_mask) == 0U {
+        a
+      } else {
+        b
+      }
     } else {
       a // Both negative, return either
     }
@@ -1735,6 +2002,7 @@ fn op_f32_max(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_f32_copysign(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f32()
   let a_bits = a.reinterpret_as_uint()
@@ -1745,30 +2013,35 @@ fn op_f32_copysign(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_f64_add(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a + b)))
   Next
 }
 
+///|
 fn op_f64_sub(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a - b)))
   Next
 }
 
+///|
 fn op_f64_mul(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a * b)))
   Next
 }
 
+///|
 fn op_f64_div(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a / b)))
   Next
 }
 
+///|
 fn op_f64_min(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f64()
   // WebAssembly min semantics: if either is NaN, return canonical NaN
@@ -1786,7 +2059,11 @@ fn op_f64_min(rt : Runtime) -> ControlFlow {
     let sign_mask = 0x8000_0000_0000_0000UL
     if (a_bits & sign_mask) != 0UL || (b_bits & sign_mask) != 0UL {
       // At least one is negative, return the one with negative sign
-      if (a_bits & sign_mask) != 0UL { a } else { b }
+      if (a_bits & sign_mask) != 0UL {
+        a
+      } else {
+        b
+      }
     } else {
       a // Both positive, return either
     }
@@ -1795,6 +2072,7 @@ fn op_f64_min(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_f64_max(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f64()
   // WebAssembly max semantics: if either is NaN, return canonical NaN
@@ -1812,7 +2090,11 @@ fn op_f64_max(rt : Runtime) -> ControlFlow {
     let sign_mask = 0x8000_0000_0000_0000UL
     if (a_bits & sign_mask) == 0UL || (b_bits & sign_mask) == 0UL {
       // At least one is positive, return the one with positive sign
-      if (a_bits & sign_mask) == 0UL { a } else { b }
+      if (a_bits & sign_mask) == 0UL {
+        a
+      } else {
+        b
+      }
     } else {
       a // Both negative, return either
     }
@@ -1821,6 +2103,7 @@ fn op_f64_max(rt : Runtime) -> ControlFlow {
   Next
 }
 
+///|
 fn op_f64_copysign(rt : Runtime) -> ControlFlow {
   let (a, b) = rt.pop_two_f64()
   let a_bits = a.reinterpret_as_uint64()
@@ -1832,36 +2115,43 @@ fn op_f64_copysign(rt : Runtime) -> ControlFlow {
 }
 
 // Float unary operations
+
+///|
 fn op_f64_abs(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f64()
   rt.stack.push(Value::F64(a.abs()))
   Next
 }
 
+///|
 fn op_f64_sqrt(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a.sqrt())))
   Next
 }
 
+///|
 fn op_f64_ceil(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a.ceil())))
   Next
 }
 
+///|
 fn op_f64_floor(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a.floor())))
   Next
 }
 
+///|
 fn op_f64_trunc(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a.trunc())))
   Next
 }
 
+///|
 fn op_f64_nearest(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f64()
   rt.stack.push(Value::F64(canonicalize_f64(rint(a))))
@@ -1869,60 +2159,71 @@ fn op_f64_nearest(rt : Runtime) -> ControlFlow {
 }
 
 // Float conversion operations
+
+///|
 fn op_f64_convert_i64_u(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i64()
   rt.stack.push(Value::F64(a.to_double()))
   Next
 }
 
+///|
 fn op_f64_convert_i64_s(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i64().reinterpret_as_int64()
   rt.stack.push(Value::F64(a.to_double()))
   Next
 }
 
+///|
 fn op_f64_convert_i32_u(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i32()
   rt.stack.push(Value::F64(a.to_double()))
   Next
 }
 
+///|
 fn op_f64_convert_i32_s(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i32().reinterpret_as_int()
   rt.stack.push(Value::F64(a.to_double()))
   Next
 }
 
+///|
 fn op_f64_promote_f32(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f32()
   rt.stack.push(Value::F64(a.to_double()))
   Next
 }
 
+///|
 fn op_f32_demote_f64(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f64()
   rt.stack.push(Value::F32(a.to_float()))
   Next
 }
 
+///|
 fn op_f32_convert_i32_s(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i32().reinterpret_as_int()
   rt.stack.push(Value::F32(a.to_float()))
   Next
 }
 
+///|
 fn op_f32_convert_i32_u(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i32()
   rt.stack.push(Value::F32(a.to_double().to_float()))
   Next
 }
 
+///|
 fn op_f32_convert_i64_s(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i64().reinterpret_as_int64()
   rt.stack.push(Value::F32(a.to_double().to_float()))
   Next
 }
 
+///|
 fn op_f32_convert_i64_u(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i64()
   // For unsigned i64 to float, handle large values carefully
@@ -1937,48 +2238,57 @@ fn op_f32_convert_i64_u(rt : Runtime) -> ControlFlow {
 }
 
 // Truncation operations
+
+///|
 fn op_i64_trunc_f64_s(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f64()
   rt.stack.push(Value::I64(a.to_int64().reinterpret_as_uint64()))
   Next
 }
 
+///|
 fn op_i64_trunc_f64_u(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f64()
   rt.stack.push(Value::I64(a.to_uint64()))
   Next
 }
 
+///|
 fn op_i32_trunc_f32_s(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f32()
   rt.stack.push(Value::I32(a.to_int().reinterpret_as_uint()))
   Next
 }
 
+///|
 fn op_i32_trunc_f32_u(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f32()
   rt.stack.push(Value::I32(a.to_int().reinterpret_as_uint()))
   Next
 }
 
+///|
 fn op_i32_trunc_f64_s(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f64()
   rt.stack.push(Value::I32(a.to_int().reinterpret_as_uint()))
   Next
 }
 
+///|
 fn op_i32_trunc_f64_u(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f64()
   rt.stack.push(Value::I32(a.to_int().reinterpret_as_uint()))
   Next
 }
 
+///|
 fn op_i64_trunc_f32_s(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f32()
   rt.stack.push(Value::I64(a.to_double().to_int64().reinterpret_as_uint64()))
   Next
 }
 
+///|
 fn op_i64_trunc_f32_u(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f32()
   rt.stack.push(Value::I64(a.to_double().to_uint64()))
@@ -1986,24 +2296,29 @@ fn op_i64_trunc_f32_u(rt : Runtime) -> ControlFlow {
 }
 
 // Reinterpret operations
+
+///|
 fn op_i32_reinterpret_f32(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f32()
   rt.stack.push(Value::I32(a.reinterpret_as_uint()))
   Next
 }
 
+///|
 fn op_i64_reinterpret_f64(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f64()
   rt.stack.push(Value::I64(a.reinterpret_as_uint64()))
   Next
 }
 
+///|
 fn op_f32_reinterpret_i32(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i32()
   rt.stack.push(Value::F32(Float::reinterpret_from_uint(a)))
   Next
 }
 
+///|
 fn op_f64_reinterpret_i64(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i64()
   rt.stack.push(Value::F64(a.reinterpret_as_double()))
@@ -2011,12 +2326,15 @@ fn op_f64_reinterpret_i64(rt : Runtime) -> ControlFlow {
 }
 
 // Global operations
+
+///|
 fn op_global_get(rt : Runtime) -> ControlFlow {
   let idx = rt.read_imm_idx()
   rt.stack.push(rt.globals[idx])
   Next
 }
 
+///|
 fn op_global_set(rt : Runtime) -> ControlFlow {
   let idx = rt.read_imm_idx()
   let value = rt.stack.unsafe_pop()
@@ -2028,6 +2346,7 @@ fn op_global_set(rt : Runtime) -> ControlFlow {
 // Compilation
 // ============================================================================
 
+///|
 fn Runtime::compile_wasm_instr(
   self : Runtime,
   instr : Instr,
@@ -2222,11 +2541,9 @@ fn Runtime::compile_wasm_instr(
       self.emit(WasmInstr(op_push_block_target))
       let target_slot = self.ops.length()
       self.emit(ImmediateIdx(0)) // Placeholder
-
       for instr in instrs {
         self.compile_wasm_instr(instr)
       }
-
       self.emit(WasmInstr(op_end_block))
       // Patch the target to point AFTER end_block (br skips past end_block)
       self.ops[target_slot] = ImmediateIdx(self.ops.length())
@@ -2238,11 +2555,9 @@ fn Runtime::compile_wasm_instr(
       let loop_start = self.ops.length()
       self.emit(WasmInstr(op_push_loop_target))
       self.emit(ImmediateIdx(loop_start))
-
       for instr in instrs {
         self.compile_wasm_instr(instr)
       }
-
       self.emit(WasmInstr(op_end_block))
     }
     Br(label) => {
@@ -2266,26 +2581,20 @@ fn Runtime::compile_wasm_instr(
       self.emit(WasmInstr(op_push_block_target))
       let end_target_slot = self.ops.length()
       self.emit(ImmediateIdx(0)) // Placeholder for end_pc
-
       self.emit(WasmInstr(op_if))
       let else_pc_slot = self.ops.length()
       self.emit(ImmediateIdx(0))
-
       for instr in then_instrs {
         self.compile_wasm_instr(instr)
       }
-
       self.emit(WasmInstr(op_else))
       let end_pc_slot = self.ops.length()
       self.emit(ImmediateIdx(0))
-
       let else_start = self.ops.length()
       self.ops[else_pc_slot] = ImmediateIdx(else_start)
-
       for instr in else_instrs {
         self.compile_wasm_instr(instr)
       }
-
       self.emit(WasmInstr(op_end_block))
       let end_pc = self.ops.length() - 1
       self.ops[end_pc_slot] = ImmediateIdx(end_pc)
@@ -2447,6 +2756,7 @@ fn Runtime::compile_wasm_instr(
   }
 }
 
+///|
 fn Runtime::compile_func(
   self : Runtime,
   code : Code,
@@ -2459,12 +2769,14 @@ fn Runtime::compile_func(
   code.compiled = Some(start_pc)
 }
 
+///|
 pub fn Runtime::compile(self : Runtime) -> Unit raise RuntimeError {
   for code in self.module_.codes {
     self.compile_func(code)
   }
 }
 
+///|
 fn Runtime::execute(self : Runtime) -> Unit raise RuntimeError {
   while true {
     guard self.ops.unsafe_get(self.pc) is WasmInstr(f) else {
@@ -2481,6 +2793,7 @@ fn Runtime::execute(self : Runtime) -> Unit raise RuntimeError {
   }
 }
 
+///|
 pub fn Runtime::call_compiled(
   self : Runtime,
   func_name : Bytes,
@@ -2502,15 +2815,14 @@ pub fn Runtime::call_compiled(
   guard func_idx is Some(idx) else {
     raise RuntimeError::FunctionNotFound("Function not found: \{func_name}")
   }
-
   let type_idx = self.module_.funcs[idx].reinterpret_as_int()
   let func_type = self.module_.types[type_idx]
   let code = self.module_.codes[idx]
-
   guard code.compiled is Some(start_pc) else {
-    raise RuntimeError::FunctionNotCompiled("Function not compiled: \{func_name}")
+    raise RuntimeError::FunctionNotCompiled(
+      "Function not compiled: \{func_name}",
+    )
   }
-
   self.locals = []
   for arg in args {
     self.locals.push(arg)
@@ -2529,12 +2841,10 @@ pub fn Runtime::call_compiled(
         )
     }
   }
-
   self.stack.clear()
   self.call_stack.clear()
   self.pc = start_pc
   self.execute()
-
   let results : Array[Value] = []
   for _i = 0; _i < func_type.results.length(); _i = _i + 1 {
     if self.stack.length() > 0 {

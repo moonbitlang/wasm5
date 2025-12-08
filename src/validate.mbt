@@ -418,11 +418,21 @@ fn validate_instruction(
     }
 
     // Memory operations - loads (all take i32 address and push the loaded value)
-    I32Load(_, _) | I32Load8S(_, _) | I32Load8U(_, _) | I32Load16S(_, _) | I32Load16U(_, _) => {
+    I32Load(_, _)
+    | I32Load8S(_, _)
+    | I32Load8U(_, _)
+    | I32Load16S(_, _)
+    | I32Load16U(_, _) => {
       ctx.poly_pop_expect(I32, "i32.load address")
       stack.push(I32)
     }
-    I64Load(_, _) | I64Load8S(_, _) | I64Load8U(_, _) | I64Load16S(_, _) | I64Load16U(_, _) | I64Load32S(_, _) | I64Load32U(_, _) => {
+    I64Load(_, _)
+    | I64Load8S(_, _)
+    | I64Load8U(_, _)
+    | I64Load16S(_, _)
+    | I64Load16U(_, _)
+    | I64Load32S(_, _)
+    | I64Load32U(_, _) => {
       ctx.poly_pop_expect(I32, "i64.load address")
       stack.push(I64)
     }
@@ -452,22 +462,19 @@ fn validate_instruction(
       ctx.poly_pop_expect(I32, "f64.store address")
     }
     // Memory size and grow
-    MemorySize(_) => {
-      stack.push(I32)
-    }
+    MemorySize(_) => stack.push(I32)
     MemoryGrow(_) => {
       ctx.poly_pop_expect(I32, "memory.grow delta")
       stack.push(I32)
     }
 
     // Table instructions
-    TableSize(_) => {
-      stack.push(I32)
-    }
+    TableSize(_) => stack.push(I32)
     TableGet(table_idx) => {
       ctx.poly_pop_expect(I32, "table.get index")
       // Look up table's element type
-      let elem_type = if table_idx.reinterpret_as_int() < module_.tables.length() {
+      let elem_type = if table_idx.reinterpret_as_int() <
+        module_.tables.length() {
         let table = module_.tables[table_idx.reinterpret_as_int()]
         match table.elem_type {
           RefType::FuncRef => ValType::FuncRef
@@ -486,14 +493,16 @@ fn validate_instruction(
       } else if stack.length() < 1 {
         raise ValidationError::TypeMismatch("table.set expects value on stack")
       } else {
-        let _ = stack.unsafe_pop() // Pop the ref value
+        let _ = stack.unsafe_pop()
+         // Pop the ref value
       }
       ctx.poly_pop_expect(I32, "table.set index")
     }
     TableGrow(table_idx) => {
       ctx.poly_pop_expect(I32, "table.grow delta")
       // Pop init value and check it matches table's element type
-      let table_elem_type = if table_idx.reinterpret_as_int() < module_.tables.length() {
+      let table_elem_type = if table_idx.reinterpret_as_int() <
+        module_.tables.length() {
         module_.tables[table_idx.reinterpret_as_int()].elem_type
       } else {
         RefType::FuncRef // Default, will be caught elsewhere if invalid
@@ -529,19 +538,21 @@ fn validate_instruction(
       }
       stack.push(val_type)
     }
-    RefFunc(_) => {
+    RefFunc(_) =>
       // ref.func pushes a funcref
       stack.push(ValType::FuncRef)
-    }
     RefIsNull => {
       // ref.is_null pops a reference type and pushes i32
       // In polymorphic context, allow any type on stack
       if ctx.is_unreachable && stack.length() == 0 {
         // Unreachable - stack is polymorphic, don't pop anything
       } else if stack.length() < 1 {
-        raise ValidationError::TypeMismatch("ref.is_null expects reference on stack")
+        raise ValidationError::TypeMismatch(
+          "ref.is_null expects reference on stack",
+        )
       } else {
-        let _ = stack.unsafe_pop() // Pop the reference
+        let _ = stack.unsafe_pop()
+         // Pop the reference
       }
       stack.push(I32) // Push result
     }
@@ -752,7 +763,9 @@ fn validate_instruction(
         for i = 0; i < target_types.length(); i = i + 1 {
           let stack_idx = stack.length() - target_types.length() + i
           if stack[stack_idx] != target_types[i] {
-            raise ValidationError::TypeMismatch("br: branch target type mismatch")
+            raise ValidationError::TypeMismatch(
+              "br: branch target type mismatch",
+            )
           }
         }
       }
@@ -760,11 +773,10 @@ fn validate_instruction(
       ctx.is_unreachable = true
       stack.clear()
     }
-    BrIf(_label) => {
+    BrIf(_label) =>
       // Conditional branch - pop i32 condition
       ctx.poly_pop_expect(I32, "br_if condition")
-      // Stack continues after (not unreachable)
-    }
+    // Stack continues after (not unreachable)
     BrTable(_labels, default_label) => {
       // Table branch - pop i32 index
       ctx.poly_pop_expect(I32, "br_table index")
@@ -782,7 +794,7 @@ fn validate_instruction(
       ctx.is_unreachable = true
       stack.clear()
     }
-    Drop => {
+    Drop =>
       // In unreachable code, drop is valid even with empty stack
       if ctx.is_unreachable && stack.length() == 0 {
         // Polymorphic - pretend we dropped something
@@ -790,8 +802,8 @@ fn validate_instruction(
         raise ValidationError::TypeMismatch("expected value on stack for drop")
       } else {
         let _ = stack.unsafe_pop()
+
       }
-    }
     Select => {
       // Pop condition (i32), then two values of same type, push one back
       ctx.poly_pop_expect(I32, "select condition")
@@ -806,7 +818,9 @@ fn validate_instruction(
         let val1 = stack.unsafe_pop()
         // Both values should be same type
         if not(ctx.is_unreachable) && val1 != val2 {
-          raise ValidationError::TypeMismatch("select values must have same type")
+          raise ValidationError::TypeMismatch(
+            "select values must have same type",
+          )
         }
         // Push the selected value type back
         stack.push(val1)
@@ -844,7 +858,10 @@ fn validate_instruction(
       ctx.poly_pop_expect(I32, "call_indirect table index")
       // Pop arguments from stack (in reverse order)
       for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
-        ctx.poly_pop_expect(func_type_called.params[i], "call_indirect argument")
+        ctx.poly_pop_expect(
+          func_type_called.params[i],
+          "call_indirect argument",
+        )
       }
       // Push results onto stack
       for result in func_type_called.results {

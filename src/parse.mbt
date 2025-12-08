@@ -93,7 +93,10 @@ fn Parser::read_i32_leb128(self : Parser) -> Int raise ParseError {
 ///|
 fn Parser::read_i64_leb128(self : Parser) -> Int64 raise ParseError {
   // Returns (result, shift, last_byte) where last_byte is the final 7-bit chunk
-  fn read_loop(shift : Int, result : Int64) -> (Int64, Int, Int) raise ParseError {
+  fn read_loop(
+    shift : Int,
+    result : Int64,
+  ) -> (Int64, Int, Int) raise ParseError {
     let byte = self.read_byte()
     let value = byte.land(0x7f).to_int64() << shift
     let new_result = result | value
@@ -264,9 +267,7 @@ fn parse_function_section(parser : Parser) -> Array[UInt] raise ParseError {
 }
 
 ///|
-fn parse_table_section(
-  parser : Parser,
-) -> Array[TableType] raise {
+fn parse_table_section(parser : Parser) -> Array[TableType] raise {
   let count = parser.read_u32_leb128()
   let tables = []
   for i in 0U..<count {
@@ -350,16 +351,20 @@ fn parse_element_section(parser : Parser) -> Array[Elem] raise {
     // Read elemkind or reftype for certain flags
     match flags {
       1 | 3 => {
-        let _ = parser.read_byte() // elemkind (0x00 = funcref)
+        let _ = parser.read_byte()
+         // elemkind (0x00 = funcref)
       }
       2 => {
-        let _ = parser.read_byte() // elemkind
+        let _ = parser.read_byte()
+         // elemkind
       }
       5 | 7 => {
-        let _ = parser.read_reftype() // reftype
+        let _ = parser.read_reftype()
+         // reftype
       }
       6 => {
-        let _ = parser.read_reftype() // reftype
+        let _ = parser.read_reftype()
+         // reftype
       }
       _ => ()
     }

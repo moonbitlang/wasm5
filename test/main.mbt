@@ -630,7 +630,7 @@ let blacklisted_wast_files : Array[String] = [
   //   1. Parser support for the 0xFC prefix and sub-opcode decoding
   //   2. 8 new instruction types (i32/i64 × f32/f64 × signed/unsigned)
   //   3. Saturating semantics (clamp to min/max instead of trap on overflow)
-  "conversions.wast",
+   "conversions.wast",
 ]
 
 ///|
