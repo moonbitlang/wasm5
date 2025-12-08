@@ -125,6 +125,20 @@ fn parse_args(args : Array[Json]) -> Array[@wasm5.Value] raise {
         runtime_args.push(@wasm5.Value::F32(parse_f32_value(v)))
       { "type": "f64", "value": String(v), .. } =>
         runtime_args.push(@wasm5.Value::F64(parse_f64_value(v)))
+      // externref: "null" for null, otherwise an integer index
+      { "type": "externref", "value": String(v), .. } =>
+        if v == "null" {
+          runtime_args.push(@wasm5.Value::Ref(None))
+        } else {
+          runtime_args.push(@wasm5.Value::Ref(Some(@strconv.parse(v))))
+        }
+      // funcref: "null" for null, otherwise an integer function index
+      { "type": "funcref", "value": String(v), .. } =>
+        if v == "null" {
+          runtime_args.push(@wasm5.Value::Ref(None))
+        } else {
+          runtime_args.push(@wasm5.Value::Ref(Some(@strconv.parse(v))))
+        }
       _ => raise TestUnsupported::UnsupportedArgType("\{arg}")
     }
   }
@@ -152,6 +166,20 @@ fn parse_expected_value(expected : Json) -> ExpectedValue raise {
         AnyF64Nan
       } else {
         Exact(@wasm5.Value::F64(parse_f64_value(v)))
+      }
+    // externref: "null" for null, otherwise an integer index
+    { "type": "externref", "value": String(v), .. } =>
+      if v == "null" {
+        Exact(@wasm5.Value::Ref(None))
+      } else {
+        Exact(@wasm5.Value::Ref(Some(@strconv.parse(v))))
+      }
+    // funcref: "null" for null, otherwise an integer function index
+    { "type": "funcref", "value": String(v), .. } =>
+      if v == "null" {
+        Exact(@wasm5.Value::Ref(None))
+      } else {
+        Exact(@wasm5.Value::Ref(Some(@strconv.parse(v))))
       }
     _ => raise TestUnsupported::UnsupportedExpectedType("\{expected}")
   }

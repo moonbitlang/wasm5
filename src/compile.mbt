@@ -817,6 +817,8 @@ fn op_call(rt : Runtime) -> ControlFlow {
       ValType::I64 => rt.locals.push(Value::I64(0UL))
       ValType::F32 => rt.locals.push(Value::F32(0.0))
       ValType::F64 => rt.locals.push(Value::F64(0.0))
+      ValType::FuncRef => rt.locals.push(Value::Ref(None))
+      ValType::ExternRef => rt.locals.push(Value::Ref(None))
       _ =>
         return Trap(
           RuntimeError::UnsupportedLocalType("Unsupported local type: \{local_type}"),
@@ -919,6 +921,8 @@ fn op_call_indirect(rt : Runtime) -> ControlFlow {
       ValType::I64 => rt.locals.push(Value::I64(0UL))
       ValType::F32 => rt.locals.push(Value::F32(0.0))
       ValType::F64 => rt.locals.push(Value::F64(0.0))
+      ValType::FuncRef => rt.locals.push(Value::Ref(None))
+      ValType::ExternRef => rt.locals.push(Value::Ref(None))
       _ =>
         return Trap(
           RuntimeError::UnsupportedLocalType("Unsupported local type: \{local_type}"),
@@ -2464,6 +2468,8 @@ pub fn Runtime::call_compiled(
       ValType::I64 => self.locals.push(Value::I64(0UL))
       ValType::F32 => self.locals.push(Value::F32(0.0))
       ValType::F64 => self.locals.push(Value::F64(0.0))
+      ValType::FuncRef => self.locals.push(Value::Ref(None))
+      ValType::ExternRef => self.locals.push(Value::Ref(None))
       _ =>
         raise RuntimeError::UnsupportedLocalType(
           "Unsupported local type: \{local_type}",
