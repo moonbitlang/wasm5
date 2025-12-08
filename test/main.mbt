@@ -314,6 +314,14 @@ fn handle_assert_trap(
           "expected trap '\{expected_error}' but got IntegerOverflow",
         )
       }
+    @wasm5.RuntimeError::MemoryOutOfBounds =>
+      if not(expected_error.contains("out of bounds memory access")) {
+        ctx.fail(
+          line,
+          "assert_trap",
+          "expected trap '\{expected_error}' but got MemoryOutOfBounds",
+        )
+      }
     e =>
       ctx.fail(
         line,

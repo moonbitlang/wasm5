@@ -76,6 +76,25 @@ pub fn Runtime::load(m : Module) -> Runtime raise RuntimeError {
     let value = eval_const_expr(global.init, [])
     globals.push(value)
   }
+  // Initialize data segments (copy data into memory)
+  for data in m.datas {
+    // Evaluate offset expression to get the starting address
+    let offset_value = eval_const_expr(data.offset, globals)
+    let offset = match offset_value {
+      I32(v) => v.reinterpret_as_int()
+      _ =>
+        raise RuntimeError::UnsupportedInitExpression(
+          "data segment offset must be i32",
+        )
+    }
+    // Copy data bytes into memory
+    for i = 0; i < data.init.length(); i = i + 1 {
+      let addr = offset + i
+      if addr >= 0 && addr < memory.length() {
+        memory[addr] = data.init[i]
+      }
+    }
+  }
   Runtime::{
     module_: m,
     ops: [],
