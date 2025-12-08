@@ -2127,10 +2127,12 @@ fn Runtime::compile_wasm_instr(
       self.ops[target_slot] = ImmediateIdx(self.ops.length())
     }
     Loop(_block_type, instrs) => {
-      // Push loop target (points to start of loop body)
+      // Push loop target - points to op_push_loop_target itself so that
+      // when we branch back, we re-execute op_push_loop_target and restore
+      // the branch target after it was popped by br
+      let loop_start = self.ops.length()
       self.emit(WasmInstr(op_push_loop_target))
-      let loop_body_start = self.ops.length() + 1 // After the immediate
-      self.emit(ImmediateIdx(loop_body_start))
+      self.emit(ImmediateIdx(loop_start))
 
       for instr in instrs {
         self.compile_wasm_instr(instr)
