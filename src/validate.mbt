@@ -28,11 +28,14 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
 fn get_block_type(
   module_ : Module,
   block_type : BlockType,
-) -> (Array[ValType], Array[ValType]) {
+) -> (Array[ValType], Array[ValType]) raise ValidationError {
   match block_type {
     Empty => ([], [])
     Value(t) => ([], [t])
     TypeIndex(idx) => {
+      if idx < 0 || idx >= module_.types.length() {
+        raise ValidationError::InvalidTypeIndex(idx)
+      }
       let func_type = module_.types[idx]
       (func_type.params, func_type.results)
     }

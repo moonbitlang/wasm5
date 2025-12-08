@@ -71,8 +71,13 @@ pub struct Runtime {
 /// Load a WebAssembly module into the runtime
 pub fn Runtime::load(m : Module) -> Runtime raise RuntimeError {
   // Initialize memory
+  // Limit to 256 pages (16MB) to avoid memory allocation issues
+  // WebAssembly spec allows up to 65536 pages (4GB), but we cap it for practical reasons
+  let max_pages : UInt = 256
   let memory_size = if m.mems.length() > 0 {
-    m.mems[0].limits.min.reinterpret_as_int() * 65536 // Pages to bytes
+    let pages = m.mems[0].limits.min
+    let capped_pages = if pages > max_pages { max_pages } else { pages }
+    capped_pages.reinterpret_as_int() * 65536
   } else {
     0
   }
