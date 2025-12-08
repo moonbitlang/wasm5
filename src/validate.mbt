@@ -898,7 +898,6 @@ fn validate_instruction(
         stack.push(result)
       }
     }
-    _ => ()
   }
 }
 

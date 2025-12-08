@@ -1144,11 +1144,6 @@ fn op_call_indirect(rt : Runtime) -> ControlFlow {
 }
 
 ///|
-fn op_unsupported(_rt : Runtime) -> ControlFlow {
-  Trap(RuntimeError::UnimplementedInstruction("unsupported instruction"))
-}
-
-///|
 fn op_end(rt : Runtime) -> ControlFlow {
   if rt.call_stack.length() > 0 {
     op_return(rt)
@@ -1198,7 +1193,7 @@ fn op_i32_load(rt : Runtime) -> ControlFlow {
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
     return Trap(RuntimeError::MemoryOutOfBounds)
   }
-  let addr = effective_addr.to_int64().to_int()
+  let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_uint()
   let b1 = rt.memory[addr + 1].to_uint()
   let b2 = rt.memory[addr + 2].to_uint()
@@ -1216,7 +1211,7 @@ fn op_i32_store(rt : Runtime) -> ControlFlow {
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
     return Trap(RuntimeError::MemoryOutOfBounds)
   }
-  let addr = effective_addr.to_int64().to_int()
+  let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFU).to_byte()
   rt.memory[addr + 1] = ((value >> 8) & 0xFFU).to_byte()
   rt.memory[addr + 2] = ((value >> 16) & 0xFFU).to_byte()
@@ -1234,7 +1229,7 @@ fn op_i32_load8_s(rt : Runtime) -> ControlFlow {
   if effective_addr + 1UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
     return Trap(RuntimeError::MemoryOutOfBounds)
   }
-  let addr = effective_addr.to_int64().to_int()
+  let addr = effective_addr.reinterpret_as_int64().to_int()
   let b = rt.memory[addr].to_int()
   // Sign extend from 8 bits
   let value = if b >= 128 { b - 256 } else { b }
@@ -1250,7 +1245,7 @@ fn op_i32_load8_u(rt : Runtime) -> ControlFlow {
   if effective_addr + 1UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
     return Trap(RuntimeError::MemoryOutOfBounds)
   }
-  let addr = effective_addr.to_int64().to_int()
+  let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.stack.push(Value::I32(rt.memory[addr].to_uint()))
   Next
 }
@@ -1263,7 +1258,7 @@ fn op_i32_load16_s(rt : Runtime) -> ControlFlow {
   if effective_addr + 2UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
     return Trap(RuntimeError::MemoryOutOfBounds)
   }
-  let addr = effective_addr.to_int64().to_int()
+  let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_int()
   let b1 = rt.memory[addr + 1].to_int()
   let value16 = b0 | (b1 << 8)
@@ -1281,7 +1276,7 @@ fn op_i32_load16_u(rt : Runtime) -> ControlFlow {
   if effective_addr + 2UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
     return Trap(RuntimeError::MemoryOutOfBounds)
   }
-  let addr = effective_addr.to_int64().to_int()
+  let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_uint()
   let b1 = rt.memory[addr + 1].to_uint()
   rt.stack.push(Value::I32(b0 | (b1 << 8)))
@@ -1296,7 +1291,7 @@ fn op_i64_load(rt : Runtime) -> ControlFlow {
   if effective_addr + 8UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
     return Trap(RuntimeError::MemoryOutOfBounds)
   }
-  let addr = effective_addr.to_int64().to_int()
+  let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_uint64()
   let b1 = rt.memory[addr + 1].to_uint64()
   let b2 = rt.memory[addr + 2].to_uint64()
@@ -1329,7 +1324,7 @@ fn op_i64_store(rt : Runtime) -> ControlFlow {
   if effective_addr + 8UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
     return Trap(RuntimeError::MemoryOutOfBounds)
   }
-  let addr = effective_addr.to_int64().to_int()
+  let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFUL).to_byte()
   rt.memory[addr + 1] = ((value >> 8) & 0xFFUL).to_byte()
   rt.memory[addr + 2] = ((value >> 16) & 0xFFUL).to_byte()
@@ -1349,7 +1344,7 @@ fn op_i64_load8_s(rt : Runtime) -> ControlFlow {
   if effective_addr + 1UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
     return Trap(RuntimeError::MemoryOutOfBounds)
   }
-  let addr = effective_addr.to_int64().to_int()
+  let addr = effective_addr.reinterpret_as_int64().to_int()
   let b = rt.memory[addr].to_int64()
   // Sign extend from 8 bits
   let value = if b >= 128L { b - 256L } else { b }
@@ -1365,7 +1360,7 @@ fn op_i64_load8_u(rt : Runtime) -> ControlFlow {
   if effective_addr + 1UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
     return Trap(RuntimeError::MemoryOutOfBounds)
   }
-  let addr = effective_addr.to_int64().to_int()
+  let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.stack.push(Value::I64(rt.memory[addr].to_uint64()))
   Next
 }
@@ -1378,7 +1373,7 @@ fn op_i64_load16_s(rt : Runtime) -> ControlFlow {
   if effective_addr + 2UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
     return Trap(RuntimeError::MemoryOutOfBounds)
   }
-  let addr = effective_addr.to_int64().to_int()
+  let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_int64()
   let b1 = rt.memory[addr + 1].to_int64()
   let value16 = b0 | (b1 << 8)
@@ -1396,7 +1391,7 @@ fn op_i64_load16_u(rt : Runtime) -> ControlFlow {
   if effective_addr + 2UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
     return Trap(RuntimeError::MemoryOutOfBounds)
   }
-  let addr = effective_addr.to_int64().to_int()
+  let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_uint64()
   let b1 = rt.memory[addr + 1].to_uint64()
   rt.stack.push(Value::I64(b0 | (b1 << 8)))
@@ -1411,7 +1406,7 @@ fn op_i64_load32_s(rt : Runtime) -> ControlFlow {
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
     return Trap(RuntimeError::MemoryOutOfBounds)
   }
-  let addr = effective_addr.to_int64().to_int()
+  let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_int64()
   let b1 = rt.memory[addr + 1].to_int64()
   let b2 = rt.memory[addr + 2].to_int64()
@@ -1435,7 +1430,7 @@ fn op_i64_load32_u(rt : Runtime) -> ControlFlow {
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
     return Trap(RuntimeError::MemoryOutOfBounds)
   }
-  let addr = effective_addr.to_int64().to_int()
+  let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_uint64()
   let b1 = rt.memory[addr + 1].to_uint64()
   let b2 = rt.memory[addr + 2].to_uint64()
@@ -1452,7 +1447,7 @@ fn op_f32_load(rt : Runtime) -> ControlFlow {
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
     return Trap(RuntimeError::MemoryOutOfBounds)
   }
-  let addr = effective_addr.to_int64().to_int()
+  let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_uint()
   let b1 = rt.memory[addr + 1].to_uint()
   let b2 = rt.memory[addr + 2].to_uint()
@@ -1470,7 +1465,7 @@ fn op_f64_load(rt : Runtime) -> ControlFlow {
   if effective_addr + 8UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
     return Trap(RuntimeError::MemoryOutOfBounds)
   }
-  let addr = effective_addr.to_int64().to_int()
+  let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_uint64()
   let b1 = rt.memory[addr + 1].to_uint64()
   let b2 = rt.memory[addr + 2].to_uint64()
@@ -1500,7 +1495,7 @@ fn op_f32_store(rt : Runtime) -> ControlFlow {
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
     return Trap(RuntimeError::MemoryOutOfBounds)
   }
-  let addr = effective_addr.to_int64().to_int()
+  let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFU).to_byte()
   rt.memory[addr + 1] = ((value >> 8) & 0xFFU).to_byte()
   rt.memory[addr + 2] = ((value >> 16) & 0xFFU).to_byte()
@@ -1517,7 +1512,7 @@ fn op_f64_store(rt : Runtime) -> ControlFlow {
   if effective_addr + 8UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
     return Trap(RuntimeError::MemoryOutOfBounds)
   }
-  let addr = effective_addr.to_int64().to_int()
+  let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFUL).to_byte()
   rt.memory[addr + 1] = ((value >> 8) & 0xFFUL).to_byte()
   rt.memory[addr + 2] = ((value >> 16) & 0xFFUL).to_byte()
@@ -1540,7 +1535,7 @@ fn op_i32_store8(rt : Runtime) -> ControlFlow {
   if effective_addr + 1UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
     return Trap(RuntimeError::MemoryOutOfBounds)
   }
-  let addr = effective_addr.to_int64().to_int()
+  let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFU).to_byte()
   Next
 }
@@ -1554,7 +1549,7 @@ fn op_i32_store16(rt : Runtime) -> ControlFlow {
   if effective_addr + 2UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
     return Trap(RuntimeError::MemoryOutOfBounds)
   }
-  let addr = effective_addr.to_int64().to_int()
+  let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFU).to_byte()
   rt.memory[addr + 1] = ((value >> 8) & 0xFFU).to_byte()
   Next
@@ -1569,7 +1564,7 @@ fn op_i64_store8(rt : Runtime) -> ControlFlow {
   if effective_addr + 1UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
     return Trap(RuntimeError::MemoryOutOfBounds)
   }
-  let addr = effective_addr.to_int64().to_int()
+  let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFUL).to_byte()
   Next
 }
@@ -1583,7 +1578,7 @@ fn op_i64_store16(rt : Runtime) -> ControlFlow {
   if effective_addr + 2UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
     return Trap(RuntimeError::MemoryOutOfBounds)
   }
-  let addr = effective_addr.to_int64().to_int()
+  let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFUL).to_byte()
   rt.memory[addr + 1] = ((value >> 8) & 0xFFUL).to_byte()
   Next
@@ -1598,7 +1593,7 @@ fn op_i64_store32(rt : Runtime) -> ControlFlow {
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
     return Trap(RuntimeError::MemoryOutOfBounds)
   }
-  let addr = effective_addr.to_int64().to_int()
+  let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFUL).to_byte()
   rt.memory[addr + 1] = ((value >> 8) & 0xFFUL).to_byte()
   rt.memory[addr + 2] = ((value >> 16) & 0xFFUL).to_byte()
@@ -2242,28 +2237,28 @@ fn op_f64_promote_f32(rt : Runtime) -> ControlFlow {
 ///|
 fn op_f32_demote_f64(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f64()
-  rt.stack.push(Value::F32(a.to_float()))
+  rt.stack.push(Value::F32(Float::from_double(a)))
   Next
 }
 
 ///|
 fn op_f32_convert_i32_s(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i32().reinterpret_as_int()
-  rt.stack.push(Value::F32(a.to_float()))
+  rt.stack.push(Value::F32(Float::from_int(a)))
   Next
 }
 
 ///|
 fn op_f32_convert_i32_u(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i32()
-  rt.stack.push(Value::F32(a.to_double().to_float()))
+  rt.stack.push(Value::F32(Float::from_double(a.to_double())))
   Next
 }
 
 ///|
 fn op_f32_convert_i64_s(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i64().reinterpret_as_int64()
-  rt.stack.push(Value::F32(a.to_double().to_float()))
+  rt.stack.push(Value::F32(Float::from_double(a.to_double())))
   Next
 }
 
@@ -2277,7 +2272,7 @@ fn op_f32_convert_i64_u(rt : Runtime) -> ControlFlow {
     // For values >= 2^63, convert via double
     (a >> 1).reinterpret_as_int64().to_double() * 2.0 + (a & 1UL).to_double()
   }
-  rt.stack.push(Value::F32(f.to_float()))
+  rt.stack.push(Value::F32(Float::from_double(f)))
   Next
 }
 
@@ -2793,10 +2788,6 @@ fn Runtime::compile_wasm_instr(
       self.emit(ImmediateIdx(type_idx.reinterpret_as_int()))
       self.emit(ImmediateIdx(table_idx.reinterpret_as_int()))
     }
-    _ =>
-      raise RuntimeError::UnimplementedInstruction(
-        "Unimplemented instruction: \{instr}",
-      )
   }
 }
 
