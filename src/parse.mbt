@@ -161,6 +161,18 @@ fn Parser::read_valtype(self : Parser) -> ValType raise {
     0x7B => V128
     0x70 => FuncRef
     0x6F => ExternRef
+    // GC proposal abstract heap types as value types
+    0x73 => FuncRef // noextern
+    0x72 => FuncRef // nofunc
+    0x71 => FuncRef // none
+    0x6E => ExternRef // nullexternref
+    0x6D => FuncRef // nullfuncref
+    0x6C => FuncRef // nullref
+    0x6B => FuncRef // structref
+    0x6A => FuncRef // arrayref
+    0x69 => FuncRef // i31ref
+    0x68 => ExternRef // anyref
+    0x67 => FuncRef // eqref
     // GC proposal: (ref null $t) - nullable typed reference
     0x63 => {
       let _ = self.read_i32_leb128() // type index, ignored
@@ -186,6 +198,19 @@ fn Parser::read_reftype(self : Parser) -> RefType raise {
   match byte {
     0x70 => FuncRef
     0x6F => ExternRef
+    // GC proposal abstract heap types encoded as reference types
+    0x73 => FuncRef // noextern - treat as funcref
+    0x72 => FuncRef // nofunc - treat as funcref
+    0x71 => FuncRef // none - treat as funcref
+    0x6E => ExternRef // nullexternref - treat as externref
+    0x6D => FuncRef // nullfuncref - treat as funcref
+    0x6C => FuncRef // nullref - treat as funcref
+    0x6B => FuncRef // structref - treat as funcref
+    0x6A => FuncRef // arrayref - treat as funcref
+    0x69 => FuncRef // i31ref - treat as funcref
+    0x68 => ExternRef // anyref - treat as externref
+    0x67 => FuncRef // eqref - treat as funcref
+    0x40 => FuncRef // GC proposal: empty block type used as ref type
     // GC proposal: (ref null $t) - nullable typed reference
     0x63 => {
       let _ = self.read_i32_leb128() // type index, ignored for now
@@ -216,31 +241,94 @@ fn Parser::read_limits(self : Parser) -> Limits raise ParseError {
 // Section parsers
 
 ///|
+fn parse_single_type(parser : Parser) -> FuncType raise {
+  let tag = parser.read_byte()
+  // Handle composite types from GC proposal
+  match tag {
+    // func type
+    0x60 => {
+      let param_count = parser.read_u32_leb128()
+      let params = []
+      for _ in 0U..<param_count {
+        params.push(parser.read_valtype())
+      }
+      let result_count = parser.read_u32_leb128()
+      let results = []
+      for _ in 0U..<result_count {
+        results.push(parser.read_valtype())
+      }
+      { params, results }
+    }
+    // struct type (GC proposal) - skip fields, return empty func type
+    0x5F => {
+      let field_count = parser.read_u32_leb128()
+      for _ in 0U..<field_count {
+        let _ = parser.read_valtype() // field type
+        let _ = parser.read_byte() // mutability
+      }
+      { params: [], results: [] }
+    }
+    // array type (GC proposal) - skip element, return empty func type
+    0x5E => {
+      let _ = parser.read_valtype() // element type
+      let _ = parser.read_byte() // mutability
+      { params: [], results: [] }
+    }
+    _ =>
+      raise ValidationError::TypeMismatch(
+        "expected composite type tag, got 0x\{tag.to_string()}",
+      )
+  }
+}
+
+///|
 fn parse_type_section(parser : Parser) -> Array[FuncType] raise {
   let count = parser.read_u32_leb128()
   let types = []
   for i in 0U..<count {
     let tag = parser.read_byte()
-    if tag != 0x60 {
-      raise ValidationError::TypeMismatch(
-        "expected function type tag 0x60, got 0x\{tag.to_string()}",
-      )
+    // GC proposal: handle recursive type groups and subtypes
+    match tag {
+      // rec - recursive type group
+      0x4E => {
+        let rec_count = parser.read_u32_leb128()
+        for _ in 0U..<rec_count {
+          let func_type = parse_single_type(parser)
+          types.push(func_type)
+        }
+        continue
+      }
+      // sub - subtype (with supertypes)
+      0x4F => {
+        let supertype_count = parser.read_u32_leb128()
+        for _ in 0U..<supertype_count {
+          let _ = parser.read_u32_leb128() // supertype index, ignored
+        }
+        let func_type = parse_single_type(parser)
+        types.push(func_type)
+        continue
+      }
+      // sub final - final subtype (with supertypes)
+      0x50 => {
+        let supertype_count = parser.read_u32_leb128()
+        for _ in 0U..<supertype_count {
+          let _ = parser.read_u32_leb128() // supertype index, ignored
+        }
+        let func_type = parse_single_type(parser)
+        types.push(func_type)
+        continue
+      }
+      // Standard function type
+      0x60 => {
+        parser.pos = parser.pos - 1 // Put the byte back
+        let func_type = parse_single_type(parser)
+        types.push(func_type)
+      }
+      _ =>
+        raise ValidationError::TypeMismatch(
+          "expected type tag, got 0x\{tag.to_string()}",
+        )
     }
-
-    // Read params
-    let param_count = parser.read_u32_leb128()
-    let params = []
-    for j in 0U..<param_count {
-      params.push(parser.read_valtype())
-    }
-
-    // Read results
-    let result_count = parser.read_u32_leb128()
-    let results = []
-    for j in 0U..<result_count {
-      results.push(parser.read_valtype())
-    }
-    types.push({ params, results })
   }
   types
 }
@@ -265,6 +353,12 @@ fn parse_import_section(parser : Parser) -> Array[Import] raise {
         let val_type = parser.read_valtype()
         let mutable = parser.read_byte() == 0x01
         ImportDesc::Global({ val_type, mutable })
+      }
+      // Exception handling: tag import - skip type index, treat as function import
+      0x04 => {
+        let _ = parser.read_byte() // tag attribute (should be 0x00)
+        let type_idx = parser.read_u32_leb128()
+        ImportDesc::Func(type_idx)
       }
       _ =>
         raise ValidationError::TypeMismatch(
@@ -334,6 +428,8 @@ fn parse_export_section(parser : Parser) -> Array[Export] raise {
       0x01 => ExportDesc::Table(parser.read_u32_leb128())
       0x02 => ExportDesc::Mem(parser.read_u32_leb128())
       0x03 => ExportDesc::Global(parser.read_u32_leb128())
+      // Exception handling: tag export - treat as function export
+      0x04 => ExportDesc::Func(parser.read_u32_leb128())
       _ =>
         raise ValidationError::TypeMismatch(
           "invalid export descriptor tag: 0x\{desc_tag.to_string()}",
@@ -509,6 +605,30 @@ fn parse_instr(parser : Parser, opcode : Byte) -> Instr raise {
         If(blocktype, then_instrs, [])
       }
     }
+    // Exception handling proposal (skip for compatibility)
+    0x06 => {
+      // try blocktype - treat as block
+      let blocktype = parse_blocktype(parser)
+      let instrs = parse_instrs(parser)
+      Block(blocktype, instrs)
+    }
+    0x07 => {
+      // catch tagidx - skip tag index, return nop
+      let _ = parser.read_u32_leb128()
+      Nop
+    }
+    0x08 => {
+      // throw tagidx - skip tag index, return unreachable
+      let _ = parser.read_u32_leb128()
+      Unreachable
+    }
+    0x09 => {
+      // rethrow labelidx - skip label, return unreachable
+      let _ = parser.read_u32_leb128()
+      Unreachable
+    }
+    0x0A => Nop // catch_all - just nop
+    0x0B => Nop // delegate - should not be reached as instruction (it's a block terminator)
     0x0C => Br(parser.read_u32_leb128())
     0x0D => BrIf(parser.read_u32_leb128())
     0x0E => {
@@ -526,6 +646,56 @@ fn parse_instr(parser : Parser, opcode : Byte) -> Instr raise {
       let type_idx = parser.read_u32_leb128()
       let table_idx = parser.read_u32_leb128()
       CallIndirect(type_idx, table_idx)
+    }
+    // Tail call proposal: return_call - treat as call + return
+    0x12 => Call(parser.read_u32_leb128())
+    // Tail call proposal: return_call_indirect - treat as call_indirect + return
+    0x13 => {
+      let type_idx = parser.read_u32_leb128()
+      let table_idx = parser.read_u32_leb128()
+      CallIndirect(type_idx, table_idx)
+    }
+    // Typed function references: call_ref - read type index, treat as nop for now
+    0x14 => {
+      let _ = parser.read_u32_leb128() // type index
+      Nop // Placeholder - needs proper implementation
+    }
+    // Typed function references: return_call_ref - read type index, treat as nop
+    0x15 => {
+      let _ = parser.read_u32_leb128() // type index
+      Nop // Placeholder - needs proper implementation
+    }
+    // Exception handling: try_table
+    0x1F => {
+      let blocktype = parse_blocktype(parser)
+      // Read catch clauses
+      let catch_count = parser.read_u32_leb128()
+      for _ in 0U..<catch_count {
+        let catch_kind = parser.read_byte()
+        match catch_kind {
+          0x00 => {
+            // catch tagidx labelidx
+            let _ = parser.read_u32_leb128()
+            let _ = parser.read_u32_leb128()
+          }
+          0x01 => {
+            // catch_ref tagidx labelidx
+            let _ = parser.read_u32_leb128()
+            let _ = parser.read_u32_leb128()
+          }
+          0x02 => {
+            // catch_all labelidx
+            let _ = parser.read_u32_leb128()
+          }
+          0x03 => {
+            // catch_all_ref labelidx
+            let _ = parser.read_u32_leb128()
+          }
+          _ => ()
+        }
+      }
+      let instrs = parse_instrs(parser)
+      Block(blocktype, instrs)
     }
 
     // Parametric instructions
@@ -698,6 +868,19 @@ fn parse_instr(parser : Parser, opcode : Byte) -> Instr raise {
       // ref.func funcidx
       let func_idx = parser.read_u32_leb128()
       RefFunc(func_idx)
+    }
+    // GC proposal reference instructions
+    0xD3 => RefIsNull // ref.eq - compare two references, treat as ref.is_null for now
+    0xD4 => Nop // ref.as_non_null - just pass through for now
+    0xD5 => {
+      // br_on_null labelidx - branch if null, read label
+      let _ = parser.read_u32_leb128()
+      Nop // Treat as nop for compatibility
+    }
+    0xD6 => {
+      // br_on_non_null labelidx - branch if not null, read label
+      let _ = parser.read_u32_leb128()
+      Nop // Treat as nop for compatibility
     }
 
     // Numeric instructions - constants
