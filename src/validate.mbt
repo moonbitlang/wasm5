@@ -166,14 +166,14 @@ fn ValidationCtx::pop_control(
 fn ValidationCtx::get_label_types(
   self : ValidationCtx,
   label : UInt,
-) -> Array[ValType] {
+) -> Array[ValType] raise ValidationError {
   // Labels are relative depth: 0 is innermost, 1 is next outer, etc.
   let idx = self.control_stack.length() - 1 - label.reinterpret_as_int()
   if idx >= 0 && idx < self.control_stack.length() {
     let (_, results) = self.control_stack[idx]
     results
   } else {
-    []
+    raise ValidationError::UnknownLabel(label.reinterpret_as_int())
   }
 }
 
@@ -985,12 +985,16 @@ fn validate_instruction(
       // Conditional branch - pop i32 condition
       ctx.poly_pop_expect(I32, "br_if condition")
     // Stack continues after (not unreachable)
-    BrTable(_labels, default_label) => {
+    BrTable(labels, default_label) => {
       // Table branch - pop i32 index
       ctx.poly_pop_expect(I32, "br_table index")
       // In unreachable code, br_table is always valid
       if not(ctx.is_unreachable) {
-        // Validate we have required values for branch targets
+        // Validate all labels exist (calls get_label_types which raises error if invalid)
+        for label in labels {
+          let _ = ctx.get_label_types(label)
+        }
+        // Validate we have required values for branch targets using default label
         let target_types = ctx.get_label_types(default_label)
         if stack.length() < target_types.length() {
           raise ValidationError::TypeMismatch(

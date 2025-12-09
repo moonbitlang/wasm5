@@ -34,6 +34,7 @@ pub suberror ValidationError {
   InvalidGlobalIndex(Int)
   StackSizeMismatch(String)
   InvalidAlignment(String)
+  UnknownLabel(Int)
 } derive(Show)
 
 ///|

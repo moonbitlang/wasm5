@@ -498,6 +498,14 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got InvalidAlignment",
         )
       }
+    @wasm5.ValidationError::UnknownLabel(_) =>
+      if not(expected_error.contains("unknown label")) {
+        ctx.fail(
+          line,
+          "assert_invalid",
+          "expected '\{expected_error}' but got UnknownLabel",
+        )
+      }
     _ => () // Other validation errors are acceptable
   }
 }

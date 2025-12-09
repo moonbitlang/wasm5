@@ -3476,10 +3476,23 @@ fn Runtime::compile_func(
   code : Code,
 ) -> Unit raise RuntimeError {
   let start_pc = self.ops.length()
+  // Push implicit function-level block target
+  // This represents the function body itself (label 0 for return/outer br)
+  // Branch to this label should jump to the end of the function
+  self.emit(WasmInstr(op_push_block_target))
+  let func_end_slot = self.ops.length()
+  self.emit(ImmediateIdx(0)) // Placeholder, will be patched
+
   for instr in code.body.instrs {
     self.compile_wasm_instr(instr)
   }
+
+  self.emit(WasmInstr(op_end_block)) // Pop the function-level target
   self.emit(WasmInstr(op_end))
+
+  // Patch the function end target to point after op_end_block
+  self.ops[func_end_slot] = ImmediateIdx(self.ops.length() - 1) // Points to op_end
+
   code.compiled = Some(start_pc)
 }
 
