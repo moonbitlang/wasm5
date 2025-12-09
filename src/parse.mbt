@@ -206,20 +206,60 @@ fn Parser::read_reftype(self : Parser) -> RefType raise {
     0x72 => RefType::NoFunc
     0x73 => RefType::NoExtern
     0x74 => RefType::NoExn
-    // GC proposal: (ref null $t) - nullable typed reference
+    // GC proposal: (ref null <heaptype>) - nullable typed reference
     0x63 => {
-      let type_idx = self.read_i32_leb128()
-      RefType::TypeIndex(type_idx)
+      // Read the heap type that follows
+      let heap_type_byte = self.read_byte()
+      match heap_type_byte {
+        0x70 | 0x6F | 0x6E | 0x6D | 0x6C | 0x6B | 0x6A | 0x69 | 0x71 | 0x72 | 0x73 | 0x74 => {
+          // Known heap type - put byte back and parse it
+          self.pos = self.pos - 1
+          self.read_reftype()
+        }
+        _ => {
+          // It's a type index - put byte back and read as signed LEB128
+          self.pos = self.pos - 1
+          let type_idx = self.read_i32_leb128()
+          RefType::TypeIndex(type_idx)
+        }
+      }
     }
-    // GC proposal: (ref $t) - non-null typed reference
+    // GC proposal: (ref <heaptype>) - non-null typed reference
     0x64 => {
-      let type_idx = self.read_i32_leb128()
-      RefType::TypeIndex(type_idx)
+      // Read the heap type that follows (same logic as 0x63)
+      let heap_type_byte = self.read_byte()
+      match heap_type_byte {
+        0x70 | 0x6F | 0x6E | 0x6D | 0x6C | 0x6B | 0x6A | 0x69 | 0x71 | 0x72 | 0x73 | 0x74 => {
+          // Known heap type - put byte back and parse it
+          self.pos = self.pos - 1
+          self.read_reftype()
+        }
+        _ => {
+          // It's a type index - put byte back and read as signed LEB128
+          self.pos = self.pos - 1
+          let type_idx = self.read_i32_leb128()
+          RefType::TypeIndex(type_idx)
+        }
+      }
     }
-    _ =>
-      raise ValidationError::TypeMismatch(
-        "invalid reference type: 0x\{byte.to_string()}",
-      )
+    _ => {
+      // If we get here and the byte looks like it could be a type index,
+      // try parsing it as such
+      if byte < 0x40 {
+        // Looks like a small type index - put it back and read as signed LEB128
+        self.pos = self.pos - 1
+        let type_idx = self.read_i32_leb128()
+        RefType::TypeIndex(type_idx)
+      } else if byte == 0x40 {
+        // 0x40 is empty/void - treat as funcref for compatibility
+        // This might appear in some edge cases
+        RefType::Func
+      } else {
+        raise ValidationError::TypeMismatch(
+          "invalid reference type: 0x\{byte.to_string()}",
+        )
+      }
+    }
   }
 }
 
@@ -380,9 +420,32 @@ fn parse_table_section(parser : Parser) -> Array[TableType] raise {
   let count = parser.read_u32_leb128()
   let tables = []
   for i in 0U..<count {
-    let elem_type = parser.read_reftype()
-    let limits = parser.read_limits()
-    tables.push({ elem_type, limits })
+    // GC proposal: tables can have a flag byte indicating format
+    // Format: <byte> where:
+    // - 0x00-0x03: has limits encoding (bit 0 = has_max, bit 1 = shared/has_init)
+    // - 0x40+: reftype byte
+    let first_byte = parser.read_byte()
+
+    // Check if this looks like a table encoding flag (0x00-0x03) vs a reftype
+    if first_byte <= 0x03 {
+      // New encoding with flags
+      let has_init = (first_byte & 0x02) != 0
+      parser.pos = parser.pos - 1 // Put byte back for limits parsing
+      let limits = parser.read_limits()
+      let elem_type = parser.read_reftype()
+
+      // If has_init flag is set, read and skip the init expression
+      if has_init {
+        let _ = parse_expr(parser)
+      }
+      tables.push({ elem_type, limits })
+    } else {
+      // Old encoding: first byte is the reftype
+      parser.pos = parser.pos - 1
+      let elem_type = parser.read_reftype()
+      let limits = parser.read_limits()
+      tables.push({ elem_type, limits })
+    }
   }
   tables
 }
