@@ -2334,6 +2334,156 @@ fn op_i64_trunc_f32_u(rt : Runtime) -> ControlFlow {
   Next
 }
 
+// =============================================================================
+// Saturating Truncation Operations
+// =============================================================================
+// These operations convert floats to integers but instead of trapping on
+// overflow/NaN, they "saturate" to the min/max value or return 0 for NaN.
+
+///|
+fn op_i32_trunc_sat_f32_s(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f32()
+  let result = if a.is_nan() {
+    0U
+  } else if a >= 2147483648.0 {
+    // >= 2^31, saturate to max i32
+    0x7FFFFFFFU
+  } else if a < -2147483648.0 {
+    // < -2^31, saturate to min i32
+    0x80000000U
+  } else {
+    a.to_int().reinterpret_as_uint()
+  }
+  rt.stack.push(Value::I32(result))
+  Next
+}
+
+///|
+fn op_i32_trunc_sat_f32_u(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f32()
+  let result = if a.is_nan() {
+    0U
+  } else if a >= 4294967296.0 {
+    // >= 2^32, saturate to max u32
+    0xFFFFFFFFU
+  } else if a <= -1.0 {
+    // negative, saturate to 0
+    0U
+  } else {
+    a.to_double().to_uint64().to_uint()
+  }
+  rt.stack.push(Value::I32(result))
+  Next
+}
+
+///|
+fn op_i32_trunc_sat_f64_s(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f64()
+  let result = if a.is_nan() {
+    0U
+  } else if a >= 2147483648.0 {
+    // >= 2^31, saturate to max i32
+    0x7FFFFFFFU
+  } else if a < -2147483648.0 {
+    // < -2^31, saturate to min i32
+    0x80000000U
+  } else {
+    a.to_int().reinterpret_as_uint()
+  }
+  rt.stack.push(Value::I32(result))
+  Next
+}
+
+///|
+fn op_i32_trunc_sat_f64_u(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f64()
+  let result = if a.is_nan() {
+    0U
+  } else if a >= 4294967296.0 {
+    // >= 2^32, saturate to max u32
+    0xFFFFFFFFU
+  } else if a <= -1.0 {
+    // negative, saturate to 0
+    0U
+  } else {
+    a.to_uint64().to_uint()
+  }
+  rt.stack.push(Value::I32(result))
+  Next
+}
+
+///|
+fn op_i64_trunc_sat_f32_s(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f32().to_double()
+  let result = if a.is_nan() {
+    0UL
+  } else if a >= 9223372036854775808.0 {
+    // >= 2^63, saturate to max i64
+    0x7FFFFFFFFFFFFFFFUL
+  } else if a < -9223372036854775808.0 {
+    // < -2^63, saturate to min i64
+    0x8000000000000000UL
+  } else {
+    a.to_int64().reinterpret_as_uint64()
+  }
+  rt.stack.push(Value::I64(result))
+  Next
+}
+
+///|
+fn op_i64_trunc_sat_f32_u(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f32().to_double()
+  let result = if a.is_nan() {
+    0UL
+  } else if a >= 18446744073709551616.0 {
+    // >= 2^64, saturate to max u64
+    0xFFFFFFFFFFFFFFFFUL
+  } else if a <= -1.0 {
+    // negative, saturate to 0
+    0UL
+  } else {
+    a.to_uint64()
+  }
+  rt.stack.push(Value::I64(result))
+  Next
+}
+
+///|
+fn op_i64_trunc_sat_f64_s(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f64()
+  let result = if a.is_nan() {
+    0UL
+  } else if a >= 9223372036854775808.0 {
+    // >= 2^63, saturate to max i64
+    0x7FFFFFFFFFFFFFFFUL
+  } else if a < -9223372036854775808.0 {
+    // < -2^63, saturate to min i64
+    0x8000000000000000UL
+  } else {
+    a.to_int64().reinterpret_as_uint64()
+  }
+  rt.stack.push(Value::I64(result))
+  Next
+}
+
+///|
+fn op_i64_trunc_sat_f64_u(rt : Runtime) -> ControlFlow {
+  let a = rt.pop_f64()
+  let result = if a.is_nan() {
+    0UL
+  } else if a >= 18446744073709551616.0 {
+    // >= 2^64, saturate to max u64
+    0xFFFFFFFFFFFFFFFFUL
+  } else if a <= -1.0 {
+    // negative, saturate to 0
+    0UL
+  } else {
+    a.to_uint64()
+  }
+  rt.stack.push(Value::I64(result))
+  Next
+}
+
 // Reinterpret operations
 
 ///|
@@ -2551,6 +2701,15 @@ fn Runtime::compile_wasm_instr(
     I32TruncF64U => self.emit(WasmInstr(op_i32_trunc_f64_u))
     I64TruncF32S => self.emit(WasmInstr(op_i64_trunc_f32_s))
     I64TruncF32U => self.emit(WasmInstr(op_i64_trunc_f32_u))
+    // Saturating truncations
+    I32TruncSatF32S => self.emit(WasmInstr(op_i32_trunc_sat_f32_s))
+    I32TruncSatF32U => self.emit(WasmInstr(op_i32_trunc_sat_f32_u))
+    I32TruncSatF64S => self.emit(WasmInstr(op_i32_trunc_sat_f64_s))
+    I32TruncSatF64U => self.emit(WasmInstr(op_i32_trunc_sat_f64_u))
+    I64TruncSatF32S => self.emit(WasmInstr(op_i64_trunc_sat_f32_s))
+    I64TruncSatF32U => self.emit(WasmInstr(op_i64_trunc_sat_f32_u))
+    I64TruncSatF64S => self.emit(WasmInstr(op_i64_trunc_sat_f64_s))
+    I64TruncSatF64U => self.emit(WasmInstr(op_i64_trunc_sat_f64_u))
     // Reinterpret
     I32ReinterpretF32 => self.emit(WasmInstr(op_i32_reinterpret_f32))
     I64ReinterpretF64 => self.emit(WasmInstr(op_i64_reinterpret_f64))

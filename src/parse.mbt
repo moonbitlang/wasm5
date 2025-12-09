@@ -837,6 +837,15 @@ fn parse_instr(parser : Parser, opcode : Byte) -> Instr raise {
     0xFC => {
       let sub_opcode = parser.read_u32_leb128()
       match sub_opcode {
+        // Saturating truncation instructions
+        0x00 => I32TruncSatF32S
+        0x01 => I32TruncSatF32U
+        0x02 => I32TruncSatF64S
+        0x03 => I32TruncSatF64U
+        0x04 => I64TruncSatF32S
+        0x05 => I64TruncSatF32U
+        0x06 => I64TruncSatF64S
+        0x07 => I64TruncSatF64U
         // table.grow
         0x0F => {
           let table_idx = parser.read_u32_leb128()

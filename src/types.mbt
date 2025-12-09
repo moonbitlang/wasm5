@@ -346,6 +346,16 @@ pub enum Instr {
   I64Extend8S
   I64Extend16S
   I64Extend32S
+
+  // Saturating truncation instructions
+  I32TruncSatF32S
+  I32TruncSatF32U
+  I32TruncSatF64S
+  I32TruncSatF64U
+  I64TruncSatF32S
+  I64TruncSatF32U
+  I64TruncSatF64S
+  I64TruncSatF64U
 } derive(Show)
 
 // Expression (sequence of instructions)

@@ -353,6 +353,24 @@ fn validate_instruction(
       stack.push(I64)
     }
 
+    // Saturating truncation: f32/f64 -> i32/i64 (same types as regular trunc)
+    I32TruncSatF32S | I32TruncSatF32U => {
+      ctx.poly_pop_expect(F32, "i32.trunc_sat_f32")
+      stack.push(I32)
+    }
+    I32TruncSatF64S | I32TruncSatF64U => {
+      ctx.poly_pop_expect(F64, "i32.trunc_sat_f64")
+      stack.push(I32)
+    }
+    I64TruncSatF32S | I64TruncSatF32U => {
+      ctx.poly_pop_expect(F32, "i64.trunc_sat_f32")
+      stack.push(I64)
+    }
+    I64TruncSatF64S | I64TruncSatF64U => {
+      ctx.poly_pop_expect(F64, "i64.trunc_sat_f64")
+      stack.push(I64)
+    }
+
     // Reinterpret operations
     F32ReinterpretI32 => {
       ctx.poly_pop_expect(I32, "f32.reinterpret_i32")
