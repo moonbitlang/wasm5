@@ -944,6 +944,66 @@ fn op_br_table(rt : Runtime) -> ControlFlow {
 }
 
 ///|
+fn op_br_on_null(rt : Runtime) -> ControlFlow {
+  let label = rt.read_imm_idx()
+  // Pop reference value
+  let ref_val = rt.stack.unsafe_pop()
+  // Check if it's null
+  let is_null = match ref_val {
+    Ref(None) => true
+    _ => false
+  }
+  if is_null {
+    // Branch - same as br
+    let target_idx = rt.branch_targets.length() - 1 - label
+    if target_idx < 0 || target_idx >= rt.branch_targets.length() {
+      return Trap(
+        RuntimeError::InvalidType("br_on_null: invalid branch target"),
+      )
+    }
+    let target_pc = rt.branch_targets[target_idx]
+    for _i = 0; _i <= label; _i = _i + 1 {
+      let _ = rt.branch_targets.unsafe_pop()
+    }
+    Jump(target_pc)
+  } else {
+    // Not null - push back the value and continue
+    rt.stack.push(ref_val)
+    Next
+  }
+}
+
+///|
+fn op_br_on_non_null(rt : Runtime) -> ControlFlow {
+  let label = rt.read_imm_idx()
+  // Pop reference value
+  let ref_val = rt.stack.unsafe_pop()
+  // Check if it's not null
+  let is_non_null = match ref_val {
+    Ref(None) => false
+    _ => true
+  }
+  if is_non_null {
+    // Branch with the value
+    rt.stack.push(ref_val)
+    let target_idx = rt.branch_targets.length() - 1 - label
+    if target_idx < 0 || target_idx >= rt.branch_targets.length() {
+      return Trap(
+        RuntimeError::InvalidType("br_on_non_null: invalid branch target"),
+      )
+    }
+    let target_pc = rt.branch_targets[target_idx]
+    for _i = 0; _i <= label; _i = _i + 1 {
+      let _ = rt.branch_targets.unsafe_pop()
+    }
+    Jump(target_pc)
+  } else {
+    // Null - don't push anything, continue
+    Next
+  }
+}
+
+///|
 fn op_call(rt : Runtime) -> ControlFlow {
   let func_idx = rt.read_imm_idx()
 
@@ -3193,6 +3253,16 @@ fn Runtime::compile_wasm_instr(
         self.emit(ImmediateIdx(label.reinterpret_as_int()))
       }
       self.emit(ImmediateIdx(default_label.reinterpret_as_int()))
+    }
+    BrOnNull(label) => {
+      // br_on_null: branch if ref is null
+      self.emit(WasmInstr(op_br_on_null))
+      self.emit(ImmediateIdx(label.reinterpret_as_int()))
+    }
+    BrOnNonNull(label) => {
+      // br_on_non_null: branch if ref is not null
+      self.emit(WasmInstr(op_br_on_non_null))
+      self.emit(ImmediateIdx(label.reinterpret_as_int()))
     }
     If(_block_type, then_instrs, else_instrs) => {
       // Push branch target for the If block (br 0 inside will jump to end)

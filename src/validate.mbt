@@ -22,6 +22,45 @@ fn reftype_to_valtype(ref_type : RefType) -> ValType {
 }
 
 ///|
+/// Check if t1 is a subtype of t2 (t1 <: t2)
+/// WebAssembly GC type hierarchy:
+/// - NullRef (none) <: all nullable reference types
+/// - NullFuncRef (nofunc) <: FuncRef
+/// - NullExternRef (noextern) <: ExternRef
+/// - NullExnRef (noexn) <: ExnRef
+/// - I31Ref, StructRef, ArrayRef <: EqRef <: AnyRef
+/// - FuncRef <: AnyRef (in some proposals)
+fn is_subtype(t1 : ValType, t2 : ValType) -> Bool {
+  // Reflexive: every type is a subtype of itself
+  if t1 == t2 {
+    return true
+  }
+
+  match (t1, t2) {
+    // Bottom types (null) are subtypes of their corresponding reference types
+    (NullRef, AnyRef) | (NullRef, EqRef) | (NullRef, I31Ref) |
+    (NullRef, StructRef) | (NullRef, ArrayRef) => true
+
+    (NullFuncRef, FuncRef) => true
+    (NullExternRef, ExternRef) => true
+    (NullExnRef, ExnRef) => true
+
+    // Reference type hierarchy
+    (I31Ref, EqRef) | (I31Ref, AnyRef) => true
+    (StructRef, EqRef) | (StructRef, AnyRef) => true
+    (ArrayRef, EqRef) | (ArrayRef, AnyRef) => true
+    (EqRef, AnyRef) => true
+
+    // Some proposals allow funcref <: anyref
+    (FuncRef, AnyRef) => true
+    (ExnRef, AnyRef) => true
+
+    // Non-reference types are not related by subtyping
+    _ => false
+  }
+}
+
+///|
 /// Validate a WebAssembly module
 fn validate_module(m : Module) -> Unit raise ValidationError {
   // Validate function type indices
@@ -614,7 +653,7 @@ fn validate_instruction(
         )
       } else {
         let actual_type = stack.unsafe_pop()
-        if actual_type != expected_type {
+        if not(is_subtype(actual_type, expected_type)) {
           raise ValidationError::TypeMismatch(
             "table.grow init value type mismatch: expected \{expected_type}, got \{actual_type}",
           )
@@ -683,10 +722,10 @@ fn validate_instruction(
           "block: expected \{results.length()} values, got \{block_ctx.stack.length()}",
         )
       } else {
-        // Exact match - validate result types
+        // Exact match - validate result types (with subtyping)
         for i = 0; i < results.length(); i = i + 1 {
-          if block_ctx.stack[i] != results[i] {
-            raise ValidationError::TypeMismatch("block result type mismatch")
+          if not(is_subtype(block_ctx.stack[i], results[i])) {
+            raise ValidationError::TypeMismatch("block result type mismatch: expected \{results[i]}, got \{block_ctx.stack[i]}")
           }
         }
         // Push results onto parent stack
@@ -730,10 +769,10 @@ fn validate_instruction(
           "loop: expected \{results.length()} values, got \{loop_ctx.stack.length()}",
         )
       } else {
-        // Exact match - validate result types
+        // Exact match - validate result types (with subtyping)
         for i = 0; i < results.length(); i = i + 1 {
-          if loop_ctx.stack[i] != results[i] {
-            raise ValidationError::TypeMismatch("loop result type mismatch")
+          if not(is_subtype(loop_ctx.stack[i], results[i])) {
+            raise ValidationError::TypeMismatch("loop result type mismatch: expected \{results[i]}, got \{loop_ctx.stack[i]}")
           }
         }
         // Push results onto parent stack
@@ -772,11 +811,11 @@ fn validate_instruction(
           "if then branch: expected \{results.length()} values, got \{then_ctx.stack.length()}",
         )
       } else {
-        // Exact match - validate result types
+        // Exact match - validate result types (with subtyping)
         for i = 0; i < results.length(); i = i + 1 {
-          if then_ctx.stack[i] != results[i] {
+          if not(is_subtype(then_ctx.stack[i], results[i])) {
             raise ValidationError::TypeMismatch(
-              "if then branch result type mismatch",
+              "if then branch result type mismatch: expected \{results[i]}, got \{then_ctx.stack[i]}",
             )
           }
         }
@@ -803,11 +842,11 @@ fn validate_instruction(
           "if else branch: expected \{results.length()} values, got \{else_ctx.stack.length()}",
         )
       } else {
-        // Exact match - validate result types
+        // Exact match - validate result types (with subtyping)
         for i = 0; i < results.length(); i = i + 1 {
-          if else_ctx.stack[i] != results[i] {
+          if not(is_subtype(else_ctx.stack[i], results[i])) {
             raise ValidationError::TypeMismatch(
-              "if else branch result type mismatch",
+              "if else branch result type mismatch: expected \{results[i]}, got \{else_ctx.stack[i]}",
             )
           }
         }
@@ -828,11 +867,11 @@ fn validate_instruction(
             "return: expected \{func_type.results.length()} values on stack",
           )
         }
-        // Validate result types
+        // Validate result types (with subtyping)
         for i = 0; i < func_type.results.length(); i = i + 1 {
           let stack_idx = stack.length() - func_type.results.length() + i
-          if stack[stack_idx] != func_type.results[i] {
-            raise ValidationError::TypeMismatch("return: result type mismatch")
+          if not(is_subtype(stack[stack_idx], func_type.results[i])) {
+            raise ValidationError::TypeMismatch("return: result type mismatch: expected \{func_type.results[i]}, got \{stack[stack_idx]}")
           }
         }
       }
@@ -850,12 +889,12 @@ fn validate_instruction(
             "br: expected \{target_types.length()} values on stack for branch target",
           )
         }
-        // Validate types for the branch target
+        // Validate types for the branch target (with subtyping)
         for i = 0; i < target_types.length(); i = i + 1 {
           let stack_idx = stack.length() - target_types.length() + i
-          if stack[stack_idx] != target_types[i] {
+          if not(is_subtype(stack[stack_idx], target_types[i])) {
             raise ValidationError::TypeMismatch(
-              "br: branch target type mismatch",
+              "br: branch target type mismatch: expected \{target_types[i]}, got \{stack[stack_idx]}",
             )
           }
         }
@@ -884,6 +923,29 @@ fn validate_instruction(
       // Code after is unreachable
       ctx.is_unreachable = true
       stack.clear()
+    }
+    BrOnNull(_label) => {
+      // br_on_null: pop nullable ref, branch if null, else push non-null ref
+      // For now, just pop a reference value (any reference type)
+      if not(ctx.is_unreachable) && stack.length() < 1 {
+        raise ValidationError::TypeMismatch("br_on_null expects reference on stack")
+      } else if stack.length() >= 1 {
+        let _ = stack.unsafe_pop()
+        // Push back a reference (simplified - same type for now)
+        // TODO: properly track non-null type narrowing
+        stack.push(FuncRef) // Placeholder
+      }
+    }
+    BrOnNonNull(label) => {
+      // br_on_non_null: pop nullable ref, branch if non-null (with the value), else continue
+      // Pop the nullable reference
+      if not(ctx.is_unreachable) && stack.length() < 1 {
+        raise ValidationError::TypeMismatch("br_on_non_null expects reference on stack")
+      } else if stack.length() >= 1 {
+        let _ = stack.unsafe_pop()
+      }
+      // If we branch, we pass the non-null value to the target
+      // Fallthrough case: the value was null, so nothing is pushed
     }
     Drop =>
       // In unreachable code, drop is valid even with empty stack
@@ -1156,10 +1218,11 @@ fn validate_function(
       )
     }
   } else {
-    // Check types from top of stack
+    // Check types from top of stack (with subtyping)
     for i = 0; i < func_type.results.length(); i = i + 1 {
-      if stack[i] != func_type.results[i] {
-        raise ValidationError::TypeMismatch("function return type mismatch")
+      // Stack type must be a subtype of expected return type
+      if not(is_subtype(stack[i], func_type.results[i])) {
+        raise ValidationError::TypeMismatch("function return type mismatch: expected \{func_type.results[i]}, got \{stack[i]}")
       }
     }
   }

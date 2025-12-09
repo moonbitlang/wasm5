@@ -169,6 +169,8 @@ pub enum Instr {
   Br(UInt)
   BrIf(UInt)
   BrTable(Array[UInt], UInt)
+  BrOnNull(UInt) // GC proposal: branch if null
+  BrOnNonNull(UInt) // GC proposal: branch if not null
   Return
   Call(UInt)
   CallIndirect(UInt, UInt)

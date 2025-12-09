@@ -956,16 +956,8 @@ fn parse_instr(parser : Parser, opcode : Byte) -> Instr raise {
     // GC proposal reference instructions
     0xD3 => RefIsNull // ref.eq - compare two references, treat as ref.is_null for now
     0xD4 => Nop // ref.as_non_null - just pass through for now
-    0xD5 => {
-      // br_on_null labelidx - branch if null, read label
-      let _ = parser.read_u32_leb128()
-      Nop // Treat as nop for compatibility
-    }
-    0xD6 => {
-      // br_on_non_null labelidx - branch if not null, read label
-      let _ = parser.read_u32_leb128()
-      Nop // Treat as nop for compatibility
-    }
+    0xD5 => BrOnNull(parser.read_u32_leb128()) // br_on_null labelidx
+    0xD6 => BrOnNonNull(parser.read_u32_leb128()) // br_on_non_null labelidx
 
     // Numeric instructions - constants
     0x41 => I32Const(parser.read_i32_leb128().reinterpret_as_uint())
