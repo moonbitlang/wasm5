@@ -860,8 +860,8 @@ fn validate_instruction(
       }
       let _ = block_ctx.pop_control()
       // Check block produces correct results
-      if block_ctx.is_unreachable {
-        // Unreachable code - valid, push expected results
+      if block_ctx.is_unreachable && block_ctx.stack.length() == 0 {
+        // Unreachable code with empty stack - all polymorphic, push expected results
         for result in results {
           stack.push(result)
         }
@@ -907,8 +907,8 @@ fn validate_instruction(
       }
       let _ = loop_ctx.pop_control()
       // Check loop produces correct results
-      if loop_ctx.is_unreachable {
-        // Unreachable code - valid
+      if loop_ctx.is_unreachable && loop_ctx.stack.length() == 0 {
+        // Unreachable code with empty stack - all polymorphic
         for result in results {
           stack.push(result)
         }
@@ -953,8 +953,8 @@ fn validate_instruction(
       }
       let _ = then_ctx.pop_control()
       // Check then branch produces correct results
-      if then_ctx.is_unreachable {
-        // Unreachable - valid
+      if then_ctx.is_unreachable && then_ctx.stack.length() == 0 {
+        // Unreachable with empty stack - all polymorphic, valid
       } else if then_ctx.stack.length() != results.length() {
         raise ValidationError::TypeMismatch(
           "if then branch: expected \{results.length()} values, got \{then_ctx.stack.length()}",
@@ -984,8 +984,8 @@ fn validate_instruction(
       }
       let _ = else_ctx.pop_control()
       // Check else branch produces correct results
-      if else_ctx.is_unreachable {
-        // Unreachable - valid
+      if else_ctx.is_unreachable && else_ctx.stack.length() == 0 {
+        // Unreachable with empty stack - all polymorphic, valid
       } else if else_ctx.stack.length() != results.length() {
         raise ValidationError::TypeMismatch(
           "if else branch: expected \{results.length()} values, got \{else_ctx.stack.length()}",
@@ -1008,19 +1008,25 @@ fn validate_instruction(
 
     // Control flow
     Return => {
-      // In unreachable code, we allow return even with empty stack
-      if not(ctx.is_unreachable) {
+      // In unreachable code with empty stack, allow polymorphic return
+      // Otherwise, validate concrete values on stack
+      if not(ctx.is_unreachable) || stack.length() > 0 {
         // Check we have the right values on stack for function return
         if stack.length() < func_type.results.length() {
-          raise ValidationError::TypeMismatch(
-            "return: expected \{func_type.results.length()} values on stack",
-          )
-        }
-        // Validate result types (with subtyping)
-        for i = 0; i < func_type.results.length(); i = i + 1 {
-          let stack_idx = stack.length() - func_type.results.length() + i
-          if not(is_subtype(stack[stack_idx], func_type.results[i])) {
-            raise ValidationError::TypeMismatch("return: result type mismatch: expected \{func_type.results[i]}, got \{stack[stack_idx]}")
+          if ctx.is_unreachable {
+            // In unreachable code, missing values are polymorphic - OK
+          } else {
+            raise ValidationError::TypeMismatch(
+              "return: expected \{func_type.results.length()} values on stack",
+            )
+          }
+        } else {
+          // Validate result types for concrete values (with subtyping)
+          for i = 0; i < func_type.results.length(); i = i + 1 {
+            let stack_idx = stack.length() - func_type.results.length() + i
+            if not(is_subtype(stack[stack_idx], func_type.results[i])) {
+              raise ValidationError::TypeMismatch("return: result type mismatch: expected \{func_type.results[i]}, got \{stack[stack_idx]}")
+            }
           }
         }
       }
@@ -1030,22 +1036,29 @@ fn validate_instruction(
       stack.clear()
     }
     Br(label) => {
-      // In unreachable code, br is always valid
-      if not(ctx.is_unreachable) {
+      // Always validate label exists (even in unreachable code)
+      let target_types = ctx.get_label_types(label)
+
+      // Validate stack contents (even in unreachable code with concrete values)
+      if not(ctx.is_unreachable) || stack.length() > 0 {
         // Unconditional branch - validate we have required values for target
-        let target_types = ctx.get_label_types(label)
         if stack.length() < target_types.length() {
-          raise ValidationError::TypeMismatch(
-            "br: expected \{target_types.length()} values on stack for branch target",
-          )
-        }
-        // Validate types for the branch target (with subtyping)
-        for i = 0; i < target_types.length(); i = i + 1 {
-          let stack_idx = stack.length() - target_types.length() + i
-          if not(is_subtype(stack[stack_idx], target_types[i])) {
+          if ctx.is_unreachable {
+            // In unreachable code, missing values are polymorphic - OK
+          } else {
             raise ValidationError::TypeMismatch(
-              "br: branch target type mismatch: expected \{target_types[i]}, got \{stack[stack_idx]}",
+              "br: expected \{target_types.length()} values on stack for branch target",
             )
+          }
+        } else {
+          // Validate types for the branch target (with subtyping)
+          for i = 0; i < target_types.length(); i = i + 1 {
+            let stack_idx = stack.length() - target_types.length() + i
+            if not(is_subtype(stack[stack_idx], target_types[i])) {
+              raise ValidationError::TypeMismatch(
+                "br: branch target type mismatch: expected \{target_types[i]}, got \{stack[stack_idx]}",
+              )
+            }
           }
         }
       }
@@ -1061,18 +1074,34 @@ fn validate_instruction(
     BrTable(labels, default_label) => {
       // Table branch - pop i32 index
       ctx.poly_pop_expect(I32, "br_table index")
-      // In unreachable code, br_table is always valid
-      if not(ctx.is_unreachable) {
-        // Validate all labels exist (calls get_label_types which raises error if invalid)
-        for label in labels {
-          let _ = ctx.get_label_types(label)
-        }
+
+      // Validate all labels exist (even in unreachable code)
+      for label in labels {
+        let _ = ctx.get_label_types(label)
+      }
+      let target_types = ctx.get_label_types(default_label)
+
+      // Validate concrete values on stack
+      if not(ctx.is_unreachable) || stack.length() > 0 {
         // Validate we have required values for branch targets using default label
-        let target_types = ctx.get_label_types(default_label)
         if stack.length() < target_types.length() {
-          raise ValidationError::TypeMismatch(
-            "br_table: expected \{target_types.length()} values on stack for branch target",
-          )
+          if ctx.is_unreachable {
+            // In unreachable code, missing values are polymorphic - OK
+          } else {
+            raise ValidationError::TypeMismatch(
+              "br_table: expected \{target_types.length()} values on stack for branch target",
+            )
+          }
+        } else {
+          // Validate types for concrete values (with subtyping)
+          for i = 0; i < target_types.length(); i = i + 1 {
+            let stack_idx = stack.length() - target_types.length() + i
+            if not(is_subtype(stack[stack_idx], target_types[i])) {
+              raise ValidationError::TypeMismatch(
+                "br_table: branch target type mismatch: expected \{target_types[i]}, got \{stack[stack_idx]}",
+              )
+            }
+          }
         }
       }
       // Code after is unreachable, record stack height
