@@ -69,51 +69,62 @@ fn Parser::read_u32_leb128(self : Parser) -> UInt raise ParseError {
 
 ///|
 fn Parser::read_i32_leb128(self : Parser) -> Int raise ParseError {
-  // Returns (result, shift, last_byte) where last_byte is the final 7-bit chunk
-  fn read_loop(shift : Int, result : Int) -> (Int, Int, Int) raise ParseError {
-    let byte = self.read_byte().to_int()
-    let value = (byte & 0x7f) << shift
-    let new_result = result | value
+  let mut result = 0
+  let mut shift = 0
+  let mut byte = 0
+
+  while true {
+    byte = self.read_byte().to_int()
+    result = result | ((byte & 0x7f) << shift)
+    shift = shift + 7
+
     if (byte & 0x80) == 0 {
-      (new_result, shift, byte & 0x7f)
-    } else {
-      read_loop(shift + 7, new_result)
+      break
+    }
+
+    if shift >= 35 {
+      raise ParseError::InvalidFormat("LEB128 i32 too long")
     }
   }
 
-  let (result, shift, last_byte) = read_loop(0, 0)
-  // Sign extend if the sign bit (bit 6 of last 7-bit chunk) is set
-  if shift < 32 && (last_byte & 0x40) != 0 {
-    result | (-1 << (shift + 7))
-  } else {
-    result
+  // Sign extend: if the sign bit of the last 7-bit group is set
+  // and we haven't filled all 32 bits, we need to sign extend
+  if shift < 32 && (byte & 0x40) != 0 {
+    // Set all bits from 'shift' to 31
+    result = result | ((-1) << shift)
   }
+
+  result
 }
 
 ///|
 fn Parser::read_i64_leb128(self : Parser) -> Int64 raise ParseError {
-  // Returns (result, shift, last_byte) where last_byte is the final 7-bit chunk
-  fn read_loop(
-    shift : Int,
-    result : Int64,
-  ) -> (Int64, Int, Int) raise ParseError {
-    let byte = self.read_byte()
-    let value = byte.land(0x7f).to_int64() << shift
-    let new_result = result | value
+  let mut result = 0L
+  let mut shift = 0
+  let mut byte = 0
+
+  while true {
+    byte = self.read_byte().to_int()
+    result = result | ((byte & 0x7f).to_int64() << shift)
+    shift = shift + 7
+
     if (byte & 0x80) == 0 {
-      (new_result, shift, byte.land(0x7f).to_int())
-    } else {
-      read_loop(shift + 7, new_result)
+      break
+    }
+
+    if shift >= 70 {
+      raise ParseError::InvalidFormat("LEB128 i64 too long")
     }
   }
 
-  let (result, shift, last_byte) = read_loop(0, 0L)
-  // Sign extend if the sign bit (bit 6 of last 7-bit chunk) is set
-  if shift < 64 && (last_byte & 0x40) != 0 {
-    result | (-1L << (shift + 7))
-  } else {
-    result
+  // Sign extend: if the sign bit of the last 7-bit group is set
+  // and we haven't filled all 64 bits, we need to sign extend
+  if shift < 64 && (byte & 0x40) != 0 {
+    // Set all bits from 'shift' to 63
+    result = result | ((-1L) << shift)
   }
+
+  result
 }
 
 ///|
