@@ -174,6 +174,8 @@ pub enum Instr {
   CallIndirect(UInt, UInt)
   ReturnCall(UInt) // tail call proposal
   ReturnCallIndirect(UInt, UInt) // tail call proposal
+  CallRef(UInt) // typed function references
+  ReturnCallRef(UInt) // typed function references
 
   // Parametric instructions
   Drop

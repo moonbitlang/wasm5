@@ -1063,6 +1063,59 @@ fn validate_instruction(
       // This will be validated at the end of the function
       ctx.is_unreachable = true
     }
+    CallRef(type_idx) => {
+      // call_ref: calls function through a reference
+      // Stack: [args...] [funcref] -> [results...]
+      let idx = type_idx.reinterpret_as_int()
+      if idx < 0 || idx >= module_.types.length() {
+        raise ValidationError::InvalidTypeIndex(idx)
+      }
+      let func_type_called = module_.types[idx]
+
+      // Pop the function reference
+      if ctx.is_unreachable && stack.length() == 0 {
+        // Polymorphic - allow
+      } else if stack.length() < 1 {
+        raise ValidationError::TypeMismatch("call_ref expects funcref on stack")
+      } else {
+        let _ = stack.unsafe_pop() // Pop funcref (we don't type-check it strictly for now)
+      }
+
+      // Pop arguments from stack (in reverse order)
+      for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
+        ctx.poly_pop_expect(func_type_called.params[i], "call_ref argument")
+      }
+
+      // Push results onto stack
+      for result in func_type_called.results {
+        stack.push(result)
+      }
+    }
+    ReturnCallRef(type_idx) => {
+      // return_call_ref: tail call through a reference
+      let idx = type_idx.reinterpret_as_int()
+      if idx < 0 || idx >= module_.types.length() {
+        raise ValidationError::InvalidTypeIndex(idx)
+      }
+      let func_type_called = module_.types[idx]
+
+      // Pop the function reference
+      if ctx.is_unreachable && stack.length() == 0 {
+        // Polymorphic - allow
+      } else if stack.length() < 1 {
+        raise ValidationError::TypeMismatch("return_call_ref expects funcref on stack")
+      } else {
+        let _ = stack.unsafe_pop() // Pop funcref
+      }
+
+      // Pop arguments from stack (in reverse order)
+      for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
+        ctx.poly_pop_expect(func_type_called.params[i], "return_call_ref argument")
+      }
+
+      // Mark as unreachable - this is a tail call
+      ctx.is_unreachable = true
+    }
   }
 }
 

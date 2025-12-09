@@ -1342,6 +1342,181 @@ fn op_return_call_indirect(rt : Runtime) -> ControlFlow {
 }
 
 ///|
+fn op_call_ref(rt : Runtime) -> ControlFlow {
+  let type_idx = rt.read_imm_idx()
+
+  // Pop the function reference from the stack
+  let func_ref_value = rt.stack.unsafe_pop()
+  guard func_ref_value is Ref(Some(func_idx)) else {
+    return Trap(RuntimeError::InvalidType("call_ref: null or invalid function reference"))
+  }
+
+  // Count imported functions
+  let mut num_imported_funcs = 0
+  for imp in rt.module_.imports {
+    match imp.desc {
+      ImportDesc::Func(_) => num_imported_funcs += 1
+      _ => ()
+    }
+  }
+
+  // Check if calling an imported function
+  if func_idx < num_imported_funcs {
+    return Trap(
+      RuntimeError::FunctionNotCompiled(
+        "Imported function calls not yet supported via call_ref: \{func_idx}",
+      ),
+    )
+  }
+
+  // Adjust index for local functions
+  let local_func_idx = func_idx - num_imported_funcs
+  if local_func_idx < 0 || local_func_idx >= rt.module_.codes.length() {
+    return Trap(RuntimeError::InvalidType("call_ref: invalid function index"))
+  }
+
+  let actual_type_idx = rt.module_.funcs[local_func_idx].reinterpret_as_int()
+  let func_type = rt.module_.types[type_idx]
+  let actual_type = rt.module_.types[actual_type_idx]
+
+  // Check type signature matches
+  if func_type.params.length() != actual_type.params.length() ||
+    func_type.results.length() != actual_type.results.length() {
+    return Trap(RuntimeError::InvalidType("call_ref: type mismatch"))
+  }
+
+  let code = rt.module_.codes[local_func_idx]
+  guard code.compiled is Some(callee_pc) else {
+    return Trap(
+      RuntimeError::FunctionNotCompiled("Function not compiled: \{func_idx}"),
+    )
+  }
+
+  // Pop arguments
+  let num_params = func_type.params.length()
+  let args : Array[Value] = Array::make(num_params, Value::I32(0U))
+  for i = num_params - 1; i >= 0; i = i - 1 {
+    args[i] = rt.stack.unsafe_pop()
+  }
+
+  // Save frame
+  rt.call_stack.push(CallFrame::{ return_pc: rt.pc, locals: rt.locals })
+
+  // Set up new locals
+  rt.locals = []
+  for arg in args {
+    rt.locals.push(arg)
+  }
+  for local_type in code.locals {
+    match local_type {
+      ValType::I32 => rt.locals.push(Value::I32(0U))
+      ValType::I64 => rt.locals.push(Value::I64(0UL))
+      ValType::F32 => rt.locals.push(Value::F32(0.0))
+      ValType::F64 => rt.locals.push(Value::F64(0.0))
+      ValType::FuncRef => rt.locals.push(Value::Ref(None))
+      ValType::ExternRef => rt.locals.push(Value::Ref(None))
+      ValType::AnyRef | ValType::ExnRef | ValType::NullRef | ValType::NullFuncRef |
+      ValType::NullExnRef | ValType::NullExternRef | ValType::EqRef | ValType::I31Ref |
+      ValType::StructRef | ValType::ArrayRef =>
+        rt.locals.push(Value::Ref(None))
+      _ =>
+        return Trap(
+          RuntimeError::UnsupportedLocalType(
+            "Unsupported local type: \{local_type}",
+          ),
+        )
+    }
+  }
+  Jump(callee_pc)
+}
+
+///|
+fn op_return_call_ref(rt : Runtime) -> ControlFlow {
+  let type_idx = rt.read_imm_idx()
+
+  // Pop the function reference from the stack
+  let func_ref_value = rt.stack.unsafe_pop()
+  guard func_ref_value is Ref(Some(func_idx)) else {
+    return Trap(RuntimeError::InvalidType("return_call_ref: null or invalid function reference"))
+  }
+
+  // Count imported functions
+  let mut num_imported_funcs = 0
+  for imp in rt.module_.imports {
+    match imp.desc {
+      ImportDesc::Func(_) => num_imported_funcs += 1
+      _ => ()
+    }
+  }
+
+  // Check if calling an imported function
+  if func_idx < num_imported_funcs {
+    return Trap(
+      RuntimeError::FunctionNotCompiled(
+        "Imported function calls not yet supported via return_call_ref: \{func_idx}",
+      ),
+    )
+  }
+
+  // Adjust index for local functions
+  let local_func_idx = func_idx - num_imported_funcs
+  if local_func_idx < 0 || local_func_idx >= rt.module_.codes.length() {
+    return Trap(RuntimeError::InvalidType("return_call_ref: invalid function index"))
+  }
+
+  let actual_type_idx = rt.module_.funcs[local_func_idx].reinterpret_as_int()
+  let func_type = rt.module_.types[type_idx]
+  let actual_type = rt.module_.types[actual_type_idx]
+
+  // Check type signature matches
+  if func_type.params.length() != actual_type.params.length() ||
+    func_type.results.length() != actual_type.results.length() {
+    return Trap(RuntimeError::InvalidType("return_call_ref: type mismatch"))
+  }
+
+  let code = rt.module_.codes[local_func_idx]
+  guard code.compiled is Some(callee_pc) else {
+    return Trap(
+      RuntimeError::FunctionNotCompiled("Function not compiled: \{func_idx}"),
+    )
+  }
+
+  // Pop arguments
+  let num_params = func_type.params.length()
+  let args : Array[Value] = Array::make(num_params, Value::I32(0U))
+  for i = num_params - 1; i >= 0; i = i - 1 {
+    args[i] = rt.stack.unsafe_pop()
+  }
+
+  // For tail call: replace current locals instead of pushing new frame
+  rt.locals = []
+  for arg in args {
+    rt.locals.push(arg)
+  }
+  for local_type in code.locals {
+    match local_type {
+      ValType::I32 => rt.locals.push(Value::I32(0U))
+      ValType::I64 => rt.locals.push(Value::I64(0UL))
+      ValType::F32 => rt.locals.push(Value::F32(0.0))
+      ValType::F64 => rt.locals.push(Value::F64(0.0))
+      ValType::FuncRef => rt.locals.push(Value::Ref(None))
+      ValType::ExternRef => rt.locals.push(Value::Ref(None))
+      ValType::AnyRef | ValType::ExnRef | ValType::NullRef | ValType::NullFuncRef |
+      ValType::NullExnRef | ValType::NullExternRef | ValType::EqRef | ValType::I31Ref |
+      ValType::StructRef | ValType::ArrayRef =>
+        rt.locals.push(Value::Ref(None))
+      _ =>
+        return Trap(
+          RuntimeError::UnsupportedLocalType(
+            "Unsupported local type: \{local_type}",
+          ),
+        )
+    }
+  }
+  Jump(callee_pc)
+}
+
+///|
 fn op_nop(_rt : Runtime) -> ControlFlow {
   Next
 }
@@ -3212,6 +3387,15 @@ fn Runtime::compile_wasm_instr(
       self.emit(WasmInstr(op_return_call_indirect))
       self.emit(ImmediateIdx(type_idx.reinterpret_as_int()))
       self.emit(ImmediateIdx(table_idx.reinterpret_as_int()))
+    }
+    // Typed function references
+    CallRef(type_idx) => {
+      self.emit(WasmInstr(op_call_ref))
+      self.emit(ImmediateIdx(type_idx.reinterpret_as_int()))
+    }
+    ReturnCallRef(type_idx) => {
+      self.emit(WasmInstr(op_return_call_ref))
+      self.emit(ImmediateIdx(type_idx.reinterpret_as_int()))
     }
   }
 }

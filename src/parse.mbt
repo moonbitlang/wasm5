@@ -649,13 +649,12 @@ fn parse_instr(parser : Parser, opcode : Byte) -> Instr raise {
       let table_idx = parser.read_u32_leb128()
       ReturnCallIndirect(type_idx, table_idx)
     }
-    // Typed function references: call_ref - read type index, treat as nop for now
-    0x14 => {
-      let _ = parser.read_u32_leb128() // type index
-      Nop // Placeholder - needs proper implementation
-    }
-    // Typed function references: return_call_ref - read type index, treat as nop
-    0x15 => {
+    // Typed function references: call_ref
+    0x14 => CallRef(parser.read_u32_leb128())
+    // Typed function references: return_call_ref
+    0x15 => ReturnCallRef(parser.read_u32_leb128())
+    // GC proposal: ref.as_non_null - check reference is not null
+    0x16 => {
       let _ = parser.read_u32_leb128() // type index
       Nop // Placeholder - needs proper implementation
     }
