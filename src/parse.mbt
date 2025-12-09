@@ -161,6 +161,16 @@ fn Parser::read_valtype(self : Parser) -> ValType raise {
     0x7B => V128
     0x70 => FuncRef
     0x6F => ExternRef
+    // GC proposal: (ref null $t) - nullable typed reference
+    0x63 => {
+      let _ = self.read_i32_leb128() // type index, ignored
+      FuncRef // Treat as funcref for compatibility
+    }
+    // GC proposal: (ref $t) - non-null typed reference
+    0x64 => {
+      let _ = self.read_i32_leb128() // type index, ignored
+      FuncRef // Treat as funcref for compatibility
+    }
     _ =>
       raise ValidationError::TypeMismatch(
         "invalid value type: 0x\{byte.to_string()}",
@@ -176,6 +186,16 @@ fn Parser::read_reftype(self : Parser) -> RefType raise {
   match byte {
     0x70 => FuncRef
     0x6F => ExternRef
+    // GC proposal: (ref null $t) - nullable typed reference
+    0x63 => {
+      let _ = self.read_i32_leb128() // type index, ignored for now
+      FuncRef // Treat as funcref for compatibility
+    }
+    // GC proposal: (ref $t) - non-null typed reference
+    0x64 => {
+      let _ = self.read_i32_leb128() // type index, ignored for now
+      FuncRef // Treat as funcref for compatibility
+    }
     _ =>
       raise ValidationError::TypeMismatch(
         "invalid reference type: 0x\{byte.to_string()}",
@@ -883,6 +903,16 @@ fn parse_blocktype(parser : Parser) -> BlockType raise ParseError {
     0x7B => Value(V128)
     0x70 => Value(FuncRef)
     0x6F => Value(ExternRef)
+    // GC proposal: (ref null $t) - treat as funcref for compatibility
+    0x63 => {
+      let _ = parser.read_i32_leb128() // type index, ignored
+      Value(FuncRef)
+    }
+    // GC proposal: (ref $t) - treat as funcref for compatibility
+    0x64 => {
+      let _ = parser.read_i32_leb128() // type index, ignored
+      Value(FuncRef)
+    }
     _ => {
       // Type index encoded as signed LEB128
       // Put the byte back and read as signed LEB128
