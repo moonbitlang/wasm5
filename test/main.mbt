@@ -378,7 +378,11 @@ fn handle_assert_trap(
         )
       }
     @wasm5.RuntimeError::IntegerOverflow =>
-      if not(expected_error.contains("overflow")) {
+      // IntegerOverflow is used for both "integer overflow" and "invalid conversion to integer"
+      if not(
+        expected_error.contains("overflow") ||
+        expected_error.contains("invalid conversion"),
+      ) {
         ctx.fail(
           line,
           "assert_trap",

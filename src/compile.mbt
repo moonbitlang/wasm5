@@ -2276,11 +2276,18 @@ fn op_f32_convert_i64_u(rt : Runtime) -> ControlFlow {
   Next
 }
 
-// Truncation operations
+// Truncation operations (with trapping on overflow/NaN)
 
 ///|
 fn op_i64_trunc_f64_s(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f64()
+  // Trap on NaN or out of range
+  if a.is_nan() {
+    return Trap(RuntimeError::IntegerOverflow)
+  }
+  if a >= 9223372036854775808.0 || a < -9223372036854775808.0 {
+    return Trap(RuntimeError::IntegerOverflow)
+  }
   rt.stack.push(Value::I64(a.to_int64().reinterpret_as_uint64()))
   Next
 }
@@ -2288,6 +2295,13 @@ fn op_i64_trunc_f64_s(rt : Runtime) -> ControlFlow {
 ///|
 fn op_i64_trunc_f64_u(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f64()
+  // Trap on NaN or out of range
+  if a.is_nan() {
+    return Trap(RuntimeError::IntegerOverflow)
+  }
+  if a >= 18446744073709551616.0 || a <= -1.0 {
+    return Trap(RuntimeError::IntegerOverflow)
+  }
   rt.stack.push(Value::I64(a.to_uint64()))
   Next
 }
@@ -2295,6 +2309,13 @@ fn op_i64_trunc_f64_u(rt : Runtime) -> ControlFlow {
 ///|
 fn op_i32_trunc_f32_s(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f32()
+  // Trap on NaN or out of range
+  if a.is_nan() {
+    return Trap(RuntimeError::IntegerOverflow) // "invalid conversion to integer"
+  }
+  if a >= 2147483648.0 || a < -2147483648.0 {
+    return Trap(RuntimeError::IntegerOverflow)
+  }
   rt.stack.push(Value::I32(a.to_int().reinterpret_as_uint()))
   Next
 }
@@ -2302,13 +2323,27 @@ fn op_i32_trunc_f32_s(rt : Runtime) -> ControlFlow {
 ///|
 fn op_i32_trunc_f32_u(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f32()
-  rt.stack.push(Value::I32(a.to_int().reinterpret_as_uint()))
+  // Trap on NaN or out of range
+  if a.is_nan() {
+    return Trap(RuntimeError::IntegerOverflow)
+  }
+  if a >= 4294967296.0 || a <= -1.0 {
+    return Trap(RuntimeError::IntegerOverflow)
+  }
+  rt.stack.push(Value::I32(a.to_double().to_uint64().to_uint()))
   Next
 }
 
 ///|
 fn op_i32_trunc_f64_s(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f64()
+  // Trap on NaN or out of range
+  if a.is_nan() {
+    return Trap(RuntimeError::IntegerOverflow)
+  }
+  if a >= 2147483648.0 || a < -2147483648.0 {
+    return Trap(RuntimeError::IntegerOverflow)
+  }
   rt.stack.push(Value::I32(a.to_int().reinterpret_as_uint()))
   Next
 }
@@ -2316,21 +2351,42 @@ fn op_i32_trunc_f64_s(rt : Runtime) -> ControlFlow {
 ///|
 fn op_i32_trunc_f64_u(rt : Runtime) -> ControlFlow {
   let a = rt.pop_f64()
-  rt.stack.push(Value::I32(a.to_int().reinterpret_as_uint()))
+  // Trap on NaN or out of range
+  if a.is_nan() {
+    return Trap(RuntimeError::IntegerOverflow)
+  }
+  if a >= 4294967296.0 || a <= -1.0 {
+    return Trap(RuntimeError::IntegerOverflow)
+  }
+  rt.stack.push(Value::I32(a.to_uint64().to_uint()))
   Next
 }
 
 ///|
 fn op_i64_trunc_f32_s(rt : Runtime) -> ControlFlow {
-  let a = rt.pop_f32()
-  rt.stack.push(Value::I64(a.to_double().to_int64().reinterpret_as_uint64()))
+  let a = rt.pop_f32().to_double()
+  // Trap on NaN or out of range
+  if a.is_nan() {
+    return Trap(RuntimeError::IntegerOverflow)
+  }
+  if a >= 9223372036854775808.0 || a < -9223372036854775808.0 {
+    return Trap(RuntimeError::IntegerOverflow)
+  }
+  rt.stack.push(Value::I64(a.to_int64().reinterpret_as_uint64()))
   Next
 }
 
 ///|
 fn op_i64_trunc_f32_u(rt : Runtime) -> ControlFlow {
-  let a = rt.pop_f32()
-  rt.stack.push(Value::I64(a.to_double().to_uint64()))
+  let a = rt.pop_f32().to_double()
+  // Trap on NaN or out of range
+  if a.is_nan() {
+    return Trap(RuntimeError::IntegerOverflow)
+  }
+  if a >= 18446744073709551616.0 || a <= -1.0 {
+    return Trap(RuntimeError::IntegerOverflow)
+  }
+  rt.stack.push(Value::I64(a.to_uint64()))
   Next
 }
 
