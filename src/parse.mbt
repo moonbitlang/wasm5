@@ -420,24 +420,16 @@ fn parse_table_section(parser : Parser) -> Array[TableType] raise {
   let count = parser.read_u32_leb128()
   let tables = []
   for i in 0U..<count {
-    // GC proposal: tables can have a flag byte indicating format
-    // Format: <byte> where:
-    // - 0x00-0x03: has limits encoding (bit 0 = has_max, bit 1 = shared/has_init)
-    // - 0x40+: reftype byte
+    // GC proposal: tables can have encoding prefix:
+    // - 0x40: reftype + limits + init_expr (explicit initializer)
+    // - otherwise: reftype + limits (old format, implicit null init)
     let first_byte = parser.read_byte()
 
-    // Check if this looks like a table encoding flag (0x00-0x03) vs a reftype
-    if first_byte <= 0x03 {
-      // New encoding with flags
-      let has_init = (first_byte & 0x02) != 0
-      parser.pos = parser.pos - 1 // Put byte back for limits parsing
-      let limits = parser.read_limits()
+    if first_byte == 0x40 {
+      // New encoding with explicit init expression
       let elem_type = parser.read_reftype()
-
-      // If has_init flag is set, read and skip the init expression
-      if has_init {
-        let _ = parse_expr(parser)
-      }
+      let limits = parser.read_limits()
+      let _ = parse_expr(parser) // Read and skip init expression
       tables.push({ elem_type, limits })
     } else {
       // Old encoding: first byte is the reftype
@@ -594,8 +586,29 @@ fn parse_data_section(parser : Parser) -> Array[Data] raise {
   let count = parser.read_u32_leb128()
   let datas = []
   for i in 0U..<count {
-    let mem_idx = parser.read_u32_leb128()
-    let offset = parse_expr(parser)
+    // Read flags to determine encoding format
+    let flags = parser.read_u32_leb128()
+
+    let (mem_idx, offset) = match flags {
+      0 => {
+        // Active segment with implicit memory 0
+        (0U, parse_expr(parser))
+      }
+      1 => {
+        // Passive segment - no memory index or offset
+        (0U, { instrs: [I32Const(0U)] }) // Dummy offset
+      }
+      2 => {
+        // Active segment with explicit memory index
+        (parser.read_u32_leb128(), parse_expr(parser))
+      }
+      _ => {
+        // Unknown flag - try old format
+        // Treat flags value as mem_idx
+        (flags, parse_expr(parser))
+      }
+    }
+
     let init_len = parser.read_u32_leb128()
     let init = parser.read_bytes(init_len)
     datas.push({ mem_idx, offset, init })
