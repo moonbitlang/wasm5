@@ -2,6 +2,26 @@
 // This module ties together types, parser, and runtime components
 
 ///|
+/// Convert RefType to ValType
+fn reftype_to_valtype(ref_type : RefType) -> ValType {
+  match ref_type {
+    RefType::Func => ValType::FuncRef
+    RefType::Extern => ValType::ExternRef
+    RefType::Any => ValType::AnyRef
+    RefType::Eq => ValType::EqRef
+    RefType::I31 => ValType::I31Ref
+    RefType::Struct => ValType::StructRef
+    RefType::Array => ValType::ArrayRef
+    RefType::Exn => ValType::ExnRef
+    RefType::None => ValType::NullRef
+    RefType::NoFunc => ValType::NullFuncRef
+    RefType::NoExtern => ValType::NullExternRef
+    RefType::NoExn => ValType::NullExnRef
+    RefType::TypeIndex(_) => ValType::FuncRef // Treat typed references as funcref for now
+  }
+}
+
+///|
 /// Validate a WebAssembly module
 fn validate_module(m : Module) -> Unit raise ValidationError {
   // Validate function type indices
@@ -557,10 +577,7 @@ fn validate_instruction(
       let elem_type = if table_idx.reinterpret_as_int() <
         module_.tables.length() {
         let table = module_.tables[table_idx.reinterpret_as_int()]
-        match table.elem_type {
-          RefType::FuncRef => ValType::FuncRef
-          RefType::ExternRef => ValType::ExternRef
-        }
+        reftype_to_valtype(table.elem_type)
       } else {
         ValType::FuncRef // Default if table not found
       }
@@ -586,12 +603,9 @@ fn validate_instruction(
         module_.tables.length() {
         module_.tables[table_idx.reinterpret_as_int()].elem_type
       } else {
-        RefType::FuncRef // Default, will be caught elsewhere if invalid
+        RefType::Func // Default, will be caught elsewhere if invalid
       }
-      let expected_type : ValType = match table_elem_type {
-        RefType::FuncRef => ValType::FuncRef
-        RefType::ExternRef => ValType::ExternRef
-      }
+      let expected_type : ValType = reftype_to_valtype(table_elem_type)
       if ctx.is_unreachable && stack.length() == 0 {
         // Polymorphic - allow
       } else if stack.length() < 1 {
@@ -612,11 +626,7 @@ fn validate_instruction(
     // Reference instructions
     RefNull(ref_type) => {
       // ref.null pushes a null reference of the given type
-      // Convert RefType to ValType
-      let val_type : ValType = match ref_type {
-        RefType::FuncRef => ValType::FuncRef
-        RefType::ExternRef => ValType::ExternRef
-      }
+      let val_type = reftype_to_valtype(ref_type)
       stack.push(val_type)
     }
     RefFunc(_) =>
@@ -978,6 +988,80 @@ fn validate_instruction(
       for result in func_type_called.results {
         stack.push(result)
       }
+    }
+    ReturnCall(func_idx) => {
+      // return_call: tail call that returns to caller
+      // Reuse the same logic as Call, but mark as unreachable
+      let idx = func_idx.reinterpret_as_int()
+
+      // Find the type index for this function
+      // First count imported functions
+      let mut num_imported_funcs = 0
+      for imp in module_.imports {
+        match imp.desc {
+          ImportDesc::Func(_) => num_imported_funcs += 1
+          _ => ()
+        }
+      }
+
+      let type_idx = if idx < num_imported_funcs {
+        // It's an imported function - find its type
+        let mut import_func_idx = 0
+        let mut found_type_idx = 0
+        for imp in module_.imports {
+          match imp.desc {
+            ImportDesc::Func(t) => {
+              if import_func_idx == idx {
+                found_type_idx = t.reinterpret_as_int()
+                break
+              }
+              import_func_idx += 1
+            }
+            _ => ()
+          }
+        }
+        found_type_idx
+      } else {
+        // It's a local function
+        let local_idx = idx - num_imported_funcs
+        if local_idx < 0 || local_idx >= module_.funcs.length() {
+          raise ValidationError::InvalidFunctionIndex(idx)
+        }
+        module_.funcs[local_idx].reinterpret_as_int()
+      }
+
+      if type_idx < 0 || type_idx >= module_.types.length() {
+        raise ValidationError::InvalidTypeIndex(type_idx)
+      }
+
+      let func_type_called = module_.types[type_idx]
+      // Pop arguments from stack (in reverse order)
+      for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
+        ctx.poly_pop_expect(func_type_called.params[i], "return_call argument")
+      }
+      // Mark as unreachable - this is a tail call that doesn't return to current function
+      ctx.is_unreachable = true
+    }
+    ReturnCallIndirect(type_idx, _table_idx) => {
+      // return_call_indirect: tail call through table that returns to caller
+      let idx = type_idx.reinterpret_as_int()
+      if idx < 0 || idx >= module_.types.length() {
+        raise ValidationError::InvalidTypeIndex(idx)
+      }
+      let func_type_called = module_.types[idx]
+      // Pop table index
+      ctx.poly_pop_expect(I32, "return_call_indirect table index")
+      // Pop arguments from stack (in reverse order)
+      for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
+        ctx.poly_pop_expect(
+          func_type_called.params[i],
+          "return_call_indirect argument",
+        )
+      }
+      // For tail calls, just mark as unreachable without modifying stack
+      // The called function's signature should match current function's return type
+      // This will be validated at the end of the function
+      ctx.is_unreachable = true
     }
   }
 }

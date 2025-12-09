@@ -159,20 +159,18 @@ fn Parser::read_valtype(self : Parser) -> ValType raise {
     0x7D => F32
     0x7C => F64
     0x7B => V128
-    0x70 => FuncRef
-    0x6F => ExternRef
-    // GC proposal abstract heap types as value types
-    0x73 => FuncRef // noextern
-    0x72 => FuncRef // nofunc
-    0x71 => FuncRef // none
-    0x6E => ExternRef // nullexternref
-    0x6D => FuncRef // nullfuncref
-    0x6C => FuncRef // nullref
-    0x6B => FuncRef // structref
-    0x6A => FuncRef // arrayref
-    0x69 => FuncRef // i31ref
-    0x68 => ExternRef // anyref
-    0x67 => FuncRef // eqref
+    0x70 => FuncRef     // funcref
+    0x6F => ExternRef   // externref
+    0x6E => AnyRef      // anyref (any heap type)
+    0x6D => EqRef       // eqref
+    0x6C => I31Ref      // i31ref
+    0x6B => StructRef   // structref
+    0x6A => ArrayRef    // arrayref
+    0x69 => ExnRef      // exnref
+    0x71 => NullRef     // none (bottom type)
+    0x72 => NullFuncRef // nofunc (bottom type)
+    0x73 => NullExternRef // noextern (bottom type)
+    0x74 => NullExnRef  // noexn (bottom type)
     // GC proposal: (ref null $t) - nullable typed reference
     0x63 => {
       let _ = self.read_i32_leb128() // type index, ignored
@@ -196,30 +194,27 @@ fn Parser::read_valtype(self : Parser) -> ValType raise {
 fn Parser::read_reftype(self : Parser) -> RefType raise {
   let byte = self.read_byte()
   match byte {
-    0x70 => FuncRef
-    0x6F => ExternRef
-    // GC proposal abstract heap types encoded as reference types
-    0x73 => FuncRef // noextern - treat as funcref
-    0x72 => FuncRef // nofunc - treat as funcref
-    0x71 => FuncRef // none - treat as funcref
-    0x6E => ExternRef // nullexternref - treat as externref
-    0x6D => FuncRef // nullfuncref - treat as funcref
-    0x6C => FuncRef // nullref - treat as funcref
-    0x6B => FuncRef // structref - treat as funcref
-    0x6A => FuncRef // arrayref - treat as funcref
-    0x69 => FuncRef // i31ref - treat as funcref
-    0x68 => ExternRef // anyref - treat as externref
-    0x67 => FuncRef // eqref - treat as funcref
-    0x40 => FuncRef // GC proposal: empty block type used as ref type
+    0x70 => RefType::Func
+    0x6F => RefType::Extern
+    0x6E => RefType::Any
+    0x6D => RefType::Eq
+    0x6C => RefType::I31
+    0x6B => RefType::Struct
+    0x6A => RefType::Array
+    0x69 => RefType::Exn
+    0x71 => RefType::None
+    0x72 => RefType::NoFunc
+    0x73 => RefType::NoExtern
+    0x74 => RefType::NoExn
     // GC proposal: (ref null $t) - nullable typed reference
     0x63 => {
-      let _ = self.read_i32_leb128() // type index, ignored for now
-      FuncRef // Treat as funcref for compatibility
+      let type_idx = self.read_i32_leb128()
+      RefType::TypeIndex(type_idx)
     }
     // GC proposal: (ref $t) - non-null typed reference
     0x64 => {
-      let _ = self.read_i32_leb128() // type index, ignored for now
-      FuncRef // Treat as funcref for compatibility
+      let type_idx = self.read_i32_leb128()
+      RefType::TypeIndex(type_idx)
     }
     _ =>
       raise ValidationError::TypeMismatch(
@@ -647,13 +642,12 @@ fn parse_instr(parser : Parser, opcode : Byte) -> Instr raise {
       let table_idx = parser.read_u32_leb128()
       CallIndirect(type_idx, table_idx)
     }
-    // Tail call proposal: return_call - treat as call + return
-    0x12 => Call(parser.read_u32_leb128())
-    // Tail call proposal: return_call_indirect - treat as call_indirect + return
+    // Tail call proposal
+    0x12 => ReturnCall(parser.read_u32_leb128())
     0x13 => {
       let type_idx = parser.read_u32_leb128()
       let table_idx = parser.read_u32_leb128()
-      CallIndirect(type_idx, table_idx)
+      ReturnCallIndirect(type_idx, table_idx)
     }
     // Typed function references: call_ref - read type index, treat as nop for now
     0x14 => {
@@ -857,9 +851,24 @@ fn parse_instr(parser : Parser, opcode : Byte) -> Instr raise {
       // ref.null heaptype
       let heap_type = parser.read_byte()
       let ref_type : RefType = match heap_type {
-        0x70 => RefType::FuncRef
-        0x6F => RefType::ExternRef
-        _ => RefType::FuncRef // Default to funcref for other types
+        0x70 => RefType::Func       // funcref
+        0x6F => RefType::Extern     // externref
+        0x6E => RefType::Any        // anyref
+        0x6D => RefType::Eq         // eqref
+        0x6C => RefType::I31        // i31ref
+        0x6B => RefType::Struct     // structref
+        0x6A => RefType::Array      // arrayref
+        0x69 => RefType::Exn        // exnref
+        0x71 => RefType::None       // none
+        0x72 => RefType::NoFunc     // nofunc
+        0x73 => RefType::NoExtern   // noextern
+        0x74 => RefType::NoExn      // noexn
+        _ => {
+          // Assume it's a type index (negative or positive)
+          parser.pos = parser.pos - 1
+          let type_idx = parser.read_i32_leb128()
+          RefType::TypeIndex(type_idx)
+        }
       }
       RefNull(ref_type)
     }
@@ -1086,6 +1095,16 @@ fn parse_blocktype(parser : Parser) -> BlockType raise ParseError {
     0x7B => Value(V128)
     0x70 => Value(FuncRef)
     0x6F => Value(ExternRef)
+    0x6E => Value(AnyRef)
+    0x6D => Value(EqRef)
+    0x6C => Value(I31Ref)
+    0x6B => Value(StructRef)
+    0x6A => Value(ArrayRef)
+    0x69 => Value(ExnRef)
+    0x71 => Value(NullRef)
+    0x72 => Value(NullFuncRef)
+    0x73 => Value(NullExternRef)
+    0x74 => Value(NullExnRef)
     // GC proposal: (ref null $t) - treat as funcref for compatibility
     0x63 => {
       let _ = parser.read_i32_leb128() // type index, ignored
