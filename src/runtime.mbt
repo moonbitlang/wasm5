@@ -33,6 +33,7 @@ pub suberror ValidationError {
   InvalidLocalIndex(Int)
   InvalidGlobalIndex(Int)
   StackSizeMismatch(String)
+  InvalidAlignment(String)
 } derive(Show)
 
 ///|

@@ -117,6 +117,26 @@ fn Parser::read_i64_leb128(self : Parser) -> Int64 raise ParseError {
 }
 
 ///|
+/// Parse memory argument (memarg) with multi-memory support
+/// Returns (align, offset, memory_index)
+/// In multi-memory proposal, the first byte encodes:
+/// - bits 0-5: alignment (log2)
+/// - bit 6: if set, memory index follows
+/// If bit 6 is not set, memory index defaults to 0
+fn Parser::read_memarg(self : Parser) -> (UInt, UInt, UInt) raise ParseError {
+  let flags_and_align = self.read_u32_leb128()
+  let align = flags_and_align.land(0x3F) // bits 0-5
+  let has_memory_index = (flags_and_align.land(0x40)) != 0 // bit 6
+  let memory_idx = if has_memory_index {
+    self.read_u32_leb128()
+  } else {
+    0
+  }
+  let offset = self.read_u32_leb128()
+  (align, offset, memory_idx)
+}
+
+///|
 fn Parser::read_f32(self : Parser) -> Float raise ParseError {
   match self.bytes[self.pos:] {
     [u32le(bits), ..] => {
@@ -790,118 +810,95 @@ fn parse_instr(parser : Parser, opcode : Byte) -> Instr raise {
 
     // Memory instructions
     0x28 => {
-      let align = parser.read_u32_leb128()
-      let offset = parser.read_u32_leb128()
+      let (align, offset, _memory_idx) = parser.read_memarg()
       I32Load(align, offset)
     }
     0x29 => {
-      let align = parser.read_u32_leb128()
-      let offset = parser.read_u32_leb128()
+      let (align, offset, _memory_idx) = parser.read_memarg()
       I64Load(align, offset)
     }
     0x2A => {
-      let align = parser.read_u32_leb128()
-      let offset = parser.read_u32_leb128()
+      let (align, offset, _memory_idx) = parser.read_memarg()
       F32Load(align, offset)
     }
     0x2B => {
-      let align = parser.read_u32_leb128()
-      let offset = parser.read_u32_leb128()
+      let (align, offset, _memory_idx) = parser.read_memarg()
       F64Load(align, offset)
     }
     0x2C => {
-      let align = parser.read_u32_leb128()
-      let offset = parser.read_u32_leb128()
+      let (align, offset, _memory_idx) = parser.read_memarg()
       I32Load8S(align, offset)
     }
     0x2D => {
-      let align = parser.read_u32_leb128()
-      let offset = parser.read_u32_leb128()
+      let (align, offset, _memory_idx) = parser.read_memarg()
       I32Load8U(align, offset)
     }
     0x2E => {
-      let align = parser.read_u32_leb128()
-      let offset = parser.read_u32_leb128()
+      let (align, offset, _memory_idx) = parser.read_memarg()
       I32Load16S(align, offset)
     }
     0x2F => {
-      let align = parser.read_u32_leb128()
-      let offset = parser.read_u32_leb128()
+      let (align, offset, _memory_idx) = parser.read_memarg()
       I32Load16U(align, offset)
     }
     0x30 => {
-      let align = parser.read_u32_leb128()
-      let offset = parser.read_u32_leb128()
+      let (align, offset, _memory_idx) = parser.read_memarg()
       I64Load8S(align, offset)
     }
     0x31 => {
-      let align = parser.read_u32_leb128()
-      let offset = parser.read_u32_leb128()
+      let (align, offset, _memory_idx) = parser.read_memarg()
       I64Load8U(align, offset)
     }
     0x32 => {
-      let align = parser.read_u32_leb128()
-      let offset = parser.read_u32_leb128()
+      let (align, offset, _memory_idx) = parser.read_memarg()
       I64Load16S(align, offset)
     }
     0x33 => {
-      let align = parser.read_u32_leb128()
-      let offset = parser.read_u32_leb128()
+      let (align, offset, _memory_idx) = parser.read_memarg()
       I64Load16U(align, offset)
     }
     0x34 => {
-      let align = parser.read_u32_leb128()
-      let offset = parser.read_u32_leb128()
+      let (align, offset, _memory_idx) = parser.read_memarg()
       I64Load32S(align, offset)
     }
     0x35 => {
-      let align = parser.read_u32_leb128()
-      let offset = parser.read_u32_leb128()
+      let (align, offset, _memory_idx) = parser.read_memarg()
       I64Load32U(align, offset)
     }
     0x36 => {
-      let align = parser.read_u32_leb128()
-      let offset = parser.read_u32_leb128()
+      let (align, offset, _memory_idx) = parser.read_memarg()
       I32Store(align, offset)
     }
     0x37 => {
-      let align = parser.read_u32_leb128()
-      let offset = parser.read_u32_leb128()
+      let (align, offset, _memory_idx) = parser.read_memarg()
       I64Store(align, offset)
     }
     0x38 => {
-      let align = parser.read_u32_leb128()
-      let offset = parser.read_u32_leb128()
+      let (align, offset, _memory_idx) = parser.read_memarg()
       F32Store(align, offset)
     }
     0x39 => {
-      let align = parser.read_u32_leb128()
-      let offset = parser.read_u32_leb128()
+      let (align, offset, _memory_idx) = parser.read_memarg()
       F64Store(align, offset)
     }
     0x3A => {
-      let align = parser.read_u32_leb128()
-      let offset = parser.read_u32_leb128()
+      let (align, offset, _memory_idx) = parser.read_memarg()
       I32Store8(align, offset)
     }
     0x3B => {
-      let align = parser.read_u32_leb128()
-      let offset = parser.read_u32_leb128()
+      let (align, offset, _memory_idx) = parser.read_memarg()
       I32Store16(align, offset)
     }
     0x3C => {
-      let align = parser.read_u32_leb128()
-      let offset = parser.read_u32_leb128()
+      let (align, offset, _memory_idx) = parser.read_memarg()
       I64Store8(align, offset)
     }
     0x3D => {
-      let align = parser.read_u32_leb128()
-      let offset = parser.read_u32_leb128()
+      let (align, offset, _memory_idx) = parser.read_memarg()
       I64Store16(align, offset)
     }
     0x3E => {
-      let align = parser.read_u32_leb128()
-      let offset = parser.read_u32_leb128()
+      let (align, offset, _memory_idx) = parser.read_memarg()
       I64Store32(align, offset)
     }
     0x25 => {

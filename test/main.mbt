@@ -490,6 +490,14 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got StackSizeMismatch",
         )
       }
+    @wasm5.ValidationError::InvalidAlignment(_) =>
+      if not(expected_error.contains("alignment")) {
+        ctx.fail(
+          line,
+          "assert_invalid",
+          "expected '\{expected_error}' but got InvalidAlignment",
+        )
+      }
     _ => () // Other validation errors are acceptable
   }
 }

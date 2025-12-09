@@ -22,6 +22,36 @@ fn reftype_to_valtype(ref_type : RefType) -> ValType {
 }
 
 ///|
+/// Validate alignment - alignment must not be larger than natural alignment
+/// align parameter is stored as log2(alignment), natural is in bytes
+fn validate_alignment(align : UInt, natural : Int) -> Unit raise ValidationError {
+  // align is log2 of alignment (e.g., align=2 means 2^2 = 4 byte alignment)
+  // natural is the natural alignment in bytes
+  let align_int = align.reinterpret_as_int()
+  let max_align = match natural {
+    1 => 0 // 2^0 = 1
+    2 => 1 // 2^1 = 2
+    4 => 2 // 2^2 = 4
+    8 => 3 // 2^3 = 8
+    _ => {
+      // Calculate log2 of natural alignment
+      let mut n = natural
+      let mut log = 0
+      while n > 1 {
+        n = n / 2
+        log = log + 1
+      }
+      log
+    }
+  }
+  if align_int > max_align {
+    raise ValidationError::InvalidAlignment(
+      "alignment must not be larger than natural (align=\{align_int}, max=\{max_align})",
+    )
+  }
+}
+
+///|
 /// Check if t1 is a subtype of t2 (t1 <: t2)
 /// WebAssembly GC type hierarchy:
 /// - NullRef (none) <: all nullable reference types
@@ -558,46 +588,94 @@ fn validate_instruction(
     }
 
     // Memory operations - loads (all take i32 address and push the loaded value)
-    I32Load(_, _)
-    | I32Load8S(_, _)
-    | I32Load8U(_, _)
-    | I32Load16S(_, _)
-    | I32Load16U(_, _) => {
+    I32Load(align, _) => {
+      validate_alignment(align, 4)
       ctx.poly_pop_expect(I32, "i32.load address")
       stack.push(I32)
     }
-    I64Load(_, _)
-    | I64Load8S(_, _)
-    | I64Load8U(_, _)
-    | I64Load16S(_, _)
-    | I64Load16U(_, _)
-    | I64Load32S(_, _)
-    | I64Load32U(_, _) => {
+    I32Load8S(align, _) | I32Load8U(align, _) => {
+      validate_alignment(align, 1)
+      ctx.poly_pop_expect(I32, "i32.load8 address")
+      stack.push(I32)
+    }
+    I32Load16S(align, _) | I32Load16U(align, _) => {
+      validate_alignment(align, 2)
+      ctx.poly_pop_expect(I32, "i32.load16 address")
+      stack.push(I32)
+    }
+    I64Load(align, _) => {
+      validate_alignment(align, 8)
       ctx.poly_pop_expect(I32, "i64.load address")
       stack.push(I64)
     }
-    F32Load(_, _) => {
+    I64Load8S(align, _) | I64Load8U(align, _) => {
+      validate_alignment(align, 1)
+      ctx.poly_pop_expect(I32, "i64.load8 address")
+      stack.push(I64)
+    }
+    I64Load16S(align, _) | I64Load16U(align, _) => {
+      validate_alignment(align, 2)
+      ctx.poly_pop_expect(I32, "i64.load16 address")
+      stack.push(I64)
+    }
+    I64Load32S(align, _) | I64Load32U(align, _) => {
+      validate_alignment(align, 4)
+      ctx.poly_pop_expect(I32, "i64.load32 address")
+      stack.push(I64)
+    }
+    F32Load(align, _) => {
+      validate_alignment(align, 4)
       ctx.poly_pop_expect(I32, "f32.load address")
       stack.push(F32)
     }
-    F64Load(_, _) => {
+    F64Load(align, _) => {
+      validate_alignment(align, 8)
       ctx.poly_pop_expect(I32, "f64.load address")
       stack.push(F64)
     }
     // Memory operations - stores (all take i32 address and value, push nothing)
-    I32Store(_, _) | I32Store8(_, _) | I32Store16(_, _) => {
+    I32Store(align, _) => {
+      validate_alignment(align, 4)
       ctx.poly_pop_expect(I32, "i32.store value")
       ctx.poly_pop_expect(I32, "i32.store address")
     }
-    I64Store(_, _) | I64Store8(_, _) | I64Store16(_, _) | I64Store32(_, _) => {
+    I32Store8(align, _) => {
+      validate_alignment(align, 1)
+      ctx.poly_pop_expect(I32, "i32.store8 value")
+      ctx.poly_pop_expect(I32, "i32.store8 address")
+    }
+    I32Store16(align, _) => {
+      validate_alignment(align, 2)
+      ctx.poly_pop_expect(I32, "i32.store16 value")
+      ctx.poly_pop_expect(I32, "i32.store16 address")
+    }
+    I64Store(align, _) => {
+      validate_alignment(align, 8)
       ctx.poly_pop_expect(I64, "i64.store value")
       ctx.poly_pop_expect(I32, "i64.store address")
     }
-    F32Store(_, _) => {
+    I64Store8(align, _) => {
+      validate_alignment(align, 1)
+      ctx.poly_pop_expect(I64, "i64.store8 value")
+      ctx.poly_pop_expect(I32, "i64.store8 address")
+    }
+    I64Store16(align, _) => {
+      validate_alignment(align, 2)
+      ctx.poly_pop_expect(I64, "i64.store16 value")
+      ctx.poly_pop_expect(I32, "i64.store16 address")
+    }
+    I64Store32(align, _) => {
+      validate_alignment(align, 4)
+      ctx.poly_pop_expect(I64, "i64.store32 value")
+      ctx.poly_pop_expect(I32, "i64.store32 address")
+    }
+    F32Store(align, _) => {
+      validate_alignment(align, 4)
       ctx.poly_pop_expect(F32, "f32.store value")
       ctx.poly_pop_expect(I32, "f32.store address")
     }
-    F64Store(_, _) => {
+    F64Store(align, _) => {
+      validate_alignment(align, 8)
       ctx.poly_pop_expect(F64, "f64.store value")
       ctx.poly_pop_expect(I32, "f64.store address")
     }
