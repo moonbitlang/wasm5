@@ -101,6 +101,66 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
     }
   }
 
+  // Validate start function if present
+  match m.start {
+    Some(start_idx) => {
+      let func_idx = start_idx.reinterpret_as_int()
+
+      // Count total functions (imported + local)
+      let mut num_imported_funcs = 0
+      for imp in m.imports {
+        match imp.desc {
+          ImportDesc::Func(_) => num_imported_funcs += 1
+          _ => ()
+        }
+      }
+      let total_funcs = num_imported_funcs + m.funcs.length()
+
+      // Check if function index is valid
+      if func_idx < 0 || func_idx >= total_funcs {
+        raise ValidationError::InvalidFunctionIndex(func_idx)
+      }
+
+      // Get the function type
+      let type_idx = if func_idx < num_imported_funcs {
+        // Imported function
+        let mut current_import = 0
+        let mut found_type_idx = 0
+        for imp in m.imports {
+          match imp.desc {
+            ImportDesc::Func(tidx) => {
+              if current_import == func_idx {
+                found_type_idx = tidx.reinterpret_as_int()
+                break
+              }
+              current_import += 1
+            }
+            _ => ()
+          }
+        }
+        found_type_idx
+      } else {
+        // Local function
+        m.funcs[func_idx - num_imported_funcs].reinterpret_as_int()
+      }
+
+      let func_type = m.types[type_idx]
+
+      // Start function must have type [] -> []
+      if func_type.params.length() > 0 {
+        raise ValidationError::InvalidStartFunction(
+          "start function must have no parameters",
+        )
+      }
+      if func_type.results.length() > 0 {
+        raise ValidationError::InvalidStartFunction(
+          "start function must have no results",
+        )
+      }
+    }
+    None => ()
+  }
+
   // Validate function bodies against their types
   for i = 0; i < m.codes.length(); i = i + 1 {
     let type_idx = m.funcs[i].reinterpret_as_int()

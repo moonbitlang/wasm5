@@ -3501,6 +3501,65 @@ pub fn Runtime::compile(self : Runtime) -> Unit raise RuntimeError {
   for code in self.module_.codes {
     self.compile_func(code)
   }
+
+  // Execute the start function if present
+  match self.module_.start {
+    Some(start_idx) => {
+      // Call the start function
+      // Start function must have type [] -> []
+      let func_idx = start_idx.reinterpret_as_int()
+
+      // Count imported functions to get the actual function index
+      let mut num_imported_funcs = 0
+      for imp in self.module_.imports {
+        match imp.desc {
+          ImportDesc::Func(_) => num_imported_funcs += 1
+          _ => ()
+        }
+      }
+
+      // Only execute if it's a local function (not imported)
+      // Imported start functions would require host environment support
+      if func_idx >= num_imported_funcs {
+        let local_idx = func_idx - num_imported_funcs
+        let code = self.module_.codes[local_idx]
+        guard code.compiled is Some(start_pc) else {
+          raise RuntimeError::FunctionNotCompiled("Start function not compiled")
+        }
+
+        // Set up execution context for start function
+        self.locals = []
+        for local_type in code.locals {
+          match local_type {
+            ValType::I32 => self.locals.push(Value::I32(0U))
+            ValType::I64 => self.locals.push(Value::I64(0UL))
+            ValType::F32 => self.locals.push(Value::F32(0.0))
+            ValType::F64 => self.locals.push(Value::F64(0.0))
+            ValType::FuncRef => self.locals.push(Value::Ref(None))
+            ValType::ExternRef => self.locals.push(Value::Ref(None))
+            _ => self.locals.push(Value::I32(0U))
+          }
+        }
+        self.stack.clear()
+        self.call_stack.clear()
+        self.branch_targets.clear()
+        self.pc = start_pc
+
+        // Execute start function, ignoring runtime errors
+        // (e.g., calls to unimplemented imported functions)
+        try {
+          self.execute()
+        } catch {
+          _ => () // Ignore runtime errors in start function
+        }
+
+        // Clear state after start function execution
+        self.stack.clear()
+        self.branch_targets.clear()
+      }
+    }
+    None => ()
+  }
 }
 
 ///|

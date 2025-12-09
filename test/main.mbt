@@ -506,6 +506,14 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got UnknownLabel",
         )
       }
+    @wasm5.ValidationError::InvalidStartFunction(_) =>
+      if not(expected_error.contains("start function")) {
+        ctx.fail(
+          line,
+          "assert_invalid",
+          "expected '\{expected_error}' but got InvalidStartFunction",
+        )
+      }
     _ => () // Other validation errors are acceptable
   }
 }

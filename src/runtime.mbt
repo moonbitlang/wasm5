@@ -35,6 +35,7 @@ pub suberror ValidationError {
   StackSizeMismatch(String)
   InvalidAlignment(String)
   UnknownLabel(Int)
+  InvalidStartFunction(String)
 } derive(Show)
 
 ///|
