@@ -196,6 +196,7 @@ fn get_block_type(
 struct ValidationCtx {
   stack : Array[ValType]
   mut is_unreachable : Bool
+  mut unreachable_stack_height : Int // Stack height when entering unreachable mode
   // Stack of control frames - each frame tracks the expected result types
   // For br validation, we need to know what types the target label expects
   control_stack : Array[(Array[ValType], Array[ValType])] // (params, results) for each control frame
@@ -203,7 +204,7 @@ struct ValidationCtx {
 
 ///|
 fn ValidationCtx::new() -> ValidationCtx {
-  { stack: [], is_unreachable: false, control_stack: [] }
+  { stack: [], is_unreachable: false, unreachable_stack_height: 0, control_stack: [] }
 }
 
 ///|
@@ -262,6 +263,7 @@ fn ValidationCtx::get_label_types(
 ///|
 /// Pop a value from the stack, allowing empty stack in unreachable mode.
 /// Returns the type if available, or the expected type if unreachable.
+/// Only values below unreachable_stack_height are polymorphic.
 fn ValidationCtx::poly_pop(
   self : ValidationCtx,
   expected : ValType,
@@ -269,7 +271,8 @@ fn ValidationCtx::poly_pop(
   if self.stack.length() > 0 {
     self.stack.unsafe_pop()
   } else if self.is_unreachable {
-    // In unreachable code, pretend we got the expected type
+    // In unreachable code with empty stack, this is a polymorphic pop
+    // (popping from below the unreachable boundary)
     expected
   } else {
     raise ValidationError::TypeMismatch(
@@ -280,13 +283,21 @@ fn ValidationCtx::poly_pop(
 
 ///|
 /// Check and pop a value of a specific type, allowing polymorphic behavior.
+/// Concrete values (pushed after unreachable) must still type-check.
 fn ValidationCtx::poly_pop_expect(
   self : ValidationCtx,
   expected : ValType,
   op_name : String,
 ) -> Unit raise ValidationError {
+  // In unreachable mode, concrete values are those currently on the stack
+  // (they were pushed after unreachable). Polymorphic values are those
+  // we pop from an empty stack (they would have been there before unreachable).
+  let is_concrete_value = self.stack.length() > 0
+
   let actual = self.poly_pop(expected)
-  if not(self.is_unreachable) && actual != expected {
+
+  // Type-check concrete values, or all values if not in unreachable mode
+  if (not(self.is_unreachable) || is_concrete_value) && actual != expected {
     raise ValidationError::TypeMismatch(
       "\{op_name} requires \{expected}, got \{actual}",
     )
@@ -1013,8 +1024,9 @@ fn validate_instruction(
           }
         }
       }
-      // Mark as unreachable and clear stack
+      // Mark as unreachable and record stack height
       ctx.is_unreachable = true
+      ctx.unreachable_stack_height = stack.length()
       stack.clear()
     }
     Br(label) => {
@@ -1037,8 +1049,9 @@ fn validate_instruction(
           }
         }
       }
-      // Mark as unreachable and clear stack
+      // Mark as unreachable and record stack height
       ctx.is_unreachable = true
+      ctx.unreachable_stack_height = stack.length()
       stack.clear()
     }
     BrIf(_label) =>
@@ -1062,8 +1075,9 @@ fn validate_instruction(
           )
         }
       }
-      // Code after is unreachable
+      // Code after is unreachable, record stack height
       ctx.is_unreachable = true
+      ctx.unreachable_stack_height = stack.length()
       stack.clear()
     }
     BrOnNull(_label) => {
@@ -1102,29 +1116,42 @@ fn validate_instruction(
     Select => {
       // Pop condition (i32), then two values of same type, push one back
       ctx.poly_pop_expect(I32, "select condition")
-      // In unreachable code, we're more lenient with types
-      if ctx.is_unreachable && stack.length() < 2 {
-        // Polymorphic - assume valid types
-        stack.push(I32) // Default to I32 in unreachable code
-      } else if stack.length() < 2 {
-        raise ValidationError::TypeMismatch("select expects 2 values on stack")
-      } else {
+      // Check how many concrete values we have BEFORE popping
+      let num_concrete = stack.length()
+
+      // Pop two values using poly_pop_expect which checks types for concrete values
+      // For the first pop, we don't know the expected type yet, so use a placeholder
+      // and manually check types after
+      if num_concrete >= 2 {
+        // Both values are concrete - they must match
         let val2 = stack.unsafe_pop()
         let val1 = stack.unsafe_pop()
-        // Both values should be same type
-        if not(ctx.is_unreachable) && val1 != val2 {
+        if val1 != val2 {
           raise ValidationError::TypeMismatch(
-            "select values must have same type",
+            "select values must have same type: got \{val1} and \{val2}",
           )
         }
-        // Push the selected value type back
         stack.push(val1)
+      } else if num_concrete == 1 {
+        // One concrete, one polymorphic
+        let val = stack.unsafe_pop()
+        // The polymorphic value can be any type, so no error
+        stack.push(val)
+      } else {
+        // Both polymorphic (stack is empty)
+        if ctx.is_unreachable {
+          // In unreachable code, assume a default type
+          stack.push(I32)
+        } else {
+          raise ValidationError::TypeMismatch("select expects 2 values on stack")
+        }
       }
     }
     Nop => ()
     Unreachable => {
       // unreachable instruction marks all subsequent code as unreachable
       ctx.is_unreachable = true
+      ctx.unreachable_stack_height = stack.length()
       stack.clear()
     }
     Call(func_idx) => {
@@ -1245,6 +1272,7 @@ fn validate_instruction(
       }
       // Mark as unreachable - this is a tail call that doesn't return to current function
       ctx.is_unreachable = true
+      ctx.unreachable_stack_height = stack.length()
     }
     ReturnCallIndirect(type_idx, _table_idx) => {
       // return_call_indirect: tail call through table that returns to caller
@@ -1266,6 +1294,7 @@ fn validate_instruction(
       // The called function's signature should match current function's return type
       // This will be validated at the end of the function
       ctx.is_unreachable = true
+      ctx.unreachable_stack_height = stack.length()
     }
     CallRef(type_idx) => {
       // call_ref: calls function through a reference
@@ -1319,6 +1348,7 @@ fn validate_instruction(
 
       // Mark as unreachable - this is a tail call
       ctx.is_unreachable = true
+      ctx.unreachable_stack_height = stack.length()
     }
   }
 }
@@ -1342,8 +1372,8 @@ fn validate_function(
 
   // Check final stack matches return type
   let stack = ctx.stack
-  if ctx.is_unreachable {
-    // Unreachable code - valid regardless of stack
+  if ctx.is_unreachable && stack.length() == 0 {
+    // Unreachable code with empty stack - all values are polymorphic, valid
   } else if stack.length() != func_type.results.length() {
     // Stack size doesn't match expected return values
     if stack.length() < func_type.results.length() {
