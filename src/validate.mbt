@@ -422,19 +422,79 @@ fn validate_instruction(
     }
 
     // Global operations
+    // Note: Global index space includes imported globals first, then local globals
     GlobalGet(idx) => {
       let global_idx = idx.reinterpret_as_int()
-      if global_idx < 0 || global_idx >= module_.globals.length() {
+      // Count imported globals
+      let mut num_imported_globals = 0
+      for imp in module_.imports {
+        match imp.desc {
+          ImportDesc::Global(_) => num_imported_globals += 1
+          _ => ()
+        }
+      }
+      let total_globals = num_imported_globals + module_.globals.length()
+      if global_idx < 0 || global_idx >= total_globals {
         raise ValidationError::InvalidGlobalIndex(global_idx)
       }
-      stack.push(module_.globals[global_idx].type_.val_type)
+      let global_type = if global_idx < num_imported_globals {
+        // It's an imported global - find it in imports
+        let mut import_global_idx = 0
+        let mut found_type : ValType = ValType::I32 // default
+        for imp in module_.imports {
+          match imp.desc {
+            ImportDesc::Global(gt) => {
+              if import_global_idx == global_idx {
+                found_type = gt.val_type
+                break
+              }
+              import_global_idx += 1
+            }
+            _ => ()
+          }
+        }
+        found_type
+      } else {
+        // It's a local global
+        module_.globals[global_idx - num_imported_globals].type_.val_type
+      }
+      stack.push(global_type)
     }
     GlobalSet(idx) => {
       let global_idx = idx.reinterpret_as_int()
-      if global_idx < 0 || global_idx >= module_.globals.length() {
+      // Count imported globals
+      let mut num_imported_globals = 0
+      for imp in module_.imports {
+        match imp.desc {
+          ImportDesc::Global(_) => num_imported_globals += 1
+          _ => ()
+        }
+      }
+      let total_globals = num_imported_globals + module_.globals.length()
+      if global_idx < 0 || global_idx >= total_globals {
         raise ValidationError::InvalidGlobalIndex(global_idx)
       }
-      let global_type = module_.globals[global_idx].type_.val_type
+      let global_type = if global_idx < num_imported_globals {
+        // It's an imported global - find it in imports
+        let mut import_global_idx = 0
+        let mut found_type : ValType = ValType::I32 // default
+        for imp in module_.imports {
+          match imp.desc {
+            ImportDesc::Global(gt) => {
+              if import_global_idx == global_idx {
+                found_type = gt.val_type
+                break
+              }
+              import_global_idx += 1
+            }
+            _ => ()
+          }
+        }
+        found_type
+      } else {
+        // It's a local global
+        module_.globals[global_idx - num_imported_globals].type_.val_type
+      }
       ctx.poly_pop_expect(global_type, "global.set")
     }
 

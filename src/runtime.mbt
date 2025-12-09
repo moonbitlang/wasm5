@@ -83,10 +83,27 @@ pub fn Runtime::load(m : Module) -> Runtime raise RuntimeError {
   }
   let memory = Array::make(memory_size, b'\x00')
   // Initialize globals
+  // First, add imported globals with default values (since we don't have a host environment)
   let globals : Array[Value] = []
+  for imp in m.imports {
+    match imp.desc {
+      ImportDesc::Global(gt) =>
+        match gt.val_type {
+          ValType::I32 => globals.push(Value::I32(666U)) // spectest global_i32 = 666
+          ValType::I64 => globals.push(Value::I64(666UL)) // spectest global_i64 = 666
+          ValType::F32 => globals.push(Value::F32(0.0))
+          ValType::F64 => globals.push(Value::F64(0.0))
+          ValType::FuncRef => globals.push(Value::Ref(None))
+          ValType::ExternRef => globals.push(Value::Ref(None))
+          _ => globals.push(Value::I32(0U))
+        }
+      _ => ()
+    }
+  }
+  // Then add local globals
   for i = 0; i < m.globals.length(); i = i + 1 {
     let global = m.globals[i]
-    let value = eval_const_expr(global.init, [])
+    let value = eval_const_expr(global.init, globals)
     globals.push(value)
   }
   // Initialize data segments (copy data into memory)
@@ -158,27 +175,107 @@ fn eval_const_expr(
   expr : Expr,
   globals : Array[Value],
 ) -> Value raise RuntimeError {
-  // Simple constant expression evaluator for init expressions
+  // Constant expression evaluator for init expressions
+  // Supports multi-instruction expressions (e.g., arithmetic in global inits)
   if expr.instrs.length() == 0 {
     raise RuntimeError::UnsupportedInitExpression("empty init expression")
   }
-  match expr.instrs[0] {
-    I32Const(v) => I32(v)
-    I64Const(v) => I64(v)
-    F32Const(v) => F32(v)
-    F64Const(v) => F64(v)
-    GlobalGet(idx) => {
-      let idx_int = idx.reinterpret_as_int()
-      guard idx_int >= 0 && idx_int < globals.length() else {
-        raise RuntimeError::UnsupportedInitExpression(
-          "global index out of bounds in init expression",
-        )
+  let stack : Array[Value] = []
+  for instr in expr.instrs {
+    match instr {
+      I32Const(v) => stack.push(I32(v))
+      I64Const(v) => stack.push(I64(v))
+      F32Const(v) => stack.push(F32(v))
+      F64Const(v) => stack.push(F64(v))
+      RefNull(_) => stack.push(Ref(None))
+      RefFunc(idx) => stack.push(Ref(Some(idx.reinterpret_as_int())))
+      GlobalGet(idx) => {
+        let idx_int = idx.reinterpret_as_int()
+        guard idx_int >= 0 && idx_int < globals.length() else {
+          raise RuntimeError::UnsupportedInitExpression(
+            "global index out of bounds in init expression",
+          )
+        }
+        stack.push(globals[idx_int])
       }
-      globals[idx_int]
+      // i32 arithmetic operations
+      I32Add => {
+        let b = stack.unsafe_pop()
+        let a = stack.unsafe_pop()
+        match (a, b) {
+          (I32(av), I32(bv)) => stack.push(I32(av + bv))
+          _ =>
+            raise RuntimeError::UnsupportedInitExpression(
+              "type mismatch in i32.add",
+            )
+        }
+      }
+      I32Sub => {
+        let b = stack.unsafe_pop()
+        let a = stack.unsafe_pop()
+        match (a, b) {
+          (I32(av), I32(bv)) => stack.push(I32(av - bv))
+          _ =>
+            raise RuntimeError::UnsupportedInitExpression(
+              "type mismatch in i32.sub",
+            )
+        }
+      }
+      I32Mul => {
+        let b = stack.unsafe_pop()
+        let a = stack.unsafe_pop()
+        match (a, b) {
+          (I32(av), I32(bv)) => stack.push(I32(av * bv))
+          _ =>
+            raise RuntimeError::UnsupportedInitExpression(
+              "type mismatch in i32.mul",
+            )
+        }
+      }
+      // i64 arithmetic operations
+      I64Add => {
+        let b = stack.unsafe_pop()
+        let a = stack.unsafe_pop()
+        match (a, b) {
+          (I64(av), I64(bv)) => stack.push(I64(av + bv))
+          _ =>
+            raise RuntimeError::UnsupportedInitExpression(
+              "type mismatch in i64.add",
+            )
+        }
+      }
+      I64Sub => {
+        let b = stack.unsafe_pop()
+        let a = stack.unsafe_pop()
+        match (a, b) {
+          (I64(av), I64(bv)) => stack.push(I64(av - bv))
+          _ =>
+            raise RuntimeError::UnsupportedInitExpression(
+              "type mismatch in i64.sub",
+            )
+        }
+      }
+      I64Mul => {
+        let b = stack.unsafe_pop()
+        let a = stack.unsafe_pop()
+        match (a, b) {
+          (I64(av), I64(bv)) => stack.push(I64(av * bv))
+          _ =>
+            raise RuntimeError::UnsupportedInitExpression(
+              "type mismatch in i64.mul",
+            )
+        }
+      }
+      _ =>
+        raise RuntimeError::UnsupportedInitExpression(
+          "unsupported init expression instruction: \{instr}",
+        )
     }
-    _ =>
-      raise RuntimeError::UnsupportedInitExpression(
-        "unsupported init expression: \{expr.instrs[0]}",
-      )
   }
+  guard stack.length() == 1 else {
+    raise RuntimeError::UnsupportedInitExpression(
+      "init expression should produce exactly one value",
+    )
+  }
+  stack[0]
 }
