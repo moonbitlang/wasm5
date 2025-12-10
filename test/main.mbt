@@ -229,6 +229,22 @@ fn parse_expected_value(expected : Json) -> ExpectedValue raise {
         Exact(@wasm5.Value::Ref(Some(parse_i32_value(v).reinterpret_as_int())))
       }
     { "type": "funcref", .. } => AnyFuncRef // type-only check, any funcref
+    // anyref: any reference (including null)
+    { "type": "anyref", "value": String(v), .. } =>
+      if v == "null" {
+        Exact(@wasm5.Value::Ref(None))
+      } else {
+        Exact(@wasm5.Value::Ref(Some(parse_i32_value(v).reinterpret_as_int())))
+      }
+    { "type": "anyref", .. } => AnyFuncRef // Treat as any reference
+    // exnref: exception reference (including null)
+    { "type": "exnref", "value": String(v), .. } =>
+      if v == "null" {
+        Exact(@wasm5.Value::Ref(None))
+      } else {
+        Exact(@wasm5.Value::Ref(Some(parse_i32_value(v).reinterpret_as_int())))
+      }
+    { "type": "exnref", .. } => AnyFuncRef // Treat as any reference
     // refnull: any null reference
     { "type": "refnull", .. } => AnyRefNull
     _ => raise TestUnsupported::UnsupportedExpectedType("\{expected}")
