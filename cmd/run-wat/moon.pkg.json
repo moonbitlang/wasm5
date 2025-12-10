@@ -1,0 +1,12 @@
+{
+  "is-main": true,
+  "import": [
+    {
+      "path": "Yu-zh/wasm5/src",
+      "alias": "wasm5"
+    },
+    "moonbitlang/async",
+    "moonbitlang/async/fs",
+    "moonbitlang/async/process"
+  ]
+}
