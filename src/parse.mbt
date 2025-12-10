@@ -72,16 +72,13 @@ fn Parser::read_i32_leb128(self : Parser) -> Int raise ParseError {
   let mut result = 0
   let mut shift = 0
   let mut byte = 0
-
   while true {
     byte = self.read_byte().to_int()
     result = result | ((byte & 0x7f) << shift)
     shift = shift + 7
-
     if (byte & 0x80) == 0 {
       break
     }
-
     if shift >= 35 {
       raise ParseError::InvalidFormat("LEB128 i32 too long")
     }
@@ -91,9 +88,8 @@ fn Parser::read_i32_leb128(self : Parser) -> Int raise ParseError {
   // and we haven't filled all 32 bits, we need to sign extend
   if shift < 32 && (byte & 0x40) != 0 {
     // Set all bits from 'shift' to 31
-    result = result | ((-1) << shift)
+    result = result | (-1 << shift)
   }
-
   result
 }
 
@@ -102,16 +98,13 @@ fn Parser::read_i64_leb128(self : Parser) -> Int64 raise ParseError {
   let mut result = 0L
   let mut shift = 0
   let mut byte = 0
-
   while true {
     byte = self.read_byte().to_int()
     result = result | ((byte & 0x7f).to_int64() << shift)
     shift = shift + 7
-
     if (byte & 0x80) == 0 {
       break
     }
-
     if shift >= 70 {
       raise ParseError::InvalidFormat("LEB128 i64 too long")
     }
@@ -121,9 +114,8 @@ fn Parser::read_i64_leb128(self : Parser) -> Int64 raise ParseError {
   // and we haven't filled all 64 bits, we need to sign extend
   if shift < 64 && (byte & 0x40) != 0 {
     // Set all bits from 'shift' to 63
-    result = result | ((-1L) << shift)
+    result = result | (-1L << shift)
   }
-
   result
 }
 
@@ -136,13 +128,9 @@ fn Parser::read_i64_leb128(self : Parser) -> Int64 raise ParseError {
 /// If bit 6 is not set, memory index defaults to 0
 fn Parser::read_memarg(self : Parser) -> (UInt, UInt, UInt) raise ParseError {
   let flags_and_align = self.read_u32_leb128()
-  let align = flags_and_align.land(0x3F) // bits 0-5
-  let has_memory_index = (flags_and_align.land(0x40)) != 0 // bit 6
-  let memory_idx = if has_memory_index {
-    self.read_u32_leb128()
-  } else {
-    0
-  }
+  let align = flags_and_align & 0x3F // bits 0-5
+  let has_memory_index = (flags_and_align & 0x40) != 0 // bit 6
+  let memory_idx = if has_memory_index { self.read_u32_leb128() } else { 0 }
   let offset = self.read_u32_leb128()
   (align, offset, memory_idx)
 }
@@ -190,18 +178,18 @@ fn Parser::read_valtype(self : Parser) -> ValType raise {
     0x7D => F32
     0x7C => F64
     0x7B => V128
-    0x70 => FuncRef     // funcref
-    0x6F => ExternRef   // externref
-    0x6E => AnyRef      // anyref (any heap type)
-    0x6D => EqRef       // eqref
-    0x6C => I31Ref      // i31ref
-    0x6B => StructRef   // structref
-    0x6A => ArrayRef    // arrayref
-    0x69 => ExnRef      // exnref
-    0x71 => NullRef     // none (bottom type)
+    0x70 => FuncRef // funcref
+    0x6F => ExternRef // externref
+    0x6E => AnyRef // anyref (any heap type)
+    0x6D => EqRef // eqref
+    0x6C => I31Ref // i31ref
+    0x6B => StructRef // structref
+    0x6A => ArrayRef // arrayref
+    0x69 => ExnRef // exnref
+    0x71 => NullRef // none (bottom type)
     0x72 => NullFuncRef // nofunc (bottom type)
     0x73 => NullExternRef // noextern (bottom type)
-    0x74 => NullExnRef  // noexn (bottom type)
+    0x74 => NullExnRef // noexn (bottom type)
     // GC proposal: (ref null $t) - nullable typed reference
     0x63 => {
       let _ = self.read_i32_leb128() // type index, ignored
@@ -242,7 +230,18 @@ fn Parser::read_reftype(self : Parser) -> RefType raise {
       // Read the heap type that follows
       let heap_type_byte = self.read_byte()
       match heap_type_byte {
-        0x70 | 0x6F | 0x6E | 0x6D | 0x6C | 0x6B | 0x6A | 0x69 | 0x71 | 0x72 | 0x73 | 0x74 => {
+        0x70
+        | 0x6F
+        | 0x6E
+        | 0x6D
+        | 0x6C
+        | 0x6B
+        | 0x6A
+        | 0x69
+        | 0x71
+        | 0x72
+        | 0x73
+        | 0x74 => {
           // Known heap type - put byte back and parse it
           self.pos = self.pos - 1
           self.read_reftype()
@@ -260,7 +259,18 @@ fn Parser::read_reftype(self : Parser) -> RefType raise {
       // Read the heap type that follows (same logic as 0x63)
       let heap_type_byte = self.read_byte()
       match heap_type_byte {
-        0x70 | 0x6F | 0x6E | 0x6D | 0x6C | 0x6B | 0x6A | 0x69 | 0x71 | 0x72 | 0x73 | 0x74 => {
+        0x70
+        | 0x6F
+        | 0x6E
+        | 0x6D
+        | 0x6C
+        | 0x6B
+        | 0x6A
+        | 0x69
+        | 0x71
+        | 0x72
+        | 0x73
+        | 0x74 => {
           // Known heap type - put byte back and parse it
           self.pos = self.pos - 1
           self.read_reftype()
@@ -273,7 +283,7 @@ fn Parser::read_reftype(self : Parser) -> RefType raise {
         }
       }
     }
-    _ => {
+    _ =>
       // If we get here and the byte looks like it could be a type index,
       // try parsing it as such
       if byte < 0x40 {
@@ -290,7 +300,6 @@ fn Parser::read_reftype(self : Parser) -> RefType raise {
           "invalid reference type: 0x\{byte.to_string()}",
         )
       }
-    }
   }
 }
 
@@ -330,7 +339,8 @@ fn parse_single_type(parser : Parser) -> FuncType raise {
       let field_count = parser.read_u32_leb128()
       for _ in 0U..<field_count {
         let _ = parser.read_valtype() // field type
-        let _ = parser.read_byte() // mutability
+        let _ = parser.read_byte()
+         // mutability
       }
       { params: [], results: [] }
     }
@@ -368,7 +378,8 @@ fn parse_type_section(parser : Parser) -> Array[FuncType] raise {
       0x4F => {
         let supertype_count = parser.read_u32_leb128()
         for _ in 0U..<supertype_count {
-          let _ = parser.read_u32_leb128() // supertype index, ignored
+          let _ = parser.read_u32_leb128()
+           // supertype index, ignored
         }
         let func_type = parse_single_type(parser)
         types.push(func_type)
@@ -378,7 +389,8 @@ fn parse_type_section(parser : Parser) -> Array[FuncType] raise {
       0x50 => {
         let supertype_count = parser.read_u32_leb128()
         for _ in 0U..<supertype_count {
-          let _ = parser.read_u32_leb128() // supertype index, ignored
+          let _ = parser.read_u32_leb128()
+           // supertype index, ignored
         }
         let func_type = parse_single_type(parser)
         types.push(func_type)
@@ -455,7 +467,6 @@ fn parse_table_section(parser : Parser) -> Array[TableType] raise {
     // - 0x40: reftype + limits + init_expr (explicit initializer)
     // - otherwise: reftype + limits (old format, implicit null init)
     let first_byte = parser.read_byte()
-
     if first_byte == 0x40 {
       // New encoding with explicit init expression
       let elem_type = parser.read_reftype()
@@ -619,27 +630,21 @@ fn parse_data_section(parser : Parser) -> Array[Data] raise {
   for i in 0U..<count {
     // Read flags to determine encoding format
     let flags = parser.read_u32_leb128()
-
     let (mem_idx, offset) = match flags {
-      0 => {
+      0 =>
         // Active segment with implicit memory 0
         (0U, parse_expr(parser))
-      }
-      1 => {
+      1 =>
         // Passive segment - no memory index or offset
         (0U, { instrs: [I32Const(0U)] }) // Dummy offset
-      }
-      2 => {
+      2 =>
         // Active segment with explicit memory index
         (parser.read_u32_leb128(), parse_expr(parser))
-      }
-      _ => {
+      _ =>
         // Unknown flag - try old format
         // Treat flags value as mem_idx
         (flags, parse_expr(parser))
-      }
     }
-
     let init_len = parser.read_u32_leb128()
     let init = parser.read_bytes(init_len)
     datas.push({ mem_idx, offset, init })
@@ -777,19 +782,23 @@ fn parse_instr(parser : Parser, opcode : Byte) -> Instr raise {
             // catch tagidx labelidx
             let _ = parser.read_u32_leb128()
             let _ = parser.read_u32_leb128()
+
           }
           0x01 => {
             // catch_ref tagidx labelidx
             let _ = parser.read_u32_leb128()
             let _ = parser.read_u32_leb128()
+
           }
           0x02 => {
             // catch_all labelidx
             let _ = parser.read_u32_leb128()
+
           }
           0x03 => {
             // catch_all_ref labelidx
             let _ = parser.read_u32_leb128()
+
           }
           _ => ()
         }
@@ -808,6 +817,7 @@ fn parse_instr(parser : Parser, opcode : Byte) -> Instr raise {
       // Read and discard the type(s) - we treat it the same as untyped select at runtime
       for _ in 0U..<num_types {
         let _ = parser.read_valtype()
+
       }
       Select
     }
@@ -934,18 +944,18 @@ fn parse_instr(parser : Parser, opcode : Byte) -> Instr raise {
       // ref.null heaptype
       let heap_type = parser.read_byte()
       let ref_type : RefType = match heap_type {
-        0x70 => RefType::Func       // funcref
-        0x6F => RefType::Extern     // externref
-        0x6E => RefType::Any        // anyref
-        0x6D => RefType::Eq         // eqref
-        0x6C => RefType::I31        // i31ref
-        0x6B => RefType::Struct     // structref
-        0x6A => RefType::Array      // arrayref
-        0x69 => RefType::Exn        // exnref
-        0x71 => RefType::None       // none
-        0x72 => RefType::NoFunc     // nofunc
-        0x73 => RefType::NoExtern   // noextern
-        0x74 => RefType::NoExn      // noexn
+        0x70 => RefType::Func // funcref
+        0x6F => RefType::Extern // externref
+        0x6E => RefType::Any // anyref
+        0x6D => RefType::Eq // eqref
+        0x6C => RefType::I31 // i31ref
+        0x6B => RefType::Struct // structref
+        0x6A => RefType::Array // arrayref
+        0x69 => RefType::Exn // exnref
+        0x71 => RefType::None // none
+        0x72 => RefType::NoFunc // nofunc
+        0x73 => RefType::NoExtern // noextern
+        0x74 => RefType::NoExn // noexn
         _ => {
           // Assume it's a type index (negative or positive)
           parser.pos = parser.pos - 1

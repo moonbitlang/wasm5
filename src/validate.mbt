@@ -24,7 +24,10 @@ fn reftype_to_valtype(ref_type : RefType) -> ValType {
 ///|
 /// Validate alignment - alignment must not be larger than natural alignment
 /// align parameter is stored as log2(alignment), natural is in bytes
-fn validate_alignment(align : UInt, natural : Int) -> Unit raise ValidationError {
+fn validate_alignment(
+  align : UInt,
+  natural : Int,
+) -> Unit raise ValidationError {
   // align is log2 of alignment (e.g., align=2 means 2^2 = 4 byte alignment)
   // natural is the natural alignment in bytes
   let align_int = align.reinterpret_as_int()
@@ -65,12 +68,13 @@ fn is_subtype(t1 : ValType, t2 : ValType) -> Bool {
   if t1 == t2 {
     return true
   }
-
   match (t1, t2) {
     // Bottom types (null) are subtypes of their corresponding reference types
-    (NullRef, AnyRef) | (NullRef, EqRef) | (NullRef, I31Ref) |
-    (NullRef, StructRef) | (NullRef, ArrayRef) => true
-
+    (NullRef, AnyRef)
+    | (NullRef, EqRef)
+    | (NullRef, I31Ref)
+    | (NullRef, StructRef)
+    | (NullRef, ArrayRef) => true
     (NullFuncRef, FuncRef) => true
     (NullExternRef, ExternRef) => true
     (NullExnRef, ExnRef) => true
@@ -143,7 +147,6 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
         // Local function
         m.funcs[func_idx - num_imported_funcs].reinterpret_as_int()
       }
-
       let func_type = m.types[type_idx]
 
       // Start function must have type [] -> []
@@ -198,21 +201,24 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
           )
         }
         if max_val > 65536 {
-          raise ValidationError::InvalidMemorySize("memory size must be at most 65536 pages (4GiB)")
+          raise ValidationError::InvalidMemorySize(
+            "memory size must be at most 65536 pages (4GiB)",
+          )
         }
       }
-      None => {
+      None =>
         if mem.limits.min > 65536 {
-          raise ValidationError::InvalidMemorySize("memory size must be at most 65536 pages (4GiB)")
+          raise ValidationError::InvalidMemorySize(
+            "memory size must be at most 65536 pages (4GiB)",
+          )
         }
-      }
     }
   }
 
   // Validate memory limits for imported memories
   for imp in m.imports {
     match imp.desc {
-      ImportDesc::Mem(mem_type) => {
+      ImportDesc::Mem(mem_type) =>
         match mem_type.limits.max {
           Some(max_val) => {
             let min = mem_type.limits.min.reinterpret_as_int()
@@ -223,16 +229,18 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
               )
             }
             if max_val > 65536 {
-              raise ValidationError::InvalidMemorySize("memory size must be at most 65536 pages (4GiB)")
+              raise ValidationError::InvalidMemorySize(
+                "memory size must be at most 65536 pages (4GiB)",
+              )
             }
           }
-          None => {
+          None =>
             if mem_type.limits.min > 65536 {
-              raise ValidationError::InvalidMemorySize("memory size must be at most 65536 pages (4GiB)")
+              raise ValidationError::InvalidMemorySize(
+                "memory size must be at most 65536 pages (4GiB)",
+              )
             }
-          }
         }
-      }
       _ => ()
     }
   }
@@ -280,7 +288,12 @@ struct ValidationCtx {
 
 ///|
 fn ValidationCtx::new() -> ValidationCtx {
-  { stack: [], is_unreachable: false, unreachable_stack_height: 0, control_stack: [] }
+  {
+    stack: [],
+    is_unreachable: false,
+    unreachable_stack_height: 0,
+    control_stack: [],
+  }
 }
 
 ///|
@@ -369,7 +382,6 @@ fn ValidationCtx::poly_pop_expect(
   // (they were pushed after unreachable). Polymorphic values are those
   // we pop from an empty stack (they would have been there before unreachable).
   let is_concrete_value = self.stack.length() > 0
-
   let actual = self.poly_pop(expected)
 
   // Type-check concrete values, or all values if not in unreachable mode
@@ -957,7 +969,9 @@ fn validate_instruction(
         // Exact match - validate result types (with subtyping)
         for i = 0; i < results.length(); i = i + 1 {
           if not(is_subtype(block_ctx.stack[i], results[i])) {
-            raise ValidationError::TypeMismatch("block result type mismatch: expected \{results[i]}, got \{block_ctx.stack[i]}")
+            raise ValidationError::TypeMismatch(
+              "block result type mismatch: expected \{results[i]}, got \{block_ctx.stack[i]}",
+            )
           }
         }
         // Push results onto parent stack
@@ -1004,7 +1018,9 @@ fn validate_instruction(
         // Exact match - validate result types (with subtyping)
         for i = 0; i < results.length(); i = i + 1 {
           if not(is_subtype(loop_ctx.stack[i], results[i])) {
-            raise ValidationError::TypeMismatch("loop result type mismatch: expected \{results[i]}, got \{loop_ctx.stack[i]}")
+            raise ValidationError::TypeMismatch(
+              "loop result type mismatch: expected \{results[i]}, got \{loop_ctx.stack[i]}",
+            )
           }
         }
         // Push results onto parent stack
@@ -1108,7 +1124,9 @@ fn validate_instruction(
           for i = 0; i < func_type.results.length(); i = i + 1 {
             let stack_idx = stack.length() - func_type.results.length() + i
             if not(is_subtype(stack[stack_idx], func_type.results[i])) {
-              raise ValidationError::TypeMismatch("return: result type mismatch: expected \{func_type.results[i]}, got \{stack[stack_idx]}")
+              raise ValidationError::TypeMismatch(
+                "return: result type mismatch: expected \{func_type.results[i]}, got \{stack[stack_idx]}",
+              )
             }
           }
         }
@@ -1247,29 +1265,32 @@ fn validate_instruction(
       ctx.unreachable_stack_height = stack.length()
       stack.clear()
     }
-    BrOnNull(_label) => {
+    BrOnNull(_label) =>
       // br_on_null: pop nullable ref, branch if null, else push non-null ref
       // For now, just pop a reference value (any reference type)
       if not(ctx.is_unreachable) && stack.length() < 1 {
-        raise ValidationError::TypeMismatch("br_on_null expects reference on stack")
+        raise ValidationError::TypeMismatch(
+          "br_on_null expects reference on stack",
+        )
       } else if stack.length() >= 1 {
         let _ = stack.unsafe_pop()
         // Push back a reference (simplified - same type for now)
         // TODO: properly track non-null type narrowing
         stack.push(FuncRef) // Placeholder
       }
-    }
-    BrOnNonNull(label) => {
+    BrOnNonNull(label) =>
       // br_on_non_null: pop nullable ref, branch if non-null (with the value), else continue
       // Pop the nullable reference
       if not(ctx.is_unreachable) && stack.length() < 1 {
-        raise ValidationError::TypeMismatch("br_on_non_null expects reference on stack")
+        raise ValidationError::TypeMismatch(
+          "br_on_non_null expects reference on stack",
+        )
       } else if stack.length() >= 1 {
         let _ = stack.unsafe_pop()
+
       }
-      // If we branch, we pass the non-null value to the target
-      // Fallthrough case: the value was null, so nothing is pushed
-    }
+    // If we branch, we pass the non-null value to the target
+    // Fallthrough case: the value was null, so nothing is pushed
     Drop =>
       // In unreachable code, drop is valid even with empty stack
       if ctx.is_unreachable && stack.length() == 0 {
@@ -1303,14 +1324,12 @@ fn validate_instruction(
         // One concrete, one polymorphic
         let val = stack.unsafe_pop()
         stack.push(val)
-      } else {
         // Both polymorphic (stack is empty)
-        if ctx.is_unreachable {
-          // In unreachable code, assume a default type
-          stack.push(I32)
-        } else {
-          raise ValidationError::TypeMismatch("select expects 2 values on stack")
-        }
+      } else if ctx.is_unreachable {
+        // In unreachable code, assume a default type
+        stack.push(I32)
+      } else {
+        raise ValidationError::TypeMismatch("select expects 2 values on stack")
       }
     }
     Nop => ()
@@ -1400,7 +1419,6 @@ fn validate_instruction(
           _ => ()
         }
       }
-
       let type_idx = if idx < num_imported_funcs {
         // It's an imported function - find its type
         let mut import_func_idx = 0
@@ -1426,11 +1444,9 @@ fn validate_instruction(
         }
         module_.funcs[local_idx].reinterpret_as_int()
       }
-
       if type_idx < 0 || type_idx >= module_.types.length() {
         raise ValidationError::InvalidTypeIndex(type_idx)
       }
-
       let func_type_called = module_.types[type_idx]
       // Pop arguments from stack (in reverse order)
       for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
@@ -1477,7 +1493,8 @@ fn validate_instruction(
       } else if stack.length() < 1 {
         raise ValidationError::TypeMismatch("call_ref expects funcref on stack")
       } else {
-        let _ = stack.unsafe_pop() // Pop funcref (we don't type-check it strictly for now)
+        let _ = stack.unsafe_pop()
+         // Pop funcref (we don't type-check it strictly for now)
       }
 
       // Pop arguments from stack (in reverse order)
@@ -1502,14 +1519,20 @@ fn validate_instruction(
       if ctx.is_unreachable && stack.length() == 0 {
         // Polymorphic - allow
       } else if stack.length() < 1 {
-        raise ValidationError::TypeMismatch("return_call_ref expects funcref on stack")
+        raise ValidationError::TypeMismatch(
+          "return_call_ref expects funcref on stack",
+        )
       } else {
-        let _ = stack.unsafe_pop() // Pop funcref
+        let _ = stack.unsafe_pop()
+         // Pop funcref
       }
 
       // Pop arguments from stack (in reverse order)
       for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
-        ctx.poly_pop_expect(func_type_called.params[i], "return_call_ref argument")
+        ctx.poly_pop_expect(
+          func_type_called.params[i],
+          "return_call_ref argument",
+        )
       }
 
       // Mark as unreachable - this is a tail call
@@ -1560,7 +1583,9 @@ fn validate_function(
     for i = 0; i < func_type.results.length(); i = i + 1 {
       // Stack type must be a subtype of expected return type
       if not(is_subtype(stack[i], func_type.results[i])) {
-        raise ValidationError::TypeMismatch("function return type mismatch: expected \{func_type.results[i]}, got \{stack[i]}")
+        raise ValidationError::TypeMismatch(
+          "function return type mismatch: expected \{func_type.results[i]}, got \{stack[i]}",
+        )
       }
     }
   }

@@ -25,18 +25,18 @@ enum ValType {
 
 ///|
 enum RefType {
-  Func      // 0x70
-  Extern    // 0x6F
-  Any       // 0x6E
-  Eq        // 0x6D
-  I31       // 0x6C
-  Struct    // 0x6B
-  Array     // 0x6A
-  Exn       // 0x69
-  None      // 0x71 - bottom type
-  NoFunc    // 0x72 - bottom type for func
-  NoExtern  // 0x73 - bottom type for extern
-  NoExn     // 0x74 - bottom type for exn
+  Func // 0x70
+  Extern // 0x6F
+  Any // 0x6E
+  Eq // 0x6D
+  I31 // 0x6C
+  Struct // 0x6B
+  Array // 0x6A
+  Exn // 0x69
+  None // 0x71 - bottom type
+  NoFunc // 0x72 - bottom type for func
+  NoExtern // 0x73 - bottom type for extern
+  NoExn // 0x74 - bottom type for exn
   TypeIndex(Int) // typed reference (ref null $t)
 } derive(Show)
 

@@ -424,9 +424,9 @@ fn handle_assert_trap(
     @wasm5.RuntimeError::IntegerOverflow =>
       // IntegerOverflow is used for both "integer overflow" and "invalid conversion to integer"
       if not(
-        expected_error.contains("overflow") ||
-        expected_error.contains("invalid conversion"),
-      ) {
+          expected_error.contains("overflow") ||
+          expected_error.contains("invalid conversion"),
+        ) {
         ctx.fail(
           line,
           "assert_trap",
@@ -770,7 +770,6 @@ async fn main {
   // These contain (module quote ...) which are expected to fail with InvalidMagic
   // linking.wast: Tests cross-module imports/exports - requires module registry system
   let blacklist = ["comments.wast", "annotations.wast", "linking.wast"]
-
   let failures : Array[TestFailure] = []
   let wast_files = collect_wast_files("test/reference_tests/")
   for wast_file in wast_files {

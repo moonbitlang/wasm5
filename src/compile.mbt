@@ -964,6 +964,7 @@ fn op_br_on_null(rt : Runtime) -> ControlFlow {
     let target_pc = rt.branch_targets[target_idx]
     for _i = 0; _i <= label; _i = _i + 1 {
       let _ = rt.branch_targets.unsafe_pop()
+
     }
     Jump(target_pc)
   } else {
@@ -995,6 +996,7 @@ fn op_br_on_non_null(rt : Runtime) -> ControlFlow {
     let target_pc = rt.branch_targets[target_idx]
     for _i = 0; _i <= label; _i = _i + 1 {
       let _ = rt.branch_targets.unsafe_pop()
+
     }
     Jump(target_pc)
   } else {
@@ -1061,10 +1063,16 @@ fn op_call(rt : Runtime) -> ControlFlow {
       ValType::F64 => rt.locals.push(Value::F64(0.0))
       ValType::FuncRef => rt.locals.push(Value::Ref(None))
       ValType::ExternRef => rt.locals.push(Value::Ref(None))
-      ValType::AnyRef | ValType::ExnRef | ValType::NullRef | ValType::NullFuncRef |
-      ValType::NullExnRef | ValType::NullExternRef | ValType::EqRef | ValType::I31Ref |
-      ValType::StructRef | ValType::ArrayRef =>
-        rt.locals.push(Value::Ref(None))
+      ValType::AnyRef
+      | ValType::ExnRef
+      | ValType::NullRef
+      | ValType::NullFuncRef
+      | ValType::NullExnRef
+      | ValType::NullExternRef
+      | ValType::EqRef
+      | ValType::I31Ref
+      | ValType::StructRef
+      | ValType::ArrayRef => rt.locals.push(Value::Ref(None))
       _ =>
         return Trap(
           RuntimeError::UnsupportedLocalType(
@@ -1196,10 +1204,16 @@ fn op_call_indirect(rt : Runtime) -> ControlFlow {
       ValType::F64 => rt.locals.push(Value::F64(0.0))
       ValType::FuncRef => rt.locals.push(Value::Ref(None))
       ValType::ExternRef => rt.locals.push(Value::Ref(None))
-      ValType::AnyRef | ValType::ExnRef | ValType::NullRef | ValType::NullFuncRef |
-      ValType::NullExnRef | ValType::NullExternRef | ValType::EqRef | ValType::I31Ref |
-      ValType::StructRef | ValType::ArrayRef =>
-        rt.locals.push(Value::Ref(None))
+      ValType::AnyRef
+      | ValType::ExnRef
+      | ValType::NullRef
+      | ValType::NullFuncRef
+      | ValType::NullExnRef
+      | ValType::NullExternRef
+      | ValType::EqRef
+      | ValType::I31Ref
+      | ValType::StructRef
+      | ValType::ArrayRef => rt.locals.push(Value::Ref(None))
       _ =>
         return Trap(
           RuntimeError::UnsupportedLocalType(
@@ -1273,10 +1287,16 @@ fn op_return_call(rt : Runtime) -> ControlFlow {
       ValType::F64 => rt.locals.push(Value::F64(0.0))
       ValType::FuncRef => rt.locals.push(Value::Ref(None))
       ValType::ExternRef => rt.locals.push(Value::Ref(None))
-      ValType::AnyRef | ValType::ExnRef | ValType::NullRef | ValType::NullFuncRef |
-      ValType::NullExnRef | ValType::NullExternRef | ValType::EqRef | ValType::I31Ref |
-      ValType::StructRef | ValType::ArrayRef =>
-        rt.locals.push(Value::Ref(None))
+      ValType::AnyRef
+      | ValType::ExnRef
+      | ValType::NullRef
+      | ValType::NullFuncRef
+      | ValType::NullExnRef
+      | ValType::NullExternRef
+      | ValType::EqRef
+      | ValType::I31Ref
+      | ValType::StructRef
+      | ValType::ArrayRef => rt.locals.push(Value::Ref(None))
       _ =>
         return Trap(
           RuntimeError::UnsupportedLocalType(
@@ -1298,7 +1318,9 @@ fn op_return_call_indirect(rt : Runtime) -> ControlFlow {
 
   // Check table bounds
   if table_idx < 0 || table_idx >= rt.tables.length() {
-    return Trap(RuntimeError::InvalidType("return_call_indirect: invalid table index"))
+    return Trap(
+      RuntimeError::InvalidType("return_call_indirect: invalid table index"),
+    )
   }
   let table = rt.tables[table_idx].data
   if elem_idx < 0 || elem_idx >= table.length() {
@@ -1386,10 +1408,16 @@ fn op_return_call_indirect(rt : Runtime) -> ControlFlow {
       ValType::F64 => rt.locals.push(Value::F64(0.0))
       ValType::FuncRef => rt.locals.push(Value::Ref(None))
       ValType::ExternRef => rt.locals.push(Value::Ref(None))
-      ValType::AnyRef | ValType::ExnRef | ValType::NullRef | ValType::NullFuncRef |
-      ValType::NullExnRef | ValType::NullExternRef | ValType::EqRef | ValType::I31Ref |
-      ValType::StructRef | ValType::ArrayRef =>
-        rt.locals.push(Value::Ref(None))
+      ValType::AnyRef
+      | ValType::ExnRef
+      | ValType::NullRef
+      | ValType::NullFuncRef
+      | ValType::NullExnRef
+      | ValType::NullExternRef
+      | ValType::EqRef
+      | ValType::I31Ref
+      | ValType::StructRef
+      | ValType::ArrayRef => rt.locals.push(Value::Ref(None))
       _ =>
         return Trap(
           RuntimeError::UnsupportedLocalType(
@@ -1408,7 +1436,9 @@ fn op_call_ref(rt : Runtime) -> ControlFlow {
   // Pop the function reference from the stack
   let func_ref_value = rt.stack.unsafe_pop()
   guard func_ref_value is Ref(Some(func_idx)) else {
-    return Trap(RuntimeError::InvalidType("call_ref: null or invalid function reference"))
+    return Trap(
+      RuntimeError::InvalidType("call_ref: null or invalid function reference"),
+    )
   }
 
   // Count imported functions
@@ -1434,7 +1464,6 @@ fn op_call_ref(rt : Runtime) -> ControlFlow {
   if local_func_idx < 0 || local_func_idx >= rt.module_.codes.length() {
     return Trap(RuntimeError::InvalidType("call_ref: invalid function index"))
   }
-
   let actual_type_idx = rt.module_.funcs[local_func_idx].reinterpret_as_int()
   let func_type = rt.module_.types[type_idx]
   let actual_type = rt.module_.types[actual_type_idx]
@@ -1444,7 +1473,6 @@ fn op_call_ref(rt : Runtime) -> ControlFlow {
     func_type.results.length() != actual_type.results.length() {
     return Trap(RuntimeError::InvalidType("call_ref: type mismatch"))
   }
-
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     return Trap(
@@ -1475,10 +1503,16 @@ fn op_call_ref(rt : Runtime) -> ControlFlow {
       ValType::F64 => rt.locals.push(Value::F64(0.0))
       ValType::FuncRef => rt.locals.push(Value::Ref(None))
       ValType::ExternRef => rt.locals.push(Value::Ref(None))
-      ValType::AnyRef | ValType::ExnRef | ValType::NullRef | ValType::NullFuncRef |
-      ValType::NullExnRef | ValType::NullExternRef | ValType::EqRef | ValType::I31Ref |
-      ValType::StructRef | ValType::ArrayRef =>
-        rt.locals.push(Value::Ref(None))
+      ValType::AnyRef
+      | ValType::ExnRef
+      | ValType::NullRef
+      | ValType::NullFuncRef
+      | ValType::NullExnRef
+      | ValType::NullExternRef
+      | ValType::EqRef
+      | ValType::I31Ref
+      | ValType::StructRef
+      | ValType::ArrayRef => rt.locals.push(Value::Ref(None))
       _ =>
         return Trap(
           RuntimeError::UnsupportedLocalType(
@@ -1497,7 +1531,11 @@ fn op_return_call_ref(rt : Runtime) -> ControlFlow {
   // Pop the function reference from the stack
   let func_ref_value = rt.stack.unsafe_pop()
   guard func_ref_value is Ref(Some(func_idx)) else {
-    return Trap(RuntimeError::InvalidType("return_call_ref: null or invalid function reference"))
+    return Trap(
+      RuntimeError::InvalidType(
+        "return_call_ref: null or invalid function reference",
+      ),
+    )
   }
 
   // Count imported functions
@@ -1521,9 +1559,10 @@ fn op_return_call_ref(rt : Runtime) -> ControlFlow {
   // Adjust index for local functions
   let local_func_idx = func_idx - num_imported_funcs
   if local_func_idx < 0 || local_func_idx >= rt.module_.codes.length() {
-    return Trap(RuntimeError::InvalidType("return_call_ref: invalid function index"))
+    return Trap(
+      RuntimeError::InvalidType("return_call_ref: invalid function index"),
+    )
   }
-
   let actual_type_idx = rt.module_.funcs[local_func_idx].reinterpret_as_int()
   let func_type = rt.module_.types[type_idx]
   let actual_type = rt.module_.types[actual_type_idx]
@@ -1533,7 +1572,6 @@ fn op_return_call_ref(rt : Runtime) -> ControlFlow {
     func_type.results.length() != actual_type.results.length() {
     return Trap(RuntimeError::InvalidType("return_call_ref: type mismatch"))
   }
-
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     return Trap(
@@ -1561,10 +1599,16 @@ fn op_return_call_ref(rt : Runtime) -> ControlFlow {
       ValType::F64 => rt.locals.push(Value::F64(0.0))
       ValType::FuncRef => rt.locals.push(Value::Ref(None))
       ValType::ExternRef => rt.locals.push(Value::Ref(None))
-      ValType::AnyRef | ValType::ExnRef | ValType::NullRef | ValType::NullFuncRef |
-      ValType::NullExnRef | ValType::NullExternRef | ValType::EqRef | ValType::I31Ref |
-      ValType::StructRef | ValType::ArrayRef =>
-        rt.locals.push(Value::Ref(None))
+      ValType::AnyRef
+      | ValType::ExnRef
+      | ValType::NullRef
+      | ValType::NullFuncRef
+      | ValType::NullExnRef
+      | ValType::NullExternRef
+      | ValType::EqRef
+      | ValType::I31Ref
+      | ValType::StructRef
+      | ValType::ArrayRef => rt.locals.push(Value::Ref(None))
       _ =>
         return Trap(
           RuntimeError::UnsupportedLocalType(
@@ -3482,17 +3526,14 @@ fn Runtime::compile_func(
   self.emit(WasmInstr(op_push_block_target))
   let func_end_slot = self.ops.length()
   self.emit(ImmediateIdx(0)) // Placeholder, will be patched
-
   for instr in code.body.instrs {
     self.compile_wasm_instr(instr)
   }
-
   self.emit(WasmInstr(op_end_block)) // Pop the function-level target
   self.emit(WasmInstr(op_end))
 
   // Patch the function end target to point after op_end_block
   self.ops[func_end_slot] = ImmediateIdx(self.ops.length() - 1) // Points to op_end
-
   code.compiled = Some(start_pc)
 }
 
@@ -3547,9 +3588,7 @@ pub fn Runtime::compile(self : Runtime) -> Unit raise RuntimeError {
 
         // Execute start function, ignoring runtime errors
         // (e.g., calls to unimplemented imported functions)
-        try {
-          self.execute()
-        } catch {
+        self.execute() catch {
           _ => () // Ignore runtime errors in start function
         }
 
