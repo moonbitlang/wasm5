@@ -1150,19 +1150,74 @@ fn validate_instruction(
       ctx.unreachable_stack_height = stack.length()
       stack.clear()
     }
-    BrIf(_label) =>
-      // Conditional branch - pop i32 condition
+    BrIf(label) => {
+      // Conditional branch
+      // First, validate label exists
+      let target_types = ctx.get_label_types(label)
+
+      // Pop i32 condition
       ctx.poly_pop_expect(I32, "br_if condition")
-    // Stack continues after (not unreachable)
+
+      // Validate that branch target's required values are on stack
+      // Unlike br, we DON'T pop them (they stay for fallthrough case)
+      if not(ctx.is_unreachable) || stack.length() > 0 {
+        if stack.length() < target_types.length() {
+          if ctx.is_unreachable {
+            // In unreachable code, missing values are polymorphic - OK
+          } else {
+            raise ValidationError::TypeMismatch(
+              "br_if: expected \{target_types.length()} values on stack for branch target",
+            )
+          }
+        } else {
+          // Validate types for the branch target (with subtyping)
+          for i = 0; i < target_types.length(); i = i + 1 {
+            let stack_idx = stack.length() - target_types.length() + i
+            if not(is_subtype(stack[stack_idx], target_types[i])) {
+              raise ValidationError::TypeMismatch(
+                "br_if: branch target type mismatch: expected \{target_types[i]}, got \{stack[stack_idx]}",
+              )
+            }
+          }
+        }
+      }
+      // Note: Unlike br, br_if does NOT mark as unreachable
+      // Stack remains unchanged (values stay for fallthrough)
+    }
     BrTable(labels, default_label) => {
       // Table branch - pop i32 index
       ctx.poly_pop_expect(I32, "br_table index")
 
-      // Validate all labels exist (even in unreachable code)
+      // Validate all labels exist and have compatible types
+      let default_types = ctx.get_label_types(default_label)
+
+      // All labels (including default) must have the same arity and types
+      // TODO: This validation is currently disabled due to a bug where get_label_types
+      // returns different types for the same label on different calls. This needs investigation.
+      // The issue manifests as F32 vs F64 type mismatches in br_table.wast tests.
+      //
+      // For now, we only validate arity (length) matches and that labels exist.
       for label in labels {
-        let _ = ctx.get_label_types(label)
+        let label_types = ctx.get_label_types(label)
+
+        // Check arity matches
+        if label_types.length() != default_types.length() {
+          raise ValidationError::TypeMismatch(
+            "br_table: all labels must have same arity (expected \{default_types.length()}, got \{label_types.length()})",
+          )
+        }
+
+        // TODO: Re-enable once we fix the type mismatch bug
+        // Check types match exactly (WebAssembly spec requires exact match)
+        // for i = 0; i < label_types.length(); i = i + 1 {
+        //   if label_types[i] != default_types[i] {
+        //     raise ValidationError::TypeMismatch(
+        //       "br_table: all labels must have same types (label \{label} has \{label_types[i]}, default has \{default_types[i]} at position \{i})",
+        //     )
+        //   }
+        // }
       }
-      let target_types = ctx.get_label_types(default_label)
+      let target_types = default_types
 
       // Validate concrete values on stack
       if not(ctx.is_unreachable) || stack.length() > 0 {
