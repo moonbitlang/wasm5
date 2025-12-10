@@ -36,6 +36,8 @@ pub suberror ValidationError {
   InvalidAlignment(String)
   UnknownLabel(Int)
   InvalidStartFunction(String)
+  UnknownMemory(Int)
+  InvalidMemorySize(String)
 } derive(Show)
 
 ///|

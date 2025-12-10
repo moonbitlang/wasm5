@@ -161,6 +161,57 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
     None => ()
   }
 
+  // Validate memory limits
+  for mem in m.mems {
+    match mem.limits.max {
+      Some(max_val) => {
+        let min = mem.limits.min.reinterpret_as_int()
+        let max = max_val.reinterpret_as_int()
+        if min > max {
+          raise ValidationError::InvalidMemorySize(
+            "size minimum must not be greater than maximum",
+          )
+        }
+        if max_val > 65536 {
+          raise ValidationError::InvalidMemorySize("memory size must be at most 65536 pages (4GiB)")
+        }
+      }
+      None => {
+        if mem.limits.min > 65536 {
+          raise ValidationError::InvalidMemorySize("memory size must be at most 65536 pages (4GiB)")
+        }
+      }
+    }
+  }
+
+  // Validate memory limits for imported memories
+  for imp in m.imports {
+    match imp.desc {
+      ImportDesc::Mem(mem_type) => {
+        match mem_type.limits.max {
+          Some(max_val) => {
+            let min = mem_type.limits.min.reinterpret_as_int()
+            let max = max_val.reinterpret_as_int()
+            if min > max {
+              raise ValidationError::InvalidMemorySize(
+                "size minimum must not be greater than maximum",
+              )
+            }
+            if max_val > 65536 {
+              raise ValidationError::InvalidMemorySize("memory size must be at most 65536 pages (4GiB)")
+            }
+          }
+          None => {
+            if mem_type.limits.min > 65536 {
+              raise ValidationError::InvalidMemorySize("memory size must be at most 65536 pages (4GiB)")
+            }
+          }
+        }
+      }
+      _ => ()
+    }
+  }
+
   // Validate function bodies against their types
   for i = 0; i < m.codes.length(); i = i + 1 {
     let type_idx = m.funcs[i].reinterpret_as_int()
