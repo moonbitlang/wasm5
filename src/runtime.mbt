@@ -38,6 +38,7 @@ pub suberror ValidationError {
   InvalidStartFunction(String)
   UnknownMemory(Int)
   InvalidMemorySize(String)
+  ImmutableGlobal(Int)
 } derive(Show)
 
 ///|

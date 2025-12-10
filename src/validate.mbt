@@ -161,6 +161,31 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
     None => ()
   }
 
+  // Validate global initializers
+  for i = 0; i < m.globals.length(); i = i + 1 {
+    let global = m.globals[i]
+    // Create a validation context for the init expression
+    let init_ctx = ValidationCtx::new()
+    // Validate each instruction in the init expression
+    let dummy_func_type : FuncType = { params: [], results: [] }
+    let dummy_code : Code = { locals: [], body: global.init, compiled: None }
+    for instr in global.init.instrs {
+      validate_instruction(m, dummy_func_type, dummy_code, init_ctx, instr)
+    }
+    // Check that init expression produces exactly one value of the correct type
+    if init_ctx.stack.length() != 1 {
+      raise ValidationError::TypeMismatch(
+        "global initializer must produce exactly one value, got \{init_ctx.stack.length()}",
+      )
+    }
+    let produced_type = init_ctx.stack[0]
+    if produced_type != global.type_.val_type {
+      raise ValidationError::TypeMismatch(
+        "global initializer type mismatch: expected \{global.type_.val_type}, got \{produced_type}",
+      )
+    }
+  }
+
   // Validate memory limits
   for mem in m.mems {
     match mem.limits.max {
@@ -685,15 +710,17 @@ fn validate_instruction(
       if global_idx < 0 || global_idx >= total_globals {
         raise ValidationError::InvalidGlobalIndex(global_idx)
       }
-      let global_type = if global_idx < num_imported_globals {
+      let (global_type, is_mutable) = if global_idx < num_imported_globals {
         // It's an imported global - find it in imports
         let mut import_global_idx = 0
         let mut found_type : ValType = ValType::I32 // default
+        let mut found_mutable = false
         for imp in module_.imports {
           match imp.desc {
             ImportDesc::Global(gt) => {
               if import_global_idx == global_idx {
                 found_type = gt.val_type
+                found_mutable = gt.mutable
                 break
               }
               import_global_idx += 1
@@ -701,10 +728,15 @@ fn validate_instruction(
             _ => ()
           }
         }
-        found_type
+        (found_type, found_mutable)
       } else {
         // It's a local global
-        module_.globals[global_idx - num_imported_globals].type_.val_type
+        let global = module_.globals[global_idx - num_imported_globals]
+        (global.type_.val_type, global.type_.mutable)
+      }
+      // Check if global is mutable
+      if not(is_mutable) {
+        raise ValidationError::ImmutableGlobal(global_idx)
       }
       ctx.poly_pop_expect(global_type, "global.set")
     }
