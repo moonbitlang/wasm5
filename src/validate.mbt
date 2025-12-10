@@ -1143,14 +1143,14 @@ fn validate_instruction(
 
       }
     Select => {
+      // Note: We can't distinguish between plain select (0x1B) and typed select (0x1C)
+      // at validation time since the parser treats them the same. So we allow all types.
       // Pop condition (i32), then two values of same type, push one back
       ctx.poly_pop_expect(I32, "select condition")
       // Check how many concrete values we have BEFORE popping
       let num_concrete = stack.length()
 
-      // Pop two values using poly_pop_expect which checks types for concrete values
-      // For the first pop, we don't know the expected type yet, so use a placeholder
-      // and manually check types after
+      // Pop two values and validate
       if num_concrete >= 2 {
         // Both values are concrete - they must match
         let val2 = stack.unsafe_pop()
@@ -1164,7 +1164,6 @@ fn validate_instruction(
       } else if num_concrete == 1 {
         // One concrete, one polymorphic
         let val = stack.unsafe_pop()
-        // The polymorphic value can be any type, so no error
         stack.push(val)
       } else {
         // Both polymorphic (stack is empty)

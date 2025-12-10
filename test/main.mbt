@@ -72,11 +72,14 @@ suberror TestUnsupported {
 // =============================================================================
 
 ///|
-/// Special expected value that represents "any NaN"
+/// Special expected value that represents "any NaN" or type-only checks
 enum ExpectedValue {
   Exact(@wasm5.Value)
   AnyF32Nan // nan:arithmetic for f32 - any NaN value is acceptable
   AnyF64Nan // nan:arithmetic for f64 - any NaN value is acceptable
+  AnyFuncRef // any funcref value (including null)
+  AnyExternRef // any externref value (including null)
+  AnyRefNull // any null reference
 } derive(Show)
 
 ///|
@@ -210,20 +213,24 @@ fn parse_expected_value(expected : Json) -> ExpectedValue raise {
       } else {
         Exact(@wasm5.Value::F64(parse_f64_value(v)))
       }
-    // externref: "null" for null, otherwise an integer index
+    // externref: "null" for null, otherwise an integer index, or no value (any externref)
     { "type": "externref", "value": String(v), .. } =>
       if v == "null" {
         Exact(@wasm5.Value::Ref(None))
       } else {
         Exact(@wasm5.Value::Ref(Some(parse_i32_value(v).reinterpret_as_int())))
       }
-    // funcref: "null" for null, otherwise an integer function index
+    { "type": "externref", .. } => AnyExternRef // type-only check, any externref
+    // funcref: "null" for null, otherwise an integer function index, or no value (any funcref)
     { "type": "funcref", "value": String(v), .. } =>
       if v == "null" {
         Exact(@wasm5.Value::Ref(None))
       } else {
         Exact(@wasm5.Value::Ref(Some(parse_i32_value(v).reinterpret_as_int())))
       }
+    { "type": "funcref", .. } => AnyFuncRef // type-only check, any funcref
+    // refnull: any null reference
+    { "type": "refnull", .. } => AnyRefNull
     _ => raise TestUnsupported::UnsupportedExpectedType("\{expected}")
   }
 }
@@ -251,6 +258,9 @@ fn format_expected_with_bits(e : ExpectedValue) -> String {
     Exact(v) => format_value_with_bits(v)
     AnyF32Nan => "AnyF32Nan"
     AnyF64Nan => "AnyF64Nan"
+    AnyFuncRef => "AnyFuncRef"
+    AnyExternRef => "AnyExternRef"
+    AnyRefNull => "AnyRefNull"
   }
 }
 
@@ -277,6 +287,24 @@ fn values_match(actual : @wasm5.Value, expected : ExpectedValue) -> Bool {
     AnyF64Nan =>
       match actual {
         @wasm5.Value::F64(v) => v.is_nan()
+        _ => false
+      }
+    AnyFuncRef =>
+      // Accept any reference value (funcref can be null or non-null)
+      match actual {
+        @wasm5.Value::Ref(_) => true
+        _ => false
+      }
+    AnyExternRef =>
+      // Accept any reference value (externref can be null or non-null)
+      match actual {
+        @wasm5.Value::Ref(_) => true
+        _ => false
+      }
+    AnyRefNull =>
+      // Accept only null references
+      match actual {
+        @wasm5.Value::Ref(None) => true
         _ => false
       }
   }
