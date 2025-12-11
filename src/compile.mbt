@@ -2979,7 +2979,7 @@ fn op_i32_trunc_f64_s(rt : Runtime) -> ControlFlow {
   if a.is_nan() {
     return Trap(RuntimeError::IntegerOverflow)
   }
-  if a >= 2147483648.0 || a < -2147483648.0 {
+  if a >= 2147483648.0 || a <= -2147483649.0 {
     return Trap(RuntimeError::IntegerOverflow)
   }
   rt.stack.push(Value::I32(a.to_int().reinterpret_as_uint()))
