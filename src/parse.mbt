@@ -340,7 +340,7 @@ fn parse_single_type(parser : Parser) -> FuncType raise {
       for _ in 0U..<field_count {
         let _ = parser.read_valtype() // field type
         let _ = parser.read_byte()
-         // mutability
+        // mutability
       }
       { params: [], results: [] }
     }
@@ -379,7 +379,7 @@ fn parse_type_section(parser : Parser) -> Array[FuncType] raise {
         let supertype_count = parser.read_u32_leb128()
         for _ in 0U..<supertype_count {
           let _ = parser.read_u32_leb128()
-           // supertype index, ignored
+          // supertype index, ignored
         }
         let func_type = parse_single_type(parser)
         types.push(func_type)
@@ -390,7 +390,7 @@ fn parse_type_section(parser : Parser) -> Array[FuncType] raise {
         let supertype_count = parser.read_u32_leb128()
         for _ in 0U..<supertype_count {
           let _ = parser.read_u32_leb128()
-           // supertype index, ignored
+          // supertype index, ignored
         }
         let func_type = parse_single_type(parser)
         types.push(func_type)
