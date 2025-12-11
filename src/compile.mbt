@@ -97,7 +97,7 @@ enum CompileBlockKind {
   BlockKind // br jumps to end, uses results
   LoopKind // br jumps to start, uses params
   IfKind // br jumps to end, uses results
-}
+} derive(Eq)
 
 ///|
 /// Compile-time control frame for tracking block types and stack heights
@@ -106,6 +106,11 @@ struct CompileBlock {
   params : Array[ValType]
   results : Array[ValType]
   stack_height_at_entry : Int // type_stack.length() when block started (after params popped)
+  // For loops: the PC to jump to (known at block start)
+  // For blocks/if: 0 (unused, patches go to pending_br_patches)
+  target_pc : Int
+  // Slots that need to be patched with the end PC (for blocks/if)
+  pending_br_patches : Array[Int]
 }
 
 ///|
@@ -152,11 +157,19 @@ fn CompileCtx::push_control(
   kind : CompileBlockKind,
   params : Array[ValType],
   results : Array[ValType],
+  target_pc : Int, // For loops: start PC; for blocks/if: placeholder (0), will be patched
 ) -> Unit {
   // Pop params from type stack (they're consumed by the block)
   self.pop_types(params.length())
   let height = self.type_stack.length()
-  self.control_stack.push({ kind, params, results, stack_height_at_entry: height })
+  self.control_stack.push({
+    kind,
+    params,
+    results,
+    stack_height_at_entry: height,
+    target_pc,
+    pending_br_patches: [],
+  })
   // Push params back as the block's initial stack (block body sees them)
   self.push_types(params)
 }
@@ -200,6 +213,29 @@ fn CompileCtx::calc_drop_count(self : CompileCtx, label : Int, arity : Int) -> I
   let current_height = self.type_stack.length()
   let target_height = self.get_target_stack_height(label)
   current_height - target_height - arity
+}
+
+///|
+/// Get the target PC for a branch to the given label
+/// For loops, this is the known start PC
+/// For blocks/if, returns the current target_pc (may be placeholder if not yet known)
+fn CompileCtx::get_target_pc(self : CompileCtx, label : Int) -> Int {
+  let idx = self.control_stack.length() - 1 - label
+  self.control_stack[idx].target_pc
+}
+
+///|
+/// Check if the target block is a loop (target PC is already known)
+fn CompileCtx::is_loop_target(self : CompileCtx, label : Int) -> Bool {
+  let idx = self.control_stack.length() - 1 - label
+  self.control_stack[idx].kind == LoopKind
+}
+
+///|
+/// Register a slot that needs to be patched with the target PC when the block ends
+fn CompileCtx::add_br_patch(self : CompileCtx, label : Int, slot : Int) -> Unit {
+  let idx = self.control_stack.length() - 1 - label
+  self.control_stack[idx].pending_br_patches.push(slot)
 }
 
 ///|
@@ -967,46 +1003,14 @@ fn op_if(rt : Runtime) -> ControlFlow {
   }
 }
 
-///|
-fn op_else(rt : Runtime) -> ControlFlow {
-  let end_pc = rt.read_imm_idx()
-  Jump(end_pc)
-}
-
-///|
-fn op_end_block(rt : Runtime) -> ControlFlow {
-  let _ = rt.branch_targets.unsafe_pop()
-  Next
-}
-
-///|
-fn op_push_block_target(rt : Runtime) -> ControlFlow {
-  let target_pc = rt.read_imm_idx()
-  rt.branch_targets.push(target_pc)
-  Next
-}
-
-///|
-fn op_push_loop_target(rt : Runtime) -> ControlFlow {
-  let target_pc = rt.read_imm_idx()
-  rt.branch_targets.push(target_pc)
-  Next
-}
+// NOTE: op_else, op_end_block, op_push_block_target, op_push_loop_target removed
+// Branch targets are now computed at compile time and embedded directly in branch instructions
 
 ///|
 fn op_br(rt : Runtime) -> ControlFlow {
-  let label = rt.read_imm_idx()
+  let target_pc = rt.read_imm_idx()
   let arity = rt.read_imm_idx()
   let drop_count = rt.read_imm_idx()
-  let target_idx = rt.branch_targets.length() - 1 - label
-  if target_idx < 0 || target_idx >= rt.branch_targets.length() {
-    return Trap(
-      RuntimeError::InvalidType(
-        "br: invalid branch target index \{target_idx} (label=\{label}, targets=\{rt.branch_targets.length()})",
-      ),
-    )
-  }
-  let target_pc = rt.branch_targets[target_idx]
 
   // Save the top `arity` values (the branch result values)
   let results : Array[Value] = []
@@ -1024,30 +1028,16 @@ fn op_br(rt : Runtime) -> ControlFlow {
     rt.stack.push(results[i])
   }
 
-  // Pop all targets up to and including the target
-  for _i = 0; _i <= label; _i = _i + 1 {
-    let _ = rt.branch_targets.unsafe_pop()
-  }
   Jump(target_pc)
 }
 
 ///|
 fn op_br_if(rt : Runtime) -> ControlFlow {
-  let label = rt.read_imm_idx()
+  let target_pc = rt.read_imm_idx()
   let arity = rt.read_imm_idx()
   let drop_count = rt.read_imm_idx()
   let cond = rt.pop_i32()
   if cond != 0U {
-    let target_idx = rt.branch_targets.length() - 1 - label
-    if target_idx < 0 || target_idx >= rt.branch_targets.length() {
-      return Trap(
-        RuntimeError::InvalidType(
-          "br_if: invalid branch target index \{target_idx} (label=\{label}, targets=\{rt.branch_targets.length()})",
-        ),
-      )
-    }
-    let target_pc = rt.branch_targets[target_idx]
-
     // Save the top `arity` values (the branch result values)
     let results : Array[Value] = []
     for _ in 0..<arity {
@@ -1064,10 +1054,6 @@ fn op_br_if(rt : Runtime) -> ControlFlow {
       rt.stack.push(results[i])
     }
 
-    // Pop all targets up to and including the target
-    for _i = 0; _i <= label; _i = _i + 1 {
-      let _ = rt.branch_targets.unsafe_pop()
-    }
     Jump(target_pc)
   } else {
     Next
@@ -1080,31 +1066,21 @@ fn op_br_table(rt : Runtime) -> ControlFlow {
   let arity = rt.read_imm_idx()
   let index = rt.pop_i32().reinterpret_as_int()
 
-  // Read all label+drop_count pairs, selecting the right one
-  let mut target_label = 0
+  // Read all target_pc+drop_count pairs, selecting the right one
+  let mut target_pc = 0
   let mut drop_count = 0
   for i = 0; i <= num_labels; i = i + 1 {
-    let label = rt.read_imm_idx()
+    let pc = rt.read_imm_idx()
     let lbl_drop = rt.read_imm_idx()
     if i == index && i < num_labels {
-      target_label = label
+      target_pc = pc
       drop_count = lbl_drop
     } else if i == num_labels && (index < 0 || index >= num_labels) {
       // Default label
-      target_label = label
+      target_pc = pc
       drop_count = lbl_drop
     }
   }
-
-  let target_idx = rt.branch_targets.length() - 1 - target_label
-  if target_idx < 0 || target_idx >= rt.branch_targets.length() {
-    return Trap(
-      RuntimeError::InvalidType(
-        "br_table: invalid branch target index \{target_idx}",
-      ),
-    )
-  }
-  let target_pc = rt.branch_targets[target_idx]
 
   // Save the top `arity` values (the branch result values)
   let results : Array[Value] = []
@@ -1122,16 +1098,12 @@ fn op_br_table(rt : Runtime) -> ControlFlow {
     rt.stack.push(results[i])
   }
 
-  // Pop all targets up to and including the target
-  for _i = 0; _i <= target_label; _i = _i + 1 {
-    let _ = rt.branch_targets.unsafe_pop()
-  }
   Jump(target_pc)
 }
 
 ///|
 fn op_br_on_null(rt : Runtime) -> ControlFlow {
-  let label = rt.read_imm_idx()
+  let target_pc = rt.read_imm_idx()
   let arity = rt.read_imm_idx()
   let drop_count = rt.read_imm_idx()
   // Pop reference value
@@ -1142,15 +1114,6 @@ fn op_br_on_null(rt : Runtime) -> ControlFlow {
     _ => false
   }
   if is_null {
-    // Branch - same as br
-    let target_idx = rt.branch_targets.length() - 1 - label
-    if target_idx < 0 || target_idx >= rt.branch_targets.length() {
-      return Trap(
-        RuntimeError::InvalidType("br_on_null: invalid branch target"),
-      )
-    }
-    let target_pc = rt.branch_targets[target_idx]
-
     // Save the top `arity` values
     let results : Array[Value] = []
     for _ in 0..<arity {
@@ -1167,9 +1130,6 @@ fn op_br_on_null(rt : Runtime) -> ControlFlow {
       rt.stack.push(results[i])
     }
 
-    for _i = 0; _i <= label; _i = _i + 1 {
-      let _ = rt.branch_targets.unsafe_pop()
-    }
     Jump(target_pc)
   } else {
     // Not null - push back the value and continue
@@ -1180,7 +1140,7 @@ fn op_br_on_null(rt : Runtime) -> ControlFlow {
 
 ///|
 fn op_br_on_non_null(rt : Runtime) -> ControlFlow {
-  let label = rt.read_imm_idx()
+  let target_pc = rt.read_imm_idx()
   let arity = rt.read_imm_idx()
   let drop_count = rt.read_imm_idx()
   // Pop reference value
@@ -1191,15 +1151,6 @@ fn op_br_on_non_null(rt : Runtime) -> ControlFlow {
     _ => true
   }
   if is_non_null {
-    // Branch with the value
-    let target_idx = rt.branch_targets.length() - 1 - label
-    if target_idx < 0 || target_idx >= rt.branch_targets.length() {
-      return Trap(
-        RuntimeError::InvalidType("br_on_non_null: invalid branch target"),
-      )
-    }
-    let target_pc = rt.branch_targets[target_idx]
-
     // Save the top `arity` values (includes the ref we just popped if arity > 0)
     rt.stack.push(ref_val) // Push it back first for proper handling
     let results : Array[Value] = []
@@ -1217,9 +1168,6 @@ fn op_br_on_non_null(rt : Runtime) -> ControlFlow {
       rt.stack.push(results[i])
     }
 
-    for _i = 0; _i <= label; _i = _i + 1 {
-      let _ = rt.branch_targets.unsafe_pop()
-    }
     Jump(target_pc)
   } else {
     // Null - don't push anything, continue
@@ -3492,40 +3440,33 @@ fn Runtime::compile_wasm_instr(
     // Control flow
     Block(block_type, instrs) => {
       let (params, results) = get_compile_block_type(self.module_, block_type)
-      // Push control frame for compile-time tracking
-      ctx.push_control(BlockKind, params, results)
-      // Push runtime block target (placeholder, will be patched)
-      self.emit(WasmInstr(op_push_block_target))
-      let target_slot = self.ops.length()
-      self.emit(ImmediateIdx(0)) // Placeholder
+      // Push control frame - target_pc is 0 (placeholder), will be patched at block end
+      ctx.push_control(BlockKind, params, results, 0)
+      // Compile block body
       for instr in instrs {
         self.compile_wasm_instr(ctx, instr)
       }
-      self.emit(WasmInstr(op_end_block))
-      // Patch the target to point AFTER end_block (br skips past end_block)
-      self.ops[target_slot] = ImmediateIdx(self.ops.length())
-      // Pop control frame and update type stack
+      // Now we know the end PC - it's the current position
+      let end_pc = self.ops.length()
+      // Pop control frame and patch all pending branches
       let block = ctx.pop_control()
-      // Block body should have left exactly the result types on stack
-      // Reset stack to entry height + results
+      for slot in block.pending_br_patches {
+        self.ops[slot] = ImmediateIdx(end_pc)
+      }
+      // Reset type stack
       ctx.truncate_stack(block.stack_height_at_entry)
       ctx.push_types(block.results)
     }
     Loop(block_type, instrs) => {
       let (params, results) = get_compile_block_type(self.module_, block_type)
-      // Push control frame for compile-time tracking
-      ctx.push_control(LoopKind, params, results)
-      // Push loop target - points to op_push_loop_target itself so that
-      // when we branch back, we re-execute op_push_loop_target and restore
-      // the branch target after it was popped by br
+      // For loops, target_pc is the start (where br jumps back to)
       let loop_start = self.ops.length()
-      self.emit(WasmInstr(op_push_loop_target))
-      self.emit(ImmediateIdx(loop_start))
+      ctx.push_control(LoopKind, params, results, loop_start)
+      // Compile loop body
       for instr in instrs {
         self.compile_wasm_instr(ctx, instr)
       }
-      self.emit(WasmInstr(op_end_block))
-      // Pop control frame and update type stack
+      // Pop control frame (no patches needed for loops - target was known at start)
       let block = ctx.pop_control()
       ctx.truncate_stack(block.stack_height_at_entry)
       ctx.push_types(block.results)
@@ -3535,11 +3476,18 @@ fn Runtime::compile_wasm_instr(
       let arity = ctx.get_branch_arity(label_int)
       let drop_count = ctx.calc_drop_count(label_int, arity)
       self.emit(WasmInstr(op_br))
-      self.emit(ImmediateIdx(label_int))
+      // Emit target PC slot - for loops it's known, for blocks we need to patch
+      let target_pc_slot = self.ops.length()
+      if ctx.is_loop_target(label_int) {
+        // Loop target is known
+        self.emit(ImmediateIdx(ctx.get_target_pc(label_int)))
+      } else {
+        // Block/if target - emit placeholder and register for patching
+        self.emit(ImmediateIdx(0))
+        ctx.add_br_patch(label_int, target_pc_slot)
+      }
       self.emit(ImmediateIdx(arity))
       self.emit(ImmediateIdx(drop_count))
-      // After unconditional br, stack is polymorphic (unreachable)
-      // We don't model unreachable here, just leave stack as is
     }
     BrIf(label) => {
       ctx.pop_type() // Pop condition
@@ -3547,10 +3495,16 @@ fn Runtime::compile_wasm_instr(
       let arity = ctx.get_branch_arity(label_int)
       let drop_count = ctx.calc_drop_count(label_int, arity)
       self.emit(WasmInstr(op_br_if))
-      self.emit(ImmediateIdx(label_int))
+      // Emit target PC slot
+      let target_pc_slot = self.ops.length()
+      if ctx.is_loop_target(label_int) {
+        self.emit(ImmediateIdx(ctx.get_target_pc(label_int)))
+      } else {
+        self.emit(ImmediateIdx(0))
+        ctx.add_br_patch(label_int, target_pc_slot)
+      }
       self.emit(ImmediateIdx(arity))
       self.emit(ImmediateIdx(drop_count))
-      // For br_if, stack continues normally in fallthrough case
     }
     BrTable(labels, default_label) => {
       ctx.pop_type() // Pop index
@@ -3560,56 +3514,74 @@ fn Runtime::compile_wasm_instr(
       self.emit(WasmInstr(op_br_table))
       self.emit(ImmediateIdx(labels.length()))
       self.emit(ImmediateIdx(arity))
-      // For each label, emit label + drop_count
+      // For each label, emit target_pc + drop_count
       for label in labels {
         let label_int = label.reinterpret_as_int()
         let drop_count = ctx.calc_drop_count(label_int, arity)
-        self.emit(ImmediateIdx(label_int))
+        let target_pc_slot = self.ops.length()
+        if ctx.is_loop_target(label_int) {
+          self.emit(ImmediateIdx(ctx.get_target_pc(label_int)))
+        } else {
+          self.emit(ImmediateIdx(0))
+          ctx.add_br_patch(label_int, target_pc_slot)
+        }
         self.emit(ImmediateIdx(drop_count))
       }
-      // Default label + drop_count
+      // Default label
       let default_drop = ctx.calc_drop_count(default_int, arity)
-      self.emit(ImmediateIdx(default_int))
+      let default_pc_slot = self.ops.length()
+      if ctx.is_loop_target(default_int) {
+        self.emit(ImmediateIdx(ctx.get_target_pc(default_int)))
+      } else {
+        self.emit(ImmediateIdx(0))
+        ctx.add_br_patch(default_int, default_pc_slot)
+      }
       self.emit(ImmediateIdx(default_drop))
     }
     BrOnNull(label) => {
       // br_on_null: branch if ref is null, leaving ref on stack if not null
-      // At compile time: pop ref first, then calculate drop_count
-      // (runtime pops ref first, so drop_count should be calculated without the ref)
       ctx.pop_type() // Pop the reference type
       let label_int = label.reinterpret_as_int()
       let arity = ctx.get_branch_arity(label_int)
       let drop_count = ctx.calc_drop_count(label_int, arity)
       self.emit(WasmInstr(op_br_on_null))
-      self.emit(ImmediateIdx(label_int))
+      let target_pc_slot = self.ops.length()
+      if ctx.is_loop_target(label_int) {
+        self.emit(ImmediateIdx(ctx.get_target_pc(label_int)))
+      } else {
+        self.emit(ImmediateIdx(0))
+        ctx.add_br_patch(label_int, target_pc_slot)
+      }
       self.emit(ImmediateIdx(arity))
       self.emit(ImmediateIdx(drop_count))
-      // In fallthrough case, ref is pushed back, so push it back on type stack
-      ctx.push_type(FuncRef) // Use FuncRef as placeholder
+      // In fallthrough case, ref is pushed back
+      ctx.push_type(FuncRef)
     }
     BrOnNonNull(label) => {
       // br_on_non_null: branch if ref is not null
-      // Pop ref, calculate drop_count
       ctx.pop_type() // Pop the reference type
       let label_int = label.reinterpret_as_int()
       let arity = ctx.get_branch_arity(label_int)
       let drop_count = ctx.calc_drop_count(label_int, arity)
       self.emit(WasmInstr(op_br_on_non_null))
-      self.emit(ImmediateIdx(label_int))
+      let target_pc_slot = self.ops.length()
+      if ctx.is_loop_target(label_int) {
+        self.emit(ImmediateIdx(ctx.get_target_pc(label_int)))
+      } else {
+        self.emit(ImmediateIdx(0))
+        ctx.add_br_patch(label_int, target_pc_slot)
+      }
       self.emit(ImmediateIdx(arity))
       self.emit(ImmediateIdx(drop_count))
-      // In fallthrough case (null), ref is discarded, so nothing to push
+      // In fallthrough case (null), ref is discarded
     }
     If(block_type, then_instrs, else_instrs) => {
       ctx.pop_type() // Pop condition
       let (params, results) = get_compile_block_type(self.module_, block_type)
-      // Push control frame
-      ctx.push_control(IfKind, params, results)
+      // Push control frame - target_pc is 0 (placeholder), will be patched at if end
+      ctx.push_control(IfKind, params, results, 0)
       let entry_height = ctx.control_stack[ctx.control_stack.length() - 1].stack_height_at_entry
-      // Push branch target for the If block (br 0 inside will jump to end)
-      self.emit(WasmInstr(op_push_block_target))
-      let end_target_slot = self.ops.length()
-      self.emit(ImmediateIdx(0)) // Placeholder for end_pc
+      // Emit if instruction with placeholder for else branch
       self.emit(WasmInstr(op_if))
       let else_pc_slot = self.ops.length()
       self.emit(ImmediateIdx(0))
@@ -3617,25 +3589,31 @@ fn Runtime::compile_wasm_instr(
       for instr in then_instrs {
         self.compile_wasm_instr(ctx, instr)
       }
+      // Emit jump over else branch (unconditional)
+      self.emit(WasmInstr(op_br))
+      let end_jump_slot = self.ops.length()
+      self.emit(ImmediateIdx(0)) // Will be patched to end
+      self.emit(ImmediateIdx(results.length())) // arity = results
+      self.emit(ImmediateIdx(0)) // drop_count = 0 (then branch should have correct stack)
+      // Patch else_pc to point here
+      let else_start = self.ops.length()
+      self.ops[else_pc_slot] = ImmediateIdx(else_start)
       // Reset stack for else branch
       ctx.truncate_stack(entry_height)
       ctx.push_types(params)
-      self.emit(WasmInstr(op_else))
-      let end_pc_slot = self.ops.length()
-      self.emit(ImmediateIdx(0))
-      let else_start = self.ops.length()
-      self.ops[else_pc_slot] = ImmediateIdx(else_start)
       // Compile else branch
       for instr in else_instrs {
         self.compile_wasm_instr(ctx, instr)
       }
-      self.emit(WasmInstr(op_end_block))
-      let end_pc = self.ops.length() - 1
-      self.ops[end_pc_slot] = ImmediateIdx(end_pc)
-      // Branch target points AFTER end_block (br skips past end_block)
-      self.ops[end_target_slot] = ImmediateIdx(self.ops.length())
-      // Pop control frame and set result types
+      // Now we know the end PC
+      let end_pc = self.ops.length()
+      // Patch the jump at end of then branch
+      self.ops[end_jump_slot] = ImmediateIdx(end_pc)
+      // Pop control frame and patch all pending branches from inside the if
       let block = ctx.pop_control()
+      for slot in block.pending_br_patches {
+        self.ops[slot] = ImmediateIdx(end_pc)
+      }
       ctx.truncate_stack(block.stack_height_at_entry)
       ctx.push_types(block.results)
     }
@@ -3874,23 +3852,22 @@ fn Runtime::compile_func(
   // Push implicit function-level control frame
   // The function body acts like a block with params=[] and results=func_type.results
   // But parameters are already popped into locals, so we model it as empty params
-  ctx.push_control(BlockKind, [], func_type.results)
+  // target_pc is 0 placeholder - will be patched at end
+  ctx.push_control(BlockKind, [], func_type.results, 0)
 
   let start_pc = self.ops.length()
-  // Push implicit function-level block target
-  // This represents the function body itself (label 0 for return/outer br)
-  // Branch to this label should jump to the end of the function
-  self.emit(WasmInstr(op_push_block_target))
-  let func_end_slot = self.ops.length()
-  self.emit(ImmediateIdx(0)) // Placeholder, will be patched
+  // Compile function body
   for instr in code.body.instrs {
     self.compile_wasm_instr(ctx, instr)
   }
-  self.emit(WasmInstr(op_end_block)) // Pop the function-level target
   self.emit(WasmInstr(op_end))
 
-  // Patch the function end target to point after op_end_block
-  self.ops[func_end_slot] = ImmediateIdx(self.ops.length() - 1) // Points to op_end
+  // Now we know the end PC - patch all pending branches from function body
+  let end_pc = self.ops.length() - 1 // Points to op_end
+  let func_block = ctx.pop_control()
+  for slot in func_block.pending_br_patches {
+    self.ops[slot] = ImmediateIdx(end_pc)
+  }
   code.compiled = Some(start_pc)
 }
 
@@ -3940,7 +3917,6 @@ pub fn Runtime::compile(self : Runtime) -> Unit raise RuntimeError {
         }
         self.stack.clear()
         self.call_stack.clear()
-        self.branch_targets.clear()
         self.pc = start_pc
 
         // Execute start function, ignoring runtime errors
@@ -3951,7 +3927,6 @@ pub fn Runtime::compile(self : Runtime) -> Unit raise RuntimeError {
 
         // Clear state after start function execution
         self.stack.clear()
-        self.branch_targets.clear()
       }
     }
     None => ()

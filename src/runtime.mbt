@@ -67,7 +67,6 @@ pub struct Runtime {
   mut locals : Array[Value]
   mut pc : Int
   call_stack : Array[CallFrame]
-  branch_targets : Array[Int] // Stack of branch target PCs (for br instructions)
   memory : Array[Byte] // Linear memory
   globals : Array[Value] // Global variables
   tables : Array[RuntimeTable] // Tables with limits
@@ -169,7 +168,6 @@ pub fn Runtime::load(m : Module) -> Runtime raise RuntimeError {
     locals: [],
     pc: 0,
     call_stack: [],
-    branch_targets: [],
     memory,
     globals,
     tables,
