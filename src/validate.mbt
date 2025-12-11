@@ -255,7 +255,7 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
   }
 
   // Validate exports
-  let export_names : Set[String] = Set::new()
+  let export_names : Set[Bytes] = Set::new()
   for exp in m.exports {
     // Check for duplicate export names
     if export_names.contains(exp.name) {
@@ -1352,7 +1352,7 @@ fn validate_instruction(
         // TODO: properly track non-null type narrowing
         stack.push(FuncRef) // Placeholder
       }
-    BrOnNonNull(label) =>
+    BrOnNonNull(_label) =>
       // br_on_non_null: pop nullable ref, branch if non-null (with the value), else continue
       // Pop the nullable reference
       if not(ctx.is_unreachable) && stack.length() < 1 {

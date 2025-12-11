@@ -102,8 +102,8 @@ enum ImportDesc {
 
 ///|
 struct Import {
-  module_ : String
-  name : String
+  module_ : Bytes
+  name : Bytes
   desc : ImportDesc
 }
 
@@ -121,7 +121,7 @@ pub enum ExportDesc {
 
 ///|
 struct Export {
-  name : String
+  name : Bytes
   desc : ExportDesc
 }
 

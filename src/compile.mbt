@@ -4369,10 +4369,9 @@ pub fn Runtime::call_compiled(
   func_name : Bytes,
   args : Array[Value],
 ) -> Array[Value] raise RuntimeError {
-  let func_name_str = func_name.to_string()
   let mut func_idx : Int? = None
   for exp in self.module_.exports {
-    if exp.name == func_name_str {
+    if exp.name == func_name {
       match exp.desc {
         Func(idx) => {
           func_idx = Some(idx.reinterpret_as_int())

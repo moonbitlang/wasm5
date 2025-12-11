@@ -179,22 +179,26 @@ pub fn Runtime::load(m : Module) -> Runtime raise RuntimeError {
     let name = imp.name
     match imp.desc {
       Func(_type_idx) =>
-        if module_ == "spectest" && name == "print_i32" {
-          imported_funcs.push({ arity: 1U, func: spectest_print_i32 })
-        } else if module_ == "spectest" && name == "print_i64" {
-          imported_funcs.push({ arity: 1U, func: spectest_print_i64 })
-        } else if module_ == "spectest" && name == "print_f32" {
-          imported_funcs.push({ arity: 1U, func: spectest_print_f32 })
-        } else if module_ == "spectest" && name == "print_f64" {
-          imported_funcs.push({ arity: 1U, func: spectest_print_f64 })
-        } else if module_ == "spectest" && name == "print_i32_f32" {
-          imported_funcs.push({ arity: 2U, func: spectest_print_i32_f32 })
-        } else if module_ == "spectest" && name == "print_f64_f64" {
-          imported_funcs.push({ arity: 2U, func: spectest_print_f64_f64 })
-        } else {
-          raise RuntimeError::FunctionNotFound(
-            "imported function not found: \{module_}.\{name}",
-          )
+        if module_ == "spectest" {
+          if name == "print" {
+            imported_funcs.push({ arity: 0U, func: spectest_print })
+          } else if name == "print_i32" {
+            imported_funcs.push({ arity: 1U, func: spectest_print_i32 })
+          } else if name == "print_i64" {
+            imported_funcs.push({ arity: 1U, func: spectest_print_i64 })
+          } else if name == "print_f32" {
+            imported_funcs.push({ arity: 1U, func: spectest_print_f32 })
+          } else if name == "print_f64" {
+            imported_funcs.push({ arity: 1U, func: spectest_print_f64 })
+          } else if name == "print_i32_f32" {
+            imported_funcs.push({ arity: 2U, func: spectest_print_i32_f32 })
+          } else if name == "print_f64_f64" {
+            imported_funcs.push({ arity: 2U, func: spectest_print_f64_f64 })
+          } else {
+            raise RuntimeError::FunctionNotFound(
+              "imported function not found: \{module_}.\{name}",
+            )
+          }
         }
       Table(_) | Mem(_) | Global(_) => ()
     }
@@ -321,6 +325,12 @@ fn eval_const_expr(
     )
   }
   stack[0]
+}
+
+///|
+fn spectest_print(args : Array[Value]) -> Array[Value] {
+  guard args is []
+  []
 }
 
 ///|
