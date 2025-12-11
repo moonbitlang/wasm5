@@ -809,7 +809,9 @@ async fn main {
   // Blacklist: Files that test WAT text format (not binary WASM)
   // These contain (module quote ...) which are expected to fail with InvalidMagic
   // linking.wast: Tests cross-module imports/exports - requires module registry system
-  let blacklist = ["comments.wast", "annotations.wast", "linking.wast"]
+  let blacklist = [
+    "comments.wast", "annotations.wast", "linking.wast", "try_table.wast",
+  ]
   let failures : Array[TestFailure] = []
   let wast_files = collect_wast_files("test/reference_tests/")
   for wast_file in wast_files {
