@@ -1184,7 +1184,6 @@ fn op_br_on_non_null(rt : Runtime) -> ControlFlow {
 ///|
 fn op_call(rt : Runtime) -> ControlFlow {
   let func_idx = rt.read_imm_idx()
-
   // Count imported functions
   let mut num_imported_funcs = 0
   for imp in rt.module_.imports {
@@ -1196,13 +1195,17 @@ fn op_call(rt : Runtime) -> ControlFlow {
 
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
-    // Imported functions are not supported for direct calls yet
-    // They need special handling (host function callbacks)
-    return Trap(
-      RuntimeError::FunctionNotCompiled(
-        "Imported function calls not yet supported: \{func_idx}",
-      ),
-    )
+    let imported_func = rt.imported_funcs[func_idx]
+    let arity = imported_func.arity
+    let args = []
+    for _ in 0U..<arity {
+      args.push(rt.stack.unsafe_pop())
+    }
+    let results = (imported_func.func)(args)
+    for res in results {
+      rt.stack.push(res)
+    }
+    return Next
   }
 
   // Adjust index for local functions
