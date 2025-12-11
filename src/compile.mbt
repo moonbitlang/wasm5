@@ -92,6 +92,133 @@ struct CallFrame {
 }
 
 ///|
+/// Block kind for compile-time control flow tracking
+enum CompileBlockKind {
+  BlockKind // br jumps to end, uses results
+  LoopKind // br jumps to start, uses params
+  IfKind // br jumps to end, uses results
+}
+
+///|
+/// Compile-time control frame for tracking block types and stack heights
+struct CompileBlock {
+  kind : CompileBlockKind
+  params : Array[ValType]
+  results : Array[ValType]
+  stack_height_at_entry : Int // type_stack.length() when block started (after params popped)
+}
+
+///|
+/// Compile-time context for tracking types during compilation
+struct CompileCtx {
+  type_stack : Array[ValType]
+  control_stack : Array[CompileBlock]
+}
+
+///|
+fn CompileCtx::new() -> CompileCtx {
+  { type_stack: [], control_stack: [] }
+}
+
+///|
+fn CompileCtx::push_type(self : CompileCtx, t : ValType) -> Unit {
+  self.type_stack.push(t)
+}
+
+///|
+fn CompileCtx::pop_type(self : CompileCtx) -> Unit {
+  if self.type_stack.length() > 0 {
+    let _ = self.type_stack.unsafe_pop()
+  }
+}
+
+///|
+fn CompileCtx::pop_types(self : CompileCtx, n : Int) -> Unit {
+  for _ in 0..<n {
+    self.pop_type()
+  }
+}
+
+///|
+fn CompileCtx::push_types(self : CompileCtx, types : Array[ValType]) -> Unit {
+  for t in types {
+    self.push_type(t)
+  }
+}
+
+///|
+fn CompileCtx::push_control(
+  self : CompileCtx,
+  kind : CompileBlockKind,
+  params : Array[ValType],
+  results : Array[ValType],
+) -> Unit {
+  // Pop params from type stack (they're consumed by the block)
+  self.pop_types(params.length())
+  let height = self.type_stack.length()
+  self.control_stack.push({ kind, params, results, stack_height_at_entry: height })
+  // Push params back as the block's initial stack (block body sees them)
+  self.push_types(params)
+}
+
+///|
+fn CompileCtx::pop_control(self : CompileCtx) -> CompileBlock {
+  self.control_stack.unsafe_pop()
+}
+
+///|
+/// Truncate type stack to a given height
+fn CompileCtx::truncate_stack(self : CompileCtx, height : Int) -> Unit {
+  while self.type_stack.length() > height {
+    let _ = self.type_stack.unsafe_pop()
+  }
+}
+
+///|
+/// Get the branch target arity for a given label depth
+/// For blocks/if: arity = number of result types
+/// For loops: arity = number of param types (loop restarts)
+fn CompileCtx::get_branch_arity(self : CompileCtx, label : Int) -> Int {
+  let idx = self.control_stack.length() - 1 - label
+  let block = self.control_stack[idx]
+  match block.kind {
+    LoopKind => block.params.length()
+    BlockKind | IfKind => block.results.length()
+  }
+}
+
+///|
+/// Get the stack height at the target block's entry
+fn CompileCtx::get_target_stack_height(self : CompileCtx, label : Int) -> Int {
+  let idx = self.control_stack.length() - 1 - label
+  self.control_stack[idx].stack_height_at_entry
+}
+
+///|
+/// Calculate how many values to drop when branching to a label
+fn CompileCtx::calc_drop_count(self : CompileCtx, label : Int, arity : Int) -> Int {
+  let current_height = self.type_stack.length()
+  let target_height = self.get_target_stack_height(label)
+  current_height - target_height - arity
+}
+
+///|
+/// Get block type from BlockType enum (similar to validation's get_block_type)
+fn get_compile_block_type(
+  module_ : Module,
+  block_type : BlockType,
+) -> (Array[ValType], Array[ValType]) {
+  match block_type {
+    Empty => ([], [])
+    Value(t) => ([], [t])
+    TypeIndex(idx) => {
+      let func_type = module_.types[idx]
+      (func_type.params, func_type.results)
+    }
+  }
+}
+
+///|
 /// Emit an instruction to the ops array
 fn Runtime::emit(self : Runtime, instr : MInstr) -> Unit {
   self.ops.push(instr)
@@ -869,6 +996,8 @@ fn op_push_loop_target(rt : Runtime) -> ControlFlow {
 ///|
 fn op_br(rt : Runtime) -> ControlFlow {
   let label = rt.read_imm_idx()
+  let arity = rt.read_imm_idx()
+  let drop_count = rt.read_imm_idx()
   let target_idx = rt.branch_targets.length() - 1 - label
   if target_idx < 0 || target_idx >= rt.branch_targets.length() {
     return Trap(
@@ -878,10 +1007,26 @@ fn op_br(rt : Runtime) -> ControlFlow {
     )
   }
   let target_pc = rt.branch_targets[target_idx]
+
+  // Save the top `arity` values (the branch result values)
+  let results : Array[Value] = []
+  for _ in 0..<arity {
+    results.push(rt.stack.unsafe_pop())
+  }
+
+  // Drop the unwanted values
+  for _ in 0..<drop_count {
+    let _ = rt.stack.unsafe_pop()
+  }
+
+  // Push results back (in reverse order since we popped them)
+  for i = results.length() - 1; i >= 0; i = i - 1 {
+    rt.stack.push(results[i])
+  }
+
   // Pop all targets up to and including the target
   for _i = 0; _i <= label; _i = _i + 1 {
     let _ = rt.branch_targets.unsafe_pop()
-
   }
   Jump(target_pc)
 }
@@ -889,6 +1034,8 @@ fn op_br(rt : Runtime) -> ControlFlow {
 ///|
 fn op_br_if(rt : Runtime) -> ControlFlow {
   let label = rt.read_imm_idx()
+  let arity = rt.read_imm_idx()
+  let drop_count = rt.read_imm_idx()
   let cond = rt.pop_i32()
   if cond != 0U {
     let target_idx = rt.branch_targets.length() - 1 - label
@@ -900,10 +1047,26 @@ fn op_br_if(rt : Runtime) -> ControlFlow {
       )
     }
     let target_pc = rt.branch_targets[target_idx]
+
+    // Save the top `arity` values (the branch result values)
+    let results : Array[Value] = []
+    for _ in 0..<arity {
+      results.push(rt.stack.unsafe_pop())
+    }
+
+    // Drop the unwanted values
+    for _ in 0..<drop_count {
+      let _ = rt.stack.unsafe_pop()
+    }
+
+    // Push results back (in reverse order since we popped them)
+    for i = results.length() - 1; i >= 0; i = i - 1 {
+      rt.stack.push(results[i])
+    }
+
     // Pop all targets up to and including the target
     for _i = 0; _i <= label; _i = _i + 1 {
       let _ = rt.branch_targets.unsafe_pop()
-
     }
     Jump(target_pc)
   } else {
@@ -914,18 +1077,25 @@ fn op_br_if(rt : Runtime) -> ControlFlow {
 ///|
 fn op_br_table(rt : Runtime) -> ControlFlow {
   let num_labels = rt.read_imm_idx()
+  let arity = rt.read_imm_idx()
   let index = rt.pop_i32().reinterpret_as_int()
-  // Read all labels and default
+
+  // Read all label+drop_count pairs, selecting the right one
   let mut target_label = 0
+  let mut drop_count = 0
   for i = 0; i <= num_labels; i = i + 1 {
     let label = rt.read_imm_idx()
+    let lbl_drop = rt.read_imm_idx()
     if i == index && i < num_labels {
       target_label = label
+      drop_count = lbl_drop
     } else if i == num_labels && (index < 0 || index >= num_labels) {
       // Default label
       target_label = label
+      drop_count = lbl_drop
     }
   }
+
   let target_idx = rt.branch_targets.length() - 1 - target_label
   if target_idx < 0 || target_idx >= rt.branch_targets.length() {
     return Trap(
@@ -935,10 +1105,26 @@ fn op_br_table(rt : Runtime) -> ControlFlow {
     )
   }
   let target_pc = rt.branch_targets[target_idx]
+
+  // Save the top `arity` values (the branch result values)
+  let results : Array[Value] = []
+  for _ in 0..<arity {
+    results.push(rt.stack.unsafe_pop())
+  }
+
+  // Drop the unwanted values
+  for _ in 0..<drop_count {
+    let _ = rt.stack.unsafe_pop()
+  }
+
+  // Push results back (in reverse order since we popped them)
+  for i = results.length() - 1; i >= 0; i = i - 1 {
+    rt.stack.push(results[i])
+  }
+
   // Pop all targets up to and including the target
   for _i = 0; _i <= target_label; _i = _i + 1 {
     let _ = rt.branch_targets.unsafe_pop()
-
   }
   Jump(target_pc)
 }
@@ -946,6 +1132,8 @@ fn op_br_table(rt : Runtime) -> ControlFlow {
 ///|
 fn op_br_on_null(rt : Runtime) -> ControlFlow {
   let label = rt.read_imm_idx()
+  let arity = rt.read_imm_idx()
+  let drop_count = rt.read_imm_idx()
   // Pop reference value
   let ref_val = rt.stack.unsafe_pop()
   // Check if it's null
@@ -962,9 +1150,25 @@ fn op_br_on_null(rt : Runtime) -> ControlFlow {
       )
     }
     let target_pc = rt.branch_targets[target_idx]
+
+    // Save the top `arity` values
+    let results : Array[Value] = []
+    for _ in 0..<arity {
+      results.push(rt.stack.unsafe_pop())
+    }
+
+    // Drop the unwanted values
+    for _ in 0..<drop_count {
+      let _ = rt.stack.unsafe_pop()
+    }
+
+    // Push results back
+    for i = results.length() - 1; i >= 0; i = i - 1 {
+      rt.stack.push(results[i])
+    }
+
     for _i = 0; _i <= label; _i = _i + 1 {
       let _ = rt.branch_targets.unsafe_pop()
-
     }
     Jump(target_pc)
   } else {
@@ -977,6 +1181,8 @@ fn op_br_on_null(rt : Runtime) -> ControlFlow {
 ///|
 fn op_br_on_non_null(rt : Runtime) -> ControlFlow {
   let label = rt.read_imm_idx()
+  let arity = rt.read_imm_idx()
+  let drop_count = rt.read_imm_idx()
   // Pop reference value
   let ref_val = rt.stack.unsafe_pop()
   // Check if it's not null
@@ -986,7 +1192,6 @@ fn op_br_on_non_null(rt : Runtime) -> ControlFlow {
   }
   if is_non_null {
     // Branch with the value
-    rt.stack.push(ref_val)
     let target_idx = rt.branch_targets.length() - 1 - label
     if target_idx < 0 || target_idx >= rt.branch_targets.length() {
       return Trap(
@@ -994,9 +1199,26 @@ fn op_br_on_non_null(rt : Runtime) -> ControlFlow {
       )
     }
     let target_pc = rt.branch_targets[target_idx]
+
+    // Save the top `arity` values (includes the ref we just popped if arity > 0)
+    rt.stack.push(ref_val) // Push it back first for proper handling
+    let results : Array[Value] = []
+    for _ in 0..<arity {
+      results.push(rt.stack.unsafe_pop())
+    }
+
+    // Drop the unwanted values
+    for _ in 0..<drop_count {
+      let _ = rt.stack.unsafe_pop()
+    }
+
+    // Push results back
+    for i = results.length() - 1; i >= 0; i = i - 1 {
+      rt.stack.push(results[i])
+    }
+
     for _i = 0; _i <= label; _i = _i + 1 {
       let _ = rt.branch_targets.unsafe_pop()
-
     }
     Jump(target_pc)
   } else {
@@ -3062,120 +3284,125 @@ fn op_global_set(rt : Runtime) -> ControlFlow {
 ///|
 fn Runtime::compile_wasm_instr(
   self : Runtime,
+  ctx : CompileCtx,
   instr : Instr,
 ) -> Unit raise RuntimeError {
   match instr {
     // Constants
     I32Const(value) => {
       self.emit(WasmInstr(op_i32_const))
+      ctx.push_type(I32)
       self.emit(ImmediateI32(value))
     }
-    // Arithmetic
-    I32Add => self.emit(WasmInstr(op_i32_add))
-    I32Sub => self.emit(WasmInstr(op_i32_sub))
-    I32Mul => self.emit(WasmInstr(op_i32_mul))
-    I32DivS => self.emit(WasmInstr(op_i32_div_s))
-    I32DivU => self.emit(WasmInstr(op_i32_div_u))
-    I32RemS => self.emit(WasmInstr(op_i32_rem_s))
-    I32RemU => self.emit(WasmInstr(op_i32_rem_u))
-    // Bitwise
-    I32And => self.emit(WasmInstr(op_i32_and))
-    I32Or => self.emit(WasmInstr(op_i32_or))
-    I32Xor => self.emit(WasmInstr(op_i32_xor))
-    I32Shl => self.emit(WasmInstr(op_i32_shl))
-    I32ShrS => self.emit(WasmInstr(op_i32_shr_s))
-    I32ShrU => self.emit(WasmInstr(op_i32_shr_u))
-    I32Rotl => self.emit(WasmInstr(op_i32_rotl))
-    I32Rotr => self.emit(WasmInstr(op_i32_rotr))
-    // Comparison
-    I32Eq => self.emit(WasmInstr(op_i32_eq))
-    I32Ne => self.emit(WasmInstr(op_i32_ne))
-    I32LtS => self.emit(WasmInstr(op_i32_lt_s))
-    I32LtU => self.emit(WasmInstr(op_i32_lt_u))
-    I32GtS => self.emit(WasmInstr(op_i32_gt_s))
-    I32GtU => self.emit(WasmInstr(op_i32_gt_u))
-    I32LeS => self.emit(WasmInstr(op_i32_le_s))
-    I32LeU => self.emit(WasmInstr(op_i32_le_u))
-    I32GeS => self.emit(WasmInstr(op_i32_ge_s))
-    I32GeU => self.emit(WasmInstr(op_i32_ge_u))
-    // Unary
-    I32Eqz => self.emit(WasmInstr(op_i32_eqz))
-    I32Clz => self.emit(WasmInstr(op_i32_clz))
-    I32Ctz => self.emit(WasmInstr(op_i32_ctz))
-    I32Popcnt => self.emit(WasmInstr(op_i32_popcnt))
-    I32Extend8S => self.emit(WasmInstr(op_i32_extend8_s))
-    I32Extend16S => self.emit(WasmInstr(op_i32_extend16_s))
-    I32WrapI64 => self.emit(WasmInstr(op_i32_wrap_i64))
+    // Arithmetic (binary: pop 2, push 1)
+    I32Add => { ctx.pop_type(); self.emit(WasmInstr(op_i32_add)) }
+    I32Sub => { ctx.pop_type(); self.emit(WasmInstr(op_i32_sub)) }
+    I32Mul => { ctx.pop_type(); self.emit(WasmInstr(op_i32_mul)) }
+    I32DivS => { ctx.pop_type(); self.emit(WasmInstr(op_i32_div_s)) }
+    I32DivU => { ctx.pop_type(); self.emit(WasmInstr(op_i32_div_u)) }
+    I32RemS => { ctx.pop_type(); self.emit(WasmInstr(op_i32_rem_s)) }
+    I32RemU => { ctx.pop_type(); self.emit(WasmInstr(op_i32_rem_u)) }
+    // Bitwise (binary: pop 2, push 1)
+    I32And => { ctx.pop_type(); self.emit(WasmInstr(op_i32_and)) }
+    I32Or => { ctx.pop_type(); self.emit(WasmInstr(op_i32_or)) }
+    I32Xor => { ctx.pop_type(); self.emit(WasmInstr(op_i32_xor)) }
+    I32Shl => { ctx.pop_type(); self.emit(WasmInstr(op_i32_shl)) }
+    I32ShrS => { ctx.pop_type(); self.emit(WasmInstr(op_i32_shr_s)) }
+    I32ShrU => { ctx.pop_type(); self.emit(WasmInstr(op_i32_shr_u)) }
+    I32Rotl => { ctx.pop_type(); self.emit(WasmInstr(op_i32_rotl)) }
+    I32Rotr => { ctx.pop_type(); self.emit(WasmInstr(op_i32_rotr)) }
+    // Comparison (binary: pop 2, push 1 i32)
+    I32Eq => { ctx.pop_type(); self.emit(WasmInstr(op_i32_eq)) }
+    I32Ne => { ctx.pop_type(); self.emit(WasmInstr(op_i32_ne)) }
+    I32LtS => { ctx.pop_type(); self.emit(WasmInstr(op_i32_lt_s)) }
+    I32LtU => { ctx.pop_type(); self.emit(WasmInstr(op_i32_lt_u)) }
+    I32GtS => { ctx.pop_type(); self.emit(WasmInstr(op_i32_gt_s)) }
+    I32GtU => { ctx.pop_type(); self.emit(WasmInstr(op_i32_gt_u)) }
+    I32LeS => { ctx.pop_type(); self.emit(WasmInstr(op_i32_le_s)) }
+    I32LeU => { ctx.pop_type(); self.emit(WasmInstr(op_i32_le_u)) }
+    I32GeS => { ctx.pop_type(); self.emit(WasmInstr(op_i32_ge_s)) }
+    I32GeU => { ctx.pop_type(); self.emit(WasmInstr(op_i32_ge_u)) }
+    // Unary (pop 1, push 1)
+    I32Eqz => self.emit(WasmInstr(op_i32_eqz)) // i32 -> i32
+    I32Clz => self.emit(WasmInstr(op_i32_clz)) // i32 -> i32
+    I32Ctz => self.emit(WasmInstr(op_i32_ctz)) // i32 -> i32
+    I32Popcnt => self.emit(WasmInstr(op_i32_popcnt)) // i32 -> i32
+    I32Extend8S => self.emit(WasmInstr(op_i32_extend8_s)) // i32 -> i32
+    I32Extend16S => self.emit(WasmInstr(op_i32_extend16_s)) // i32 -> i32
+    I32WrapI64 => { ctx.pop_type(); ctx.push_type(I32); self.emit(WasmInstr(op_i32_wrap_i64)) } // i64 -> i32
     // i64 Constants
     I64Const(value) => {
       self.emit(WasmInstr(op_i64_const))
       // Split i64 into two i32 immediates
       self.emit(ImmediateI32((value & 0xFFFFFFFFUL).to_uint()))
       self.emit(ImmediateI32((value >> 32).to_uint()))
+      ctx.push_type(I64)
     }
     // f32/f64 Constants
     F32Const(value) => {
       self.emit(WasmInstr(op_f32_const))
       self.emit(ImmediateI32(value.reinterpret_as_uint()))
+      ctx.push_type(F32)
     }
     F64Const(value) => {
       self.emit(WasmInstr(op_f64_const))
       let bits = value.reinterpret_as_uint64()
       self.emit(ImmediateI32((bits & 0xFFFFFFFFUL).to_uint()))
       self.emit(ImmediateI32((bits >> 32).to_uint()))
+      ctx.push_type(F64)
     }
-    // i64 Arithmetic
-    I64Add => self.emit(WasmInstr(op_i64_add))
-    I64Sub => self.emit(WasmInstr(op_i64_sub))
-    I64Mul => self.emit(WasmInstr(op_i64_mul))
-    I64DivS => self.emit(WasmInstr(op_i64_div_s))
-    I64DivU => self.emit(WasmInstr(op_i64_div_u))
-    I64RemS => self.emit(WasmInstr(op_i64_rem_s))
-    I64RemU => self.emit(WasmInstr(op_i64_rem_u))
-    // i64 Bitwise
-    I64And => self.emit(WasmInstr(op_i64_and))
-    I64Or => self.emit(WasmInstr(op_i64_or))
-    I64Xor => self.emit(WasmInstr(op_i64_xor))
-    I64Shl => self.emit(WasmInstr(op_i64_shl))
-    I64ShrS => self.emit(WasmInstr(op_i64_shr_s))
-    I64ShrU => self.emit(WasmInstr(op_i64_shr_u))
-    I64Rotl => self.emit(WasmInstr(op_i64_rotl))
-    I64Rotr => self.emit(WasmInstr(op_i64_rotr))
-    // i64 Comparison
-    I64Eq => self.emit(WasmInstr(op_i64_eq))
-    I64Ne => self.emit(WasmInstr(op_i64_ne))
-    I64LtS => self.emit(WasmInstr(op_i64_lt_s))
-    I64LtU => self.emit(WasmInstr(op_i64_lt_u))
-    I64GtS => self.emit(WasmInstr(op_i64_gt_s))
-    I64GtU => self.emit(WasmInstr(op_i64_gt_u))
-    I64LeS => self.emit(WasmInstr(op_i64_le_s))
-    I64LeU => self.emit(WasmInstr(op_i64_le_u))
-    I64GeS => self.emit(WasmInstr(op_i64_ge_s))
-    I64GeU => self.emit(WasmInstr(op_i64_ge_u))
+    // i64 Arithmetic (binary: pop 2, push 1)
+    I64Add => { ctx.pop_type(); self.emit(WasmInstr(op_i64_add)) }
+    I64Sub => { ctx.pop_type(); self.emit(WasmInstr(op_i64_sub)) }
+    I64Mul => { ctx.pop_type(); self.emit(WasmInstr(op_i64_mul)) }
+    I64DivS => { ctx.pop_type(); self.emit(WasmInstr(op_i64_div_s)) }
+    I64DivU => { ctx.pop_type(); self.emit(WasmInstr(op_i64_div_u)) }
+    I64RemS => { ctx.pop_type(); self.emit(WasmInstr(op_i64_rem_s)) }
+    I64RemU => { ctx.pop_type(); self.emit(WasmInstr(op_i64_rem_u)) }
+    // i64 Bitwise (binary: pop 2, push 1)
+    I64And => { ctx.pop_type(); self.emit(WasmInstr(op_i64_and)) }
+    I64Or => { ctx.pop_type(); self.emit(WasmInstr(op_i64_or)) }
+    I64Xor => { ctx.pop_type(); self.emit(WasmInstr(op_i64_xor)) }
+    I64Shl => { ctx.pop_type(); self.emit(WasmInstr(op_i64_shl)) }
+    I64ShrS => { ctx.pop_type(); self.emit(WasmInstr(op_i64_shr_s)) }
+    I64ShrU => { ctx.pop_type(); self.emit(WasmInstr(op_i64_shr_u)) }
+    I64Rotl => { ctx.pop_type(); self.emit(WasmInstr(op_i64_rotl)) }
+    I64Rotr => { ctx.pop_type(); self.emit(WasmInstr(op_i64_rotr)) }
+    // i64 Comparison (pop 2 i64, push 1 i32)
+    I64Eq => { ctx.pop_types(2); ctx.push_type(I32); self.emit(WasmInstr(op_i64_eq)) }
+    I64Ne => { ctx.pop_types(2); ctx.push_type(I32); self.emit(WasmInstr(op_i64_ne)) }
+    I64LtS => { ctx.pop_types(2); ctx.push_type(I32); self.emit(WasmInstr(op_i64_lt_s)) }
+    I64LtU => { ctx.pop_types(2); ctx.push_type(I32); self.emit(WasmInstr(op_i64_lt_u)) }
+    I64GtS => { ctx.pop_types(2); ctx.push_type(I32); self.emit(WasmInstr(op_i64_gt_s)) }
+    I64GtU => { ctx.pop_types(2); ctx.push_type(I32); self.emit(WasmInstr(op_i64_gt_u)) }
+    I64LeS => { ctx.pop_types(2); ctx.push_type(I32); self.emit(WasmInstr(op_i64_le_s)) }
+    I64LeU => { ctx.pop_types(2); ctx.push_type(I32); self.emit(WasmInstr(op_i64_le_u)) }
+    I64GeS => { ctx.pop_types(2); ctx.push_type(I32); self.emit(WasmInstr(op_i64_ge_s)) }
+    I64GeU => { ctx.pop_types(2); ctx.push_type(I32); self.emit(WasmInstr(op_i64_ge_u)) }
     // i64 Unary
-    I64Eqz => self.emit(WasmInstr(op_i64_eqz))
-    I64Clz => self.emit(WasmInstr(op_i64_clz))
-    I64Ctz => self.emit(WasmInstr(op_i64_ctz))
-    I64Popcnt => self.emit(WasmInstr(op_i64_popcnt))
-    I64Extend8S => self.emit(WasmInstr(op_i64_extend8_s))
-    I64Extend16S => self.emit(WasmInstr(op_i64_extend16_s))
-    I64Extend32S => self.emit(WasmInstr(op_i64_extend32_s))
-    I64ExtendI32S => self.emit(WasmInstr(op_i64_extend_i32_s))
-    I64ExtendI32U => self.emit(WasmInstr(op_i64_extend_i32_u))
-    // Float comparisons
-    F32Eq => self.emit(WasmInstr(op_f32_eq))
-    F32Ne => self.emit(WasmInstr(op_f32_ne))
-    F32Lt => self.emit(WasmInstr(op_f32_lt))
-    F32Gt => self.emit(WasmInstr(op_f32_gt))
-    F32Le => self.emit(WasmInstr(op_f32_le))
-    F32Ge => self.emit(WasmInstr(op_f32_ge))
-    F64Eq => self.emit(WasmInstr(op_f64_eq))
-    F64Ne => self.emit(WasmInstr(op_f64_ne))
-    F64Lt => self.emit(WasmInstr(op_f64_lt))
-    F64Gt => self.emit(WasmInstr(op_f64_gt))
-    F64Le => self.emit(WasmInstr(op_f64_le))
-    F64Ge => self.emit(WasmInstr(op_f64_ge))
-    // Float unary
+    I64Eqz => { ctx.pop_type(); ctx.push_type(I32); self.emit(WasmInstr(op_i64_eqz)) } // i64 -> i32
+    I64Clz => self.emit(WasmInstr(op_i64_clz)) // i64 -> i64
+    I64Ctz => self.emit(WasmInstr(op_i64_ctz)) // i64 -> i64
+    I64Popcnt => self.emit(WasmInstr(op_i64_popcnt)) // i64 -> i64
+    I64Extend8S => self.emit(WasmInstr(op_i64_extend8_s)) // i64 -> i64
+    I64Extend16S => self.emit(WasmInstr(op_i64_extend16_s)) // i64 -> i64
+    I64Extend32S => self.emit(WasmInstr(op_i64_extend32_s)) // i64 -> i64
+    I64ExtendI32S => { ctx.pop_type(); ctx.push_type(I64); self.emit(WasmInstr(op_i64_extend_i32_s)) } // i32 -> i64
+    I64ExtendI32U => { ctx.pop_type(); ctx.push_type(I64); self.emit(WasmInstr(op_i64_extend_i32_u)) } // i32 -> i64
+    // Float comparisons (pop 2, push i32)
+    F32Eq => { ctx.pop_types(2); ctx.push_type(I32); self.emit(WasmInstr(op_f32_eq)) }
+    F32Ne => { ctx.pop_types(2); ctx.push_type(I32); self.emit(WasmInstr(op_f32_ne)) }
+    F32Lt => { ctx.pop_types(2); ctx.push_type(I32); self.emit(WasmInstr(op_f32_lt)) }
+    F32Gt => { ctx.pop_types(2); ctx.push_type(I32); self.emit(WasmInstr(op_f32_gt)) }
+    F32Le => { ctx.pop_types(2); ctx.push_type(I32); self.emit(WasmInstr(op_f32_le)) }
+    F32Ge => { ctx.pop_types(2); ctx.push_type(I32); self.emit(WasmInstr(op_f32_ge)) }
+    F64Eq => { ctx.pop_types(2); ctx.push_type(I32); self.emit(WasmInstr(op_f64_eq)) }
+    F64Ne => { ctx.pop_types(2); ctx.push_type(I32); self.emit(WasmInstr(op_f64_ne)) }
+    F64Lt => { ctx.pop_types(2); ctx.push_type(I32); self.emit(WasmInstr(op_f64_lt)) }
+    F64Gt => { ctx.pop_types(2); ctx.push_type(I32); self.emit(WasmInstr(op_f64_gt)) }
+    F64Le => { ctx.pop_types(2); ctx.push_type(I32); self.emit(WasmInstr(op_f64_le)) }
+    F64Ge => { ctx.pop_types(2); ctx.push_type(I32); self.emit(WasmInstr(op_f64_ge)) }
+    // Float unary (same type in/out)
     F32Neg => self.emit(WasmInstr(op_f32_neg))
     F32Abs => self.emit(WasmInstr(op_f32_abs))
     F32Sqrt => self.emit(WasmInstr(op_f32_sqrt))
@@ -3190,87 +3417,104 @@ fn Runtime::compile_wasm_instr(
     F64Floor => self.emit(WasmInstr(op_f64_floor))
     F64Trunc => self.emit(WasmInstr(op_f64_trunc))
     F64Nearest => self.emit(WasmInstr(op_f64_nearest))
-    // Float binary
-    F32Add => self.emit(WasmInstr(op_f32_add))
-    F32Sub => self.emit(WasmInstr(op_f32_sub))
-    F32Mul => self.emit(WasmInstr(op_f32_mul))
-    F32Div => self.emit(WasmInstr(op_f32_div))
-    F32Min => self.emit(WasmInstr(op_f32_min))
-    F32Max => self.emit(WasmInstr(op_f32_max))
-    F32Copysign => self.emit(WasmInstr(op_f32_copysign))
-    F64Add => self.emit(WasmInstr(op_f64_add))
-    F64Sub => self.emit(WasmInstr(op_f64_sub))
-    F64Mul => self.emit(WasmInstr(op_f64_mul))
-    F64Div => self.emit(WasmInstr(op_f64_div))
-    F64Min => self.emit(WasmInstr(op_f64_min))
-    F64Max => self.emit(WasmInstr(op_f64_max))
-    F64Copysign => self.emit(WasmInstr(op_f64_copysign))
+    // Float binary (pop 2, push 1)
+    F32Add => { ctx.pop_type(); self.emit(WasmInstr(op_f32_add)) }
+    F32Sub => { ctx.pop_type(); self.emit(WasmInstr(op_f32_sub)) }
+    F32Mul => { ctx.pop_type(); self.emit(WasmInstr(op_f32_mul)) }
+    F32Div => { ctx.pop_type(); self.emit(WasmInstr(op_f32_div)) }
+    F32Min => { ctx.pop_type(); self.emit(WasmInstr(op_f32_min)) }
+    F32Max => { ctx.pop_type(); self.emit(WasmInstr(op_f32_max)) }
+    F32Copysign => { ctx.pop_type(); self.emit(WasmInstr(op_f32_copysign)) }
+    F64Add => { ctx.pop_type(); self.emit(WasmInstr(op_f64_add)) }
+    F64Sub => { ctx.pop_type(); self.emit(WasmInstr(op_f64_sub)) }
+    F64Mul => { ctx.pop_type(); self.emit(WasmInstr(op_f64_mul)) }
+    F64Div => { ctx.pop_type(); self.emit(WasmInstr(op_f64_div)) }
+    F64Min => { ctx.pop_type(); self.emit(WasmInstr(op_f64_min)) }
+    F64Max => { ctx.pop_type(); self.emit(WasmInstr(op_f64_max)) }
+    F64Copysign => { ctx.pop_type(); self.emit(WasmInstr(op_f64_copysign)) }
     // Float conversions
-    F64ConvertI64U => self.emit(WasmInstr(op_f64_convert_i64_u))
-    F64ConvertI64S => self.emit(WasmInstr(op_f64_convert_i64_s))
-    F64ConvertI32U => self.emit(WasmInstr(op_f64_convert_i32_u))
-    F64ConvertI32S => self.emit(WasmInstr(op_f64_convert_i32_s))
-    F64PromoteF32 => self.emit(WasmInstr(op_f64_promote_f32))
-    F32DemoteF64 => self.emit(WasmInstr(op_f32_demote_f64))
-    F32ConvertI32S => self.emit(WasmInstr(op_f32_convert_i32_s))
-    F32ConvertI32U => self.emit(WasmInstr(op_f32_convert_i32_u))
-    F32ConvertI64S => self.emit(WasmInstr(op_f32_convert_i64_s))
-    F32ConvertI64U => self.emit(WasmInstr(op_f32_convert_i64_u))
+    F64ConvertI64U => { ctx.pop_type(); ctx.push_type(F64); self.emit(WasmInstr(op_f64_convert_i64_u)) }
+    F64ConvertI64S => { ctx.pop_type(); ctx.push_type(F64); self.emit(WasmInstr(op_f64_convert_i64_s)) }
+    F64ConvertI32U => { ctx.pop_type(); ctx.push_type(F64); self.emit(WasmInstr(op_f64_convert_i32_u)) }
+    F64ConvertI32S => { ctx.pop_type(); ctx.push_type(F64); self.emit(WasmInstr(op_f64_convert_i32_s)) }
+    F64PromoteF32 => { ctx.pop_type(); ctx.push_type(F64); self.emit(WasmInstr(op_f64_promote_f32)) }
+    F32DemoteF64 => { ctx.pop_type(); ctx.push_type(F32); self.emit(WasmInstr(op_f32_demote_f64)) }
+    F32ConvertI32S => { ctx.pop_type(); ctx.push_type(F32); self.emit(WasmInstr(op_f32_convert_i32_s)) }
+    F32ConvertI32U => { ctx.pop_type(); ctx.push_type(F32); self.emit(WasmInstr(op_f32_convert_i32_u)) }
+    F32ConvertI64S => { ctx.pop_type(); ctx.push_type(F32); self.emit(WasmInstr(op_f32_convert_i64_s)) }
+    F32ConvertI64U => { ctx.pop_type(); ctx.push_type(F32); self.emit(WasmInstr(op_f32_convert_i64_u)) }
     // Truncations
-    I64TruncF64S => self.emit(WasmInstr(op_i64_trunc_f64_s))
-    I64TruncF64U => self.emit(WasmInstr(op_i64_trunc_f64_u))
-    I32TruncF32S => self.emit(WasmInstr(op_i32_trunc_f32_s))
-    I32TruncF32U => self.emit(WasmInstr(op_i32_trunc_f32_u))
-    I32TruncF64S => self.emit(WasmInstr(op_i32_trunc_f64_s))
-    I32TruncF64U => self.emit(WasmInstr(op_i32_trunc_f64_u))
-    I64TruncF32S => self.emit(WasmInstr(op_i64_trunc_f32_s))
-    I64TruncF32U => self.emit(WasmInstr(op_i64_trunc_f32_u))
+    I64TruncF64S => { ctx.pop_type(); ctx.push_type(I64); self.emit(WasmInstr(op_i64_trunc_f64_s)) }
+    I64TruncF64U => { ctx.pop_type(); ctx.push_type(I64); self.emit(WasmInstr(op_i64_trunc_f64_u)) }
+    I32TruncF32S => { ctx.pop_type(); ctx.push_type(I32); self.emit(WasmInstr(op_i32_trunc_f32_s)) }
+    I32TruncF32U => { ctx.pop_type(); ctx.push_type(I32); self.emit(WasmInstr(op_i32_trunc_f32_u)) }
+    I32TruncF64S => { ctx.pop_type(); ctx.push_type(I32); self.emit(WasmInstr(op_i32_trunc_f64_s)) }
+    I32TruncF64U => { ctx.pop_type(); ctx.push_type(I32); self.emit(WasmInstr(op_i32_trunc_f64_u)) }
+    I64TruncF32S => { ctx.pop_type(); ctx.push_type(I64); self.emit(WasmInstr(op_i64_trunc_f32_s)) }
+    I64TruncF32U => { ctx.pop_type(); ctx.push_type(I64); self.emit(WasmInstr(op_i64_trunc_f32_u)) }
     // Saturating truncations
-    I32TruncSatF32S => self.emit(WasmInstr(op_i32_trunc_sat_f32_s))
-    I32TruncSatF32U => self.emit(WasmInstr(op_i32_trunc_sat_f32_u))
-    I32TruncSatF64S => self.emit(WasmInstr(op_i32_trunc_sat_f64_s))
-    I32TruncSatF64U => self.emit(WasmInstr(op_i32_trunc_sat_f64_u))
-    I64TruncSatF32S => self.emit(WasmInstr(op_i64_trunc_sat_f32_s))
-    I64TruncSatF32U => self.emit(WasmInstr(op_i64_trunc_sat_f32_u))
-    I64TruncSatF64S => self.emit(WasmInstr(op_i64_trunc_sat_f64_s))
-    I64TruncSatF64U => self.emit(WasmInstr(op_i64_trunc_sat_f64_u))
-    // Reinterpret
-    I32ReinterpretF32 => self.emit(WasmInstr(op_i32_reinterpret_f32))
-    I64ReinterpretF64 => self.emit(WasmInstr(op_i64_reinterpret_f64))
-    F32ReinterpretI32 => self.emit(WasmInstr(op_f32_reinterpret_i32))
-    F64ReinterpretI64 => self.emit(WasmInstr(op_f64_reinterpret_i64))
-    // Locals
-    LocalGet(idx) => {
+    I32TruncSatF32S => { ctx.pop_type(); ctx.push_type(I32); self.emit(WasmInstr(op_i32_trunc_sat_f32_s)) }
+    I32TruncSatF32U => { ctx.pop_type(); ctx.push_type(I32); self.emit(WasmInstr(op_i32_trunc_sat_f32_u)) }
+    I32TruncSatF64S => { ctx.pop_type(); ctx.push_type(I32); self.emit(WasmInstr(op_i32_trunc_sat_f64_s)) }
+    I32TruncSatF64U => { ctx.pop_type(); ctx.push_type(I32); self.emit(WasmInstr(op_i32_trunc_sat_f64_u)) }
+    I64TruncSatF32S => { ctx.pop_type(); ctx.push_type(I64); self.emit(WasmInstr(op_i64_trunc_sat_f32_s)) }
+    I64TruncSatF32U => { ctx.pop_type(); ctx.push_type(I64); self.emit(WasmInstr(op_i64_trunc_sat_f32_u)) }
+    I64TruncSatF64S => { ctx.pop_type(); ctx.push_type(I64); self.emit(WasmInstr(op_i64_trunc_sat_f64_s)) }
+    I64TruncSatF64U => { ctx.pop_type(); ctx.push_type(I64); self.emit(WasmInstr(op_i64_trunc_sat_f64_u)) }
+    // Reinterpret (same size, different type)
+    I32ReinterpretF32 => { ctx.pop_type(); ctx.push_type(I32); self.emit(WasmInstr(op_i32_reinterpret_f32)) }
+    I64ReinterpretF64 => { ctx.pop_type(); ctx.push_type(I64); self.emit(WasmInstr(op_i64_reinterpret_f64)) }
+    F32ReinterpretI32 => { ctx.pop_type(); ctx.push_type(F32); self.emit(WasmInstr(op_f32_reinterpret_i32)) }
+    F64ReinterpretI64 => { ctx.pop_type(); ctx.push_type(F64); self.emit(WasmInstr(op_f64_reinterpret_i64)) }
+    // Locals - we don't track local types here, just use a placeholder
+    LocalGet(_idx) => {
       self.emit(WasmInstr(op_local_get))
-      self.emit(ImmediateIdx(idx.reinterpret_as_int()))
+      self.emit(ImmediateIdx(_idx.reinterpret_as_int()))
+      // We need to push the local's type, but we don't have access to it here
+      // For simplicity, push I32 as placeholder (the exact type doesn't matter for branch arity)
+      ctx.push_type(I32)
     }
-    LocalSet(idx) => {
+    LocalSet(_idx) => {
+      ctx.pop_type()
       self.emit(WasmInstr(op_local_set))
-      self.emit(ImmediateIdx(idx.reinterpret_as_int()))
+      self.emit(ImmediateIdx(_idx.reinterpret_as_int()))
     }
-    LocalTee(idx) => {
+    LocalTee(_idx) => {
+      // Tee keeps the value on stack
       self.emit(WasmInstr(op_local_tee))
-      self.emit(ImmediateIdx(idx.reinterpret_as_int()))
+      self.emit(ImmediateIdx(_idx.reinterpret_as_int()))
     }
     // Stack
-    Drop => self.emit(WasmInstr(op_drop))
-    Select => self.emit(WasmInstr(op_select))
+    Drop => { ctx.pop_type(); self.emit(WasmInstr(op_drop)) }
+    Select => { ctx.pop_types(2); self.emit(WasmInstr(op_select)) } // pop 3, push 1 => net -2
     Nop => self.emit(WasmInstr(op_nop))
     Unreachable => self.emit(WasmInstr(op_unreachable))
     // Control flow
-    Block(_block_type, instrs) => {
-      // Push block target (placeholder, will be patched)
+    Block(block_type, instrs) => {
+      let (params, results) = get_compile_block_type(self.module_, block_type)
+      // Push control frame for compile-time tracking
+      ctx.push_control(BlockKind, params, results)
+      // Push runtime block target (placeholder, will be patched)
       self.emit(WasmInstr(op_push_block_target))
       let target_slot = self.ops.length()
       self.emit(ImmediateIdx(0)) // Placeholder
       for instr in instrs {
-        self.compile_wasm_instr(instr)
+        self.compile_wasm_instr(ctx, instr)
       }
       self.emit(WasmInstr(op_end_block))
       // Patch the target to point AFTER end_block (br skips past end_block)
       self.ops[target_slot] = ImmediateIdx(self.ops.length())
+      // Pop control frame and update type stack
+      let block = ctx.pop_control()
+      // Block body should have left exactly the result types on stack
+      // Reset stack to entry height + results
+      ctx.truncate_stack(block.stack_height_at_entry)
+      ctx.push_types(block.results)
     }
-    Loop(_block_type, instrs) => {
+    Loop(block_type, instrs) => {
+      let (params, results) = get_compile_block_type(self.module_, block_type)
+      // Push control frame for compile-time tracking
+      ctx.push_control(LoopKind, params, results)
       // Push loop target - points to op_push_loop_target itself so that
       // when we branch back, we re-execute op_push_loop_target and restore
       // the branch target after it was popped by br
@@ -3278,37 +3522,90 @@ fn Runtime::compile_wasm_instr(
       self.emit(WasmInstr(op_push_loop_target))
       self.emit(ImmediateIdx(loop_start))
       for instr in instrs {
-        self.compile_wasm_instr(instr)
+        self.compile_wasm_instr(ctx, instr)
       }
       self.emit(WasmInstr(op_end_block))
+      // Pop control frame and update type stack
+      let block = ctx.pop_control()
+      ctx.truncate_stack(block.stack_height_at_entry)
+      ctx.push_types(block.results)
     }
     Br(label) => {
+      let label_int = label.reinterpret_as_int()
+      let arity = ctx.get_branch_arity(label_int)
+      let drop_count = ctx.calc_drop_count(label_int, arity)
       self.emit(WasmInstr(op_br))
-      self.emit(ImmediateIdx(label.reinterpret_as_int()))
+      self.emit(ImmediateIdx(label_int))
+      self.emit(ImmediateIdx(arity))
+      self.emit(ImmediateIdx(drop_count))
+      // After unconditional br, stack is polymorphic (unreachable)
+      // We don't model unreachable here, just leave stack as is
     }
     BrIf(label) => {
+      ctx.pop_type() // Pop condition
+      let label_int = label.reinterpret_as_int()
+      let arity = ctx.get_branch_arity(label_int)
+      let drop_count = ctx.calc_drop_count(label_int, arity)
       self.emit(WasmInstr(op_br_if))
-      self.emit(ImmediateIdx(label.reinterpret_as_int()))
+      self.emit(ImmediateIdx(label_int))
+      self.emit(ImmediateIdx(arity))
+      self.emit(ImmediateIdx(drop_count))
+      // For br_if, stack continues normally in fallthrough case
     }
     BrTable(labels, default_label) => {
+      ctx.pop_type() // Pop index
+      // Use default label for arity calculation (all must have same arity per validation)
+      let default_int = default_label.reinterpret_as_int()
+      let arity = ctx.get_branch_arity(default_int)
       self.emit(WasmInstr(op_br_table))
       self.emit(ImmediateIdx(labels.length()))
+      self.emit(ImmediateIdx(arity))
+      // For each label, emit label + drop_count
       for label in labels {
-        self.emit(ImmediateIdx(label.reinterpret_as_int()))
+        let label_int = label.reinterpret_as_int()
+        let drop_count = ctx.calc_drop_count(label_int, arity)
+        self.emit(ImmediateIdx(label_int))
+        self.emit(ImmediateIdx(drop_count))
       }
-      self.emit(ImmediateIdx(default_label.reinterpret_as_int()))
+      // Default label + drop_count
+      let default_drop = ctx.calc_drop_count(default_int, arity)
+      self.emit(ImmediateIdx(default_int))
+      self.emit(ImmediateIdx(default_drop))
     }
     BrOnNull(label) => {
-      // br_on_null: branch if ref is null
+      // br_on_null: branch if ref is null, leaving ref on stack if not null
+      // At compile time: pop ref first, then calculate drop_count
+      // (runtime pops ref first, so drop_count should be calculated without the ref)
+      ctx.pop_type() // Pop the reference type
+      let label_int = label.reinterpret_as_int()
+      let arity = ctx.get_branch_arity(label_int)
+      let drop_count = ctx.calc_drop_count(label_int, arity)
       self.emit(WasmInstr(op_br_on_null))
-      self.emit(ImmediateIdx(label.reinterpret_as_int()))
+      self.emit(ImmediateIdx(label_int))
+      self.emit(ImmediateIdx(arity))
+      self.emit(ImmediateIdx(drop_count))
+      // In fallthrough case, ref is pushed back, so push it back on type stack
+      ctx.push_type(FuncRef) // Use FuncRef as placeholder
     }
     BrOnNonNull(label) => {
       // br_on_non_null: branch if ref is not null
+      // Pop ref, calculate drop_count
+      ctx.pop_type() // Pop the reference type
+      let label_int = label.reinterpret_as_int()
+      let arity = ctx.get_branch_arity(label_int)
+      let drop_count = ctx.calc_drop_count(label_int, arity)
       self.emit(WasmInstr(op_br_on_non_null))
-      self.emit(ImmediateIdx(label.reinterpret_as_int()))
+      self.emit(ImmediateIdx(label_int))
+      self.emit(ImmediateIdx(arity))
+      self.emit(ImmediateIdx(drop_count))
+      // In fallthrough case (null), ref is discarded, so nothing to push
     }
-    If(_block_type, then_instrs, else_instrs) => {
+    If(block_type, then_instrs, else_instrs) => {
+      ctx.pop_type() // Pop condition
+      let (params, results) = get_compile_block_type(self.module_, block_type)
+      // Push control frame
+      ctx.push_control(IfKind, params, results)
+      let entry_height = ctx.control_stack[ctx.control_stack.length() - 1].stack_height_at_entry
       // Push branch target for the If block (br 0 inside will jump to end)
       self.emit(WasmInstr(op_push_block_target))
       let end_target_slot = self.ops.length()
@@ -3316,34 +3613,47 @@ fn Runtime::compile_wasm_instr(
       self.emit(WasmInstr(op_if))
       let else_pc_slot = self.ops.length()
       self.emit(ImmediateIdx(0))
+      // Compile then branch
       for instr in then_instrs {
-        self.compile_wasm_instr(instr)
+        self.compile_wasm_instr(ctx, instr)
       }
+      // Reset stack for else branch
+      ctx.truncate_stack(entry_height)
+      ctx.push_types(params)
       self.emit(WasmInstr(op_else))
       let end_pc_slot = self.ops.length()
       self.emit(ImmediateIdx(0))
       let else_start = self.ops.length()
       self.ops[else_pc_slot] = ImmediateIdx(else_start)
+      // Compile else branch
       for instr in else_instrs {
-        self.compile_wasm_instr(instr)
+        self.compile_wasm_instr(ctx, instr)
       }
       self.emit(WasmInstr(op_end_block))
       let end_pc = self.ops.length() - 1
       self.ops[end_pc_slot] = ImmediateIdx(end_pc)
       // Branch target points AFTER end_block (br skips past end_block)
       self.ops[end_target_slot] = ImmediateIdx(self.ops.length())
+      // Pop control frame and set result types
+      let block = ctx.pop_control()
+      ctx.truncate_stack(block.stack_height_at_entry)
+      ctx.push_types(block.results)
     }
-    Call(func_idx) => {
+    Call(_func_idx) => {
+      // We don't track function types here, just emit the instruction
+      // For proper tracking we'd need to look up the function signature
       self.emit(WasmInstr(op_call))
-      self.emit(ImmediateIdx(func_idx.reinterpret_as_int()))
+      self.emit(ImmediateIdx(_func_idx.reinterpret_as_int()))
     }
     Return => self.emit(WasmInstr(op_return))
-    // Memory instructions
+    // Memory instructions (load: pop addr, push value; store: pop addr+value)
     I32Load(_align, offset) => {
+      // pop i32 addr, push i32 value
       self.emit(WasmInstr(op_i32_load))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
     I32Store(_align, offset) => {
+      ctx.pop_types(2) // pop addr and value
       self.emit(WasmInstr(op_i32_store))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
@@ -3364,107 +3674,131 @@ fn Runtime::compile_wasm_instr(
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
     I32Store8(_align, offset) => {
+      ctx.pop_types(2)
       self.emit(WasmInstr(op_i32_store8))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
     I32Store16(_align, offset) => {
+      ctx.pop_types(2)
       self.emit(WasmInstr(op_i32_store16))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
     I64Load(_align, offset) => {
+      ctx.pop_type(); ctx.push_type(I64)
       self.emit(WasmInstr(op_i64_load))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
     I64Store(_align, offset) => {
+      ctx.pop_types(2)
       self.emit(WasmInstr(op_i64_store))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
     I64Load8S(_align, offset) => {
+      ctx.pop_type(); ctx.push_type(I64)
       self.emit(WasmInstr(op_i64_load8_s))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
     I64Load8U(_align, offset) => {
+      ctx.pop_type(); ctx.push_type(I64)
       self.emit(WasmInstr(op_i64_load8_u))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
     I64Load16S(_align, offset) => {
+      ctx.pop_type(); ctx.push_type(I64)
       self.emit(WasmInstr(op_i64_load16_s))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
     I64Load16U(_align, offset) => {
+      ctx.pop_type(); ctx.push_type(I64)
       self.emit(WasmInstr(op_i64_load16_u))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
     I64Load32S(_align, offset) => {
+      ctx.pop_type(); ctx.push_type(I64)
       self.emit(WasmInstr(op_i64_load32_s))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
     I64Load32U(_align, offset) => {
+      ctx.pop_type(); ctx.push_type(I64)
       self.emit(WasmInstr(op_i64_load32_u))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
     I64Store8(_align, offset) => {
+      ctx.pop_types(2)
       self.emit(WasmInstr(op_i64_store8))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
     I64Store16(_align, offset) => {
+      ctx.pop_types(2)
       self.emit(WasmInstr(op_i64_store16))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
     I64Store32(_align, offset) => {
+      ctx.pop_types(2)
       self.emit(WasmInstr(op_i64_store32))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
     F32Load(_align, offset) => {
+      ctx.pop_type(); ctx.push_type(F32)
       self.emit(WasmInstr(op_f32_load))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
     F32Store(_align, offset) => {
+      ctx.pop_types(2)
       self.emit(WasmInstr(op_f32_store))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
     F64Load(_align, offset) => {
+      ctx.pop_type(); ctx.push_type(F64)
       self.emit(WasmInstr(op_f64_load))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
     F64Store(_align, offset) => {
+      ctx.pop_types(2)
       self.emit(WasmInstr(op_f64_store))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
     // Global instructions
-    GlobalGet(idx) => {
+    GlobalGet(_idx) => {
+      ctx.push_type(I32) // Placeholder type
       self.emit(WasmInstr(op_global_get))
-      self.emit(ImmediateIdx(idx.reinterpret_as_int()))
+      self.emit(ImmediateIdx(_idx.reinterpret_as_int()))
     }
-    GlobalSet(idx) => {
+    GlobalSet(_idx) => {
+      ctx.pop_type()
       self.emit(WasmInstr(op_global_set))
-      self.emit(ImmediateIdx(idx.reinterpret_as_int()))
+      self.emit(ImmediateIdx(_idx.reinterpret_as_int()))
     }
     // Memory size and grow
-    MemorySize(_) => self.emit(WasmInstr(op_memory_size))
-    MemoryGrow(_) => self.emit(WasmInstr(op_memory_grow))
+    MemorySize(_) => { ctx.push_type(I32); self.emit(WasmInstr(op_memory_size)) }
+    MemoryGrow(_) => self.emit(WasmInstr(op_memory_grow)) // i32 -> i32
     // Table instructions
     TableSize(table_idx) => {
+      ctx.push_type(I32)
       self.emit(WasmInstr(op_table_size))
       self.emit(ImmediateIdx(table_idx.reinterpret_as_int()))
     }
     TableGet(table_idx) => {
+      // pop i32 index, push ref
       self.emit(WasmInstr(op_table_get))
       self.emit(ImmediateIdx(table_idx.reinterpret_as_int()))
     }
     TableSet(table_idx) => {
+      ctx.pop_types(2) // pop index and ref
       self.emit(WasmInstr(op_table_set))
       self.emit(ImmediateIdx(table_idx.reinterpret_as_int()))
     }
     TableGrow(table_idx) => {
+      ctx.pop_type() // pop count, keep delta -> result
       self.emit(WasmInstr(op_table_grow))
       self.emit(ImmediateIdx(table_idx.reinterpret_as_int()))
     }
     // Reference instructions
-    RefNull(ref_type) => {
+    RefNull(_ref_type) => {
+      ctx.push_type(FuncRef) // Use FuncRef as placeholder
       self.emit(WasmInstr(op_ref_null))
       // Encode the ref type as an immediate
-      let type_idx = match ref_type {
+      let type_idx = match _ref_type {
         Func => 0
         Extern => 1
         Any => 2
@@ -3482,12 +3816,15 @@ fn Runtime::compile_wasm_instr(
       self.emit(ImmediateIdx(type_idx))
     }
     RefFunc(func_idx) => {
+      ctx.push_type(FuncRef)
       self.emit(WasmInstr(op_ref_func))
       self.emit(ImmediateIdx(func_idx.reinterpret_as_int()))
     }
-    RefIsNull => self.emit(WasmInstr(op_ref_is_null))
+    RefIsNull => { ctx.pop_type(); ctx.push_type(I32); self.emit(WasmInstr(op_ref_is_null)) }
     // Indirect call
     CallIndirect(type_idx, table_idx) => {
+      // Pop table index, then args based on type (simplified)
+      ctx.pop_type()
       self.emit(WasmInstr(op_call_indirect))
       self.emit(ImmediateIdx(type_idx.reinterpret_as_int()))
       self.emit(ImmediateIdx(table_idx.reinterpret_as_int()))
@@ -3517,8 +3854,28 @@ fn Runtime::compile_wasm_instr(
 ///|
 fn Runtime::compile_func(
   self : Runtime,
+  func_idx : Int, // Index into module_.funcs (excludes imports)
   code : Code,
 ) -> Unit raise RuntimeError {
+  // Get function type
+  let type_idx = self.module_.funcs[func_idx].reinterpret_as_int()
+  let func_type = self.module_.types[type_idx]
+
+  // Create compile-time context
+  let ctx = CompileCtx::new()
+
+  // Push function parameters onto type stack (they become locals)
+  // Parameters are already in locals, but we need them on the type stack
+  // for the implicit function block
+  for param in func_type.params {
+    ctx.push_type(param)
+  }
+
+  // Push implicit function-level control frame
+  // The function body acts like a block with params=[] and results=func_type.results
+  // But parameters are already popped into locals, so we model it as empty params
+  ctx.push_control(BlockKind, [], func_type.results)
+
   let start_pc = self.ops.length()
   // Push implicit function-level block target
   // This represents the function body itself (label 0 for return/outer br)
@@ -3527,7 +3884,7 @@ fn Runtime::compile_func(
   let func_end_slot = self.ops.length()
   self.emit(ImmediateIdx(0)) // Placeholder, will be patched
   for instr in code.body.instrs {
-    self.compile_wasm_instr(instr)
+    self.compile_wasm_instr(ctx, instr)
   }
   self.emit(WasmInstr(op_end_block)) // Pop the function-level target
   self.emit(WasmInstr(op_end))
@@ -3539,8 +3896,8 @@ fn Runtime::compile_func(
 
 ///|
 pub fn Runtime::compile(self : Runtime) -> Unit raise RuntimeError {
-  for code in self.module_.codes {
-    self.compile_func(code)
+  for i, code in self.module_.codes {
+    self.compile_func(i, code)
   }
 
   // Execute the start function if present
