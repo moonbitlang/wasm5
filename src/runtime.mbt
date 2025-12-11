@@ -64,6 +64,12 @@ struct RuntimeTable {
 }
 
 ///|
+struct ImportedFunc {
+  arity : UInt
+  func : (Array[Value]) -> Array[Value]
+}
+
+///|
 /// Runtime structure that holds a loaded WebAssembly module
 pub struct Runtime {
   module_ : Module
@@ -75,6 +81,7 @@ pub struct Runtime {
   memory : Array[Byte] // Linear memory
   globals : Array[Value] // Global variables
   tables : Array[RuntimeTable] // Tables with limits
+  imported_funcs : Array[ImportedFunc] // Imported functions
 }
 
 ///|
@@ -166,6 +173,32 @@ pub fn Runtime::load(m : Module) -> Runtime raise RuntimeError {
       }
     }
   }
+  let imported_funcs : Array[ImportedFunc] = []
+  for imp in m.imports {
+    let module_ = imp.module_
+    let name = imp.name
+    match imp.desc {
+      Func(_type_idx) =>
+        if module_ == "spectest" && name == "print_i32" {
+          imported_funcs.push({ arity: 1U, func: spectest_print_i32 })
+        } else if module_ == "spectest" && name == "print_i64" {
+          imported_funcs.push({ arity: 1U, func: spectest_print_i64 })
+        } else if module_ == "spectest" && name == "print_f32" {
+          imported_funcs.push({ arity: 1U, func: spectest_print_f32 })
+        } else if module_ == "spectest" && name == "print_f64" {
+          imported_funcs.push({ arity: 1U, func: spectest_print_f64 })
+        } else if module_ == "spectest" && name == "print_i32_f32" {
+          imported_funcs.push({ arity: 2U, func: spectest_print_i32_f32 })
+        } else if module_ == "spectest" && name == "print_f64_f64" {
+          imported_funcs.push({ arity: 2U, func: spectest_print_f64_f64 })
+        } else {
+          raise RuntimeError::FunctionNotFound(
+            "imported function not found: \{module_}.\{name}",
+          )
+        }
+      Table(_) | Mem(_) | Global(_) => ()
+    }
+  }
   Runtime::{
     module_: m,
     ops: [],
@@ -176,6 +209,7 @@ pub fn Runtime::load(m : Module) -> Runtime raise RuntimeError {
     memory,
     globals,
     tables,
+    imported_funcs,
   }
 }
 
@@ -287,4 +321,52 @@ fn eval_const_expr(
     )
   }
   stack[0]
+}
+
+///|
+fn spectest_print_i32(args : Array[Value]) -> Array[Value] {
+  guard args.length() == 1
+  guard args is [I32(v)]
+  println("\{v.reinterpret_as_int()} : i32")
+  []
+}
+
+///|
+fn spectest_print_i64(args : Array[Value]) -> Array[Value] {
+  guard args.length() == 1
+  guard args is [I64(v)]
+  println("\{v.reinterpret_as_int64()} : i64")
+  []
+}
+
+///|
+fn spectest_print_f32(args : Array[Value]) -> Array[Value] {
+  guard args.length() == 1
+  guard args is [F32(v)]
+  println("\{v} : f32")
+  []
+}
+
+///|
+fn spectest_print_f64(args : Array[Value]) -> Array[Value] {
+  guard args.length() == 1
+  guard args is [F64(v)]
+  println("\{v} : f64")
+  []
+}
+
+///|
+fn spectest_print_i32_f32(args : Array[Value]) -> Array[Value] {
+  guard args.length() == 2
+  guard args is [I32(iv), F32(fv)]
+  println("\{iv.reinterpret_as_int()} : i32, \{fv} : f32")
+  []
+}
+
+///|
+fn spectest_print_f64_f64(args : Array[Value]) -> Array[Value] {
+  guard args.length() == 2
+  guard args is [F64(fv1), F64(fv2)]
+  println("\{fv1} : f64, \{fv2} : f64")
+  []
 }
