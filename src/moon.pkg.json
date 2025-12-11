@@ -1,3 +1,4 @@
 {
-  "warn-list": "-3-4-6-7"
+  "warn-list": "-3-4-6-7",
+  "native-stub": ["print.c"]
 }
