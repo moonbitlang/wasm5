@@ -165,8 +165,7 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
   }
 
   // Validate global initializers
-  for i = 0; i < m.globals.length(); i = i + 1 {
-    let global = m.globals[i]
+  for global in m.globals {
     // Create a validation context for the init expression
     let init_ctx = ValidationCtx::new()
     // Validate each instruction in the init expression
@@ -246,13 +245,88 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
   }
 
   // Validate function bodies against their types
-  for i = 0; i < m.codes.length(); i = i + 1 {
+  for i in 0..<m.codes.length() {
     let type_idx = m.funcs[i].reinterpret_as_int()
     let func_type = m.types[type_idx]
     let code = m.codes[i]
 
     // Validate the function body
     validate_function(m, func_type, code)
+  }
+
+  // Validate exports
+  let export_names : Set[String] = Set::new()
+  for exp in m.exports {
+    // Check for duplicate export names
+    if export_names.contains(exp.name) {
+      raise ValidationError::DuplicateExport(
+        "duplicate export name: '\{exp.name}'",
+      )
+    }
+    export_names.add(exp.name)
+    // Check for unknown func, memory, table, global indices
+    match exp.desc {
+      Mem(idx) => {
+        let mem_idx = idx.reinterpret_as_int()
+        // Count imported memories
+        let mut num_imported_mems = 0
+        for imp in m.imports {
+          match imp.desc {
+            ImportDesc::Mem(_) => num_imported_mems += 1
+            _ => ()
+          }
+        }
+        let total_mems = num_imported_mems + m.mems.length()
+        if mem_idx < 0 || mem_idx >= total_mems {
+          raise ValidationError::UnknownExportedMemory(mem_idx)
+        }
+      }
+      Table(idx) => {
+        let table_idx = idx.reinterpret_as_int()
+        // Count imported tables
+        let mut num_imported_tables = 0
+        for imp in m.imports {
+          match imp.desc {
+            ImportDesc::Table(_) => num_imported_tables += 1
+            _ => ()
+          }
+        }
+        let total_tables = num_imported_tables + m.tables.length()
+        if table_idx < 0 || table_idx >= total_tables {
+          raise ValidationError::UnknownExportedTable(table_idx)
+        }
+      }
+      Func(idx) => {
+        let func_idx = idx.reinterpret_as_int()
+        // Count imported functions
+        let mut num_imported_funcs = 0
+        for imp in m.imports {
+          match imp.desc {
+            ImportDesc::Func(_) => num_imported_funcs += 1
+            _ => ()
+          }
+        }
+        let total_funcs = num_imported_funcs + m.funcs.length()
+        if func_idx < 0 || func_idx >= total_funcs {
+          raise ValidationError::UnknownExportedFunction(func_idx)
+        }
+      }
+      Global(idx) => {
+        let global_idx = idx.reinterpret_as_int()
+        // Count imported globals
+        let mut num_imported_globals = 0
+        for imp in m.imports {
+          match imp.desc {
+            ImportDesc::Global(_) => num_imported_globals += 1
+            _ => ()
+          }
+        }
+        let total_globals = num_imported_globals + m.globals.length()
+        if global_idx < 0 || global_idx >= total_globals {
+          raise ValidationError::UnknownExportedGlobal(global_idx)
+        }
+      }
+    }
   }
 }
 
@@ -1494,7 +1568,7 @@ fn validate_instruction(
         raise ValidationError::TypeMismatch("call_ref expects funcref on stack")
       } else {
         let _ = stack.unsafe_pop()
-         // Pop funcref (we don't type-check it strictly for now)
+        // Pop funcref (we don't type-check it strictly for now)
       }
 
       // Pop arguments from stack (in reverse order)
@@ -1524,7 +1598,7 @@ fn validate_instruction(
         )
       } else {
         let _ = stack.unsafe_pop()
-         // Pop funcref
+        // Pop funcref
       }
 
       // Pop arguments from stack (in reverse order)

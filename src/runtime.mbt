@@ -39,6 +39,11 @@ pub suberror ValidationError {
   UnknownMemory(Int)
   InvalidMemorySize(String)
   ImmutableGlobal(Int)
+  DuplicateExport(String)
+  UnknownExportedFunction(Int)
+  UnknownExportedMemory(Int)
+  UnknownExportedTable(Int)
+  UnknownExportedGlobal(Int)
 } derive(Show)
 
 ///|

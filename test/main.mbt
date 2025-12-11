@@ -558,6 +558,46 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got InvalidStartFunction",
         )
       }
+    @wasm5.ValidationError::DuplicateExport(name) =>
+      if not(expected_error.contains("duplicate export name")) {
+        ctx.fail(
+          line,
+          "assert_invalid",
+          "expected '\{expected_error}' but got DuplicateExport(\{name})",
+        )
+      }
+    @wasm5.ValidationError::UnknownExportedFunction(_) =>
+      if not(expected_error.contains("unknown function")) {
+        ctx.fail(
+          line,
+          "assert_invalid",
+          "expected '\{expected_error}' but got UnknownExportedFunction",
+        )
+      }
+    @wasm5.ValidationError::UnknownExportedMemory(_) =>
+      if not(expected_error.contains("unknown memory")) {
+        ctx.fail(
+          line,
+          "assert_invalid",
+          "expected '\{expected_error}' but got UnknownExportedMemory",
+        )
+      }
+    @wasm5.ValidationError::UnknownExportedTable(_) =>
+      if not(expected_error.contains("unknown table")) {
+        ctx.fail(
+          line,
+          "assert_invalid",
+          "expected '\{expected_error}' but got UnknownExportedTable",
+        )
+      }
+    @wasm5.ValidationError::UnknownExportedGlobal(_) =>
+      if not(expected_error.contains("unknown global")) {
+        ctx.fail(
+          line,
+          "assert_invalid",
+          "expected '\{expected_error}' but got UnknownExportedGlobal",
+        )
+      }
     _ => () // Other validation errors are acceptable
   }
 }
