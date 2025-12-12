@@ -46,6 +46,7 @@ pub suberror ValidationError {
   UnknownExportedGlobal(Int)
   InvalidTableSize(String)
   UnknownTable(Int)
+  ConstantExpressionRequired(String)
 } derive(Show)
 
 ///|

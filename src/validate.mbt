@@ -72,6 +72,63 @@ fn validate_memory_exists(module_ : Module) -> Unit raise ValidationError {
 }
 
 ///|
+/// Validate that a constant expression only uses immutable globals
+/// WebAssembly constant expressions can only use global.get on immutable globals
+fn validate_const_expr_globals(
+  m : Module,
+  expr : Expr,
+) -> Unit raise ValidationError {
+  for instr in expr.instrs {
+    match instr {
+      GlobalGet(idx) => {
+        let global_idx = idx.reinterpret_as_int()
+        // Count imported globals
+        let mut num_imported_globals = 0
+        for imp in m.imports {
+          match imp.desc {
+            ImportDesc::Global(_) => num_imported_globals += 1
+            _ => ()
+          }
+        }
+        // Check if global is mutable
+        let is_mutable = if global_idx < num_imported_globals {
+          // Imported global
+          let mut import_global_idx = 0
+          let mut found_mutable = false
+          for imp in m.imports {
+            match imp.desc {
+              ImportDesc::Global(gt) => {
+                if import_global_idx == global_idx {
+                  found_mutable = gt.mutable
+                  break
+                }
+                import_global_idx += 1
+              }
+              _ => ()
+            }
+          }
+          found_mutable
+        } else {
+          // Local global
+          let local_idx = global_idx - num_imported_globals
+          if local_idx >= 0 && local_idx < m.globals.length() {
+            m.globals[local_idx].type_.mutable
+          } else {
+            false
+          }
+        }
+        if is_mutable {
+          raise ValidationError::ConstantExpressionRequired(
+            "global.get in constant expression must reference immutable global",
+          )
+        }
+      }
+      _ => ()
+    }
+  }
+}
+
+///|
 /// Check if t1 is a subtype of t2 (t1 <: t2)
 /// WebAssembly GC type hierarchy:
 /// - NullRef (none) <: all nullable reference types
@@ -448,6 +505,8 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
       if mem_idx < 0 || mem_idx >= total_mems {
         raise ValidationError::UnknownMemory(mem_idx)
       }
+      // Validate offset expression uses only immutable globals
+      validate_const_expr_globals(m, data.offset)
     }
   }
 
