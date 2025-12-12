@@ -65,8 +65,8 @@ struct RuntimeTable {
 
 ///|
 pub struct ImportedFunc {
-  pub arity : UInt
-  pub func : (Array[Value]) -> Array[Value]
+  arity : UInt
+  func : (Array[Value]) -> Array[Value]
 }
 
 ///|
@@ -86,6 +86,7 @@ struct ImportResolverEntry {
   funcs : Map[Bytes, ImportedFunc]
 }
 
+///|
 pub struct ImportResolver {
   modules : Map[Bytes, ImportResolverEntry]
 }
@@ -152,14 +153,35 @@ pub fn Runtime::get_module(self : Runtime) -> Module {
 /// Create a default import resolver with spectest module
 pub fn default_import_resolver() -> ImportResolver {
   let resolver = ImportResolver::new()
-  resolver.add_func(b"spectest", b"print_char", { arity: 1U, func: spectest_print_char })
+  resolver.add_func(b"spectest", b"print_char", {
+    arity: 1U,
+    func: spectest_print_char,
+  })
   resolver.add_func(b"spectest", b"print", { arity: 0U, func: spectest_print })
-  resolver.add_func(b"spectest", b"print_i32", { arity: 1U, func: spectest_print_i32 })
-  resolver.add_func(b"spectest", b"print_i64", { arity: 1U, func: spectest_print_i64 })
-  resolver.add_func(b"spectest", b"print_f32", { arity: 1U, func: spectest_print_f32 })
-  resolver.add_func(b"spectest", b"print_f64", { arity: 1U, func: spectest_print_f64 })
-  resolver.add_func(b"spectest", b"print_i32_f32", { arity: 2U, func: spectest_print_i32_f32 })
-  resolver.add_func(b"spectest", b"print_f64_f64", { arity: 2U, func: spectest_print_f64_f64 })
+  resolver.add_func(b"spectest", b"print_i32", {
+    arity: 1U,
+    func: spectest_print_i32,
+  })
+  resolver.add_func(b"spectest", b"print_i64", {
+    arity: 1U,
+    func: spectest_print_i64,
+  })
+  resolver.add_func(b"spectest", b"print_f32", {
+    arity: 1U,
+    func: spectest_print_f32,
+  })
+  resolver.add_func(b"spectest", b"print_f64", {
+    arity: 1U,
+    func: spectest_print_f64,
+  })
+  resolver.add_func(b"spectest", b"print_i32_f32", {
+    arity: 2U,
+    func: spectest_print_i32_f32,
+  })
+  resolver.add_func(b"spectest", b"print_f64_f64", {
+    arity: 2U,
+    func: spectest_print_f64_f64,
+  })
   resolver
 }
 

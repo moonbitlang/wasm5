@@ -16,7 +16,7 @@ struct RegisteredModule {
 
 ///|
 /// Module registry for cross-module imports
-type ModuleRegistry Map[String, RegisteredModule]
+struct ModuleRegistry(Map[String, RegisteredModule])
 
 ///|
 fn ModuleRegistry::new() -> ModuleRegistry {
@@ -70,9 +70,7 @@ fn make_import_wrapper(
   let func : (Array[@wasm5.Value]) -> Array[@wasm5.Value] = fn(args) {
     // Call the registered module's exported function
     let rt = registered.runtime
-    try {
-      rt.call_compiled(@encoding/utf8.encode(export_name), args)
-    } catch {
+    rt.call_compiled(@encoding/utf8.encode(export_name), args) catch {
       _ => []
     }
   }
@@ -89,7 +87,7 @@ fn register_module(
 ) -> Unit {
   // Store in registry
   let entry : RegisteredModule = { runtime, module_ }
-  ctx.registry.inner()[name] = entry
+  ctx.registry.0[name] = entry
 
   // Convert name to bytes for resolver
   let name_bytes = @encoding/utf8.encode(name)
@@ -98,7 +96,7 @@ fn register_module(
   for exp in module_.exports {
     match exp.desc {
       @wasm5.ExportDesc::Func(func_idx) => {
-        let export_name = exp.name  // Already Bytes
+        let export_name = exp.name // Already Bytes
 
         // Get function arity from type
         let func_idx_int = func_idx.reinterpret_as_int()
@@ -140,9 +138,7 @@ fn register_module(
         }
 
         // Create wrapper and add to resolver
-        let export_name_str = try {
-          @encoding/utf8.decode(export_name)
-        } catch {
+        let export_name_str = @encoding/utf8.decode(export_name) catch {
           _ => continue // Skip invalid UTF-8 export names
         }
         let wrapper = make_import_wrapper(entry, export_name_str, arity)
@@ -814,7 +810,7 @@ async fn process_command(ctx : TestContext, cmd : Json) -> Unit {
       ..
     } => handle_action(ctx, fn_name, args, line.to_int())
     // Handle "register" command - register the current module with a name for imports
-    { "type": "register", "as": String(name), "line"?: line, .. } => {
+    { "type": "register", "as": String(name), "line"? : line, .. } => {
       let line = if line is Some(Number(n, ..)) { n.to_int() } else { -1 }
       handle_register(ctx, name, line)
     }
