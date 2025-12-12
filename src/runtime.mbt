@@ -44,6 +44,8 @@ pub suberror ValidationError {
   UnknownExportedMemory(Int)
   UnknownExportedTable(Int)
   UnknownExportedGlobal(Int)
+  InvalidTableSize(String)
+  UnknownTable(Int)
 } derive(Show)
 
 ///|

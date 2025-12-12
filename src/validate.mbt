@@ -244,6 +244,171 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
     }
   }
 
+  // Validate table limits and initializers
+  for table in m.tables {
+    match table.limits.max {
+      Some(max_val) =>
+        // Use unsigned comparison - compare UInt values directly
+        if table.limits.min > max_val {
+          raise ValidationError::InvalidTableSize(
+            "size minimum must not be greater than maximum",
+          )
+        }
+      None => ()
+    }
+    // Validate table initializer
+    // If the table element type is non-nullable, it must have an initializer
+    if not(table.nullable) {
+      match table.init {
+        None =>
+          raise ValidationError::TypeMismatch(
+            "table with non-nullable element type must have initializer",
+          )
+        Some(init_expr) => {
+          // For non-nullable tables, ref.null is not allowed
+          for instr in init_expr.instrs {
+            match instr {
+              RefNull(_) =>
+                raise ValidationError::TypeMismatch(
+                  "table with non-nullable element type cannot be initialized with null",
+                )
+              _ => ()
+            }
+          }
+          // Validate the initializer expression type matches the element type
+          let init_ctx = ValidationCtx::new()
+          let dummy_func_type : FuncType = { params: [], results: [] }
+          let dummy_code : Code = {
+            locals: [],
+            body: init_expr,
+            compiled: None,
+          }
+          for instr in init_expr.instrs {
+            validate_instruction(
+              m, dummy_func_type, dummy_code, init_ctx, instr,
+            )
+          }
+          if init_ctx.stack.length() != 1 {
+            raise ValidationError::TypeMismatch(
+              "table initializer must produce exactly one value",
+            )
+          }
+          // Check that the init expression type is a reference type
+          let init_type = init_ctx.stack[0]
+          match init_type {
+            FuncRef
+            | ExternRef
+            | AnyRef
+            | NullRef
+            | NullFuncRef
+            | NullExternRef => ()
+            _ =>
+              raise ValidationError::TypeMismatch(
+                "table initializer must produce a reference type",
+              )
+          }
+        }
+      }
+    } else {
+      // Nullable table with initializer - validate the init type
+      match table.init {
+        Some(init_expr) => {
+          let init_ctx = ValidationCtx::new()
+          let dummy_func_type : FuncType = { params: [], results: [] }
+          let dummy_code : Code = {
+            locals: [],
+            body: init_expr,
+            compiled: None,
+          }
+          for instr in init_expr.instrs {
+            validate_instruction(
+              m, dummy_func_type, dummy_code, init_ctx, instr,
+            )
+          }
+          if init_ctx.stack.length() != 1 {
+            raise ValidationError::TypeMismatch(
+              "table initializer must produce exactly one value",
+            )
+          }
+          let init_type = init_ctx.stack[0]
+          // Check that init type is compatible with table element type
+          // For nullable tables, we need to check if the init type is compatible
+          // Funcref table can accept funcref or null
+          // Type must be a reference type
+          match init_type {
+            FuncRef
+            | ExternRef
+            | AnyRef
+            | NullRef
+            | NullFuncRef
+            | NullExternRef => ()
+            I32 | I64 | F32 | F64 =>
+              raise ValidationError::TypeMismatch(
+                "table initializer must produce a reference type, got \{init_type}",
+              )
+            _ => ()
+          }
+          // Check element type compatibility
+          match (table.elem_type, init_type) {
+            (RefType::Func, FuncRef)
+            | (RefType::Func, NullFuncRef)
+            | (RefType::Extern, ExternRef)
+            | (RefType::Extern, NullExternRef) => ()
+            (RefType::Func, ExternRef)
+            | (RefType::Func, NullExternRef)
+            | (RefType::Func, NullRef) =>
+              raise ValidationError::TypeMismatch(
+                "table initializer type mismatch: table expects funcref, got \{init_type}",
+              )
+            (RefType::Extern, FuncRef)
+            | (RefType::Extern, NullFuncRef)
+            | (RefType::Extern, NullRef) =>
+              raise ValidationError::TypeMismatch(
+                "table initializer type mismatch: table expects externref, got \{init_type}",
+              )
+            _ => ()
+          }
+        }
+        None => ()
+      }
+    }
+  }
+
+  // Validate table limits for imported tables
+  for imp in m.imports {
+    match imp.desc {
+      ImportDesc::Table(table_type) =>
+        match table_type.limits.max {
+          Some(max_val) =>
+            // Use unsigned comparison - compare UInt values directly
+            if table_type.limits.min > max_val {
+              raise ValidationError::InvalidTableSize(
+                "size minimum must not be greater than maximum",
+              )
+            }
+          None => ()
+        }
+      _ => ()
+    }
+  }
+
+  // Validate element segments
+  // Count total tables (imported + local)
+  let mut num_imported_tables = 0
+  for imp in m.imports {
+    match imp.desc {
+      ImportDesc::Table(_) => num_imported_tables += 1
+      _ => ()
+    }
+  }
+  let total_tables = num_imported_tables + m.tables.length()
+  for elem in m.elems {
+    let table_idx = elem.table_idx.reinterpret_as_int()
+    if table_idx < 0 || table_idx >= total_tables {
+      raise ValidationError::UnknownTable(table_idx)
+    }
+  }
+
   // Validate function bodies against their types
   for i in 0..<m.codes.length() {
     let type_idx = m.funcs[i].reinterpret_as_int()

@@ -78,6 +78,8 @@ struct MemType {
 struct TableType {
   elem_type : RefType
   limits : Limits
+  init : Expr? // Optional initializer expression (GC proposal)
+  nullable : Bool // Whether the element type is nullable (default true for backward compat)
 }
 
 // Global type

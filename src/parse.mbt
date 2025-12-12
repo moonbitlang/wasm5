@@ -210,6 +210,95 @@ fn Parser::read_valtype(self : Parser) -> ValType raise {
 // Parse reference type
 
 ///|
+/// Read a reftype and return both the type and whether it's nullable
+/// Returns (RefType, nullable: Bool)
+fn Parser::read_reftype_with_nullability(
+  self : Parser,
+) -> (RefType, Bool) raise {
+  let byte = self.read_byte()
+  match byte {
+    // Standard nullable reference types
+    0x70 => (RefType::Func, true)
+    0x6F => (RefType::Extern, true)
+    0x6E => (RefType::Any, true)
+    0x6D => (RefType::Eq, true)
+    0x6C => (RefType::I31, true)
+    0x6B => (RefType::Struct, true)
+    0x6A => (RefType::Array, true)
+    0x69 => (RefType::Exn, true)
+    0x71 => (RefType::None, true)
+    0x72 => (RefType::NoFunc, true)
+    0x73 => (RefType::NoExtern, true)
+    0x74 => (RefType::NoExn, true)
+    // GC proposal: (ref null <heaptype>) - nullable typed reference
+    0x63 => {
+      let heap_type_byte = self.read_byte()
+      match heap_type_byte {
+        0x70
+        | 0x6F
+        | 0x6E
+        | 0x6D
+        | 0x6C
+        | 0x6B
+        | 0x6A
+        | 0x69
+        | 0x71
+        | 0x72
+        | 0x73
+        | 0x74 => {
+          self.pos = self.pos - 1
+          let (ref_type, _) = self.read_reftype_with_nullability()
+          (ref_type, true) // 0x63 means nullable
+        }
+        _ => {
+          self.pos = self.pos - 1
+          let type_idx = self.read_i32_leb128()
+          (RefType::TypeIndex(type_idx), true) // 0x63 means nullable
+        }
+      }
+    }
+    // GC proposal: (ref <heaptype>) - non-null typed reference
+    0x64 => {
+      let heap_type_byte = self.read_byte()
+      match heap_type_byte {
+        0x70
+        | 0x6F
+        | 0x6E
+        | 0x6D
+        | 0x6C
+        | 0x6B
+        | 0x6A
+        | 0x69
+        | 0x71
+        | 0x72
+        | 0x73
+        | 0x74 => {
+          self.pos = self.pos - 1
+          let (ref_type, _) = self.read_reftype_with_nullability()
+          (ref_type, false) // 0x64 means non-nullable
+        }
+        _ => {
+          self.pos = self.pos - 1
+          let type_idx = self.read_i32_leb128()
+          (RefType::TypeIndex(type_idx), false) // 0x64 means non-nullable
+        }
+      }
+    }
+    _ =>
+      // If the byte looks like a type index, try parsing it as such
+      if byte < 0x40 {
+        self.pos = self.pos - 1
+        let type_idx = self.read_i32_leb128()
+        (RefType::TypeIndex(type_idx), true) // Default to nullable
+      } else {
+        raise ValidationError::TypeMismatch(
+          "invalid reftype: 0x\{byte.to_string()}",
+        )
+      }
+  }
+}
+
+///|
 fn Parser::read_reftype(self : Parser) -> RefType raise {
   let byte = self.read_byte()
   match byte {
@@ -422,9 +511,9 @@ fn parse_import_section(parser : Parser) -> Array[Import] raise {
     let desc = match desc_tag {
       0x00 => ImportDesc::Func(parser.read_u32_leb128())
       0x01 => {
-        let elem_type = parser.read_reftype()
+        let (elem_type, nullable) = parser.read_reftype_with_nullability()
         let limits = parser.read_limits()
-        ImportDesc::Table({ elem_type, limits })
+        ImportDesc::Table({ elem_type, limits, init: None, nullable })
       }
       0x02 => ImportDesc::Mem({ limits: parser.read_limits() })
       0x03 => {
@@ -464,21 +553,23 @@ fn parse_table_section(parser : Parser) -> Array[TableType] raise {
   let tables = []
   for i in 0U..<count {
     // GC proposal: tables can have encoding prefix:
-    // - 0x40: reftype + limits + init_expr (explicit initializer)
+    // - 0x40 0x00: reftype + limits + init_expr (explicit initializer)
     // - otherwise: reftype + limits (old format, implicit null init)
     let first_byte = parser.read_byte()
     if first_byte == 0x40 {
       // New encoding with explicit init expression
-      let elem_type = parser.read_reftype()
+      // Skip the reserved byte (always 0x00)
+      let _ = parser.read_byte()
+      let (elem_type, nullable) = parser.read_reftype_with_nullability()
       let limits = parser.read_limits()
-      let _ = parse_expr(parser) // Read and skip init expression
-      tables.push({ elem_type, limits })
+      let init_expr = parse_expr(parser)
+      tables.push({ elem_type, limits, init: Some(init_expr), nullable })
     } else {
-      // Old encoding: first byte is the reftype
+      // Old encoding: first byte is the reftype (always nullable)
       parser.pos = parser.pos - 1
-      let elem_type = parser.read_reftype()
+      let (elem_type, nullable) = parser.read_reftype_with_nullability()
       let limits = parser.read_limits()
-      tables.push({ elem_type, limits })
+      tables.push({ elem_type, limits, init: None, nullable })
     }
   }
   tables

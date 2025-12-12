@@ -1211,7 +1211,9 @@ fn op_call(rt : Runtime) -> ControlFlow {
       }
     }
     if type_idx < 0 {
-      return Trap(RuntimeError::InvalidType("call: invalid imported function index"))
+      return Trap(
+        RuntimeError::InvalidType("call: invalid imported function index"),
+      )
     }
     let func_type = rt.module_.types[type_idx]
 
@@ -1361,7 +1363,11 @@ fn op_call_indirect(rt : Runtime) -> ControlFlow {
       }
     }
     if actual_type_idx < 0 {
-      return Trap(RuntimeError::InvalidType("call_indirect: invalid imported function index"))
+      return Trap(
+        RuntimeError::InvalidType(
+          "call_indirect: invalid imported function index",
+        ),
+      )
     }
     let actual_type = rt.module_.types[actual_type_idx]
 
@@ -1517,7 +1523,11 @@ fn op_return_call(rt : Runtime) -> ControlFlow {
       }
     }
     if type_idx < 0 {
-      return Trap(RuntimeError::InvalidType("return_call: invalid imported function index"))
+      return Trap(
+        RuntimeError::InvalidType(
+          "return_call: invalid imported function index",
+        ),
+      )
     }
     let func_type = rt.module_.types[type_idx]
 
@@ -1656,7 +1666,11 @@ fn op_return_call_indirect(rt : Runtime) -> ControlFlow {
       }
     }
     if actual_type_idx < 0 {
-      return Trap(RuntimeError::InvalidType("return_call_indirect: invalid imported function index"))
+      return Trap(
+        RuntimeError::InvalidType(
+          "return_call_indirect: invalid imported function index",
+        ),
+      )
     }
     let actual_type = rt.module_.types[actual_type_idx]
 
@@ -1819,7 +1833,9 @@ fn op_call_ref(rt : Runtime) -> ControlFlow {
       }
     }
     if actual_type_idx < 0 {
-      return Trap(RuntimeError::InvalidType("call_ref: invalid imported function index"))
+      return Trap(
+        RuntimeError::InvalidType("call_ref: invalid imported function index"),
+      )
     }
     let actual_type = rt.module_.types[actual_type_idx]
 
@@ -1953,7 +1969,11 @@ fn op_return_call_ref(rt : Runtime) -> ControlFlow {
       }
     }
     if actual_type_idx < 0 {
-      return Trap(RuntimeError::InvalidType("return_call_ref: invalid imported function index"))
+      return Trap(
+        RuntimeError::InvalidType(
+          "return_call_ref: invalid imported function index",
+        ),
+      )
     }
     let actual_type = rt.module_.types[actual_type_idx]
 
