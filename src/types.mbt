@@ -159,6 +159,7 @@ struct Data {
   mem_idx : UInt
   offset : Expr
   init : BytesView
+  is_active : Bool // Only active segments reference memory
 }
 
 // Instructions

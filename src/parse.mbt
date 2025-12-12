@@ -55,11 +55,25 @@ fn Parser::read_bytes(self : Parser, n : UInt) -> BytesView raise ParseError {
 fn Parser::read_u32_leb128(self : Parser) -> UInt raise ParseError {
   fn read_loop(shift : Int, result : UInt) -> UInt raise ParseError {
     let byte = self.read_byte()
+    // Check for overflow: shift >= 28 means we're on the 5th byte (bits 28-34)
+    // For a valid u32, the 5th byte must have value <= 0x0F (only 4 bits used)
+    // and no continuation bit (high bit must be 0)
+    if shift >= 28 && byte > 0x0F {
+      raise ParseError::InvalidFormat(
+        "LEB128 u32 overflow: value exceeds 32 bits",
+      )
+    }
     let value = byte.land(0x7f).to_uint() << shift
     let new_result = result | value
     if (byte & 0x80) == 0 {
       new_result
     } else {
+      if shift >= 28 {
+        // Continuation bit set on 5th byte - invalid
+        raise ParseError::InvalidFormat(
+          "LEB128 u32 overflow: too many continuation bytes",
+        )
+      }
       read_loop(shift + 7, new_result)
     }
   }
@@ -724,6 +738,7 @@ fn parse_data_section(parser : Parser) -> Array[Data] raise {
   for i in 0U..<count {
     // Read flags to determine encoding format
     let flags = parser.read_u32_leb128()
+    let is_active = flags == 0 || flags == 2
     let (mem_idx, offset) = match flags {
       0 =>
         // Active segment with implicit memory 0
@@ -741,7 +756,7 @@ fn parse_data_section(parser : Parser) -> Array[Data] raise {
     }
     let init_len = parser.read_u32_leb128()
     let init = parser.read_bytes(init_len)
-    datas.push({ mem_idx, offset, init })
+    datas.push({ mem_idx, offset, init, is_active })
   }
   datas
 }
