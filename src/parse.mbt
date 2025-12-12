@@ -432,11 +432,11 @@ fn parse_import_section(parser : Parser) -> Array[Import] raise {
         let mutable = parser.read_byte() == 0x01
         ImportDesc::Global({ val_type, mutable })
       }
-      // Exception handling: tag import - skip type index, treat as function import
+      // Exception handling: tag import
       0x04 => {
         let _ = parser.read_byte() // tag attribute (should be 0x00)
         let type_idx = parser.read_u32_leb128()
-        ImportDesc::Func(type_idx)
+        ImportDesc::Tag(type_idx)
       }
       _ =>
         raise ValidationError::TypeMismatch(
@@ -520,8 +520,8 @@ fn parse_export_section(parser : Parser) -> Array[Export] raise {
       0x01 => ExportDesc::Table(parser.read_u32_leb128())
       0x02 => ExportDesc::Mem(parser.read_u32_leb128())
       0x03 => ExportDesc::Global(parser.read_u32_leb128())
-      // Exception handling: tag export - treat as function export
-      0x04 => ExportDesc::Func(parser.read_u32_leb128())
+      // Exception handling: tag export
+      0x04 => ExportDesc::Tag(parser.read_u32_leb128())
       _ =>
         raise ValidationError::TypeMismatch(
           "invalid export descriptor tag: 0x\{desc_tag.to_string()}",

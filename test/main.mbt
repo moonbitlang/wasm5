@@ -8,12 +8,30 @@ struct TestFailure {
 }
 
 ///|
+/// Registered module entry for cross-module imports
+struct RegisteredModule {
+  runtime : @wasm5.Runtime
+  module_ : @wasm5.Module
+}
+
+///|
+/// Module registry for cross-module imports
+type ModuleRegistry Map[String, RegisteredModule]
+
+///|
+fn ModuleRegistry::new() -> ModuleRegistry {
+  Map::new()
+}
+
+///|
 /// Test context passed to handlers
 struct TestContext {
   dir : String
   source_file : String
   failures : Array[TestFailure]
   mut runtime : @wasm5.Runtime?
+  registry : ModuleRegistry
+  resolver : @wasm5.ImportResolver
 }
 
 ///|
@@ -27,14 +45,112 @@ fn TestContext::fail(
 }
 
 ///|
-async fn parse_and_compile(dir : String, file_name : String) -> @wasm5.Runtime {
+async fn parse_and_compile(
+  dir : String,
+  file_name : String,
+  resolver : @wasm5.ImportResolver,
+) -> @wasm5.Runtime {
   let file = @fs.open(dir + file_name, mode=ReadOnly)
   defer file.close()
   let content = file.read_all().binary()
   let module_ = @wasm5.parse(content)
-  let runtime = @wasm5.Runtime::load(module_)
+  let runtime = @wasm5.Runtime::load_with_resolver(module_, resolver)
   runtime.compile()
   runtime
+}
+
+///|
+/// Create a wrapper function that calls into a registered module's exported function
+fn make_import_wrapper(
+  registered : RegisteredModule,
+  export_name : String,
+  arity : UInt,
+) -> @wasm5.ImportedFunc {
+  // Create a wrapper that calls the registered module's function
+  let func : (Array[@wasm5.Value]) -> Array[@wasm5.Value] = fn(args) {
+    // Call the registered module's exported function
+    let rt = registered.runtime
+    try {
+      rt.call_compiled(@encoding/utf8.encode(export_name), args)
+    } catch {
+      _ => []
+    }
+  }
+  @wasm5.ImportedFunc::new(arity, func)
+}
+
+///|
+/// Register a module and add its exports to the resolver
+fn register_module(
+  ctx : TestContext,
+  name : String,
+  runtime : @wasm5.Runtime,
+  module_ : @wasm5.Module,
+) -> Unit {
+  // Store in registry
+  let entry : RegisteredModule = { runtime, module_ }
+  ctx.registry.inner()[name] = entry
+
+  // Convert name to bytes for resolver
+  let name_bytes = @encoding/utf8.encode(name)
+
+  // Add all exported functions to the resolver
+  for exp in module_.exports {
+    match exp.desc {
+      @wasm5.ExportDesc::Func(func_idx) => {
+        let export_name = exp.name  // Already Bytes
+
+        // Get function arity from type
+        let func_idx_int = func_idx.reinterpret_as_int()
+
+        // Count imported functions to get local function index
+        let mut num_imported_funcs = 0
+        for imp in module_.imports {
+          match imp.desc {
+            @wasm5.ImportDesc::Func(_) => num_imported_funcs += 1
+            _ => ()
+          }
+        }
+
+        // Determine arity based on whether it's imported or local
+        let arity : UInt = if func_idx_int < num_imported_funcs {
+          // It's an imported function - get type from import
+          let mut import_idx = 0
+          let mut found_arity : UInt = 0
+          for imp in module_.imports {
+            match imp.desc {
+              @wasm5.ImportDesc::Func(type_idx) => {
+                if import_idx == func_idx_int {
+                  let func_type = module_.types[type_idx.reinterpret_as_int()]
+                  found_arity = func_type.params.length().reinterpret_as_uint()
+                  break
+                }
+                import_idx += 1
+              }
+              _ => ()
+            }
+          }
+          found_arity
+        } else {
+          // It's a local function
+          let local_idx = func_idx_int - num_imported_funcs
+          let type_idx = module_.funcs[local_idx].reinterpret_as_int()
+          let func_type = module_.types[type_idx]
+          func_type.params.length().reinterpret_as_uint()
+        }
+
+        // Create wrapper and add to resolver
+        let export_name_str = try {
+          @encoding/utf8.decode(export_name)
+        } catch {
+          _ => continue // Skip invalid UTF-8 export names
+        }
+        let wrapper = make_import_wrapper(entry, export_name_str, arity)
+        ctx.resolver.add_func(name_bytes, export_name, wrapper)
+      }
+      _ => () // Skip non-function exports for now
+    }
+  }
 }
 
 ///|
@@ -334,11 +450,22 @@ async fn handle_module(
   line : Int,
 ) -> Unit {
   try {
-    let runtime = parse_and_compile(ctx.dir, filename)
+    let runtime = parse_and_compile(ctx.dir, filename, ctx.resolver)
     ctx.runtime = Some(runtime)
   } catch {
     e => ctx.fail(line, "module", "Error loading module: \{e}")
   }
+}
+
+///|
+/// Handle "register" command - register the current module with a name
+fn handle_register(ctx : TestContext, name : String, line : Int) -> Unit {
+  guard ctx.runtime is Some(rt) else {
+    ctx.fail(line, "register", "no module loaded to register")
+    return
+  }
+  // Register the module with its exports
+  register_module(ctx, name, rt, rt.get_module())
 }
 
 ///|
@@ -508,7 +635,7 @@ async fn handle_assert_invalid(
   line : Int,
 ) -> Unit {
   try {
-    let _ = parse_and_compile(ctx.dir, filename)
+    let _ = parse_and_compile(ctx.dir, filename, ctx.resolver)
     ctx.fail(
       line,
       "assert_invalid",
@@ -686,6 +813,11 @@ async fn process_command(ctx : TestContext, cmd : Json) -> Unit {
       },
       ..
     } => handle_action(ctx, fn_name, args, line.to_int())
+    // Handle "register" command - register the current module with a name for imports
+    { "type": "register", "as": String(name), "line"?: line, .. } => {
+      let line = if line is Some(Number(n, ..)) { n.to_int() } else { -1 }
+      handle_register(ctx, name, line)
+    }
     // Skip malformed tests (WAT parser not implemented)
     { "type": "assert_malformed", .. } => ()
     // Unknown command type - skip silently for now
@@ -706,7 +838,16 @@ async fn process_meta(
   let meta = file.read_all().json()
   match meta {
     { "commands": Array(commands), .. } => {
-      let ctx = TestContext::{ dir, source_file, failures, runtime: None }
+      let registry = ModuleRegistry::new()
+      let resolver = @wasm5.default_import_resolver()
+      let ctx = TestContext::{
+        dir,
+        source_file,
+        failures,
+        runtime: None,
+        registry,
+        resolver,
+      }
       for cmd in commands {
         process_command(ctx, cmd)
       }

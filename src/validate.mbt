@@ -326,6 +326,7 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
           raise ValidationError::UnknownExportedGlobal(global_idx)
         }
       }
+      Tag(_) => () // Skip tag export validation for now
     }
   }
 }

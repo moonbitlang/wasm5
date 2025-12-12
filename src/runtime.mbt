@@ -64,9 +64,67 @@ struct RuntimeTable {
 }
 
 ///|
-struct ImportedFunc {
-  arity : UInt
-  func : (Array[Value]) -> Array[Value]
+pub struct ImportedFunc {
+  pub arity : UInt
+  pub func : (Array[Value]) -> Array[Value]
+}
+
+///|
+/// Create a new ImportedFunc
+pub fn ImportedFunc::new(
+  arity : UInt,
+  func : (Array[Value]) -> Array[Value],
+) -> ImportedFunc {
+  { arity, func }
+}
+
+///|
+/// Import resolver for linking modules
+/// Maps (module_name, field_name) to ImportedFunc
+/// Using Bytes keys to match how WebAssembly module imports work
+struct ImportResolverEntry {
+  funcs : Map[Bytes, ImportedFunc]
+}
+
+pub struct ImportResolver {
+  modules : Map[Bytes, ImportResolverEntry]
+}
+
+///|
+/// Create a new empty import resolver
+pub fn ImportResolver::new() -> ImportResolver {
+  { modules: Map::new() }
+}
+
+///|
+/// Add an imported function to the resolver (using string literals)
+pub fn ImportResolver::add_func(
+  self : ImportResolver,
+  module_ : Bytes,
+  name : Bytes,
+  func : ImportedFunc,
+) -> Unit {
+  match self.modules.get(module_) {
+    Some(entry) => entry.funcs[name] = func
+    None => {
+      let entry : ImportResolverEntry = { funcs: Map::new() }
+      entry.funcs[name] = func
+      self.modules[module_] = entry
+    }
+  }
+}
+
+///|
+/// Look up an imported function
+pub fn ImportResolver::get_func(
+  self : ImportResolver,
+  module_ : Bytes,
+  name : Bytes,
+) -> ImportedFunc? {
+  match self.modules.get(module_) {
+    Some(entry) => entry.funcs.get(name)
+    None => None
+  }
 }
 
 ///|
@@ -85,8 +143,38 @@ pub struct Runtime {
 }
 
 ///|
-/// Load a WebAssembly module into the runtime
+/// Get the module from the runtime
+pub fn Runtime::get_module(self : Runtime) -> Module {
+  self.module_
+}
+
+///|
+/// Create a default import resolver with spectest module
+pub fn default_import_resolver() -> ImportResolver {
+  let resolver = ImportResolver::new()
+  resolver.add_func(b"spectest", b"print_char", { arity: 1U, func: spectest_print_char })
+  resolver.add_func(b"spectest", b"print", { arity: 0U, func: spectest_print })
+  resolver.add_func(b"spectest", b"print_i32", { arity: 1U, func: spectest_print_i32 })
+  resolver.add_func(b"spectest", b"print_i64", { arity: 1U, func: spectest_print_i64 })
+  resolver.add_func(b"spectest", b"print_f32", { arity: 1U, func: spectest_print_f32 })
+  resolver.add_func(b"spectest", b"print_f64", { arity: 1U, func: spectest_print_f64 })
+  resolver.add_func(b"spectest", b"print_i32_f32", { arity: 2U, func: spectest_print_i32_f32 })
+  resolver.add_func(b"spectest", b"print_f64_f64", { arity: 2U, func: spectest_print_f64_f64 })
+  resolver
+}
+
+///|
+/// Load a WebAssembly module into the runtime (using default import resolver)
 pub fn Runtime::load(m : Module) -> Runtime raise RuntimeError {
+  Runtime::load_with_resolver(m, default_import_resolver())
+}
+
+///|
+/// Load a WebAssembly module into the runtime with a custom import resolver
+pub fn Runtime::load_with_resolver(
+  m : Module,
+  resolver : ImportResolver,
+) -> Runtime raise RuntimeError {
   // Initialize memory
   // Limit to 256 pages (16MB) to avoid memory allocation issues
   // WebAssembly spec allows up to 65536 pages (4GB), but we cap it for practical reasons
@@ -108,8 +196,8 @@ pub fn Runtime::load(m : Module) -> Runtime raise RuntimeError {
         match gt.val_type {
           ValType::I32 => globals.push(Value::I32(666U)) // spectest global_i32 = 666
           ValType::I64 => globals.push(Value::I64(666UL)) // spectest global_i64 = 666
-          ValType::F32 => globals.push(Value::F32(0.0))
-          ValType::F64 => globals.push(Value::F64(0.0))
+          ValType::F32 => globals.push(Value::F32(666.6))
+          ValType::F64 => globals.push(Value::F64(666.6))
           ValType::FuncRef => globals.push(Value::Ref(None))
           ValType::ExternRef => globals.push(Value::Ref(None))
           _ => globals.push(Value::I32(0U))
@@ -173,36 +261,21 @@ pub fn Runtime::load(m : Module) -> Runtime raise RuntimeError {
       }
     }
   }
+  // Resolve imported functions - MUST push for every function import
   let imported_funcs : Array[ImportedFunc] = []
   for imp in m.imports {
-    let module_ = imp.module_
-    let name = imp.name
+    let module_name = imp.module_
+    let field_name = imp.name
     match imp.desc {
       Func(_type_idx) =>
-        if module_ == "spectest" {
-          if name == "print_char" {
-            imported_funcs.push({ arity: 1U, func: spectest_print_char })
-          } else if name == "print" {
-            imported_funcs.push({ arity: 0U, func: spectest_print })
-          } else if name == "print_i32" {
-            imported_funcs.push({ arity: 1U, func: spectest_print_i32 })
-          } else if name == "print_i64" {
-            imported_funcs.push({ arity: 1U, func: spectest_print_i64 })
-          } else if name == "print_f32" {
-            imported_funcs.push({ arity: 1U, func: spectest_print_f32 })
-          } else if name == "print_f64" {
-            imported_funcs.push({ arity: 1U, func: spectest_print_f64 })
-          } else if name == "print_i32_f32" {
-            imported_funcs.push({ arity: 2U, func: spectest_print_i32_f32 })
-          } else if name == "print_f64_f64" {
-            imported_funcs.push({ arity: 2U, func: spectest_print_f64_f64 })
-          } else {
+        match resolver.get_func(module_name, field_name) {
+          Some(func) => imported_funcs.push(func)
+          None =>
             raise RuntimeError::FunctionNotFound(
-              "imported function not found: \{module_}.\{name}",
+              "imported function not found: \{module_name}.\{field_name}",
             )
-          }
         }
-      Table(_) | Mem(_) | Global(_) => ()
+      Table(_) | Mem(_) | Global(_) | Tag(_) => ()
     }
   }
   Runtime::{

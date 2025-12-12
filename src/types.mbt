@@ -43,7 +43,7 @@ enum RefType {
 // Function type (signature)
 
 ///|
-struct FuncType {
+pub struct FuncType {
   params : Array[ValType]
   results : Array[ValType]
 }
@@ -91,17 +91,18 @@ struct GlobalType {
 // Import descriptor
 
 ///|
-enum ImportDesc {
+pub enum ImportDesc {
   Func(UInt) // type index
   Table(TableType)
   Mem(MemType)
   Global(GlobalType)
+  Tag(UInt) // type index for exception handling tags
 }
 
 // Import
 
 ///|
-struct Import {
+pub struct Import {
   module_ : Bytes
   name : Bytes
   desc : ImportDesc
@@ -115,12 +116,13 @@ pub enum ExportDesc {
   Table(UInt) // table index
   Mem(UInt) // memory index
   Global(UInt) // global index
+  Tag(UInt) // tag index for exception handling
 }
 
 // Export
 
 ///|
-struct Export {
+pub struct Export {
   name : Bytes
   desc : ExportDesc
 }
