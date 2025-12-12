@@ -203,7 +203,29 @@ pub fn Runtime::load_with_resolver(
   // Limit to 256 pages (16MB) to avoid memory allocation issues
   // WebAssembly spec allows up to 65536 pages (4GB), but we cap it for practical reasons
   let max_pages : UInt = 256
-  let memory_size = if m.mems.length() > 0 {
+
+  // Check for imported memory first, then local memory
+  let mut imported_mem_pages : UInt = 0
+  for imp in m.imports {
+    match imp.desc {
+      ImportDesc::Mem(mem_type) => {
+        imported_mem_pages = mem_type.limits.min
+        break // Only one memory allowed in MVP
+      }
+      _ => ()
+    }
+  }
+
+  let memory_size = if imported_mem_pages > 0 {
+    // Use imported memory limits
+    let capped_pages = if imported_mem_pages > max_pages {
+      max_pages
+    } else {
+      imported_mem_pages
+    }
+    capped_pages.reinterpret_as_int() * 65536
+  } else if m.mems.length() > 0 {
+    // Use local memory limits
     let pages = m.mems[0].limits.min
     let capped_pages = if pages > max_pages { max_pages } else { pages }
     capped_pages.reinterpret_as_int() * 65536
