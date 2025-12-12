@@ -149,6 +149,7 @@ struct Elem {
   table_idx : UInt
   offset : Expr
   init : Array[UInt] // function indices
+  is_active : Bool // True for active segments (flags 0,2,4,6), false for passive/declarative
 }
 
 // Data segment (for memory initialization)

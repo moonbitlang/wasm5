@@ -638,6 +638,9 @@ fn parse_element_section(parser : Parser) -> Array[Elem] raise {
     // flags=5: passive, reftype, vec of expr
     // flags=6: active, tableidx, offset expr, reftype, vec of expr
     // flags=7: declarative, reftype, vec of expr
+    // Active segments (flags 0,2,4,6) reference a table
+    // Passive/declarative segments (flags 1,3,5,7) don't
+    let is_active = flags == 0 || flags == 2 || flags == 4 || flags == 6
     let table_idx : UInt = match flags {
       0 | 4 => 0U // implicit table 0
       2 | 6 => parser.read_u32_leb128() // explicit table index
@@ -684,7 +687,7 @@ fn parse_element_section(parser : Parser) -> Array[Elem] raise {
         init.push(parser.read_u32_leb128())
       }
     }
-    elems.push({ table_idx, offset, init })
+    elems.push({ table_idx, offset, init, is_active })
   }
   elems
 }

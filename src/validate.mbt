@@ -393,6 +393,7 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
   }
 
   // Validate element segments
+  // Only active segments reference tables; passive/declarative segments don't
   // Count total tables (imported + local)
   let mut num_imported_tables = 0
   for imp in m.imports {
@@ -403,9 +404,12 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
   }
   let total_tables = num_imported_tables + m.tables.length()
   for elem in m.elems {
-    let table_idx = elem.table_idx.reinterpret_as_int()
-    if table_idx < 0 || table_idx >= total_tables {
-      raise ValidationError::UnknownTable(table_idx)
+    // Only validate table index for active segments
+    if elem.is_active {
+      let table_idx = elem.table_idx.reinterpret_as_int()
+      if table_idx < 0 || table_idx >= total_tables {
+        raise ValidationError::UnknownTable(table_idx)
+      }
     }
   }
 
