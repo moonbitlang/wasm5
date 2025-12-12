@@ -3174,23 +3174,22 @@ fn op_f32_convert_i32_u(rt : Runtime) -> ControlFlow {
 }
 
 ///|
+extern "C" fn f32_from_i64(a : Int64) -> Float = "f32_from_i64"
+
+///|
+extern "C" fn f32_from_u64(a : UInt64) -> Float = "f32_from_u64"
+
+///|
 fn op_f32_convert_i64_s(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i64().reinterpret_as_int64()
-  rt.stack.push(Value::F32(Float::from_double(a.to_double())))
+  rt.stack.push(Value::F32(f32_from_i64(a)))
   Next
 }
 
 ///|
 fn op_f32_convert_i64_u(rt : Runtime) -> ControlFlow {
   let a = rt.pop_i64()
-  // For unsigned i64 to float, handle large values carefully
-  let f = if a.reinterpret_as_int64() >= 0L {
-    a.reinterpret_as_int64().to_double()
-  } else {
-    // For values >= 2^63, convert via double
-    (a >> 1).reinterpret_as_int64().to_double() * 2.0 + (a & 1UL).to_double()
-  }
-  rt.stack.push(Value::F32(Float::from_double(f)))
+  rt.stack.push(Value::F32(f32_from_u64(a)))
   Next
 }
 
