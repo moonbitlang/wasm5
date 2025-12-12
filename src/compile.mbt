@@ -1195,15 +1195,41 @@ fn op_call(rt : Runtime) -> ControlFlow {
 
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
-    let imported_func = rt.imported_funcs[func_idx]
-    let arity = imported_func.arity
-    let args = []
-    for _ in 0U..<arity {
-      args.push(rt.stack.unsafe_pop())
+    // Get the imported function's type from the import descriptor
+    let mut import_idx = 0
+    let mut type_idx = -1
+    for imp in rt.module_.imports {
+      match imp.desc {
+        ImportDesc::Func(tidx) => {
+          if import_idx == func_idx {
+            type_idx = tidx.reinterpret_as_int()
+            break
+          }
+          import_idx += 1
+        }
+        _ => ()
+      }
     }
+    if type_idx < 0 {
+      return Trap(RuntimeError::InvalidType("call: invalid imported function index"))
+    }
+    let func_type = rt.module_.types[type_idx]
+
+    // Pop arguments based on function type
+    let num_params = func_type.params.length()
+    let args : Array[Value] = Array::make(num_params, Value::I32(0U))
+    for i = num_params - 1; i >= 0; i = i - 1 {
+      args[i] = rt.stack.unsafe_pop()
+    }
+
+    // Call the imported function
+    let imported_func = rt.imported_funcs[func_idx]
     let results = (imported_func.func)(args)
-    for res in results {
-      rt.stack.push(res)
+
+    // Push only the expected number of results based on function type
+    let num_results = func_type.results.length()
+    for i = 0; i < num_results && i < results.length(); i = i + 1 {
+      rt.stack.push(results[i])
     }
     return Next
   }
@@ -1314,13 +1340,61 @@ fn op_call_indirect(rt : Runtime) -> ControlFlow {
     }
   }
 
+  // Get the expected type
+  let expected_type = rt.module_.types[type_idx]
+
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
-    return Trap(
-      RuntimeError::FunctionNotCompiled(
-        "Imported function calls not yet supported via call_indirect: \{func_idx}",
-      ),
-    )
+    // Get the imported function's type from the import descriptor
+    let mut import_idx = 0
+    let mut actual_type_idx = -1
+    for imp in rt.module_.imports {
+      match imp.desc {
+        ImportDesc::Func(tidx) => {
+          if import_idx == func_idx {
+            actual_type_idx = tidx.reinterpret_as_int()
+            break
+          }
+          import_idx += 1
+        }
+        _ => ()
+      }
+    }
+    if actual_type_idx < 0 {
+      return Trap(RuntimeError::InvalidType("call_indirect: invalid imported function index"))
+    }
+    let actual_type = rt.module_.types[actual_type_idx]
+
+    // Check type signature matches
+    if expected_type.params.length() != actual_type.params.length() ||
+      expected_type.results.length() != actual_type.results.length() {
+      return Trap(RuntimeError::InvalidType("indirect call type mismatch"))
+    }
+    for i = 0; i < expected_type.params.length(); i = i + 1 {
+      if expected_type.params[i] != actual_type.params[i] {
+        return Trap(RuntimeError::InvalidType("indirect call type mismatch"))
+      }
+    }
+    for i = 0; i < expected_type.results.length(); i = i + 1 {
+      if expected_type.results[i] != actual_type.results[i] {
+        return Trap(RuntimeError::InvalidType("indirect call type mismatch"))
+      }
+    }
+
+    // Call the imported function
+    let imported_func = rt.imported_funcs[func_idx]
+    let num_params = actual_type.params.length()
+    let args : Array[Value] = Array::make(num_params, Value::I32(0U))
+    for i = num_params - 1; i >= 0; i = i - 1 {
+      args[i] = rt.stack.unsafe_pop()
+    }
+    let results = (imported_func.func)(args)
+    // Push only the expected number of results based on function type
+    let num_results = expected_type.results.length()
+    for i = 0; i < num_results && i < results.length(); i = i + 1 {
+      rt.stack.push(results[i])
+    }
+    return Next
   }
 
   // Adjust to local function index
@@ -1333,8 +1407,7 @@ fn op_call_indirect(rt : Runtime) -> ControlFlow {
     )
   }
 
-  // Get the expected type and actual function type
-  let expected_type = rt.module_.types[type_idx]
+  // Get the actual function type
   let actual_type_idx = rt.module_.funcs[local_func_idx].reinterpret_as_int()
   let actual_type = rt.module_.types[actual_type_idx]
 
@@ -1428,11 +1501,52 @@ fn op_return_call(rt : Runtime) -> ControlFlow {
 
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
-    return Trap(
-      RuntimeError::FunctionNotCompiled(
-        "Imported function calls not yet supported: \{func_idx}",
-      ),
-    )
+    // Get the imported function's type from the import descriptor
+    let mut import_idx = 0
+    let mut type_idx = -1
+    for imp in rt.module_.imports {
+      match imp.desc {
+        ImportDesc::Func(tidx) => {
+          if import_idx == func_idx {
+            type_idx = tidx.reinterpret_as_int()
+            break
+          }
+          import_idx += 1
+        }
+        _ => ()
+      }
+    }
+    if type_idx < 0 {
+      return Trap(RuntimeError::InvalidType("return_call: invalid imported function index"))
+    }
+    let func_type = rt.module_.types[type_idx]
+
+    // Pop arguments based on function type
+    let num_params = func_type.params.length()
+    let args : Array[Value] = Array::make(num_params, Value::I32(0U))
+    for i = num_params - 1; i >= 0; i = i - 1 {
+      args[i] = rt.stack.unsafe_pop()
+    }
+
+    // Call the imported function
+    let imported_func = rt.imported_funcs[func_idx]
+    let results = (imported_func.func)(args)
+
+    // Push only the expected number of results based on function type
+    let num_results = func_type.results.length()
+    for i = 0; i < num_results && i < results.length(); i = i + 1 {
+      rt.stack.push(results[i])
+    }
+
+    // Return to caller (tail call ends current function)
+    if rt.call_stack.length() > 0 {
+      let frame = rt.call_stack.unsafe_pop()
+      rt.pc = frame.return_pc
+      rt.locals = frame.locals
+      return Next
+    } else {
+      return End
+    }
   }
 
   // Adjust index for local functions
@@ -1521,13 +1635,69 @@ fn op_return_call_indirect(rt : Runtime) -> ControlFlow {
     }
   }
 
+  // Get the expected type
+  let expected_type = rt.module_.types[type_idx]
+
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
-    return Trap(
-      RuntimeError::FunctionNotCompiled(
-        "Imported function calls not yet supported via return_call_indirect: \{func_idx}",
-      ),
-    )
+    // Get the imported function's type from the import descriptor
+    let mut import_idx = 0
+    let mut actual_type_idx = -1
+    for imp in rt.module_.imports {
+      match imp.desc {
+        ImportDesc::Func(tidx) => {
+          if import_idx == func_idx {
+            actual_type_idx = tidx.reinterpret_as_int()
+            break
+          }
+          import_idx += 1
+        }
+        _ => ()
+      }
+    }
+    if actual_type_idx < 0 {
+      return Trap(RuntimeError::InvalidType("return_call_indirect: invalid imported function index"))
+    }
+    let actual_type = rt.module_.types[actual_type_idx]
+
+    // Check type signature matches
+    if expected_type.params.length() != actual_type.params.length() ||
+      expected_type.results.length() != actual_type.results.length() {
+      return Trap(RuntimeError::InvalidType("indirect call type mismatch"))
+    }
+    for i = 0; i < expected_type.params.length(); i = i + 1 {
+      if expected_type.params[i] != actual_type.params[i] {
+        return Trap(RuntimeError::InvalidType("indirect call type mismatch"))
+      }
+    }
+    for i = 0; i < expected_type.results.length(); i = i + 1 {
+      if expected_type.results[i] != actual_type.results[i] {
+        return Trap(RuntimeError::InvalidType("indirect call type mismatch"))
+      }
+    }
+
+    // Call the imported function
+    let imported_func = rt.imported_funcs[func_idx]
+    let num_params = actual_type.params.length()
+    let args : Array[Value] = Array::make(num_params, Value::I32(0U))
+    for i = num_params - 1; i >= 0; i = i - 1 {
+      args[i] = rt.stack.unsafe_pop()
+    }
+    let results = (imported_func.func)(args)
+    // Push only the expected number of results based on function type
+    let num_results = expected_type.results.length()
+    for i = 0; i < num_results && i < results.length(); i = i + 1 {
+      rt.stack.push(results[i])
+    }
+    // Return to caller (tail call ends current function)
+    if rt.call_stack.length() > 0 {
+      let frame = rt.call_stack.unsafe_pop()
+      rt.pc = frame.return_pc
+      rt.locals = frame.locals
+      return Next
+    } else {
+      return End
+    }
   }
 
   // Adjust to local function index
@@ -1540,8 +1710,7 @@ fn op_return_call_indirect(rt : Runtime) -> ControlFlow {
     )
   }
 
-  // Get the expected type and actual function type
-  let expected_type = rt.module_.types[type_idx]
+  // Get the actual function type
   let actual_type_idx = rt.module_.funcs[local_func_idx].reinterpret_as_int()
   let actual_type = rt.module_.types[actual_type_idx]
 
@@ -1629,13 +1798,51 @@ fn op_call_ref(rt : Runtime) -> ControlFlow {
     }
   }
 
+  // Get the expected function type
+  let func_type = rt.module_.types[type_idx]
+
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
-    return Trap(
-      RuntimeError::FunctionNotCompiled(
-        "Imported function calls not yet supported via call_ref: \{func_idx}",
-      ),
-    )
+    // Get the imported function's type from the import descriptor
+    let mut import_idx = 0
+    let mut actual_type_idx = -1
+    for imp in rt.module_.imports {
+      match imp.desc {
+        ImportDesc::Func(tidx) => {
+          if import_idx == func_idx {
+            actual_type_idx = tidx.reinterpret_as_int()
+            break
+          }
+          import_idx += 1
+        }
+        _ => ()
+      }
+    }
+    if actual_type_idx < 0 {
+      return Trap(RuntimeError::InvalidType("call_ref: invalid imported function index"))
+    }
+    let actual_type = rt.module_.types[actual_type_idx]
+
+    // Check type signature matches
+    if func_type.params.length() != actual_type.params.length() ||
+      func_type.results.length() != actual_type.results.length() {
+      return Trap(RuntimeError::InvalidType("call_ref: type mismatch"))
+    }
+
+    // Call the imported function
+    let imported_func = rt.imported_funcs[func_idx]
+    let num_params = func_type.params.length()
+    let args : Array[Value] = Array::make(num_params, Value::I32(0U))
+    for i = num_params - 1; i >= 0; i = i - 1 {
+      args[i] = rt.stack.unsafe_pop()
+    }
+    let results = (imported_func.func)(args)
+    // Push only the expected number of results based on function type
+    let num_results = func_type.results.length()
+    for i = 0; i < num_results && i < results.length(); i = i + 1 {
+      rt.stack.push(results[i])
+    }
+    return Next
   }
 
   // Adjust index for local functions
@@ -1644,7 +1851,6 @@ fn op_call_ref(rt : Runtime) -> ControlFlow {
     return Trap(RuntimeError::InvalidType("call_ref: invalid function index"))
   }
   let actual_type_idx = rt.module_.funcs[local_func_idx].reinterpret_as_int()
-  let func_type = rt.module_.types[type_idx]
   let actual_type = rt.module_.types[actual_type_idx]
 
   // Check type signature matches
@@ -1726,13 +1932,59 @@ fn op_return_call_ref(rt : Runtime) -> ControlFlow {
     }
   }
 
+  // Get the expected function type
+  let func_type = rt.module_.types[type_idx]
+
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
-    return Trap(
-      RuntimeError::FunctionNotCompiled(
-        "Imported function calls not yet supported via return_call_ref: \{func_idx}",
-      ),
-    )
+    // Get the imported function's type from the import descriptor
+    let mut import_idx = 0
+    let mut actual_type_idx = -1
+    for imp in rt.module_.imports {
+      match imp.desc {
+        ImportDesc::Func(tidx) => {
+          if import_idx == func_idx {
+            actual_type_idx = tidx.reinterpret_as_int()
+            break
+          }
+          import_idx += 1
+        }
+        _ => ()
+      }
+    }
+    if actual_type_idx < 0 {
+      return Trap(RuntimeError::InvalidType("return_call_ref: invalid imported function index"))
+    }
+    let actual_type = rt.module_.types[actual_type_idx]
+
+    // Check type signature matches
+    if func_type.params.length() != actual_type.params.length() ||
+      func_type.results.length() != actual_type.results.length() {
+      return Trap(RuntimeError::InvalidType("return_call_ref: type mismatch"))
+    }
+
+    // Call the imported function
+    let imported_func = rt.imported_funcs[func_idx]
+    let num_params = func_type.params.length()
+    let args : Array[Value] = Array::make(num_params, Value::I32(0U))
+    for i = num_params - 1; i >= 0; i = i - 1 {
+      args[i] = rt.stack.unsafe_pop()
+    }
+    let results = (imported_func.func)(args)
+    // Push only the expected number of results based on function type
+    let num_results = func_type.results.length()
+    for i = 0; i < num_results && i < results.length(); i = i + 1 {
+      rt.stack.push(results[i])
+    }
+    // Return to caller (tail call ends current function)
+    if rt.call_stack.length() > 0 {
+      let frame = rt.call_stack.unsafe_pop()
+      rt.pc = frame.return_pc
+      rt.locals = frame.locals
+      return Next
+    } else {
+      return End
+    }
   }
 
   // Adjust index for local functions
@@ -1743,7 +1995,6 @@ fn op_return_call_ref(rt : Runtime) -> ControlFlow {
     )
   }
   let actual_type_idx = rt.module_.funcs[local_func_idx].reinterpret_as_int()
-  let func_type = rt.module_.types[type_idx]
   let actual_type = rt.module_.types[actual_type_idx]
 
   // Check type signature matches
@@ -4397,11 +4648,10 @@ pub fn Runtime::call_compiled(
     }
   }
 
-  // Check if it's an imported function (can't call those directly)
+  // Check if it's an imported function - call it directly via import resolver
   if idx < num_imported_funcs {
-    raise RuntimeError::FunctionNotCompiled(
-      "Cannot call imported function directly: \{func_name}",
-    )
+    let imported_func = self.imported_funcs[idx]
+    return (imported_func.func)(args)
   }
 
   // Adjust to local function index
