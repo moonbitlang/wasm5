@@ -129,7 +129,15 @@ fn validate_const_expr_globals(
 }
 
 ///|
-/// Check if t1 is a subtype of t2 (t1 <: t2)
+/// Check if a type index refers to a function type in the module
+fn is_func_type_index(module_ : Module, type_idx : Int) -> Bool {
+  // In our current implementation, all entries in module_.types are FuncType
+  // So any valid type index is a function type
+  type_idx >= 0 && type_idx < module_.types.length()
+}
+
+///|
+/// Check if t1 is a subtype of t2 (t1 <: t2) with module context for type lookups
 /// WebAssembly GC type hierarchy:
 /// - NullRef (none) <: all nullable reference types
 /// - NullFuncRef (nofunc) <: FuncRef
@@ -137,7 +145,7 @@ fn validate_const_expr_globals(
 /// - NullExnRef (noexn) <: ExnRef
 /// - I31Ref, StructRef, ArrayRef <: EqRef <: AnyRef
 /// - FuncRef <: AnyRef (in some proposals)
-fn is_subtype(t1 : ValType, t2 : ValType) -> Bool {
+fn is_subtype(module_ : Module, t1 : ValType, t2 : ValType) -> Bool {
   // Reflexive: every type is a subtype of itself
   if t1 == t2 {
     return true
@@ -170,10 +178,12 @@ fn is_subtype(t1 : ValType, t2 : ValType) -> Bool {
     (Ref(RefType::Extern, _), ExternRef) => true
     // Ref(Func, _) is compatible with FuncRef (nullable funcref)
     (Ref(RefType::Func, _), FuncRef) => true
-    // Ref(TypeIndex(_), _) is a typed function reference, compatible with FuncRef
-    (Ref(RefType::TypeIndex(_), _), FuncRef) => true
+    // Ref(TypeIndex(n), _) is a typed function reference, compatible with FuncRef
+    // only if type n is actually a function type
+    (Ref(RefType::TypeIndex(n), _), FuncRef) => is_func_type_index(module_, n)
     // FuncRef is compatible with nullable typed function reference
-    (FuncRef, Ref(RefType::TypeIndex(_), true)) => true
+    // only if the type index refers to a function type
+    (FuncRef, Ref(RefType::TypeIndex(n), true)) => is_func_type_index(module_, n)
     (FuncRef, Ref(RefType::Func, true)) => true
     // Ref(Any, _) is compatible with AnyRef
     (Ref(RefType::Any, _), AnyRef) => true
@@ -274,7 +284,8 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
       )
     }
     let produced_type = init_ctx.stack[0]
-    if produced_type != global.type_.val_type {
+    // Use subtyping: init type must be a subtype of the declared global type
+    if not(is_subtype(m, produced_type, global.type_.val_type)) {
       raise ValidationError::TypeMismatch(
         "global initializer type mismatch: expected \{global.type_.val_type}, got \{produced_type}",
       )
@@ -394,7 +405,8 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
             | AnyRef
             | NullRef
             | NullFuncRef
-            | NullExternRef => ()
+            | NullExternRef
+            | Ref(_, _) => ()
             _ =>
               raise ValidationError::TypeMismatch(
                 "table initializer must produce a reference type",
@@ -776,8 +788,10 @@ fn ValidationCtx::poly_pop(
 ///|
 /// Check and pop a value of a specific type, allowing polymorphic behavior.
 /// Concrete values (pushed after unreachable) must still type-check.
+/// Uses subtyping: actual type must be a subtype of expected type.
 fn ValidationCtx::poly_pop_expect(
   self : ValidationCtx,
+  module_ : Module,
   expected : ValType,
   op_name : String,
 ) -> Unit raise ValidationError {
@@ -788,7 +802,9 @@ fn ValidationCtx::poly_pop_expect(
   let actual = self.poly_pop(expected)
 
   // Type-check concrete values, or all values if not in unreachable mode
-  if (not(self.is_unreachable) || is_concrete_value) && actual != expected {
+  // Use subtyping: actual must be a subtype of expected
+  if (not(self.is_unreachable) || is_concrete_value) &&
+    not(is_subtype(module_, actual, expected)) {
     raise ValidationError::TypeMismatch(
       "\{op_name} requires \{expected}, got \{actual}",
     )
@@ -828,8 +844,8 @@ fn validate_instruction(
     | I32ShrU
     | I32Rotl
     | I32Rotr => {
-      ctx.poly_pop_expect(I32, "i32 binary op")
-      ctx.poly_pop_expect(I32, "i32 binary op")
+      ctx.poly_pop_expect(module_, I32, "i32 binary op")
+      ctx.poly_pop_expect(module_, I32, "i32 binary op")
       stack.push(I32)
     }
 
@@ -844,14 +860,14 @@ fn validate_instruction(
     | I32LeU
     | I32GeS
     | I32GeU => {
-      ctx.poly_pop_expect(I32, "i32 comparison")
-      ctx.poly_pop_expect(I32, "i32 comparison")
+      ctx.poly_pop_expect(module_, I32, "i32 comparison")
+      ctx.poly_pop_expect(module_, I32, "i32 comparison")
       stack.push(I32)
     }
 
     // Unary operations
     I32Eqz | I32Clz | I32Ctz | I32Popcnt | I32Extend8S | I32Extend16S => {
-      ctx.poly_pop_expect(I32, "i32 unary op")
+      ctx.poly_pop_expect(module_, I32, "i32 unary op")
       stack.push(I32)
     }
 
@@ -871,8 +887,8 @@ fn validate_instruction(
     | I64ShrU
     | I64Rotl
     | I64Rotr => {
-      ctx.poly_pop_expect(I64, "i64 binary op")
-      ctx.poly_pop_expect(I64, "i64 binary op")
+      ctx.poly_pop_expect(module_, I64, "i64 binary op")
+      ctx.poly_pop_expect(module_, I64, "i64 binary op")
       stack.push(I64)
     }
 
@@ -887,156 +903,156 @@ fn validate_instruction(
     | I64LeU
     | I64GeS
     | I64GeU => {
-      ctx.poly_pop_expect(I64, "i64 comparison")
-      ctx.poly_pop_expect(I64, "i64 comparison")
+      ctx.poly_pop_expect(module_, I64, "i64 comparison")
+      ctx.poly_pop_expect(module_, I64, "i64 comparison")
       stack.push(I32)
     }
 
     // i64 test operation (returns i32)
     I64Eqz => {
-      ctx.poly_pop_expect(I64, "i64.eqz")
+      ctx.poly_pop_expect(module_, I64, "i64.eqz")
       stack.push(I32)
     }
 
     // i64 unary operations (return i64)
     I64Clz | I64Ctz | I64Popcnt | I64Extend8S | I64Extend16S | I64Extend32S => {
-      ctx.poly_pop_expect(I64, "i64 unary op")
+      ctx.poly_pop_expect(module_, I64, "i64 unary op")
       stack.push(I64)
     }
 
     // i32 to i64 conversion operations
     I64ExtendI32S | I64ExtendI32U => {
-      ctx.poly_pop_expect(I32, "i64 extension")
+      ctx.poly_pop_expect(module_, I32, "i64 extension")
       stack.push(I64)
     }
 
     // i64 to i32 conversion (wrap)
     I32WrapI64 => {
-      ctx.poly_pop_expect(I64, "i32.wrap_i64")
+      ctx.poly_pop_expect(module_, I64, "i32.wrap_i64")
       stack.push(I32)
     }
 
     // f32 comparison operations
     F32Eq | F32Ne | F32Lt | F32Gt | F32Le | F32Ge => {
-      ctx.poly_pop_expect(F32, "f32 comparison")
-      ctx.poly_pop_expect(F32, "f32 comparison")
+      ctx.poly_pop_expect(module_, F32, "f32 comparison")
+      ctx.poly_pop_expect(module_, F32, "f32 comparison")
       stack.push(I32)
     }
 
     // f64 comparison operations
     F64Eq | F64Ne | F64Lt | F64Gt | F64Le | F64Ge => {
-      ctx.poly_pop_expect(F64, "f64 comparison")
-      ctx.poly_pop_expect(F64, "f64 comparison")
+      ctx.poly_pop_expect(module_, F64, "f64 comparison")
+      ctx.poly_pop_expect(module_, F64, "f64 comparison")
       stack.push(I32)
     }
 
     // f32 unary operations
     F32Abs | F32Neg | F32Ceil | F32Floor | F32Trunc | F32Nearest | F32Sqrt => {
-      ctx.poly_pop_expect(F32, "f32 unary op")
+      ctx.poly_pop_expect(module_, F32, "f32 unary op")
       stack.push(F32)
     }
 
     // f64 unary operations
     F64Abs | F64Neg | F64Ceil | F64Floor | F64Trunc | F64Nearest | F64Sqrt => {
-      ctx.poly_pop_expect(F64, "f64 unary op")
+      ctx.poly_pop_expect(module_, F64, "f64 unary op")
       stack.push(F64)
     }
 
     // f32 binary operations
     F32Add | F32Sub | F32Mul | F32Div | F32Min | F32Max | F32Copysign => {
-      ctx.poly_pop_expect(F32, "f32 binary op")
-      ctx.poly_pop_expect(F32, "f32 binary op")
+      ctx.poly_pop_expect(module_, F32, "f32 binary op")
+      ctx.poly_pop_expect(module_, F32, "f32 binary op")
       stack.push(F32)
     }
 
     // f64 binary operations
     F64Add | F64Sub | F64Mul | F64Div | F64Min | F64Max | F64Copysign => {
-      ctx.poly_pop_expect(F64, "f64 binary op")
-      ctx.poly_pop_expect(F64, "f64 binary op")
+      ctx.poly_pop_expect(module_, F64, "f64 binary op")
+      ctx.poly_pop_expect(module_, F64, "f64 binary op")
       stack.push(F64)
     }
 
     // Conversion operations: i32 -> f32/f64
     F32ConvertI32S | F32ConvertI32U => {
-      ctx.poly_pop_expect(I32, "f32.convert_i32")
+      ctx.poly_pop_expect(module_, I32, "f32.convert_i32")
       stack.push(F32)
     }
     F64ConvertI32S | F64ConvertI32U => {
-      ctx.poly_pop_expect(I32, "f64.convert_i32")
+      ctx.poly_pop_expect(module_, I32, "f64.convert_i32")
       stack.push(F64)
     }
 
     // Conversion operations: i64 -> f32/f64
     F32ConvertI64S | F32ConvertI64U => {
-      ctx.poly_pop_expect(I64, "f32.convert_i64")
+      ctx.poly_pop_expect(module_, I64, "f32.convert_i64")
       stack.push(F32)
     }
     F64ConvertI64S | F64ConvertI64U => {
-      ctx.poly_pop_expect(I64, "f64.convert_i64")
+      ctx.poly_pop_expect(module_, I64, "f64.convert_i64")
       stack.push(F64)
     }
 
     // Promotion/demotion: f32 <-> f64
     F64PromoteF32 => {
-      ctx.poly_pop_expect(F32, "f64.promote_f32")
+      ctx.poly_pop_expect(module_, F32, "f64.promote_f32")
       stack.push(F64)
     }
     F32DemoteF64 => {
-      ctx.poly_pop_expect(F64, "f32.demote_f64")
+      ctx.poly_pop_expect(module_, F64, "f32.demote_f64")
       stack.push(F32)
     }
 
     // Truncation: f32/f64 -> i32/i64
     I32TruncF32S | I32TruncF32U => {
-      ctx.poly_pop_expect(F32, "i32.trunc_f32")
+      ctx.poly_pop_expect(module_, F32, "i32.trunc_f32")
       stack.push(I32)
     }
     I32TruncF64S | I32TruncF64U => {
-      ctx.poly_pop_expect(F64, "i32.trunc_f64")
+      ctx.poly_pop_expect(module_, F64, "i32.trunc_f64")
       stack.push(I32)
     }
     I64TruncF32S | I64TruncF32U => {
-      ctx.poly_pop_expect(F32, "i64.trunc_f32")
+      ctx.poly_pop_expect(module_, F32, "i64.trunc_f32")
       stack.push(I64)
     }
     I64TruncF64S | I64TruncF64U => {
-      ctx.poly_pop_expect(F64, "i64.trunc_f64")
+      ctx.poly_pop_expect(module_, F64, "i64.trunc_f64")
       stack.push(I64)
     }
 
     // Saturating truncation: f32/f64 -> i32/i64 (same types as regular trunc)
     I32TruncSatF32S | I32TruncSatF32U => {
-      ctx.poly_pop_expect(F32, "i32.trunc_sat_f32")
+      ctx.poly_pop_expect(module_, F32, "i32.trunc_sat_f32")
       stack.push(I32)
     }
     I32TruncSatF64S | I32TruncSatF64U => {
-      ctx.poly_pop_expect(F64, "i32.trunc_sat_f64")
+      ctx.poly_pop_expect(module_, F64, "i32.trunc_sat_f64")
       stack.push(I32)
     }
     I64TruncSatF32S | I64TruncSatF32U => {
-      ctx.poly_pop_expect(F32, "i64.trunc_sat_f32")
+      ctx.poly_pop_expect(module_, F32, "i64.trunc_sat_f32")
       stack.push(I64)
     }
     I64TruncSatF64S | I64TruncSatF64U => {
-      ctx.poly_pop_expect(F64, "i64.trunc_sat_f64")
+      ctx.poly_pop_expect(module_, F64, "i64.trunc_sat_f64")
       stack.push(I64)
     }
 
     // Reinterpret operations
     F32ReinterpretI32 => {
-      ctx.poly_pop_expect(I32, "f32.reinterpret_i32")
+      ctx.poly_pop_expect(module_, I32, "f32.reinterpret_i32")
       stack.push(F32)
     }
     F64ReinterpretI64 => {
-      ctx.poly_pop_expect(I64, "f64.reinterpret_i64")
+      ctx.poly_pop_expect(module_, I64, "f64.reinterpret_i64")
       stack.push(F64)
     }
     I32ReinterpretF32 => {
-      ctx.poly_pop_expect(F32, "i32.reinterpret_f32")
+      ctx.poly_pop_expect(module_, F32, "i32.reinterpret_f32")
       stack.push(I32)
     }
     I64ReinterpretF64 => {
-      ctx.poly_pop_expect(F64, "i64.reinterpret_f64")
+      ctx.poly_pop_expect(module_, F64, "i64.reinterpret_f64")
       stack.push(I64)
     }
 
@@ -1071,7 +1087,7 @@ fn validate_instruction(
       } else {
         code.locals[local_idx - func_type.params.length()]
       }
-      ctx.poly_pop_expect(local_type, "local.set")
+      ctx.poly_pop_expect(module_, local_type, "local.set")
       // Mark local as initialized
       if ctx.initialized_locals.length() > local_idx {
         ctx.initialized_locals[local_idx] = true
@@ -1163,118 +1179,118 @@ fn validate_instruction(
       if not(is_mutable) {
         raise ValidationError::ImmutableGlobal(global_idx)
       }
-      ctx.poly_pop_expect(global_type, "global.set")
+      ctx.poly_pop_expect(module_, global_type, "global.set")
     }
 
     // Memory operations - loads (all take i32 address and push the loaded value)
     I32Load(align, _) => {
       validate_memory_exists(module_)
       validate_alignment(align, 4)
-      ctx.poly_pop_expect(I32, "i32.load address")
+      ctx.poly_pop_expect(module_, I32, "i32.load address")
       stack.push(I32)
     }
     I32Load8S(align, _) | I32Load8U(align, _) => {
       validate_memory_exists(module_)
       validate_alignment(align, 1)
-      ctx.poly_pop_expect(I32, "i32.load8 address")
+      ctx.poly_pop_expect(module_, I32, "i32.load8 address")
       stack.push(I32)
     }
     I32Load16S(align, _) | I32Load16U(align, _) => {
       validate_memory_exists(module_)
       validate_alignment(align, 2)
-      ctx.poly_pop_expect(I32, "i32.load16 address")
+      ctx.poly_pop_expect(module_, I32, "i32.load16 address")
       stack.push(I32)
     }
     I64Load(align, _) => {
       validate_memory_exists(module_)
       validate_alignment(align, 8)
-      ctx.poly_pop_expect(I32, "i64.load address")
+      ctx.poly_pop_expect(module_, I32, "i64.load address")
       stack.push(I64)
     }
     I64Load8S(align, _) | I64Load8U(align, _) => {
       validate_memory_exists(module_)
       validate_alignment(align, 1)
-      ctx.poly_pop_expect(I32, "i64.load8 address")
+      ctx.poly_pop_expect(module_, I32, "i64.load8 address")
       stack.push(I64)
     }
     I64Load16S(align, _) | I64Load16U(align, _) => {
       validate_memory_exists(module_)
       validate_alignment(align, 2)
-      ctx.poly_pop_expect(I32, "i64.load16 address")
+      ctx.poly_pop_expect(module_, I32, "i64.load16 address")
       stack.push(I64)
     }
     I64Load32S(align, _) | I64Load32U(align, _) => {
       validate_memory_exists(module_)
       validate_alignment(align, 4)
-      ctx.poly_pop_expect(I32, "i64.load32 address")
+      ctx.poly_pop_expect(module_, I32, "i64.load32 address")
       stack.push(I64)
     }
     F32Load(align, _) => {
       validate_memory_exists(module_)
       validate_alignment(align, 4)
-      ctx.poly_pop_expect(I32, "f32.load address")
+      ctx.poly_pop_expect(module_, I32, "f32.load address")
       stack.push(F32)
     }
     F64Load(align, _) => {
       validate_memory_exists(module_)
       validate_alignment(align, 8)
-      ctx.poly_pop_expect(I32, "f64.load address")
+      ctx.poly_pop_expect(module_, I32, "f64.load address")
       stack.push(F64)
     }
     // Memory operations - stores (all take i32 address and value, push nothing)
     I32Store(align, _) => {
       validate_memory_exists(module_)
       validate_alignment(align, 4)
-      ctx.poly_pop_expect(I32, "i32.store value")
-      ctx.poly_pop_expect(I32, "i32.store address")
+      ctx.poly_pop_expect(module_, I32, "i32.store value")
+      ctx.poly_pop_expect(module_, I32, "i32.store address")
     }
     I32Store8(align, _) => {
       validate_memory_exists(module_)
       validate_alignment(align, 1)
-      ctx.poly_pop_expect(I32, "i32.store8 value")
-      ctx.poly_pop_expect(I32, "i32.store8 address")
+      ctx.poly_pop_expect(module_, I32, "i32.store8 value")
+      ctx.poly_pop_expect(module_, I32, "i32.store8 address")
     }
     I32Store16(align, _) => {
       validate_memory_exists(module_)
       validate_alignment(align, 2)
-      ctx.poly_pop_expect(I32, "i32.store16 value")
-      ctx.poly_pop_expect(I32, "i32.store16 address")
+      ctx.poly_pop_expect(module_, I32, "i32.store16 value")
+      ctx.poly_pop_expect(module_, I32, "i32.store16 address")
     }
     I64Store(align, _) => {
       validate_memory_exists(module_)
       validate_alignment(align, 8)
-      ctx.poly_pop_expect(I64, "i64.store value")
-      ctx.poly_pop_expect(I32, "i64.store address")
+      ctx.poly_pop_expect(module_, I64, "i64.store value")
+      ctx.poly_pop_expect(module_, I32, "i64.store address")
     }
     I64Store8(align, _) => {
       validate_memory_exists(module_)
       validate_alignment(align, 1)
-      ctx.poly_pop_expect(I64, "i64.store8 value")
-      ctx.poly_pop_expect(I32, "i64.store8 address")
+      ctx.poly_pop_expect(module_, I64, "i64.store8 value")
+      ctx.poly_pop_expect(module_, I32, "i64.store8 address")
     }
     I64Store16(align, _) => {
       validate_memory_exists(module_)
       validate_alignment(align, 2)
-      ctx.poly_pop_expect(I64, "i64.store16 value")
-      ctx.poly_pop_expect(I32, "i64.store16 address")
+      ctx.poly_pop_expect(module_, I64, "i64.store16 value")
+      ctx.poly_pop_expect(module_, I32, "i64.store16 address")
     }
     I64Store32(align, _) => {
       validate_memory_exists(module_)
       validate_alignment(align, 4)
-      ctx.poly_pop_expect(I64, "i64.store32 value")
-      ctx.poly_pop_expect(I32, "i64.store32 address")
+      ctx.poly_pop_expect(module_, I64, "i64.store32 value")
+      ctx.poly_pop_expect(module_, I32, "i64.store32 address")
     }
     F32Store(align, _) => {
       validate_memory_exists(module_)
       validate_alignment(align, 4)
-      ctx.poly_pop_expect(F32, "f32.store value")
-      ctx.poly_pop_expect(I32, "f32.store address")
+      ctx.poly_pop_expect(module_, F32, "f32.store value")
+      ctx.poly_pop_expect(module_, I32, "f32.store address")
     }
     F64Store(align, _) => {
       validate_memory_exists(module_)
       validate_alignment(align, 8)
-      ctx.poly_pop_expect(F64, "f64.store value")
-      ctx.poly_pop_expect(I32, "f64.store address")
+      ctx.poly_pop_expect(module_, F64, "f64.store value")
+      ctx.poly_pop_expect(module_, I32, "f64.store address")
     }
     // Memory size and grow
     MemorySize(_) => {
@@ -1283,14 +1299,14 @@ fn validate_instruction(
     }
     MemoryGrow(_) => {
       validate_memory_exists(module_)
-      ctx.poly_pop_expect(I32, "memory.grow delta")
+      ctx.poly_pop_expect(module_, I32, "memory.grow delta")
       stack.push(I32)
     }
 
     // Table instructions
     TableSize(_) => stack.push(I32)
     TableGet(table_idx) => {
-      ctx.poly_pop_expect(I32, "table.get index")
+      ctx.poly_pop_expect(module_, I32, "table.get index")
       // Look up table's element type
       let elem_type = if table_idx.reinterpret_as_int() <
         module_.tables.length() {
@@ -1312,10 +1328,10 @@ fn validate_instruction(
         let _ = stack.unsafe_pop()
         // Pop the ref value
       }
-      ctx.poly_pop_expect(I32, "table.set index")
+      ctx.poly_pop_expect(module_, I32, "table.set index")
     }
     TableGrow(table_idx) => {
-      ctx.poly_pop_expect(I32, "table.grow delta")
+      ctx.poly_pop_expect(module_, I32, "table.grow delta")
       // Pop init value and check it matches table's element type
       let table_elem_type = if table_idx.reinterpret_as_int() <
         module_.tables.length() {
@@ -1332,7 +1348,7 @@ fn validate_instruction(
         )
       } else {
         let actual_type = stack.unsafe_pop()
-        if not(is_subtype(actual_type, expected_type)) {
+        if not(is_subtype(module_, actual_type, expected_type)) {
           raise ValidationError::TypeMismatch(
             "table.grow init value type mismatch: expected \{expected_type}, got \{actual_type}",
           )
@@ -1347,9 +1363,50 @@ fn validate_instruction(
       let val_type = reftype_to_valtype(ref_type)
       stack.push(val_type)
     }
-    RefFunc(_) =>
-      // ref.func pushes a funcref
-      stack.push(ValType::FuncRef)
+    RefFunc(func_idx) => {
+      // ref.func pushes a typed function reference (non-nullable)
+      // Get the function's type index to create the proper typed reference
+      let idx = func_idx.reinterpret_as_int()
+      let mut num_imported_funcs = 0
+      for imp in module_.imports {
+        match imp.desc {
+          ImportDesc::Func(_) => num_imported_funcs += 1
+          _ => ()
+        }
+      }
+      // Validate function index
+      let total_funcs = num_imported_funcs + module_.funcs.length()
+      if idx < 0 || idx >= total_funcs {
+        raise ValidationError::InvalidFunctionIndex(idx)
+      }
+      let type_idx = if idx < num_imported_funcs {
+        // Imported function - get type from import
+        let mut import_idx = 0
+        let mut found_type_idx = 0
+        for imp in module_.imports {
+          match imp.desc {
+            ImportDesc::Func(t_idx) => {
+              if import_idx == idx {
+                found_type_idx = t_idx.reinterpret_as_int()
+                break
+              }
+              import_idx += 1
+            }
+            _ => ()
+          }
+        }
+        found_type_idx
+      } else {
+        // Local function - get type from funcs array
+        let local_idx = idx - num_imported_funcs
+        if local_idx < 0 || local_idx >= module_.funcs.length() {
+          raise ValidationError::InvalidFunctionIndex(idx)
+        }
+        module_.funcs[local_idx].reinterpret_as_int()
+      }
+      // Push typed function reference (non-nullable)
+      stack.push(ValType::Ref(RefType::TypeIndex(type_idx), false))
+    }
     RefIsNull => {
       // ref.is_null pops a reference type and pushes i32
       // In polymorphic context, allow any type on stack
@@ -1371,7 +1428,7 @@ fn validate_instruction(
       let (params, results) = get_block_type(module_, block_type)
       // Pop parameters from parent stack using polymorphic stack
       for i = params.length() - 1; i >= 0; i = i - 1 {
-        ctx.poly_pop_expect(params[i], "block parameter")
+        ctx.poly_pop_expect(module_, params[i], "block parameter")
       }
       // Create new validation context for block
       let block_ctx = ValidationCtx::new()
@@ -1410,7 +1467,7 @@ fn validate_instruction(
       } else {
         // Exact match - validate result types (with subtyping)
         for i = 0; i < results.length(); i = i + 1 {
-          if not(is_subtype(block_ctx.stack[i], results[i])) {
+          if not(is_subtype(module_, block_ctx.stack[i], results[i])) {
             raise ValidationError::TypeMismatch(
               "block result type mismatch: expected \{results[i]}, got \{block_ctx.stack[i]}",
             )
@@ -1426,7 +1483,7 @@ fn validate_instruction(
       let (params, results) = get_block_type(module_, block_type)
       // Pop parameters from parent stack using polymorphic stack
       for i = params.length() - 1; i >= 0; i = i - 1 {
-        ctx.poly_pop_expect(params[i], "loop parameter")
+        ctx.poly_pop_expect(module_, params[i], "loop parameter")
       }
       // Create new validation context for loop
       let loop_ctx = ValidationCtx::new()
@@ -1465,7 +1522,7 @@ fn validate_instruction(
       } else {
         // Exact match - validate result types (with subtyping)
         for i = 0; i < results.length(); i = i + 1 {
-          if not(is_subtype(loop_ctx.stack[i], results[i])) {
+          if not(is_subtype(module_, loop_ctx.stack[i], results[i])) {
             raise ValidationError::TypeMismatch(
               "loop result type mismatch: expected \{results[i]}, got \{loop_ctx.stack[i]}",
             )
@@ -1480,10 +1537,10 @@ fn validate_instruction(
     If(block_type, then_instrs, else_instrs) => {
       let (params, results) = get_block_type(module_, block_type)
       // Pop condition (using polymorphic stack)
-      ctx.poly_pop_expect(I32, "if condition")
+      ctx.poly_pop_expect(module_, I32, "if condition")
       // Pop parameters from parent stack (using polymorphic stack)
       for i = params.length() - 1; i >= 0; i = i - 1 {
-        ctx.poly_pop_expect(params[i], "if parameter")
+        ctx.poly_pop_expect(module_, params[i], "if parameter")
       }
       // Validate then branch
       let then_ctx = ValidationCtx::new()
@@ -1513,7 +1570,7 @@ fn validate_instruction(
       } else {
         // Exact match - validate result types (with subtyping)
         for i = 0; i < results.length(); i = i + 1 {
-          if not(is_subtype(then_ctx.stack[i], results[i])) {
+          if not(is_subtype(module_, then_ctx.stack[i], results[i])) {
             raise ValidationError::TypeMismatch(
               "if then branch result type mismatch: expected \{results[i]}, got \{then_ctx.stack[i]}",
             )
@@ -1548,7 +1605,7 @@ fn validate_instruction(
       } else {
         // Exact match - validate result types (with subtyping)
         for i = 0; i < results.length(); i = i + 1 {
-          if not(is_subtype(else_ctx.stack[i], results[i])) {
+          if not(is_subtype(module_, else_ctx.stack[i], results[i])) {
             raise ValidationError::TypeMismatch(
               "if else branch result type mismatch: expected \{results[i]}, got \{else_ctx.stack[i]}",
             )
@@ -1581,7 +1638,7 @@ fn validate_instruction(
           // Validate result types for concrete values (with subtyping)
           for i = 0; i < func_type.results.length(); i = i + 1 {
             let stack_idx = stack.length() - func_type.results.length() + i
-            if not(is_subtype(stack[stack_idx], func_type.results[i])) {
+            if not(is_subtype(module_, stack[stack_idx], func_type.results[i])) {
               raise ValidationError::TypeMismatch(
                 "return: result type mismatch: expected \{func_type.results[i]}, got \{stack[stack_idx]}",
               )
@@ -1613,7 +1670,7 @@ fn validate_instruction(
           // Validate types for the branch target (with subtyping)
           for i = 0; i < target_types.length(); i = i + 1 {
             let stack_idx = stack.length() - target_types.length() + i
-            if not(is_subtype(stack[stack_idx], target_types[i])) {
+            if not(is_subtype(module_, stack[stack_idx], target_types[i])) {
               raise ValidationError::TypeMismatch(
                 "br: branch target type mismatch: expected \{target_types[i]}, got \{stack[stack_idx]}",
               )
@@ -1632,7 +1689,7 @@ fn validate_instruction(
       let target_types = ctx.get_label_types(label)
 
       // Pop i32 condition
-      ctx.poly_pop_expect(I32, "br_if condition")
+      ctx.poly_pop_expect(module_, I32, "br_if condition")
 
       // Validate that branch target's required values are on stack
       // Unlike br, we DON'T pop them (they stay for fallthrough case)
@@ -1649,7 +1706,7 @@ fn validate_instruction(
           // Validate types for the branch target (with subtyping)
           for i = 0; i < target_types.length(); i = i + 1 {
             let stack_idx = stack.length() - target_types.length() + i
-            if not(is_subtype(stack[stack_idx], target_types[i])) {
+            if not(is_subtype(module_, stack[stack_idx], target_types[i])) {
               raise ValidationError::TypeMismatch(
                 "br_if: branch target type mismatch: expected \{target_types[i]}, got \{stack[stack_idx]}",
               )
@@ -1662,7 +1719,7 @@ fn validate_instruction(
     }
     BrTable(labels, default_label) => {
       // Table branch - pop i32 index
-      ctx.poly_pop_expect(I32, "br_table index")
+      ctx.poly_pop_expect(module_, I32, "br_table index")
 
       // Validate all labels exist and have compatible types
       let default_types = ctx.get_label_types(default_label)
@@ -1710,7 +1767,7 @@ fn validate_instruction(
           // Validate types for concrete values (with subtyping)
           for i = 0; i < target_types.length(); i = i + 1 {
             let stack_idx = stack.length() - target_types.length() + i
-            if not(is_subtype(stack[stack_idx], target_types[i])) {
+            if not(is_subtype(module_, stack[stack_idx], target_types[i])) {
               raise ValidationError::TypeMismatch(
                 "br_table: branch target type mismatch: expected \{target_types[i]}, got \{stack[stack_idx]}",
               )
@@ -1763,7 +1820,7 @@ fn validate_instruction(
       // Note: We can't distinguish between plain select (0x1B) and typed select (0x1C)
       // at validation time since the parser treats them the same. So we allow all types.
       // Pop condition (i32), then two values of same type, push one back
-      ctx.poly_pop_expect(I32, "select condition")
+      ctx.poly_pop_expect(module_, I32, "select condition")
       // Check how many concrete values we have BEFORE popping
       let num_concrete = stack.length()
 
@@ -1836,7 +1893,7 @@ fn validate_instruction(
       let func_type_called = module_.types[type_idx]
       // Pop arguments from stack (in reverse order)
       for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
-        ctx.poly_pop_expect(func_type_called.params[i], "call argument")
+        ctx.poly_pop_expect(module_, func_type_called.params[i], "call argument")
       }
       // Push results onto stack
       for result in func_type_called.results {
@@ -1850,10 +1907,11 @@ fn validate_instruction(
       }
       let func_type_called = module_.types[idx]
       // Pop table index
-      ctx.poly_pop_expect(I32, "call_indirect table index")
+      ctx.poly_pop_expect(module_, I32, "call_indirect table index")
       // Pop arguments from stack (in reverse order)
       for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
         ctx.poly_pop_expect(
+          module_,
           func_type_called.params[i],
           "call_indirect argument",
         )
@@ -1908,7 +1966,7 @@ fn validate_instruction(
       let func_type_called = module_.types[type_idx]
       // Pop arguments from stack (in reverse order)
       for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
-        ctx.poly_pop_expect(func_type_called.params[i], "return_call argument")
+        ctx.poly_pop_expect(module_, func_type_called.params[i], "return_call argument")
       }
       // Mark as unreachable - this is a tail call that doesn't return to current function
       ctx.is_unreachable = true
@@ -1922,10 +1980,11 @@ fn validate_instruction(
       }
       let func_type_called = module_.types[idx]
       // Pop table index
-      ctx.poly_pop_expect(I32, "return_call_indirect table index")
+      ctx.poly_pop_expect(module_, I32, "return_call_indirect table index")
       // Pop arguments from stack (in reverse order)
       for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
         ctx.poly_pop_expect(
+          module_,
           func_type_called.params[i],
           "return_call_indirect argument",
         )
@@ -1957,7 +2016,7 @@ fn validate_instruction(
 
       // Pop arguments from stack (in reverse order)
       for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
-        ctx.poly_pop_expect(func_type_called.params[i], "call_ref argument")
+        ctx.poly_pop_expect(module_, func_type_called.params[i], "call_ref argument")
       }
 
       // Push results onto stack
@@ -1988,6 +2047,7 @@ fn validate_instruction(
       // Pop arguments from stack (in reverse order)
       for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
         ctx.poly_pop_expect(
+          module_,
           func_type_called.params[i],
           "return_call_ref argument",
         )
@@ -2040,7 +2100,7 @@ fn validate_function(
     // Check types from top of stack (with subtyping)
     for i = 0; i < func_type.results.length(); i = i + 1 {
       // Stack type must be a subtype of expected return type
-      if not(is_subtype(stack[i], func_type.results[i])) {
+      if not(is_subtype(module_, stack[i], func_type.results[i])) {
         raise ValidationError::TypeMismatch(
           "function return type mismatch: expected \{func_type.results[i]}, got \{stack[i]}",
         )
