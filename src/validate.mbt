@@ -163,6 +163,25 @@ fn is_subtype(t1 : ValType, t2 : ValType) -> Bool {
     (FuncRef, AnyRef) => true
     (ExnRef, AnyRef) => true
 
+    // Typed references: Ref(T, nullable)
+    // Non-nullable is subtype of nullable for same heap type
+    (Ref(ht1, false), Ref(ht2, true)) => ht1 == ht2
+    // Ref(Extern, _) is compatible with ExternRef (nullable externref)
+    (Ref(RefType::Extern, _), ExternRef) => true
+    // Ref(Func, _) is compatible with FuncRef (nullable funcref)
+    (Ref(RefType::Func, _), FuncRef) => true
+    // Ref(TypeIndex(_), _) is a typed function reference, compatible with FuncRef
+    (Ref(RefType::TypeIndex(_), _), FuncRef) => true
+    // FuncRef is compatible with nullable typed function reference
+    (FuncRef, Ref(RefType::TypeIndex(_), true)) => true
+    (FuncRef, Ref(RefType::Func, true)) => true
+    // Ref(Any, _) is compatible with AnyRef
+    (Ref(RefType::Any, _), AnyRef) => true
+    // Ref(Exn, _) is compatible with ExnRef
+    (Ref(RefType::Exn, _), ExnRef) => true
+    // Any reference is subtype of AnyRef
+    (Ref(_, _), AnyRef) => true
+
     // Non-reference types are not related by subtyping
     _ => false
   }
@@ -625,6 +644,9 @@ struct ValidationCtx {
   // Stack of control frames - each frame tracks the expected result types
   // For br validation, we need to know what types the target label expects
   control_stack : Array[(Array[ValType], Array[ValType])] // (params, results) for each control frame
+  // Track which locals are initialized (for non-defaultable types)
+  // Index corresponds to local index (params first, then locals)
+  initialized_locals : Array[Bool]
 }
 
 ///|
@@ -634,7 +656,47 @@ fn ValidationCtx::new() -> ValidationCtx {
     is_unreachable: false,
     unreachable_stack_height: 0,
     control_stack: [],
+    initialized_locals: [],
   }
+}
+
+///|
+/// Create a validation context with initialized locals tracking
+/// Params are always initialized; locals are initialized only if defaultable
+fn ValidationCtx::new_with_locals(
+  func_type : FuncType,
+  code : Code,
+) -> ValidationCtx {
+  let total_locals = func_type.params.length() + code.locals.length()
+  let initialized = Array::make(total_locals, false)
+  // Parameters are always initialized
+  for i = 0; i < func_type.params.length(); i = i + 1 {
+    initialized[i] = true
+  }
+  // Locals with defaultable types are initialized to their default value
+  for i = 0; i < code.locals.length(); i = i + 1 {
+    let local_type = code.locals[i]
+    if local_type.is_defaultable() {
+      initialized[func_type.params.length() + i] = true
+    }
+  }
+  {
+    stack: [],
+    is_unreachable: false,
+    unreachable_stack_height: 0,
+    control_stack: [],
+    initialized_locals: initialized,
+  }
+}
+
+///|
+/// Copy the initialized_locals array (for use when entering control structures)
+fn ValidationCtx::copy_initialized(self : ValidationCtx) -> Array[Bool] {
+  let copy = Array::make(self.initialized_locals.length(), false)
+  for i = 0; i < self.initialized_locals.length(); i = i + 1 {
+    copy[i] = self.initialized_locals[i]
+  }
+  copy
 }
 
 ///|
@@ -990,6 +1052,12 @@ fn validate_instruction(
       } else {
         code.locals[local_idx - func_type.params.length()]
       }
+      // Check initialization for non-defaultable types
+      if not(local_type.is_defaultable()) &&
+        ctx.initialized_locals.length() > local_idx &&
+        not(ctx.initialized_locals[local_idx]) {
+        raise ValidationError::UninitializedLocal(local_idx)
+      }
       stack.push(local_type)
     }
     LocalSet(idx) | LocalTee(idx) => {
@@ -1004,6 +1072,10 @@ fn validate_instruction(
         code.locals[local_idx - func_type.params.length()]
       }
       ctx.poly_pop_expect(local_type, "local.set")
+      // Mark local as initialized
+      if ctx.initialized_locals.length() > local_idx {
+        ctx.initialized_locals[local_idx] = true
+      }
       match instr {
         LocalTee(_) => stack.push(local_type)
         _ => ()
@@ -1312,11 +1384,18 @@ fn validate_instruction(
         block_ctx.control_stack.push(frame)
       }
       block_ctx.push_control(params, results)
+      // Copy initialized locals from parent context
+      // After block, we don't propagate back (block might branch out early)
+      for i = 0; i < ctx.initialized_locals.length(); i = i + 1 {
+        block_ctx.initialized_locals.push(ctx.initialized_locals[i])
+      }
       // Validate block body
       for block_instr in instrs {
         validate_instruction(module_, func_type, code, block_ctx, block_instr)
       }
       let _ = block_ctx.pop_control()
+      // Note: We do NOT propagate initialized_locals back from block_ctx
+      // because the block might have exited early via branch
       // Check block produces correct results
       if block_ctx.is_unreachable && block_ctx.stack.length() == 0 {
         // Unreachable code with empty stack - all polymorphic, push expected results
@@ -1361,11 +1440,17 @@ fn validate_instruction(
         loop_ctx.control_stack.push(frame)
       }
       loop_ctx.push_control(params, params) // Loop's br target uses params, not results
+      // Copy initialized locals from parent context
+      // Loop is similar to block - don't propagate back
+      for i = 0; i < ctx.initialized_locals.length(); i = i + 1 {
+        loop_ctx.initialized_locals.push(ctx.initialized_locals[i])
+      }
       // Validate loop body
       for loop_instr in instrs {
         validate_instruction(module_, func_type, code, loop_ctx, loop_instr)
       }
       let _ = loop_ctx.pop_control()
+      // Note: We do NOT propagate initialized_locals back from loop_ctx
       // Check loop produces correct results
       if loop_ctx.is_unreachable && loop_ctx.stack.length() == 0 {
         // Unreachable code with empty stack - all polymorphic
@@ -1410,6 +1495,10 @@ fn validate_instruction(
         then_ctx.control_stack.push(frame)
       }
       then_ctx.push_control(params, results)
+      // Copy initialized locals from parent context
+      for i = 0; i < ctx.initialized_locals.length(); i = i + 1 {
+        then_ctx.initialized_locals.push(ctx.initialized_locals[i])
+      }
       for then_instr in then_instrs {
         validate_instruction(module_, func_type, code, then_ctx, then_instr)
       }
@@ -1441,6 +1530,10 @@ fn validate_instruction(
         else_ctx.control_stack.push(frame)
       }
       else_ctx.push_control(params, results)
+      // Copy initialized locals from parent context (independently from then branch)
+      for i = 0; i < ctx.initialized_locals.length(); i = i + 1 {
+        else_ctx.initialized_locals.push(ctx.initialized_locals[i])
+      }
       for else_instr in else_instrs {
         validate_instruction(module_, func_type, code, else_ctx, else_instr)
       }
@@ -1462,6 +1555,8 @@ fn validate_instruction(
           }
         }
       }
+      // Note: We do NOT propagate initialized_locals back from either branch
+      // because branches might exit early via br/return
       // Push results onto parent stack
       for result in results {
         stack.push(result)
@@ -1912,8 +2007,8 @@ fn validate_function(
   func_type : FuncType,
   code : Code,
 ) -> Unit raise ValidationError {
-  // Create validation context
-  let ctx = ValidationCtx::new()
+  // Create validation context with local initialization tracking
+  let ctx = ValidationCtx::new_with_locals(func_type, code)
   // Push function-level control frame with empty params and function results
   ctx.push_control([], func_type.results)
 

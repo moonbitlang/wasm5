@@ -184,6 +184,33 @@ fn Parser::read_name(self : Parser) -> Bytes raise ParseError {
 // Parse value type
 
 ///|
+/// Read a heap type (used after 0x63/0x64 prefix)
+/// Heap types can be abstract heap types (0x70, 0x6F, etc.) or type indices
+fn Parser::read_heap_type(self : Parser) -> RefType raise ParseError {
+  let byte = self.read_byte()
+  match byte {
+    0x70 => RefType::Func
+    0x6F => RefType::Extern
+    0x6E => RefType::Any
+    0x6D => RefType::Eq
+    0x6C => RefType::I31
+    0x6B => RefType::Struct
+    0x6A => RefType::Array
+    0x69 => RefType::Exn
+    0x71 => RefType::None
+    0x72 => RefType::NoFunc
+    0x73 => RefType::NoExtern
+    0x74 => RefType::NoExn
+    _ => {
+      // It's a type index encoded as LEB128
+      self.pos = self.pos - 1
+      let type_idx = self.read_i32_leb128()
+      RefType::TypeIndex(type_idx)
+    }
+  }
+}
+
+///|
 fn Parser::read_valtype(self : Parser) -> ValType raise {
   let byte = self.read_byte()
   match byte {
@@ -206,13 +233,13 @@ fn Parser::read_valtype(self : Parser) -> ValType raise {
     0x74 => NullExnRef // noexn (bottom type)
     // GC proposal: (ref null $t) - nullable typed reference
     0x63 => {
-      let _ = self.read_i32_leb128() // type index, ignored
-      FuncRef // Treat as funcref for compatibility
+      let heap_type = self.read_heap_type()
+      Ref(heap_type, true) // nullable = true
     }
     // GC proposal: (ref $t) - non-null typed reference
     0x64 => {
-      let _ = self.read_i32_leb128() // type index, ignored
-      FuncRef // Treat as funcref for compatibility
+      let heap_type = self.read_heap_type()
+      Ref(heap_type, false) // nullable = false
     }
     _ =>
       raise ValidationError::TypeMismatch(
@@ -1299,15 +1326,15 @@ fn parse_blocktype(parser : Parser) -> BlockType raise ParseError {
     0x72 => Value(NullFuncRef)
     0x73 => Value(NullExternRef)
     0x74 => Value(NullExnRef)
-    // GC proposal: (ref null $t) - treat as funcref for compatibility
+    // GC proposal: (ref null $t) - nullable typed reference
     0x63 => {
-      let _ = parser.read_i32_leb128() // type index, ignored
-      Value(FuncRef)
+      let heap_type = parser.read_heap_type()
+      Value(Ref(heap_type, true))
     }
-    // GC proposal: (ref $t) - treat as funcref for compatibility
+    // GC proposal: (ref $t) - non-null typed reference
     0x64 => {
-      let _ = parser.read_i32_leb128() // type index, ignored
-      Value(FuncRef)
+      let heap_type = parser.read_heap_type()
+      Value(Ref(heap_type, false))
     }
     _ => {
       // Type index encoded as signed LEB128

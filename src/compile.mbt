@@ -1279,7 +1279,8 @@ fn op_call(rt : Runtime) -> ControlFlow {
       | ValType::EqRef
       | ValType::I31Ref
       | ValType::StructRef
-      | ValType::ArrayRef => rt.locals.push(Value::Ref(None))
+      | ValType::ArrayRef
+      | ValType::Ref(_, _) => rt.locals.push(Value::Ref(None))
       _ =>
         return Trap(
           RuntimeError::UnsupportedLocalType(
@@ -1471,7 +1472,8 @@ fn op_call_indirect(rt : Runtime) -> ControlFlow {
       | ValType::EqRef
       | ValType::I31Ref
       | ValType::StructRef
-      | ValType::ArrayRef => rt.locals.push(Value::Ref(None))
+      | ValType::ArrayRef
+      | ValType::Ref(_, _) => rt.locals.push(Value::Ref(None))
       _ =>
         return Trap(
           RuntimeError::UnsupportedLocalType(
@@ -1599,7 +1601,8 @@ fn op_return_call(rt : Runtime) -> ControlFlow {
       | ValType::EqRef
       | ValType::I31Ref
       | ValType::StructRef
-      | ValType::ArrayRef => rt.locals.push(Value::Ref(None))
+      | ValType::ArrayRef
+      | ValType::Ref(_, _) => rt.locals.push(Value::Ref(None))
       _ =>
         return Trap(
           RuntimeError::UnsupportedLocalType(
@@ -1779,7 +1782,8 @@ fn op_return_call_indirect(rt : Runtime) -> ControlFlow {
       | ValType::EqRef
       | ValType::I31Ref
       | ValType::StructRef
-      | ValType::ArrayRef => rt.locals.push(Value::Ref(None))
+      | ValType::ArrayRef
+      | ValType::Ref(_, _) => rt.locals.push(Value::Ref(None))
       _ =>
         return Trap(
           RuntimeError::UnsupportedLocalType(
@@ -1913,7 +1917,8 @@ fn op_call_ref(rt : Runtime) -> ControlFlow {
       | ValType::EqRef
       | ValType::I31Ref
       | ValType::StructRef
-      | ValType::ArrayRef => rt.locals.push(Value::Ref(None))
+      | ValType::ArrayRef
+      | ValType::Ref(_, _) => rt.locals.push(Value::Ref(None))
       _ =>
         return Trap(
           RuntimeError::UnsupportedLocalType(
@@ -2058,7 +2063,8 @@ fn op_return_call_ref(rt : Runtime) -> ControlFlow {
       | ValType::EqRef
       | ValType::I31Ref
       | ValType::StructRef
-      | ValType::ArrayRef => rt.locals.push(Value::Ref(None))
+      | ValType::ArrayRef
+      | ValType::Ref(_, _) => rt.locals.push(Value::Ref(None))
       _ =>
         return Trap(
           RuntimeError::UnsupportedLocalType(
@@ -4693,8 +4699,19 @@ pub fn Runtime::call_compiled(
       ValType::I64 => self.locals.push(Value::I64(0UL))
       ValType::F32 => self.locals.push(Value::F32(0.0))
       ValType::F64 => self.locals.push(Value::F64(0.0))
-      ValType::FuncRef => self.locals.push(Value::Ref(None))
-      ValType::ExternRef => self.locals.push(Value::Ref(None))
+      ValType::FuncRef
+      | ValType::ExternRef
+      | ValType::AnyRef
+      | ValType::ExnRef
+      | ValType::NullRef
+      | ValType::NullFuncRef
+      | ValType::NullExnRef
+      | ValType::NullExternRef
+      | ValType::EqRef
+      | ValType::I31Ref
+      | ValType::StructRef
+      | ValType::ArrayRef
+      | ValType::Ref(_, _) => self.locals.push(Value::Ref(None))
       _ =>
         raise RuntimeError::UnsupportedLocalType(
           "Unsupported local type: \{local_type}",

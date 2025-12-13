@@ -47,6 +47,7 @@ pub suberror ValidationError {
   InvalidTableSize(String)
   UnknownTable(Int)
   ConstantExpressionRequired(String)
+  UninitializedLocal(Int) // Local with non-defaultable type used before initialization
 } derive(Show)
 
 ///|

@@ -729,6 +729,14 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got UnknownExportedGlobal",
         )
       }
+    @wasm5.ValidationError::UninitializedLocal(_) =>
+      if not(expected_error.contains("uninitialized local")) {
+        ctx.fail(
+          line,
+          "assert_invalid",
+          "expected '\{expected_error}' but got UninitializedLocal",
+        )
+      }
     _ => () // Other validation errors are acceptable
   }
 }

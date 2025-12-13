@@ -19,6 +19,9 @@ enum ValType {
   I31Ref
   StructRef
   ArrayRef
+  // Typed reference with explicit nullability: Ref(heap_type, nullable)
+  // Used for (ref $t) when nullable=false, (ref null $t) when nullable=true
+  Ref(RefType, Bool)
 } derive(Show, Eq)
 
 // Reference types (heap types)
@@ -38,7 +41,26 @@ enum RefType {
   NoExtern // 0x73 - bottom type for extern
   NoExn // 0x74 - bottom type for exn
   TypeIndex(Int) // typed reference (ref null $t)
-} derive(Show)
+} derive(Show, Eq)
+
+///|
+/// Check if a value type has a default value (is defaultable)
+/// - Numeric types (i32, i64, f32, f64, v128): defaultable (default: 0)
+/// - Nullable reference types: defaultable (default: null)
+/// - Non-nullable reference types: NOT defaultable (must be initialized)
+pub fn ValType::is_defaultable(self : ValType) -> Bool {
+  match self {
+    // Numeric types are always defaultable
+    I32 | I64 | F32 | F64 | V128 => true
+    // Nullable reference types are defaultable (have null as default)
+    FuncRef | ExternRef | AnyRef | ExnRef | EqRef | I31Ref | StructRef |
+    ArrayRef => true
+    // Bottom types (null types) are defaultable
+    NullRef | NullFuncRef | NullExnRef | NullExternRef => true
+    // Typed references: defaultable only if nullable
+    Ref(_, nullable) => nullable
+  }
+}
 
 // Function type (signature)
 
