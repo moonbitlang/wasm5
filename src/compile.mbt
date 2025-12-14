@@ -4528,30 +4528,96 @@ fn Runtime::compile_wasm_instr(
     }
     // Indirect call
     CallIndirect(type_idx, table_idx) => {
-      // Pop table index, then args based on type (simplified)
+      // Pop table index (i32)
       ctx.pop_type()
+      // Get function type to properly track types
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let func_type = self.module_.types[type_idx_int]
+      // Pop params from type stack
+      ctx.pop_types(func_type.params.length())
+      // Push results to type stack
+      for result_type in func_type.results {
+        ctx.push_type(result_type)
+      }
       self.emit(WasmInstr(op_call_indirect))
-      self.emit(ImmediateIdx(type_idx.reinterpret_as_int()))
+      self.emit(ImmediateIdx(type_idx_int))
       self.emit(ImmediateIdx(table_idx.reinterpret_as_int()))
     }
     // Tail calls
     ReturnCall(func_idx) => {
+      // Look up function signature to properly track types (same as Call)
+      let func_idx_int = func_idx.reinterpret_as_int()
+
+      // Count imported functions and find type index
+      let mut num_imported = 0
+      let mut type_idx = -1
+      for imp in self.module_.imports {
+        match imp.desc {
+          ImportDesc::Func(tidx) => {
+            if num_imported == func_idx_int {
+              type_idx = tidx.reinterpret_as_int()
+              break
+            }
+            num_imported += 1
+          }
+          _ => ()
+        }
+      }
+
+      // If not an import, look up in module funcs
+      if type_idx < 0 && func_idx_int >= num_imported {
+        let local_idx = func_idx_int - num_imported
+        type_idx = self.module_.funcs[local_idx].reinterpret_as_int()
+      }
+
+      // Get the function type and update type stack
+      // For tail calls, only pop params (results go to caller, not us)
+      if type_idx >= 0 {
+        let func_type = self.module_.types[type_idx]
+        ctx.pop_types(func_type.params.length())
+      }
+
       self.emit(WasmInstr(op_return_call))
-      self.emit(ImmediateIdx(func_idx.reinterpret_as_int()))
+      self.emit(ImmediateIdx(func_idx_int))
     }
     ReturnCallIndirect(type_idx, table_idx) => {
+      // Pop table index (i32)
+      ctx.pop_type()
+      // Get function type to properly track types
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let func_type = self.module_.types[type_idx_int]
+      // Pop params from type stack (no results - tail call)
+      ctx.pop_types(func_type.params.length())
       self.emit(WasmInstr(op_return_call_indirect))
-      self.emit(ImmediateIdx(type_idx.reinterpret_as_int()))
+      self.emit(ImmediateIdx(type_idx_int))
       self.emit(ImmediateIdx(table_idx.reinterpret_as_int()))
     }
     // Typed function references
     CallRef(type_idx) => {
+      // Pop the function reference
+      ctx.pop_type()
+      // Get function type to properly track types
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let func_type = self.module_.types[type_idx_int]
+      // Pop params from type stack
+      ctx.pop_types(func_type.params.length())
+      // Push results to type stack
+      for result_type in func_type.results {
+        ctx.push_type(result_type)
+      }
       self.emit(WasmInstr(op_call_ref))
-      self.emit(ImmediateIdx(type_idx.reinterpret_as_int()))
+      self.emit(ImmediateIdx(type_idx_int))
     }
     ReturnCallRef(type_idx) => {
+      // Pop the function reference
+      ctx.pop_type()
+      // Get function type to properly track types
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let func_type = self.module_.types[type_idx_int]
+      // Pop params from type stack (no results - tail call)
+      ctx.pop_types(func_type.params.length())
       self.emit(WasmInstr(op_return_call_ref))
-      self.emit(ImmediateIdx(type_idx.reinterpret_as_int()))
+      self.emit(ImmediateIdx(type_idx_int))
     }
   }
 }
