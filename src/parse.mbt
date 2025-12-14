@@ -793,6 +793,13 @@ fn parse_data_section(parser : Parser) -> Array[Data] raise {
 ///|
 fn parse_expr(parser : Parser) -> Expr raise {
   let instrs = parse_instrs(parser)
+  // parse_instrs puts back the 0x0B, we need to consume it
+  let end_marker = parser.read_byte()
+  guard end_marker == 0x0B else {
+    raise ParseError::InvalidFormat(
+      "expected end marker 0x0B, got 0x\{end_marker.to_int().to_string()}",
+    )
+  }
   { instrs, }
 }
 
@@ -803,7 +810,8 @@ fn parse_instrs(parser : Parser) -> Array[Instr] raise {
   fn read_loop(instrs : Array[Instr]) -> Array[Instr] raise {
     let opcode = parser.read_byte()
     if opcode == 0x0B {
-      // End marker (0x0B)
+      // End marker (0x0B) - put it back for caller to handle
+      parser.pos = parser.pos - 1
       instrs
     } else if opcode == 0x05 {
       // Else marker (0x05) - put it back for the if parser to handle
@@ -829,22 +837,27 @@ fn parse_instr(parser : Parser, opcode : Byte) -> Instr raise {
     0x02 => {
       let blocktype = parse_blocktype(parser)
       let instrs = parse_instrs(parser)
+      let _ = parser.read_byte() // consume 0x0B end marker
       Block(blocktype, instrs)
     }
     0x03 => {
       let blocktype = parse_blocktype(parser)
       let instrs = parse_instrs(parser)
+      let _ = parser.read_byte() // consume 0x0B end marker
       Loop(blocktype, instrs)
     }
     0x04 => {
       let blocktype = parse_blocktype(parser)
       let then_instrs = parse_instrs(parser)
-      // Check if there's an else
-      if parser.peek() == 0x05 {
-        let _ = parser.read_byte() // consume 0x05
+      // Check if there's an else (0x05) or end (0x0B)
+      let marker = parser.read_byte()
+      if marker == 0x05 {
+        // There's an else block
         let else_instrs = parse_instrs(parser)
+        let _ = parser.read_byte() // consume final 0x0B end marker
         If(blocktype, then_instrs, else_instrs)
       } else {
+        // No else block, marker is 0x0B which ends the if
         If(blocktype, then_instrs, [])
       }
     }
@@ -853,6 +866,7 @@ fn parse_instr(parser : Parser, opcode : Byte) -> Instr raise {
       // try blocktype - treat as block
       let blocktype = parse_blocktype(parser)
       let instrs = parse_instrs(parser)
+      let _ = parser.read_byte() // consume 0x0B end marker
       Block(blocktype, instrs)
     }
     0x07 => {
@@ -940,6 +954,7 @@ fn parse_instr(parser : Parser, opcode : Byte) -> Instr raise {
         }
       }
       let instrs = parse_instrs(parser)
+      let _ = parser.read_byte() // consume 0x0B end marker
       Block(blocktype, instrs)
     }
 
