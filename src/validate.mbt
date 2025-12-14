@@ -158,6 +158,11 @@ fn is_subtype(module_ : Module, t1 : ValType, t2 : ValType) -> Bool {
     | (NullRef, StructRef)
     | (NullRef, ArrayRef) => true
     (NullFuncRef, FuncRef) => true
+    // NullFuncRef is the bottom type for all function references,
+    // so it's a subtype of any nullable typed function reference
+    (NullFuncRef, Ref(RefType::TypeIndex(n), true)) =>
+      is_func_type_index(module_, n)
+    (NullFuncRef, Ref(RefType::Func, true)) => true
     (NullExternRef, ExternRef) => true
     (NullExnRef, ExnRef) => true
 

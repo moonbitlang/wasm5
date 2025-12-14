@@ -37,8 +37,8 @@ enum RefType {
   Array // 0x6A
   Exn // 0x69
   None // 0x71 - bottom type
-  NoFunc // 0x72 - bottom type for func
-  NoExtern // 0x73 - bottom type for extern
+  NoFunc // 0x73 - bottom type for func
+  NoExtern // 0x72 - bottom type for extern
   NoExn // 0x74 - bottom type for exn
   TypeIndex(Int) // typed reference (ref null $t)
 } derive(Show, Eq)

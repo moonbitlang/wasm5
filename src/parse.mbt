@@ -198,8 +198,8 @@ fn Parser::read_heap_type(self : Parser) -> RefType raise ParseError {
     0x6A => RefType::Array
     0x69 => RefType::Exn
     0x71 => RefType::None
-    0x72 => RefType::NoFunc
-    0x73 => RefType::NoExtern
+    0x72 => RefType::NoExtern
+    0x73 => RefType::NoFunc
     0x74 => RefType::NoExn
     _ => {
       // It's a type index encoded as LEB128
@@ -228,8 +228,8 @@ fn Parser::read_valtype(self : Parser) -> ValType raise {
     0x6A => ArrayRef // arrayref
     0x69 => ExnRef // exnref
     0x71 => NullRef // none (bottom type)
-    0x72 => NullFuncRef // nofunc (bottom type)
-    0x73 => NullExternRef // noextern (bottom type)
+    0x72 => NullExternRef // noextern (bottom type)
+    0x73 => NullFuncRef // nofunc (bottom type)
     0x74 => NullExnRef // noexn (bottom type)
     // GC proposal: (ref null $t) - nullable typed reference
     0x63 => {
@@ -268,8 +268,8 @@ fn Parser::read_reftype_with_nullability(
     0x6A => (RefType::Array, true)
     0x69 => (RefType::Exn, true)
     0x71 => (RefType::None, true)
-    0x72 => (RefType::NoFunc, true)
-    0x73 => (RefType::NoExtern, true)
+    0x72 => (RefType::NoExtern, true)
+    0x73 => (RefType::NoFunc, true)
     0x74 => (RefType::NoExn, true)
     // GC proposal: (ref null <heaptype>) - nullable typed reference
     0x63 => {
@@ -352,8 +352,8 @@ fn Parser::read_reftype(self : Parser) -> RefType raise {
     0x6A => RefType::Array
     0x69 => RefType::Exn
     0x71 => RefType::None
-    0x72 => RefType::NoFunc
-    0x73 => RefType::NoExtern
+    0x72 => RefType::NoExtern
+    0x73 => RefType::NoFunc
     0x74 => RefType::NoExn
     // GC proposal: (ref null <heaptype>) - nullable typed reference
     0x63 => {
@@ -1089,8 +1089,8 @@ fn parse_instr(parser : Parser, opcode : Byte) -> Instr raise {
         0x6A => RefType::Array // arrayref
         0x69 => RefType::Exn // exnref
         0x71 => RefType::None // none
-        0x72 => RefType::NoFunc // nofunc
-        0x73 => RefType::NoExtern // noextern
+        0x72 => RefType::NoExtern // noextern
+        0x73 => RefType::NoFunc // nofunc
         0x74 => RefType::NoExn // noexn
         _ => {
           // Assume it's a type index (negative or positive)
@@ -1323,8 +1323,8 @@ fn parse_blocktype(parser : Parser) -> BlockType raise ParseError {
     0x6A => Value(ArrayRef)
     0x69 => Value(ExnRef)
     0x71 => Value(NullRef)
-    0x72 => Value(NullFuncRef)
-    0x73 => Value(NullExternRef)
+    0x72 => Value(NullExternRef)
+    0x73 => Value(NullFuncRef)
     0x74 => Value(NullExnRef)
     // GC proposal: (ref null $t) - nullable typed reference
     0x63 => {

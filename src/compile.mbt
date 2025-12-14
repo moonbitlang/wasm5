@@ -4330,7 +4330,6 @@ fn Runtime::compile_wasm_instr(
           ctx.push_type(result_type)
         }
       }
-
       self.emit(WasmInstr(op_call))
       self.emit(ImmediateIdx(func_idx_int))
     }
@@ -4576,7 +4575,6 @@ fn Runtime::compile_wasm_instr(
         let func_type = self.module_.types[type_idx]
         ctx.pop_types(func_type.params.length())
       }
-
       self.emit(WasmInstr(op_return_call))
       self.emit(ImmediateIdx(func_idx_int))
     }
