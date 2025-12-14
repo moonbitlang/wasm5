@@ -4294,11 +4294,45 @@ fn Runtime::compile_wasm_instr(
       ctx.truncate_stack(block.stack_height_at_entry)
       ctx.push_types(block.results)
     }
-    Call(_func_idx) => {
-      // We don't track function types here, just emit the instruction
-      // For proper tracking we'd need to look up the function signature
+    Call(func_idx) => {
+      // Look up function signature to properly track types
+      let func_idx_int = func_idx.reinterpret_as_int()
+
+      // Count imported functions and find type index
+      let mut num_imported = 0
+      let mut type_idx = -1
+      for imp in self.module_.imports {
+        match imp.desc {
+          ImportDesc::Func(tidx) => {
+            if num_imported == func_idx_int {
+              type_idx = tidx.reinterpret_as_int()
+              break
+            }
+            num_imported += 1
+          }
+          _ => ()
+        }
+      }
+
+      // If not an import, look up in module funcs
+      if type_idx < 0 && func_idx_int >= num_imported {
+        let local_idx = func_idx_int - num_imported
+        type_idx = self.module_.funcs[local_idx].reinterpret_as_int()
+      }
+
+      // Get the function type and update type stack
+      if type_idx >= 0 {
+        let func_type = self.module_.types[type_idx]
+        // Pop params from type stack
+        ctx.pop_types(func_type.params.length())
+        // Push results to type stack
+        for result_type in func_type.results {
+          ctx.push_type(result_type)
+        }
+      }
+
       self.emit(WasmInstr(op_call))
-      self.emit(ImmediateIdx(_func_idx.reinterpret_as_int()))
+      self.emit(ImmediateIdx(func_idx_int))
     }
     Return => self.emit(WasmInstr(op_return))
     // Memory instructions (load: pop addr, push value; store: pop addr+value)
