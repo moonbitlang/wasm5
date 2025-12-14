@@ -960,18 +960,16 @@ fn print_summary(
 /// - Files causing runtime crashes (elem.wast)
 let blacklisted_wast_files : Array[String] = [
   "comments.wast", // WAT text format test
-  "annotations.wast", // WAT text format test
-  "linking.wast", // Requires cross-module imports/exports
-  "try_table.wast", // Requires exception handling
-  "elem.wast", // Causes call_indirect stack overflow
+   "annotations.wast", // WAT text format test
+   "linking.wast", // Requires cross-module imports/exports
+   "try_table.wast", // Requires exception handling
+   "elem.wast", // Causes call_indirect stack overflow
 ]
 
 ///|
 /// Whitelist of individual tests to skip (file, line)
 /// These are known failing tests that won't be fixed soon
-let whitelisted_tests : Array[(String, Int)] = [
-  ("local_tee.wast", 613), // type mismatch validation not implemented
-]
+let whitelisted_tests : Array[(String, Int)] = [("local_tee.wast", 613)] // type mismatch validation not implemented
 
 ///|
 async fn collect_wast_files(dir : String) -> Array[String] {

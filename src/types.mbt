@@ -53,8 +53,14 @@ pub fn ValType::is_defaultable(self : ValType) -> Bool {
     // Numeric types are always defaultable
     I32 | I64 | F32 | F64 | V128 => true
     // Nullable reference types are defaultable (have null as default)
-    FuncRef | ExternRef | AnyRef | ExnRef | EqRef | I31Ref | StructRef |
-    ArrayRef => true
+    FuncRef
+    | ExternRef
+    | AnyRef
+    | ExnRef
+    | EqRef
+    | I31Ref
+    | StructRef
+    | ArrayRef => true
     // Bottom types (null types) are defaultable
     NullRef | NullFuncRef | NullExnRef | NullExternRef => true
     // Typed references: defaultable only if nullable

@@ -183,7 +183,8 @@ fn is_subtype(module_ : Module, t1 : ValType, t2 : ValType) -> Bool {
     (Ref(RefType::TypeIndex(n), _), FuncRef) => is_func_type_index(module_, n)
     // FuncRef is compatible with nullable typed function reference
     // only if the type index refers to a function type
-    (FuncRef, Ref(RefType::TypeIndex(n), true)) => is_func_type_index(module_, n)
+    (FuncRef, Ref(RefType::TypeIndex(n), true)) =>
+      is_func_type_index(module_, n)
     (FuncRef, Ref(RefType::Func, true)) => true
     // Ref(Any, _) is compatible with AnyRef
     (Ref(RefType::Any, _), AnyRef) => true
@@ -1898,7 +1899,11 @@ fn validate_instruction(
       let func_type_called = module_.types[type_idx]
       // Pop arguments from stack (in reverse order)
       for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
-        ctx.poly_pop_expect(module_, func_type_called.params[i], "call argument")
+        ctx.poly_pop_expect(
+          module_,
+          func_type_called.params[i],
+          "call argument",
+        )
       }
       // Push results onto stack
       for result in func_type_called.results {
@@ -1971,7 +1976,11 @@ fn validate_instruction(
       let func_type_called = module_.types[type_idx]
       // Pop arguments from stack (in reverse order)
       for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
-        ctx.poly_pop_expect(module_, func_type_called.params[i], "return_call argument")
+        ctx.poly_pop_expect(
+          module_,
+          func_type_called.params[i],
+          "return_call argument",
+        )
       }
       // Mark as unreachable - this is a tail call that doesn't return to current function
       ctx.is_unreachable = true
@@ -2021,7 +2030,11 @@ fn validate_instruction(
 
       // Pop arguments from stack (in reverse order)
       for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
-        ctx.poly_pop_expect(module_, func_type_called.params[i], "call_ref argument")
+        ctx.poly_pop_expect(
+          module_,
+          func_type_called.params[i],
+          "call_ref argument",
+        )
       }
 
       // Push results onto stack

@@ -217,7 +217,6 @@ pub fn Runtime::load_with_resolver(
       _ => ()
     }
   }
-
   let memory_size = if imported_mem_pages > 0 {
     // Use imported memory limits
     let capped_pages = if imported_mem_pages > max_pages {
