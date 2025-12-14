@@ -2572,6 +2572,137 @@ fn op_memory_grow(rt : Runtime) -> ControlFlow {
 }
 
 // =============================================================================
+// Bulk memory operations
+// =============================================================================
+
+///|
+fn op_memory_copy(rt : Runtime) -> ControlFlow {
+  let n = rt.pop_i32().reinterpret_as_int()
+  let src = rt.pop_i32().reinterpret_as_int()
+  let dest = rt.pop_i32().reinterpret_as_int()
+
+  // Check bounds
+  if src < 0 ||
+    dest < 0 ||
+    n < 0 ||
+    src + n > rt.memory.length() ||
+    dest + n > rt.memory.length() {
+    return Trap(RuntimeError::MemoryOutOfBounds)
+  }
+
+  // Handle overlapping regions correctly
+  if n > 0 {
+    if dest <= src {
+      // Copy forward
+      for i = 0; i < n; i = i + 1 {
+        rt.memory[dest + i] = rt.memory[src + i]
+      }
+    } else {
+      // Copy backward (for overlapping regions where dest > src)
+      for i = n - 1; i >= 0; i = i - 1 {
+        rt.memory[dest + i] = rt.memory[src + i]
+      }
+    }
+  }
+  Next
+}
+
+///|
+fn op_memory_fill(rt : Runtime) -> ControlFlow {
+  let n = rt.pop_i32().reinterpret_as_int()
+  let val = rt.pop_i32().reinterpret_as_int() & 0xFF // Truncate to byte
+  let dest = rt.pop_i32().reinterpret_as_int()
+
+  // Check bounds
+  if dest < 0 || n < 0 || dest + n > rt.memory.length() {
+    return Trap(RuntimeError::MemoryOutOfBounds)
+  }
+
+  // Fill memory
+  let byte_val = val.to_byte()
+  for i = 0; i < n; i = i + 1 {
+    rt.memory[dest + i] = byte_val
+  }
+  Next
+}
+
+///|
+fn op_memory_init(rt : Runtime) -> ControlFlow {
+  let data_idx = rt.read_imm_idx()
+  let n = rt.pop_i32().reinterpret_as_int()
+  let src = rt.pop_i32().reinterpret_as_int()
+  let dest = rt.pop_i32().reinterpret_as_int()
+
+  // Check data segment index
+  if data_idx < 0 || data_idx >= rt.data_segments.length() {
+    return Trap(RuntimeError::InvalidType("unknown data segment"))
+  }
+  let data = rt.data_segments[data_idx]
+
+  // Check bounds
+  if src < 0 ||
+    dest < 0 ||
+    n < 0 ||
+    src + n > data.length() ||
+    dest + n > rt.memory.length() {
+    return Trap(RuntimeError::MemoryOutOfBounds)
+  }
+
+  // Copy from data segment to memory
+  for i = 0; i < n; i = i + 1 {
+    rt.memory[dest + i] = data[src + i]
+  }
+  Next
+}
+
+///|
+fn op_data_drop(rt : Runtime) -> ControlFlow {
+  let data_idx = rt.read_imm_idx()
+
+  // Check data segment index
+  if data_idx < 0 || data_idx >= rt.data_segments.length() {
+    return Trap(RuntimeError::InvalidType("unknown data segment"))
+  }
+
+  // Drop the data segment (make it empty)
+  rt.data_segments[data_idx] = []
+  Next
+}
+
+// =============================================================================
+// Table bulk operations (stub implementations)
+// =============================================================================
+
+///|
+fn op_table_init(rt : Runtime) -> ControlFlow {
+  let _table_idx = rt.read_imm_idx()
+  let _elem_idx = rt.read_imm_idx()
+  let _n = rt.pop_i32()
+  let _src = rt.pop_i32()
+  let _dest = rt.pop_i32()
+  // TODO: Implement table.init
+  Next
+}
+
+///|
+fn op_table_copy(rt : Runtime) -> ControlFlow {
+  let _dst_table_idx = rt.read_imm_idx()
+  let _src_table_idx = rt.read_imm_idx()
+  let _n = rt.pop_i32()
+  let _src = rt.pop_i32()
+  let _dest = rt.pop_i32()
+  // TODO: Implement table.copy
+  Next
+}
+
+///|
+fn op_elem_drop(rt : Runtime) -> ControlFlow {
+  let _elem_idx = rt.read_imm_idx()
+  // TODO: Implement elem.drop
+  Next
+}
+
+// =============================================================================
 // Table operations
 // =============================================================================
 
@@ -4472,6 +4603,44 @@ fn Runtime::compile_wasm_instr(
       self.emit(WasmInstr(op_memory_size))
     }
     MemoryGrow(_) => self.emit(WasmInstr(op_memory_grow)) // i32 -> i32
+
+    // Bulk memory instructions
+    MemoryCopy => {
+      ctx.pop_types(3) // pop dest, src, n
+      self.emit(WasmInstr(op_memory_copy))
+    }
+    MemoryFill => {
+      ctx.pop_types(3) // pop dest, val, n
+      self.emit(WasmInstr(op_memory_fill))
+    }
+    MemoryInit(data_idx) => {
+      ctx.pop_types(3) // pop dest, src, n
+      self.emit(WasmInstr(op_memory_init))
+      self.emit(ImmediateIdx(data_idx.reinterpret_as_int()))
+    }
+    DataDrop(data_idx) => {
+      self.emit(WasmInstr(op_data_drop))
+      self.emit(ImmediateIdx(data_idx.reinterpret_as_int()))
+    }
+
+    // Table bulk operations
+    TableInit(table_idx, elem_idx) => {
+      ctx.pop_types(3) // pop dest, src, n
+      self.emit(WasmInstr(op_table_init))
+      self.emit(ImmediateIdx(table_idx.reinterpret_as_int()))
+      self.emit(ImmediateIdx(elem_idx.reinterpret_as_int()))
+    }
+    TableCopy(dst_table_idx, src_table_idx) => {
+      ctx.pop_types(3) // pop dest, src, n
+      self.emit(WasmInstr(op_table_copy))
+      self.emit(ImmediateIdx(dst_table_idx.reinterpret_as_int()))
+      self.emit(ImmediateIdx(src_table_idx.reinterpret_as_int()))
+    }
+    ElemDrop(elem_idx) => {
+      self.emit(WasmInstr(op_elem_drop))
+      self.emit(ImmediateIdx(elem_idx.reinterpret_as_int()))
+    }
+
     // Table instructions
     TableSize(table_idx) => {
       ctx.push_type(I32)

@@ -1309,6 +1309,52 @@ fn validate_instruction(
       stack.push(I32)
     }
 
+    // Bulk memory instructions
+    MemoryCopy => {
+      validate_memory_exists(module_)
+      ctx.poly_pop_expect(module_, I32, "memory.copy n")
+      ctx.poly_pop_expect(module_, I32, "memory.copy src")
+      ctx.poly_pop_expect(module_, I32, "memory.copy dest")
+    }
+    MemoryFill => {
+      validate_memory_exists(module_)
+      ctx.poly_pop_expect(module_, I32, "memory.fill n")
+      ctx.poly_pop_expect(module_, I32, "memory.fill val")
+      ctx.poly_pop_expect(module_, I32, "memory.fill dest")
+    }
+    MemoryInit(data_idx) => {
+      validate_memory_exists(module_)
+      // Validate data segment index
+      if data_idx.reinterpret_as_int() >= module_.datas.length() {
+        raise ValidationError::TypeMismatch(
+          "memory.init: unknown data segment \{data_idx}",
+        )
+      }
+      ctx.poly_pop_expect(module_, I32, "memory.init n")
+      ctx.poly_pop_expect(module_, I32, "memory.init src")
+      ctx.poly_pop_expect(module_, I32, "memory.init dest")
+    }
+    DataDrop(data_idx) =>
+      // Validate data segment index
+      if data_idx.reinterpret_as_int() >= module_.datas.length() {
+        raise ValidationError::TypeMismatch(
+          "data.drop: unknown data segment \{data_idx}",
+        )
+      }
+
+    // Table bulk operations (stub for now)
+    TableInit(_, _) => {
+      ctx.poly_pop_expect(module_, I32, "table.init n")
+      ctx.poly_pop_expect(module_, I32, "table.init src")
+      ctx.poly_pop_expect(module_, I32, "table.init dest")
+    }
+    TableCopy(_, _) => {
+      ctx.poly_pop_expect(module_, I32, "table.copy n")
+      ctx.poly_pop_expect(module_, I32, "table.copy src")
+      ctx.poly_pop_expect(module_, I32, "table.copy dest")
+    }
+    ElemDrop(_) => ()
+
     // Table instructions
     TableSize(_) => stack.push(I32)
     TableGet(table_idx) => {

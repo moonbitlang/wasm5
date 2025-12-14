@@ -145,6 +145,7 @@ pub struct Runtime {
   globals : Array[Value] // Global variables
   tables : Array[RuntimeTable] // Tables with limits
   imported_funcs : Array[ImportedFunc] // Imported functions
+  data_segments : Array[Array[Byte]] // Data segments for bulk memory ops
 }
 
 ///|
@@ -325,6 +326,16 @@ pub fn Runtime::load_with_resolver(
       Table(_) | Mem(_) | Global(_) | Tag(_) => ()
     }
   }
+
+  // Create data segments for bulk memory operations
+  let data_segments : Array[Array[Byte]] = []
+  for data in m.datas {
+    let segment : Array[Byte] = []
+    for i = 0; i < data.init.length(); i = i + 1 {
+      segment.push(data.init[i])
+    }
+    data_segments.push(segment)
+  }
   Runtime::{
     module_: m,
     ops: [],
@@ -336,6 +347,7 @@ pub fn Runtime::load_with_resolver(
     globals,
     tables,
     imported_funcs,
+    data_segments,
   }
 }
 

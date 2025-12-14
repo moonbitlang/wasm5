@@ -256,6 +256,15 @@ pub enum Instr {
   TableSet(UInt) // table index
   TableSize(UInt) // table index
   TableGrow(UInt) // table index
+  TableInit(UInt, UInt) // table index, elem segment index
+  TableCopy(UInt, UInt) // dest table index, src table index
+  ElemDrop(UInt) // elem segment index
+
+  // Bulk memory instructions
+  MemoryInit(UInt) // data segment index (memory index always 0)
+  DataDrop(UInt) // data segment index
+  MemoryCopy // memory.copy (src and dest memory indices always 0)
+  MemoryFill // memory.fill (memory index always 0)
 
   // Reference instructions
   RefNull(RefType) // ref.null with heap type
