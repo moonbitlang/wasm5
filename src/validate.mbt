@@ -1826,15 +1826,20 @@ fn validate_instruction(
 
       // Pop two values and validate
       if num_concrete >= 2 {
-        // Both values are concrete - they must match
+        // Both values are concrete - they must be compatible via subtyping
         let val2 = stack.unsafe_pop()
         let val1 = stack.unsafe_pop()
-        if val1 != val2 {
+        // Check if types are compatible: one must be subtype of the other
+        let result_type = if is_subtype(module_, val1, val2) {
+          val2 // val1 <: val2, so result is val2 (more general)
+        } else if is_subtype(module_, val2, val1) {
+          val1 // val2 <: val1, so result is val1 (more general)
+        } else {
           raise ValidationError::TypeMismatch(
-            "select values must have same type: got \{val1} and \{val2}",
+            "select values must have compatible types: got \{val1} and \{val2}",
           )
         }
-        stack.push(val1)
+        stack.push(result_type)
       } else if num_concrete == 1 {
         // One concrete, one polymorphic
         let val = stack.unsafe_pop()
