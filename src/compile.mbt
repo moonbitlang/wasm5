@@ -77,7 +77,7 @@ enum MInstr {
 
 ///|
 /// Control flow signal from instruction execution
-enum ControlFlow {
+priv enum ControlFlow {
   Next // Continue to next instruction
   Jump(Int) // Jump to specific PC
   End // Stop execution
@@ -101,7 +101,7 @@ enum CompileBlockKind {
 
 ///|
 /// Compile-time control frame for tracking block types and stack heights
-struct CompileBlock {
+priv struct CompileBlock {
   kind : CompileBlockKind
   params : Array[ValType]
   results : Array[ValType]
@@ -115,7 +115,7 @@ struct CompileBlock {
 
 ///|
 /// Compile-time context for tracking types during compilation
-struct CompileCtx {
+priv struct CompileCtx {
   type_stack : Array[ValType]
   control_stack : Array[CompileBlock]
 }

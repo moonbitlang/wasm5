@@ -3,11 +3,9 @@
 pub suberror RuntimeError {
   DivisionByZero
   IntegerOverflow
-  StackUnderflow
   MemoryOutOfBounds
   InvalidType(String)
   FunctionNotFound(String)
-  Branch(UInt) // Internal: branch control flow (label depth)
   UnimplementedInstruction(String) // Instruction not yet implemented
   Unreachable // Unreachable instruction executed
   FunctionNotCompiled(String) // Function not compiled

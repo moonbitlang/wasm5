@@ -15,15 +15,6 @@ fn Parser::eof(self : Parser) -> Bool {
 }
 
 ///|
-fn Parser::peek(self : Parser) -> Byte raise ParseError {
-  if self.pos < self.bytes.length() {
-    self.bytes.unsafe_get(self.pos)
-  } else {
-    raise ParseError::UnexpectedEof
-  }
-}
-
-///|
 fn Parser::read_byte(self : Parser) -> Byte raise ParseError {
   if self.pos < self.bytes.length() {
     let byte = self.bytes.unsafe_get(self.pos)

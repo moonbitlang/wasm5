@@ -655,10 +655,9 @@ fn get_block_type(
 
 ///|
 /// Validation context that tracks both the type stack and unreachable state
-struct ValidationCtx {
+priv struct ValidationCtx {
   stack : Array[ValType]
   mut is_unreachable : Bool
-  mut unreachable_stack_height : Int // Stack height when entering unreachable mode
   // Stack of control frames - each frame tracks the expected result types
   // For br validation, we need to know what types the target label expects
   control_stack : Array[(Array[ValType], Array[ValType])] // (params, results) for each control frame
@@ -672,7 +671,6 @@ fn ValidationCtx::new() -> ValidationCtx {
   {
     stack: [],
     is_unreachable: false,
-    unreachable_stack_height: 0,
     control_stack: [],
     initialized_locals: [],
   }
@@ -701,20 +699,9 @@ fn ValidationCtx::new_with_locals(
   {
     stack: [],
     is_unreachable: false,
-    unreachable_stack_height: 0,
     control_stack: [],
     initialized_locals: initialized,
   }
-}
-
-///|
-/// Copy the initialized_locals array (for use when entering control structures)
-fn ValidationCtx::copy_initialized(self : ValidationCtx) -> Array[Bool] {
-  let copy = Array::make(self.initialized_locals.length(), false)
-  for i = 0; i < self.initialized_locals.length(); i = i + 1 {
-    copy[i] = self.initialized_locals[i]
-  }
-  copy
 }
 
 ///|
@@ -1700,7 +1687,6 @@ fn validate_instruction(
       }
       // Mark as unreachable and record stack height
       ctx.is_unreachable = true
-      ctx.unreachable_stack_height = stack.length()
       stack.clear()
     }
     Br(label) => {
@@ -1732,7 +1718,6 @@ fn validate_instruction(
       }
       // Mark as unreachable and record stack height
       ctx.is_unreachable = true
-      ctx.unreachable_stack_height = stack.length()
       stack.clear()
     }
     BrIf(label) => {
@@ -1829,7 +1814,6 @@ fn validate_instruction(
       }
       // Code after is unreachable, record stack height
       ctx.is_unreachable = true
-      ctx.unreachable_stack_height = stack.length()
       stack.clear()
     }
     BrOnNull(_label) =>
@@ -1908,7 +1892,6 @@ fn validate_instruction(
     Unreachable => {
       // unreachable instruction marks all subsequent code as unreachable
       ctx.is_unreachable = true
-      ctx.unreachable_stack_height = stack.length()
       stack.clear()
     }
     Call(func_idx) => {
@@ -2035,7 +2018,6 @@ fn validate_instruction(
       }
       // Mark as unreachable - this is a tail call that doesn't return to current function
       ctx.is_unreachable = true
-      ctx.unreachable_stack_height = stack.length()
     }
     ReturnCallIndirect(type_idx, _table_idx) => {
       // return_call_indirect: tail call through table that returns to caller
@@ -2058,7 +2040,6 @@ fn validate_instruction(
       // The called function's signature should match current function's return type
       // This will be validated at the end of the function
       ctx.is_unreachable = true
-      ctx.unreachable_stack_height = stack.length()
     }
     CallRef(type_idx) => {
       // call_ref: calls function through a reference
@@ -2124,7 +2105,6 @@ fn validate_instruction(
 
       // Mark as unreachable - this is a tail call
       ctx.is_unreachable = true
-      ctx.unreachable_stack_height = stack.length()
     }
   }
 }

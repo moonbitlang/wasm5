@@ -11,7 +11,6 @@ struct TestFailure {
 /// Registered module entry for cross-module imports
 struct RegisteredModule {
   runtime : @wasm5.Runtime
-  module_ : @wasm5.Module
 }
 
 ///|
@@ -94,7 +93,7 @@ fn register_module(
   module_ : @wasm5.Module,
 ) -> Unit {
   // Store in registry
-  let entry : RegisteredModule = { runtime, module_ }
+  let entry : RegisteredModule = { runtime, }
   ctx.registry.0[name] = entry
 
   // Convert name to bytes for resolver

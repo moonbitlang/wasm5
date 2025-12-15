@@ -88,7 +88,7 @@ enum BlockType {
 // Limits for tables and memories
 
 ///|
-struct Limits {
+priv struct Limits {
   min : UInt
   max : UInt?
 }
@@ -166,11 +166,6 @@ struct Global {
 }
 
 // Element segment (for table initialization)
-
-///|
-enum ElemKind {
-  FuncRef
-}
 
 ///|
 struct Elem {
@@ -445,13 +440,6 @@ struct Code {
 }
 
 // Function (combines type index with code)
-
-///|
-struct Func {
-  type_idx : UInt
-  locals : Array[ValType]
-  body : Expr
-}
 
 ///|
 /// Module structure according to WASM specification

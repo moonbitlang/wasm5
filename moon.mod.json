@@ -1,5 +1,5 @@
 {
-  "name": "Yu-zh/wasm5",
+  "name": "moonbitlang/wasm5",
   "version": "0.1.0",
   "deps": {
     "moonbitlang/async": "0.14.2"

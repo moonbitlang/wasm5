@@ -6,9 +6,8 @@
     "moonbitlang/async/process",
     "moonbitlang/async",
     {
-      "path": "Yu-zh/wasm5/src",
+      "path": "moonbitlang/wasm5/src",
       "alias": "wasm5"
     }
-  ],
-  "warn-list": "-7"
+  ]
 }
