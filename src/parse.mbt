@@ -175,24 +175,34 @@ fn Parser::read_name(self : Parser) -> Bytes raise ParseError {
 // Parse value type
 
 ///|
+/// Helper function to map heap type opcodes to RefType
+/// Returns Some(RefType) for known opcodes, None otherwise
+fn opcode_to_heap_type(byte : Byte) -> Option[RefType] {
+  match byte {
+    0x70 => Some(RefType::Func)
+    0x6F => Some(RefType::Extern)
+    0x6E => Some(RefType::Any)
+    0x6D => Some(RefType::Eq)
+    0x6C => Some(RefType::I31)
+    0x6B => Some(RefType::Struct)
+    0x6A => Some(RefType::Array)
+    0x69 => Some(RefType::Exn)
+    0x71 => Some(RefType::None)
+    0x72 => Some(RefType::NoExtern)
+    0x73 => Some(RefType::NoFunc)
+    0x74 => Some(RefType::NoExn)
+    _ => Option::None
+  }
+}
+
+///|
 /// Read a heap type (used after 0x63/0x64 prefix)
 /// Heap types can be abstract heap types (0x70, 0x6F, etc.) or type indices
 fn Parser::read_heap_type(self : Parser) -> RefType raise ParseError {
   let byte = self.read_byte()
-  match byte {
-    0x70 => RefType::Func
-    0x6F => RefType::Extern
-    0x6E => RefType::Any
-    0x6D => RefType::Eq
-    0x6C => RefType::I31
-    0x6B => RefType::Struct
-    0x6A => RefType::Array
-    0x69 => RefType::Exn
-    0x71 => RefType::None
-    0x72 => RefType::NoExtern
-    0x73 => RefType::NoFunc
-    0x74 => RefType::NoExn
-    _ => {
+  match opcode_to_heap_type(byte) {
+    Some(ref_type) => ref_type
+    None => {
       // It's a type index encoded as LEB128
       self.pos = self.pos - 1
       let type_idx = self.read_i32_leb128()
@@ -210,18 +220,6 @@ fn Parser::read_valtype(self : Parser) -> ValType raise {
     0x7D => F32
     0x7C => F64
     0x7B => V128
-    0x70 => FuncRef // funcref
-    0x6F => ExternRef // externref
-    0x6E => AnyRef // anyref (any heap type)
-    0x6D => EqRef // eqref
-    0x6C => I31Ref // i31ref
-    0x6B => StructRef // structref
-    0x6A => ArrayRef // arrayref
-    0x69 => ExnRef // exnref
-    0x71 => NullRef // none (bottom type)
-    0x72 => NullExternRef // noextern (bottom type)
-    0x73 => NullFuncRef // nofunc (bottom type)
-    0x74 => NullExnRef // noexn (bottom type)
     // GC proposal: (ref null $t) - nullable typed reference
     0x63 => {
       let heap_type = self.read_heap_type()
@@ -233,9 +231,24 @@ fn Parser::read_valtype(self : Parser) -> ValType raise {
       Ref(heap_type, false) // nullable = false
     }
     _ =>
-      raise ValidationError::TypeMismatch(
-        "invalid value type: 0x\{byte.to_string()}",
-      )
+      match opcode_to_heap_type(byte) {
+        Some(RefType::Func) => FuncRef
+        Some(RefType::Extern) => ExternRef
+        Some(RefType::Any) => AnyRef
+        Some(RefType::Eq) => EqRef
+        Some(RefType::I31) => I31Ref
+        Some(RefType::Struct) => StructRef
+        Some(RefType::Array) => ArrayRef
+        Some(RefType::Exn) => ExnRef
+        Some(RefType::None) => NullRef
+        Some(RefType::NoExtern) => NullExternRef
+        Some(RefType::NoFunc) => NullFuncRef
+        Some(RefType::NoExn) => NullExnRef
+        Some(RefType::TypeIndex(_)) | None =>
+          raise ValidationError::TypeMismatch(
+            "invalid value type: 0x\{byte.to_string()}",
+          )
+      }
   }
 }
 
@@ -249,40 +262,16 @@ fn Parser::read_reftype_with_nullability(
 ) -> (RefType, Bool) raise {
   let byte = self.read_byte()
   match byte {
-    // Standard nullable reference types
-    0x70 => (RefType::Func, true)
-    0x6F => (RefType::Extern, true)
-    0x6E => (RefType::Any, true)
-    0x6D => (RefType::Eq, true)
-    0x6C => (RefType::I31, true)
-    0x6B => (RefType::Struct, true)
-    0x6A => (RefType::Array, true)
-    0x69 => (RefType::Exn, true)
-    0x71 => (RefType::None, true)
-    0x72 => (RefType::NoExtern, true)
-    0x73 => (RefType::NoFunc, true)
-    0x74 => (RefType::NoExn, true)
     // GC proposal: (ref null <heaptype>) - nullable typed reference
     0x63 => {
       let heap_type_byte = self.read_byte()
-      match heap_type_byte {
-        0x70
-        | 0x6F
-        | 0x6E
-        | 0x6D
-        | 0x6C
-        | 0x6B
-        | 0x6A
-        | 0x69
-        | 0x71
-        | 0x72
-        | 0x73
-        | 0x74 => {
+      match opcode_to_heap_type(heap_type_byte) {
+        Some(_) => {
           self.pos = self.pos - 1
           let (ref_type, _) = self.read_reftype_with_nullability()
           (ref_type, true) // 0x63 means nullable
         }
-        _ => {
+        None => {
           self.pos = self.pos - 1
           let type_idx = self.read_i32_leb128()
           (RefType::TypeIndex(type_idx), true) // 0x63 means nullable
@@ -292,24 +281,13 @@ fn Parser::read_reftype_with_nullability(
     // GC proposal: (ref <heaptype>) - non-null typed reference
     0x64 => {
       let heap_type_byte = self.read_byte()
-      match heap_type_byte {
-        0x70
-        | 0x6F
-        | 0x6E
-        | 0x6D
-        | 0x6C
-        | 0x6B
-        | 0x6A
-        | 0x69
-        | 0x71
-        | 0x72
-        | 0x73
-        | 0x74 => {
+      match opcode_to_heap_type(heap_type_byte) {
+        Some(_) => {
           self.pos = self.pos - 1
           let (ref_type, _) = self.read_reftype_with_nullability()
           (ref_type, false) // 0x64 means non-nullable
         }
-        _ => {
+        None => {
           self.pos = self.pos - 1
           let type_idx = self.read_i32_leb128()
           (RefType::TypeIndex(type_idx), false) // 0x64 means non-nullable
@@ -317,15 +295,20 @@ fn Parser::read_reftype_with_nullability(
       }
     }
     _ =>
-      // If the byte looks like a type index, try parsing it as such
-      if byte < 0x40 {
-        self.pos = self.pos - 1
-        let type_idx = self.read_i32_leb128()
-        (RefType::TypeIndex(type_idx), true) // Default to nullable
-      } else {
-        raise ValidationError::TypeMismatch(
-          "invalid reftype: 0x\{byte.to_string()}",
-        )
+      match opcode_to_heap_type(byte) {
+        // Standard nullable reference types
+        Some(ref_type) => (ref_type, true)
+        None =>
+          // If the byte looks like a type index, try parsing it as such
+          if byte < 0x40 {
+            self.pos = self.pos - 1
+            let type_idx = self.read_i32_leb128()
+            (RefType::TypeIndex(type_idx), true) // Default to nullable
+          } else {
+            raise ValidationError::TypeMismatch(
+              "invalid reftype: 0x\{byte.to_string()}",
+            )
+          }
       }
   }
 }
@@ -334,40 +317,17 @@ fn Parser::read_reftype_with_nullability(
 fn Parser::read_reftype(self : Parser) -> RefType raise {
   let byte = self.read_byte()
   match byte {
-    0x70 => RefType::Func
-    0x6F => RefType::Extern
-    0x6E => RefType::Any
-    0x6D => RefType::Eq
-    0x6C => RefType::I31
-    0x6B => RefType::Struct
-    0x6A => RefType::Array
-    0x69 => RefType::Exn
-    0x71 => RefType::None
-    0x72 => RefType::NoExtern
-    0x73 => RefType::NoFunc
-    0x74 => RefType::NoExn
     // GC proposal: (ref null <heaptype>) - nullable typed reference
     0x63 => {
       // Read the heap type that follows
       let heap_type_byte = self.read_byte()
-      match heap_type_byte {
-        0x70
-        | 0x6F
-        | 0x6E
-        | 0x6D
-        | 0x6C
-        | 0x6B
-        | 0x6A
-        | 0x69
-        | 0x71
-        | 0x72
-        | 0x73
-        | 0x74 => {
+      match opcode_to_heap_type(heap_type_byte) {
+        Some(_) => {
           // Known heap type - put byte back and parse it
           self.pos = self.pos - 1
           self.read_reftype()
         }
-        _ => {
+        None => {
           // It's a type index - put byte back and read as signed LEB128
           self.pos = self.pos - 1
           let type_idx = self.read_i32_leb128()
@@ -379,24 +339,13 @@ fn Parser::read_reftype(self : Parser) -> RefType raise {
     0x64 => {
       // Read the heap type that follows (same logic as 0x63)
       let heap_type_byte = self.read_byte()
-      match heap_type_byte {
-        0x70
-        | 0x6F
-        | 0x6E
-        | 0x6D
-        | 0x6C
-        | 0x6B
-        | 0x6A
-        | 0x69
-        | 0x71
-        | 0x72
-        | 0x73
-        | 0x74 => {
+      match opcode_to_heap_type(heap_type_byte) {
+        Some(_) => {
           // Known heap type - put byte back and parse it
           self.pos = self.pos - 1
           self.read_reftype()
         }
-        _ => {
+        None => {
           // It's a type index - put byte back and read as signed LEB128
           self.pos = self.pos - 1
           let type_idx = self.read_i32_leb128()
@@ -405,21 +354,25 @@ fn Parser::read_reftype(self : Parser) -> RefType raise {
       }
     }
     _ =>
-      // If we get here and the byte looks like it could be a type index,
-      // try parsing it as such
-      if byte < 0x40 {
-        // Looks like a small type index - put it back and read as signed LEB128
-        self.pos = self.pos - 1
-        let type_idx = self.read_i32_leb128()
-        RefType::TypeIndex(type_idx)
-      } else if byte == 0x40 {
-        // 0x40 is empty/void - treat as funcref for compatibility
-        // This might appear in some edge cases
-        RefType::Func
-      } else {
-        raise ValidationError::TypeMismatch(
-          "invalid reference type: 0x\{byte.to_string()}",
-        )
+      match opcode_to_heap_type(byte) {
+        Some(ref_type) => ref_type
+        None =>
+          // If we get here and the byte looks like it could be a type index,
+          // try parsing it as such
+          if byte < 0x40 {
+            // Looks like a small type index - put it back and read as signed LEB128
+            self.pos = self.pos - 1
+            let type_idx = self.read_i32_leb128()
+            RefType::TypeIndex(type_idx)
+          } else if byte == 0x40 {
+            // 0x40 is empty/void - treat as funcref for compatibility
+            // This might appear in some edge cases
+            RefType::Func
+          } else {
+            raise ValidationError::TypeMismatch(
+              "invalid reference type: 0x\{byte.to_string()}",
+            )
+          }
       }
   }
 }
