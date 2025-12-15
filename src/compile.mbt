@@ -83,7 +83,11 @@ fn count_imported_funcs(module_ : Module) -> Int {
 ///|
 /// Get the type index for a function (imported or local)
 /// Returns -1 if the function index is invalid
-fn get_func_type_idx(module_ : Module, func_idx : Int, num_imported : Int) -> Int {
+fn get_func_type_idx(
+  module_ : Module,
+  func_idx : Int,
+  num_imported : Int,
+) -> Int {
   if func_idx < num_imported {
     // Imported function - find type index from imports
     let mut import_idx = 0
@@ -1358,7 +1362,6 @@ fn op_call_indirect(rt : Runtime) -> ControlFlow {
   guard func_ref is Some(func_idx) else {
     return Trap(RuntimeError::InvalidType("uninitialized element"))
   }
-
   let num_imported_funcs = count_imported_funcs(rt.module_)
 
   // Get the expected type
@@ -1367,7 +1370,11 @@ fn op_call_indirect(rt : Runtime) -> ControlFlow {
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
     // Get the imported function's type from the import descriptor
-    let actual_type_idx = get_func_type_idx(rt.module_, func_idx, num_imported_funcs)
+    let actual_type_idx = get_func_type_idx(
+      rt.module_,
+      func_idx,
+      num_imported_funcs,
+    )
     if actual_type_idx < 0 {
       return Trap(
         RuntimeError::InvalidType(
@@ -1622,7 +1629,6 @@ fn op_return_call_indirect(rt : Runtime) -> ControlFlow {
   guard func_ref is Some(func_idx) else {
     return Trap(RuntimeError::InvalidType("uninitialized element"))
   }
-
   let num_imported_funcs = count_imported_funcs(rt.module_)
 
   // Get the expected type
@@ -1631,7 +1637,11 @@ fn op_return_call_indirect(rt : Runtime) -> ControlFlow {
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
     // Get the imported function's type from the import descriptor
-    let actual_type_idx = get_func_type_idx(rt.module_, func_idx, num_imported_funcs)
+    let actual_type_idx = get_func_type_idx(
+      rt.module_,
+      func_idx,
+      num_imported_funcs,
+    )
     if actual_type_idx < 0 {
       return Trap(
         RuntimeError::InvalidType(
@@ -1770,7 +1780,6 @@ fn op_call_ref(rt : Runtime) -> ControlFlow {
       RuntimeError::InvalidType("call_ref: null or invalid function reference"),
     )
   }
-
   let num_imported_funcs = count_imported_funcs(rt.module_)
 
   // Get the expected function type
@@ -1779,7 +1788,11 @@ fn op_call_ref(rt : Runtime) -> ControlFlow {
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
     // Get the imported function's type from the import descriptor
-    let actual_type_idx = get_func_type_idx(rt.module_, func_idx, num_imported_funcs)
+    let actual_type_idx = get_func_type_idx(
+      rt.module_,
+      func_idx,
+      num_imported_funcs,
+    )
     if actual_type_idx < 0 {
       return Trap(
         RuntimeError::InvalidType("call_ref: invalid imported function index"),
@@ -1887,7 +1900,6 @@ fn op_return_call_ref(rt : Runtime) -> ControlFlow {
       ),
     )
   }
-
   let num_imported_funcs = count_imported_funcs(rt.module_)
 
   // Get the expected function type
@@ -1896,7 +1908,11 @@ fn op_return_call_ref(rt : Runtime) -> ControlFlow {
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
     // Get the imported function's type from the import descriptor
-    let actual_type_idx = get_func_type_idx(rt.module_, func_idx, num_imported_funcs)
+    let actual_type_idx = get_func_type_idx(
+      rt.module_,
+      func_idx,
+      num_imported_funcs,
+    )
     if actual_type_idx < 0 {
       return Trap(
         RuntimeError::InvalidType(
@@ -4806,7 +4822,6 @@ pub fn Runtime::call_compiled(
   guard func_idx is Some(idx) else {
     raise RuntimeError::FunctionNotFound("Function not found: \{func_name}")
   }
-
   let num_imported_funcs = count_imported_funcs(self.module_)
 
   // Check if it's an imported function - call it directly via import resolver
