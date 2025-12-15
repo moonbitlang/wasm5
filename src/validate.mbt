@@ -22,6 +22,35 @@ fn reftype_to_valtype(ref_type : RefType) -> ValType {
 }
 
 ///|
+/// Cached counts of imported resources
+struct ImportCounts {
+  funcs : Int
+  tables : Int
+  mems : Int
+  globals : Int
+}
+
+///|
+/// Compute import counts in a single pass through imports
+/// This is more efficient than counting each type separately
+fn get_import_counts(module_ : Module) -> ImportCounts {
+  let mut funcs = 0
+  let mut tables = 0
+  let mut mems = 0
+  let mut globals = 0
+  for imp in module_.imports {
+    match imp.desc {
+      ImportDesc::Func(_) => funcs += 1
+      ImportDesc::Table(_) => tables += 1
+      ImportDesc::Mem(_) => mems += 1
+      ImportDesc::Global(_) => globals += 1
+      _ => ()
+    }
+  }
+  { funcs, tables, mems, globals }
+}
+
+///|
 /// Validate alignment - alignment must not be larger than natural alignment
 /// align parameter is stored as log2(alignment), natural is in bytes
 fn validate_alignment(
@@ -56,16 +85,11 @@ fn validate_alignment(
 
 ///|
 /// Validate that a memory exists in the module (memory 0)
-fn validate_memory_exists(module_ : Module) -> Unit raise ValidationError {
-  // Count imported memories
-  let mut num_imported_mems = 0
-  for imp in module_.imports {
-    match imp.desc {
-      ImportDesc::Mem(_) => num_imported_mems += 1
-      _ => ()
-    }
-  }
-  let total_mems = num_imported_mems + module_.mems.length()
+fn validate_memory_exists(
+  module_ : Module,
+  import_counts : ImportCounts
+) -> Unit raise ValidationError {
+  let total_mems = import_counts.mems + module_.mems.length()
   if total_mems == 0 {
     raise ValidationError::UnknownMemory(0)
   }
@@ -77,21 +101,14 @@ fn validate_memory_exists(module_ : Module) -> Unit raise ValidationError {
 fn validate_const_expr_globals(
   m : Module,
   expr : Expr,
+  import_counts : ImportCounts,
 ) -> Unit raise ValidationError {
   for instr in expr.instrs {
     match instr {
       GlobalGet(idx) => {
         let global_idx = idx.reinterpret_as_int()
-        // Count imported globals
-        let mut num_imported_globals = 0
-        for imp in m.imports {
-          match imp.desc {
-            ImportDesc::Global(_) => num_imported_globals += 1
-            _ => ()
-          }
-        }
         // Check if global is mutable
-        let is_mutable = if global_idx < num_imported_globals {
+        let is_mutable = if global_idx < import_counts.globals {
           // Imported global
           let mut import_global_idx = 0
           let mut found_mutable = false
@@ -110,7 +127,7 @@ fn validate_const_expr_globals(
           found_mutable
         } else {
           // Local global
-          let local_idx = global_idx - num_imported_globals
+          let local_idx = global_idx - import_counts.globals
           if local_idx >= 0 && local_idx < m.globals.length() {
             m.globals[local_idx].type_.mutable
           } else {
@@ -206,6 +223,9 @@ fn is_subtype(module_ : Module, t1 : ValType, t2 : ValType) -> Bool {
 ///|
 /// Validate a WebAssembly module
 fn validate_module(m : Module) -> Unit raise ValidationError {
+  // Compute import counts once for efficiency
+  let import_counts = get_import_counts(m)
+
   // Validate function type indices
   for i = 0; i < m.funcs.length(); i = i + 1 {
     let type_idx = m.funcs[i].reinterpret_as_int()
@@ -220,14 +240,7 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
       let func_idx = start_idx.reinterpret_as_int()
 
       // Count total functions (imported + local)
-      let mut num_imported_funcs = 0
-      for imp in m.imports {
-        match imp.desc {
-          ImportDesc::Func(_) => num_imported_funcs += 1
-          _ => ()
-        }
-      }
-      let total_funcs = num_imported_funcs + m.funcs.length()
+      let total_funcs = import_counts.funcs + m.funcs.length()
 
       // Check if function index is valid
       if func_idx < 0 || func_idx >= total_funcs {
@@ -235,7 +248,7 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
       }
 
       // Get the function type
-      let type_idx = if func_idx < num_imported_funcs {
+      let type_idx = if func_idx < import_counts.funcs {
         // Imported function
         let mut current_import = 0
         let mut found_type_idx = 0
@@ -254,7 +267,7 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
         found_type_idx
       } else {
         // Local function
-        m.funcs[func_idx - num_imported_funcs].reinterpret_as_int()
+        m.funcs[func_idx - import_counts.funcs].reinterpret_as_int()
       }
       let func_type = m.types[type_idx]
 
@@ -281,7 +294,14 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
     let dummy_func_type : FuncType = { params: [], results: [] }
     let dummy_code : Code = { locals: [], body: global.init, compiled: None }
     for instr in global.init.instrs {
-      validate_instruction(m, dummy_func_type, dummy_code, init_ctx, instr)
+      validate_instruction(
+        m,
+        dummy_func_type,
+        dummy_code,
+        init_ctx,
+        instr,
+        import_counts,
+      )
     }
     // Check that init expression produces exactly one value of the correct type
     if init_ctx.stack.length() != 1 {
@@ -395,7 +415,12 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
           }
           for instr in init_expr.instrs {
             validate_instruction(
-              m, dummy_func_type, dummy_code, init_ctx, instr,
+              m,
+              dummy_func_type,
+              dummy_code,
+              init_ctx,
+              instr,
+              import_counts,
             )
           }
           if init_ctx.stack.length() != 1 {
@@ -433,7 +458,12 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
           }
           for instr in init_expr.instrs {
             validate_instruction(
-              m, dummy_func_type, dummy_code, init_ctx, instr,
+              m,
+              dummy_func_type,
+              dummy_code,
+              init_ctx,
+              instr,
+              import_counts,
             )
           }
           if init_ctx.stack.length() != 1 {
@@ -506,14 +536,7 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
   // Validate element segments
   // Only active segments reference tables; passive/declarative segments don't
   // Count total tables (imported + local)
-  let mut num_imported_tables = 0
-  for imp in m.imports {
-    match imp.desc {
-      ImportDesc::Table(_) => num_imported_tables += 1
-      _ => ()
-    }
-  }
-  let total_tables = num_imported_tables + m.tables.length()
+  let total_tables = import_counts.tables + m.tables.length()
   for elem in m.elems {
     // Only validate table index for active segments
     if elem.is_active {
@@ -527,14 +550,7 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
   // Validate data segments reference valid memories
   // Only active segments reference memories; passive/declarative segments don't
   // Count total memories (imported + local)
-  let mut num_imported_mems = 0
-  for imp in m.imports {
-    match imp.desc {
-      ImportDesc::Mem(_) => num_imported_mems += 1
-      _ => ()
-    }
-  }
-  let total_mems = num_imported_mems + m.mems.length()
+  let total_mems = import_counts.mems + m.mems.length()
   for data in m.datas {
     // Only validate memory index for active segments
     if data.is_active {
@@ -543,7 +559,7 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
         raise ValidationError::UnknownMemory(mem_idx)
       }
       // Validate offset expression uses only immutable globals
-      validate_const_expr_globals(m, data.offset)
+      validate_const_expr_globals(m, data.offset, import_counts)
     }
   }
 
@@ -554,7 +570,7 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
     let code = m.codes[i]
 
     // Validate the function body
-    validate_function(m, func_type, code)
+    validate_function(m, func_type, code, import_counts)
   }
 
   // Validate exports
@@ -571,60 +587,28 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
     match exp.desc {
       Mem(idx) => {
         let mem_idx = idx.reinterpret_as_int()
-        // Count imported memories
-        let mut num_imported_mems = 0
-        for imp in m.imports {
-          match imp.desc {
-            ImportDesc::Mem(_) => num_imported_mems += 1
-            _ => ()
-          }
-        }
-        let total_mems = num_imported_mems + m.mems.length()
+        let total_mems = import_counts.mems + m.mems.length()
         if mem_idx < 0 || mem_idx >= total_mems {
           raise ValidationError::UnknownExportedMemory(mem_idx)
         }
       }
       Table(idx) => {
         let table_idx = idx.reinterpret_as_int()
-        // Count imported tables
-        let mut num_imported_tables = 0
-        for imp in m.imports {
-          match imp.desc {
-            ImportDesc::Table(_) => num_imported_tables += 1
-            _ => ()
-          }
-        }
-        let total_tables = num_imported_tables + m.tables.length()
+        let total_tables = import_counts.tables + m.tables.length()
         if table_idx < 0 || table_idx >= total_tables {
           raise ValidationError::UnknownExportedTable(table_idx)
         }
       }
       Func(idx) => {
         let func_idx = idx.reinterpret_as_int()
-        // Count imported functions
-        let mut num_imported_funcs = 0
-        for imp in m.imports {
-          match imp.desc {
-            ImportDesc::Func(_) => num_imported_funcs += 1
-            _ => ()
-          }
-        }
-        let total_funcs = num_imported_funcs + m.funcs.length()
+        let total_funcs = import_counts.funcs + m.funcs.length()
         if func_idx < 0 || func_idx >= total_funcs {
           raise ValidationError::UnknownExportedFunction(func_idx)
         }
       }
       Global(idx) => {
         let global_idx = idx.reinterpret_as_int()
-        // Count imported globals
-        let mut num_imported_globals = 0
-        for imp in m.imports {
-          match imp.desc {
-            ImportDesc::Global(_) => num_imported_globals += 1
-            _ => ()
-          }
-        }
-        let total_globals = num_imported_globals + m.globals.length()
+        let total_globals = import_counts.globals + m.globals.length()
         if global_idx < 0 || global_idx >= total_globals {
           raise ValidationError::UnknownExportedGlobal(global_idx)
         }
@@ -812,6 +796,7 @@ fn validate_instruction(
   code : Code,
   ctx : ValidationCtx,
   instr : Instr,
+  import_counts : ImportCounts,
 ) -> Unit raise ValidationError {
   let stack = ctx.stack
   match instr {
@@ -1095,19 +1080,11 @@ fn validate_instruction(
     // Note: Global index space includes imported globals first, then local globals
     GlobalGet(idx) => {
       let global_idx = idx.reinterpret_as_int()
-      // Count imported globals
-      let mut num_imported_globals = 0
-      for imp in module_.imports {
-        match imp.desc {
-          ImportDesc::Global(_) => num_imported_globals += 1
-          _ => ()
-        }
-      }
-      let total_globals = num_imported_globals + module_.globals.length()
+      let total_globals = import_counts.globals + module_.globals.length()
       if global_idx < 0 || global_idx >= total_globals {
         raise ValidationError::InvalidGlobalIndex(global_idx)
       }
-      let global_type = if global_idx < num_imported_globals {
+      let global_type = if global_idx < import_counts.globals {
         // It's an imported global - find it in imports
         let mut import_global_idx = 0
         let mut found_type : ValType = ValType::I32 // default
@@ -1126,25 +1103,17 @@ fn validate_instruction(
         found_type
       } else {
         // It's a local global
-        module_.globals[global_idx - num_imported_globals].type_.val_type
+        module_.globals[global_idx - import_counts.globals].type_.val_type
       }
       stack.push(global_type)
     }
     GlobalSet(idx) => {
       let global_idx = idx.reinterpret_as_int()
-      // Count imported globals
-      let mut num_imported_globals = 0
-      for imp in module_.imports {
-        match imp.desc {
-          ImportDesc::Global(_) => num_imported_globals += 1
-          _ => ()
-        }
-      }
-      let total_globals = num_imported_globals + module_.globals.length()
+      let total_globals = import_counts.globals + module_.globals.length()
       if global_idx < 0 || global_idx >= total_globals {
         raise ValidationError::InvalidGlobalIndex(global_idx)
       }
-      let (global_type, is_mutable) = if global_idx < num_imported_globals {
+      let (global_type, is_mutable) = if global_idx < import_counts.globals {
         // It's an imported global - find it in imports
         let mut import_global_idx = 0
         let mut found_type : ValType = ValType::I32 // default
@@ -1165,7 +1134,7 @@ fn validate_instruction(
         (found_type, found_mutable)
       } else {
         // It's a local global
-        let global = module_.globals[global_idx - num_imported_globals]
+        let global = module_.globals[global_idx - import_counts.globals]
         (global.type_.val_type, global.type_.mutable)
       }
       // Check if global is mutable
@@ -1177,140 +1146,140 @@ fn validate_instruction(
 
     // Memory operations - loads (all take i32 address and push the loaded value)
     I32Load(align, _) => {
-      validate_memory_exists(module_)
+      validate_memory_exists(module_, import_counts)
       validate_alignment(align, 4)
       ctx.poly_pop_expect(module_, I32, "i32.load address")
       stack.push(I32)
     }
     I32Load8S(align, _) | I32Load8U(align, _) => {
-      validate_memory_exists(module_)
+      validate_memory_exists(module_, import_counts)
       validate_alignment(align, 1)
       ctx.poly_pop_expect(module_, I32, "i32.load8 address")
       stack.push(I32)
     }
     I32Load16S(align, _) | I32Load16U(align, _) => {
-      validate_memory_exists(module_)
+      validate_memory_exists(module_, import_counts)
       validate_alignment(align, 2)
       ctx.poly_pop_expect(module_, I32, "i32.load16 address")
       stack.push(I32)
     }
     I64Load(align, _) => {
-      validate_memory_exists(module_)
+      validate_memory_exists(module_, import_counts)
       validate_alignment(align, 8)
       ctx.poly_pop_expect(module_, I32, "i64.load address")
       stack.push(I64)
     }
     I64Load8S(align, _) | I64Load8U(align, _) => {
-      validate_memory_exists(module_)
+      validate_memory_exists(module_, import_counts)
       validate_alignment(align, 1)
       ctx.poly_pop_expect(module_, I32, "i64.load8 address")
       stack.push(I64)
     }
     I64Load16S(align, _) | I64Load16U(align, _) => {
-      validate_memory_exists(module_)
+      validate_memory_exists(module_, import_counts)
       validate_alignment(align, 2)
       ctx.poly_pop_expect(module_, I32, "i64.load16 address")
       stack.push(I64)
     }
     I64Load32S(align, _) | I64Load32U(align, _) => {
-      validate_memory_exists(module_)
+      validate_memory_exists(module_, import_counts)
       validate_alignment(align, 4)
       ctx.poly_pop_expect(module_, I32, "i64.load32 address")
       stack.push(I64)
     }
     F32Load(align, _) => {
-      validate_memory_exists(module_)
+      validate_memory_exists(module_, import_counts)
       validate_alignment(align, 4)
       ctx.poly_pop_expect(module_, I32, "f32.load address")
       stack.push(F32)
     }
     F64Load(align, _) => {
-      validate_memory_exists(module_)
+      validate_memory_exists(module_, import_counts)
       validate_alignment(align, 8)
       ctx.poly_pop_expect(module_, I32, "f64.load address")
       stack.push(F64)
     }
     // Memory operations - stores (all take i32 address and value, push nothing)
     I32Store(align, _) => {
-      validate_memory_exists(module_)
+      validate_memory_exists(module_, import_counts)
       validate_alignment(align, 4)
       ctx.poly_pop_expect(module_, I32, "i32.store value")
       ctx.poly_pop_expect(module_, I32, "i32.store address")
     }
     I32Store8(align, _) => {
-      validate_memory_exists(module_)
+      validate_memory_exists(module_, import_counts)
       validate_alignment(align, 1)
       ctx.poly_pop_expect(module_, I32, "i32.store8 value")
       ctx.poly_pop_expect(module_, I32, "i32.store8 address")
     }
     I32Store16(align, _) => {
-      validate_memory_exists(module_)
+      validate_memory_exists(module_, import_counts)
       validate_alignment(align, 2)
       ctx.poly_pop_expect(module_, I32, "i32.store16 value")
       ctx.poly_pop_expect(module_, I32, "i32.store16 address")
     }
     I64Store(align, _) => {
-      validate_memory_exists(module_)
+      validate_memory_exists(module_, import_counts)
       validate_alignment(align, 8)
       ctx.poly_pop_expect(module_, I64, "i64.store value")
       ctx.poly_pop_expect(module_, I32, "i64.store address")
     }
     I64Store8(align, _) => {
-      validate_memory_exists(module_)
+      validate_memory_exists(module_, import_counts)
       validate_alignment(align, 1)
       ctx.poly_pop_expect(module_, I64, "i64.store8 value")
       ctx.poly_pop_expect(module_, I32, "i64.store8 address")
     }
     I64Store16(align, _) => {
-      validate_memory_exists(module_)
+      validate_memory_exists(module_, import_counts)
       validate_alignment(align, 2)
       ctx.poly_pop_expect(module_, I64, "i64.store16 value")
       ctx.poly_pop_expect(module_, I32, "i64.store16 address")
     }
     I64Store32(align, _) => {
-      validate_memory_exists(module_)
+      validate_memory_exists(module_, import_counts)
       validate_alignment(align, 4)
       ctx.poly_pop_expect(module_, I64, "i64.store32 value")
       ctx.poly_pop_expect(module_, I32, "i64.store32 address")
     }
     F32Store(align, _) => {
-      validate_memory_exists(module_)
+      validate_memory_exists(module_, import_counts)
       validate_alignment(align, 4)
       ctx.poly_pop_expect(module_, F32, "f32.store value")
       ctx.poly_pop_expect(module_, I32, "f32.store address")
     }
     F64Store(align, _) => {
-      validate_memory_exists(module_)
+      validate_memory_exists(module_, import_counts)
       validate_alignment(align, 8)
       ctx.poly_pop_expect(module_, F64, "f64.store value")
       ctx.poly_pop_expect(module_, I32, "f64.store address")
     }
     // Memory size and grow
     MemorySize(_) => {
-      validate_memory_exists(module_)
+      validate_memory_exists(module_, import_counts)
       stack.push(I32)
     }
     MemoryGrow(_) => {
-      validate_memory_exists(module_)
+      validate_memory_exists(module_, import_counts)
       ctx.poly_pop_expect(module_, I32, "memory.grow delta")
       stack.push(I32)
     }
 
     // Bulk memory instructions
     MemoryCopy => {
-      validate_memory_exists(module_)
+      validate_memory_exists(module_, import_counts)
       ctx.poly_pop_expect(module_, I32, "memory.copy n")
       ctx.poly_pop_expect(module_, I32, "memory.copy src")
       ctx.poly_pop_expect(module_, I32, "memory.copy dest")
     }
     MemoryFill => {
-      validate_memory_exists(module_)
+      validate_memory_exists(module_, import_counts)
       ctx.poly_pop_expect(module_, I32, "memory.fill n")
       ctx.poly_pop_expect(module_, I32, "memory.fill val")
       ctx.poly_pop_expect(module_, I32, "memory.fill dest")
     }
     MemoryInit(data_idx) => {
-      validate_memory_exists(module_)
+      validate_memory_exists(module_, import_counts)
       // Validate data segment index
       if data_idx.reinterpret_as_int() >= module_.datas.length() {
         raise ValidationError::TypeMismatch(
@@ -1406,19 +1375,12 @@ fn validate_instruction(
       // ref.func pushes a typed function reference (non-nullable)
       // Get the function's type index to create the proper typed reference
       let idx = func_idx.reinterpret_as_int()
-      let mut num_imported_funcs = 0
-      for imp in module_.imports {
-        match imp.desc {
-          ImportDesc::Func(_) => num_imported_funcs += 1
-          _ => ()
-        }
-      }
       // Validate function index
-      let total_funcs = num_imported_funcs + module_.funcs.length()
+      let total_funcs = import_counts.funcs + module_.funcs.length()
       if idx < 0 || idx >= total_funcs {
         raise ValidationError::InvalidFunctionIndex(idx)
       }
-      let type_idx = if idx < num_imported_funcs {
+      let type_idx = if idx < import_counts.funcs {
         // Imported function - get type from import
         let mut import_idx = 0
         let mut found_type_idx = 0
@@ -1437,7 +1399,7 @@ fn validate_instruction(
         found_type_idx
       } else {
         // Local function - get type from funcs array
-        let local_idx = idx - num_imported_funcs
+        let local_idx = idx - import_counts.funcs
         if local_idx < 0 || local_idx >= module_.funcs.length() {
           raise ValidationError::InvalidFunctionIndex(idx)
         }
@@ -1487,7 +1449,14 @@ fn validate_instruction(
       }
       // Validate block body
       for block_instr in instrs {
-        validate_instruction(module_, func_type, code, block_ctx, block_instr)
+        validate_instruction(
+          module_,
+          func_type,
+          code,
+          block_ctx,
+          block_instr,
+          import_counts,
+        )
       }
       let _ = block_ctx.pop_control()
       // Note: We do NOT propagate initialized_locals back from block_ctx
@@ -1543,7 +1512,14 @@ fn validate_instruction(
       }
       // Validate loop body
       for loop_instr in instrs {
-        validate_instruction(module_, func_type, code, loop_ctx, loop_instr)
+        validate_instruction(
+          module_,
+          func_type,
+          code,
+          loop_ctx,
+          loop_instr,
+          import_counts,
+        )
       }
       let _ = loop_ctx.pop_control()
       // Note: We do NOT propagate initialized_locals back from loop_ctx
@@ -1596,7 +1572,14 @@ fn validate_instruction(
         then_ctx.initialized_locals.push(ctx.initialized_locals[i])
       }
       for then_instr in then_instrs {
-        validate_instruction(module_, func_type, code, then_ctx, then_instr)
+        validate_instruction(
+          module_,
+          func_type,
+          code,
+          then_ctx,
+          then_instr,
+          import_counts,
+        )
       }
       let _ = then_ctx.pop_control()
       // Check then branch produces correct results
@@ -1631,7 +1614,14 @@ fn validate_instruction(
         else_ctx.initialized_locals.push(ctx.initialized_locals[i])
       }
       for else_instr in else_instrs {
-        validate_instruction(module_, func_type, code, else_ctx, else_instr)
+        validate_instruction(
+          module_,
+          func_type,
+          code,
+          else_ctx,
+          else_instr,
+          import_counts,
+        )
       }
       let _ = else_ctx.pop_control()
       // Check else branch produces correct results
@@ -1896,20 +1886,12 @@ fn validate_instruction(
     }
     Call(func_idx) => {
       let idx = func_idx.reinterpret_as_int()
-      // Count imported functions first
-      let mut num_imported_funcs = 0
-      for imp in module_.imports {
-        match imp.desc {
-          ImportDesc::Func(_) => num_imported_funcs += 1
-          _ => ()
-        }
-      }
-      let total_funcs = num_imported_funcs + module_.funcs.length()
+      let total_funcs = import_counts.funcs + module_.funcs.length()
       if idx < 0 || idx >= total_funcs {
         raise ValidationError::InvalidFunctionIndex(idx)
       }
       // Get the function type
-      let type_idx = if idx < num_imported_funcs {
+      let type_idx = if idx < import_counts.funcs {
         // It's an imported function - find the type index from imports
         let mut import_func_idx = 0
         let mut found_type_idx = 0
@@ -1928,7 +1910,7 @@ fn validate_instruction(
         found_type_idx
       } else {
         // It's a local function
-        module_.funcs[idx - num_imported_funcs].reinterpret_as_int()
+        module_.funcs[idx - import_counts.funcs].reinterpret_as_int()
       }
       let func_type_called = module_.types[type_idx]
       // Pop arguments from stack (in reverse order)
@@ -1971,15 +1953,7 @@ fn validate_instruction(
       let idx = func_idx.reinterpret_as_int()
 
       // Find the type index for this function
-      // First count imported functions
-      let mut num_imported_funcs = 0
-      for imp in module_.imports {
-        match imp.desc {
-          ImportDesc::Func(_) => num_imported_funcs += 1
-          _ => ()
-        }
-      }
-      let type_idx = if idx < num_imported_funcs {
+      let type_idx = if idx < import_counts.funcs {
         // It's an imported function - find its type
         let mut import_func_idx = 0
         let mut found_type_idx = 0
@@ -1998,7 +1972,7 @@ fn validate_instruction(
         found_type_idx
       } else {
         // It's a local function
-        let local_idx = idx - num_imported_funcs
+        let local_idx = idx - import_counts.funcs
         if local_idx < 0 || local_idx >= module_.funcs.length() {
           raise ValidationError::InvalidFunctionIndex(idx)
         }
@@ -2115,6 +2089,7 @@ fn validate_function(
   module_ : Module,
   func_type : FuncType,
   code : Code,
+  import_counts : ImportCounts,
 ) -> Unit raise ValidationError {
   // Create validation context with local initialization tracking
   let ctx = ValidationCtx::new_with_locals(func_type, code)
@@ -2123,7 +2098,7 @@ fn validate_function(
 
   // Validate each instruction in the function body
   for instr in code.body.instrs {
-    validate_instruction(module_, func_type, code, ctx, instr)
+    validate_instruction(module_, func_type, code, ctx, instr, import_counts)
   }
 
   // Check final stack matches return type
