@@ -51,6 +51,36 @@ fn get_import_counts(module_ : Module) -> ImportCounts {
 }
 
 ///|
+/// Get the type index for a function (imported or local)
+fn get_func_type_index(
+  module_ : Module,
+  func_idx : Int,
+  import_counts : ImportCounts
+) -> Int {
+  if func_idx < import_counts.funcs {
+    // Imported function - find type index from imports
+    let mut current_import = 0
+    let mut found_type_idx = 0
+    for imp in module_.imports {
+      match imp.desc {
+        ImportDesc::Func(tidx) => {
+          if current_import == func_idx {
+            found_type_idx = tidx.reinterpret_as_int()
+            break
+          }
+          current_import += 1
+        }
+        _ => ()
+      }
+    }
+    found_type_idx
+  } else {
+    // Local function - get type index from funcs array
+    module_.funcs[func_idx - import_counts.funcs].reinterpret_as_int()
+  }
+}
+
+///|
 /// Validate alignment - alignment must not be larger than natural alignment
 /// align parameter is stored as log2(alignment), natural is in bytes
 fn validate_alignment(
@@ -248,27 +278,7 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
       }
 
       // Get the function type
-      let type_idx = if func_idx < import_counts.funcs {
-        // Imported function
-        let mut current_import = 0
-        let mut found_type_idx = 0
-        for imp in m.imports {
-          match imp.desc {
-            ImportDesc::Func(tidx) => {
-              if current_import == func_idx {
-                found_type_idx = tidx.reinterpret_as_int()
-                break
-              }
-              current_import += 1
-            }
-            _ => ()
-          }
-        }
-        found_type_idx
-      } else {
-        // Local function
-        m.funcs[func_idx - import_counts.funcs].reinterpret_as_int()
-      }
+      let type_idx = get_func_type_index(m, func_idx, import_counts)
       let func_type = m.types[type_idx]
 
       // Start function must have type [] -> []
@@ -1380,31 +1390,7 @@ fn validate_instruction(
       if idx < 0 || idx >= total_funcs {
         raise ValidationError::InvalidFunctionIndex(idx)
       }
-      let type_idx = if idx < import_counts.funcs {
-        // Imported function - get type from import
-        let mut import_idx = 0
-        let mut found_type_idx = 0
-        for imp in module_.imports {
-          match imp.desc {
-            ImportDesc::Func(t_idx) => {
-              if import_idx == idx {
-                found_type_idx = t_idx.reinterpret_as_int()
-                break
-              }
-              import_idx += 1
-            }
-            _ => ()
-          }
-        }
-        found_type_idx
-      } else {
-        // Local function - get type from funcs array
-        let local_idx = idx - import_counts.funcs
-        if local_idx < 0 || local_idx >= module_.funcs.length() {
-          raise ValidationError::InvalidFunctionIndex(idx)
-        }
-        module_.funcs[local_idx].reinterpret_as_int()
-      }
+      let type_idx = get_func_type_index(module_, idx, import_counts)
       // Push typed function reference (non-nullable)
       stack.push(ValType::Ref(RefType::TypeIndex(type_idx), false))
     }
@@ -1891,27 +1877,7 @@ fn validate_instruction(
         raise ValidationError::InvalidFunctionIndex(idx)
       }
       // Get the function type
-      let type_idx = if idx < import_counts.funcs {
-        // It's an imported function - find the type index from imports
-        let mut import_func_idx = 0
-        let mut found_type_idx = 0
-        for imp in module_.imports {
-          match imp.desc {
-            ImportDesc::Func(t) => {
-              if import_func_idx == idx {
-                found_type_idx = t.reinterpret_as_int()
-                break
-              }
-              import_func_idx += 1
-            }
-            _ => ()
-          }
-        }
-        found_type_idx
-      } else {
-        // It's a local function
-        module_.funcs[idx - import_counts.funcs].reinterpret_as_int()
-      }
+      let type_idx = get_func_type_index(module_, idx, import_counts)
       let func_type_called = module_.types[type_idx]
       // Pop arguments from stack (in reverse order)
       for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
@@ -1953,31 +1919,7 @@ fn validate_instruction(
       let idx = func_idx.reinterpret_as_int()
 
       // Find the type index for this function
-      let type_idx = if idx < import_counts.funcs {
-        // It's an imported function - find its type
-        let mut import_func_idx = 0
-        let mut found_type_idx = 0
-        for imp in module_.imports {
-          match imp.desc {
-            ImportDesc::Func(t) => {
-              if import_func_idx == idx {
-                found_type_idx = t.reinterpret_as_int()
-                break
-              }
-              import_func_idx += 1
-            }
-            _ => ()
-          }
-        }
-        found_type_idx
-      } else {
-        // It's a local function
-        let local_idx = idx - import_counts.funcs
-        if local_idx < 0 || local_idx >= module_.funcs.length() {
-          raise ValidationError::InvalidFunctionIndex(idx)
-        }
-        module_.funcs[local_idx].reinterpret_as_int()
-      }
+      let type_idx = get_func_type_index(module_, idx, import_counts)
       if type_idx < 0 || type_idx >= module_.types.length() {
         raise ValidationError::InvalidTypeIndex(type_idx)
       }
