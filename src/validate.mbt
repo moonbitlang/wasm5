@@ -81,6 +81,40 @@ fn get_func_type_index(
 }
 
 ///|
+/// Validate a memory load instruction
+fn validate_load(
+  ctx : ValidationCtx,
+  module_ : Module,
+  import_counts : ImportCounts,
+  align : UInt,
+  natural_align : Int,
+  result_type : ValType,
+  op_name : String
+) -> Unit raise ValidationError {
+  validate_memory_exists(module_, import_counts)
+  validate_alignment(align, natural_align)
+  ctx.poly_pop_expect(module_, I32, "\{op_name} address")
+  ctx.stack.push(result_type)
+}
+
+///|
+/// Validate a memory store instruction
+fn validate_store(
+  ctx : ValidationCtx,
+  module_ : Module,
+  import_counts : ImportCounts,
+  align : UInt,
+  natural_align : Int,
+  value_type : ValType,
+  op_name : String
+) -> Unit raise ValidationError {
+  validate_memory_exists(module_, import_counts)
+  validate_alignment(align, natural_align)
+  ctx.poly_pop_expect(module_, value_type, "\{op_name} value")
+  ctx.poly_pop_expect(module_, I32, "\{op_name} address")
+}
+
+///|
 /// Validate alignment - alignment must not be larger than natural alignment
 /// align parameter is stored as log2(alignment), natural is in bytes
 fn validate_alignment(
@@ -1155,115 +1189,25 @@ fn validate_instruction(
     }
 
     // Memory operations - loads (all take i32 address and push the loaded value)
-    I32Load(align, _) => {
-      validate_memory_exists(module_, import_counts)
-      validate_alignment(align, 4)
-      ctx.poly_pop_expect(module_, I32, "i32.load address")
-      stack.push(I32)
-    }
-    I32Load8S(align, _) | I32Load8U(align, _) => {
-      validate_memory_exists(module_, import_counts)
-      validate_alignment(align, 1)
-      ctx.poly_pop_expect(module_, I32, "i32.load8 address")
-      stack.push(I32)
-    }
-    I32Load16S(align, _) | I32Load16U(align, _) => {
-      validate_memory_exists(module_, import_counts)
-      validate_alignment(align, 2)
-      ctx.poly_pop_expect(module_, I32, "i32.load16 address")
-      stack.push(I32)
-    }
-    I64Load(align, _) => {
-      validate_memory_exists(module_, import_counts)
-      validate_alignment(align, 8)
-      ctx.poly_pop_expect(module_, I32, "i64.load address")
-      stack.push(I64)
-    }
-    I64Load8S(align, _) | I64Load8U(align, _) => {
-      validate_memory_exists(module_, import_counts)
-      validate_alignment(align, 1)
-      ctx.poly_pop_expect(module_, I32, "i64.load8 address")
-      stack.push(I64)
-    }
-    I64Load16S(align, _) | I64Load16U(align, _) => {
-      validate_memory_exists(module_, import_counts)
-      validate_alignment(align, 2)
-      ctx.poly_pop_expect(module_, I32, "i64.load16 address")
-      stack.push(I64)
-    }
-    I64Load32S(align, _) | I64Load32U(align, _) => {
-      validate_memory_exists(module_, import_counts)
-      validate_alignment(align, 4)
-      ctx.poly_pop_expect(module_, I32, "i64.load32 address")
-      stack.push(I64)
-    }
-    F32Load(align, _) => {
-      validate_memory_exists(module_, import_counts)
-      validate_alignment(align, 4)
-      ctx.poly_pop_expect(module_, I32, "f32.load address")
-      stack.push(F32)
-    }
-    F64Load(align, _) => {
-      validate_memory_exists(module_, import_counts)
-      validate_alignment(align, 8)
-      ctx.poly_pop_expect(module_, I32, "f64.load address")
-      stack.push(F64)
-    }
+    I32Load(align, _) => validate_load(ctx, module_, import_counts, align, 4, I32, "i32.load")
+    I32Load8S(align, _) | I32Load8U(align, _) => validate_load(ctx, module_, import_counts, align, 1, I32, "i32.load8")
+    I32Load16S(align, _) | I32Load16U(align, _) => validate_load(ctx, module_, import_counts, align, 2, I32, "i32.load16")
+    I64Load(align, _) => validate_load(ctx, module_, import_counts, align, 8, I64, "i64.load")
+    I64Load8S(align, _) | I64Load8U(align, _) => validate_load(ctx, module_, import_counts, align, 1, I64, "i64.load8")
+    I64Load16S(align, _) | I64Load16U(align, _) => validate_load(ctx, module_, import_counts, align, 2, I64, "i64.load16")
+    I64Load32S(align, _) | I64Load32U(align, _) => validate_load(ctx, module_, import_counts, align, 4, I64, "i64.load32")
+    F32Load(align, _) => validate_load(ctx, module_, import_counts, align, 4, F32, "f32.load")
+    F64Load(align, _) => validate_load(ctx, module_, import_counts, align, 8, F64, "f64.load")
     // Memory operations - stores (all take i32 address and value, push nothing)
-    I32Store(align, _) => {
-      validate_memory_exists(module_, import_counts)
-      validate_alignment(align, 4)
-      ctx.poly_pop_expect(module_, I32, "i32.store value")
-      ctx.poly_pop_expect(module_, I32, "i32.store address")
-    }
-    I32Store8(align, _) => {
-      validate_memory_exists(module_, import_counts)
-      validate_alignment(align, 1)
-      ctx.poly_pop_expect(module_, I32, "i32.store8 value")
-      ctx.poly_pop_expect(module_, I32, "i32.store8 address")
-    }
-    I32Store16(align, _) => {
-      validate_memory_exists(module_, import_counts)
-      validate_alignment(align, 2)
-      ctx.poly_pop_expect(module_, I32, "i32.store16 value")
-      ctx.poly_pop_expect(module_, I32, "i32.store16 address")
-    }
-    I64Store(align, _) => {
-      validate_memory_exists(module_, import_counts)
-      validate_alignment(align, 8)
-      ctx.poly_pop_expect(module_, I64, "i64.store value")
-      ctx.poly_pop_expect(module_, I32, "i64.store address")
-    }
-    I64Store8(align, _) => {
-      validate_memory_exists(module_, import_counts)
-      validate_alignment(align, 1)
-      ctx.poly_pop_expect(module_, I64, "i64.store8 value")
-      ctx.poly_pop_expect(module_, I32, "i64.store8 address")
-    }
-    I64Store16(align, _) => {
-      validate_memory_exists(module_, import_counts)
-      validate_alignment(align, 2)
-      ctx.poly_pop_expect(module_, I64, "i64.store16 value")
-      ctx.poly_pop_expect(module_, I32, "i64.store16 address")
-    }
-    I64Store32(align, _) => {
-      validate_memory_exists(module_, import_counts)
-      validate_alignment(align, 4)
-      ctx.poly_pop_expect(module_, I64, "i64.store32 value")
-      ctx.poly_pop_expect(module_, I32, "i64.store32 address")
-    }
-    F32Store(align, _) => {
-      validate_memory_exists(module_, import_counts)
-      validate_alignment(align, 4)
-      ctx.poly_pop_expect(module_, F32, "f32.store value")
-      ctx.poly_pop_expect(module_, I32, "f32.store address")
-    }
-    F64Store(align, _) => {
-      validate_memory_exists(module_, import_counts)
-      validate_alignment(align, 8)
-      ctx.poly_pop_expect(module_, F64, "f64.store value")
-      ctx.poly_pop_expect(module_, I32, "f64.store address")
-    }
+    I32Store(align, _) => validate_store(ctx, module_, import_counts, align, 4, I32, "i32.store")
+    I32Store8(align, _) => validate_store(ctx, module_, import_counts, align, 1, I32, "i32.store8")
+    I32Store16(align, _) => validate_store(ctx, module_, import_counts, align, 2, I32, "i32.store16")
+    I64Store(align, _) => validate_store(ctx, module_, import_counts, align, 8, I64, "i64.store")
+    I64Store8(align, _) => validate_store(ctx, module_, import_counts, align, 1, I64, "i64.store8")
+    I64Store16(align, _) => validate_store(ctx, module_, import_counts, align, 2, I64, "i64.store16")
+    I64Store32(align, _) => validate_store(ctx, module_, import_counts, align, 4, I64, "i64.store32")
+    F32Store(align, _) => validate_store(ctx, module_, import_counts, align, 4, F32, "f32.store")
+    F64Store(align, _) => validate_store(ctx, module_, import_counts, align, 8, F64, "f64.store")
     // Memory size and grow
     MemorySize(_) => {
       validate_memory_exists(module_, import_counts)
