@@ -55,7 +55,7 @@ fn get_import_counts(module_ : Module) -> ImportCounts {
 fn get_func_type_index(
   module_ : Module,
   func_idx : Int,
-  import_counts : ImportCounts
+  import_counts : ImportCounts,
 ) -> Int raise ValidationError {
   if func_idx < import_counts.funcs {
     // Imported function - find type index from imports
@@ -91,7 +91,7 @@ fn validate_binary_op(
   module_ : Module,
   operand_type : ValType,
   result_type : ValType,
-  op_name : String
+  op_name : String,
 ) -> Unit raise ValidationError {
   ctx.poly_pop_expect(module_, operand_type, op_name)
   ctx.poly_pop_expect(module_, operand_type, op_name)
@@ -107,7 +107,7 @@ fn validate_load(
   align : UInt,
   natural_align : Int,
   result_type : ValType,
-  op_name : String
+  op_name : String,
 ) -> Unit raise ValidationError {
   validate_memory_exists(module_, import_counts)
   validate_alignment(align, natural_align)
@@ -124,7 +124,7 @@ fn validate_store(
   align : UInt,
   natural_align : Int,
   value_type : ValType,
-  op_name : String
+  op_name : String,
 ) -> Unit raise ValidationError {
   validate_memory_exists(module_, import_counts)
   validate_alignment(align, natural_align)
@@ -169,7 +169,7 @@ fn validate_alignment(
 /// Validate that a memory exists in the module (memory 0)
 fn validate_memory_exists(
   module_ : Module,
-  import_counts : ImportCounts
+  import_counts : ImportCounts,
 ) -> Unit raise ValidationError {
   let total_mems = import_counts.mems + module_.mems.length()
   if total_mems == 0 {
@@ -357,12 +357,7 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
     let dummy_code : Code = { locals: [], body: global.init, compiled: None }
     for instr in global.init.instrs {
       validate_instruction(
-        m,
-        dummy_func_type,
-        dummy_code,
-        init_ctx,
-        instr,
-        import_counts,
+        m, dummy_func_type, dummy_code, init_ctx, instr, import_counts,
       )
     }
     // Check that init expression produces exactly one value of the correct type
@@ -477,12 +472,7 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
           }
           for instr in init_expr.instrs {
             validate_instruction(
-              m,
-              dummy_func_type,
-              dummy_code,
-              init_ctx,
-              instr,
-              import_counts,
+              m, dummy_func_type, dummy_code, init_ctx, instr, import_counts,
             )
           }
           if init_ctx.stack.length() != 1 {
@@ -520,12 +510,7 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
           }
           for instr in init_expr.instrs {
             validate_instruction(
-              m,
-              dummy_func_type,
-              dummy_code,
-              init_ctx,
-              instr,
-              import_counts,
+              m, dummy_func_type, dummy_code, init_ctx, instr, import_counts,
             )
           }
           if init_ctx.stack.length() != 1 {
@@ -869,13 +854,33 @@ fn validate_instruction(
     F64Const(_) => stack.push(F64)
 
     // Binary operations
-    I32Add | I32Sub | I32Mul | I32DivS | I32DivU | I32RemS | I32RemU
-    | I32And | I32Or | I32Xor | I32Shl | I32ShrS | I32ShrU | I32Rotl | I32Rotr =>
-      validate_binary_op(ctx, module_, I32, I32, "i32 binary op")
+    I32Add
+    | I32Sub
+    | I32Mul
+    | I32DivS
+    | I32DivU
+    | I32RemS
+    | I32RemU
+    | I32And
+    | I32Or
+    | I32Xor
+    | I32Shl
+    | I32ShrS
+    | I32ShrU
+    | I32Rotl
+    | I32Rotr => validate_binary_op(ctx, module_, I32, I32, "i32 binary op")
 
     // Comparison operations
-    I32Eq | I32Ne | I32LtS | I32LtU | I32GtS | I32GtU | I32LeS | I32LeU | I32GeS | I32GeU =>
-      validate_binary_op(ctx, module_, I32, I32, "i32 comparison")
+    I32Eq
+    | I32Ne
+    | I32LtS
+    | I32LtU
+    | I32GtS
+    | I32GtU
+    | I32LeS
+    | I32LeU
+    | I32GeS
+    | I32GeU => validate_binary_op(ctx, module_, I32, I32, "i32 comparison")
 
     // Unary operations
     I32Eqz | I32Clz | I32Ctz | I32Popcnt | I32Extend8S | I32Extend16S => {
@@ -884,13 +889,33 @@ fn validate_instruction(
     }
 
     // i64 binary operations
-    I64Add | I64Sub | I64Mul | I64DivS | I64DivU | I64RemS | I64RemU
-    | I64And | I64Or | I64Xor | I64Shl | I64ShrS | I64ShrU | I64Rotl | I64Rotr =>
-      validate_binary_op(ctx, module_, I64, I64, "i64 binary op")
+    I64Add
+    | I64Sub
+    | I64Mul
+    | I64DivS
+    | I64DivU
+    | I64RemS
+    | I64RemU
+    | I64And
+    | I64Or
+    | I64Xor
+    | I64Shl
+    | I64ShrS
+    | I64ShrU
+    | I64Rotl
+    | I64Rotr => validate_binary_op(ctx, module_, I64, I64, "i64 binary op")
 
     // i64 comparison operations
-    I64Eq | I64Ne | I64LtS | I64LtU | I64GtS | I64GtU | I64LeS | I64LeU | I64GeS | I64GeU =>
-      validate_binary_op(ctx, module_, I64, I32, "i64 comparison")
+    I64Eq
+    | I64Ne
+    | I64LtS
+    | I64LtU
+    | I64GtS
+    | I64GtU
+    | I64LeS
+    | I64LeU
+    | I64GeS
+    | I64GeU => validate_binary_op(ctx, module_, I64, I32, "i64 comparison")
 
     // i64 test operation (returns i32)
     I64Eqz => {
@@ -1139,25 +1164,43 @@ fn validate_instruction(
     }
 
     // Memory operations - loads (all take i32 address and push the loaded value)
-    I32Load(align, _) => validate_load(ctx, module_, import_counts, align, 4, I32, "i32.load")
-    I32Load8S(align, _) | I32Load8U(align, _) => validate_load(ctx, module_, import_counts, align, 1, I32, "i32.load8")
-    I32Load16S(align, _) | I32Load16U(align, _) => validate_load(ctx, module_, import_counts, align, 2, I32, "i32.load16")
-    I64Load(align, _) => validate_load(ctx, module_, import_counts, align, 8, I64, "i64.load")
-    I64Load8S(align, _) | I64Load8U(align, _) => validate_load(ctx, module_, import_counts, align, 1, I64, "i64.load8")
-    I64Load16S(align, _) | I64Load16U(align, _) => validate_load(ctx, module_, import_counts, align, 2, I64, "i64.load16")
-    I64Load32S(align, _) | I64Load32U(align, _) => validate_load(ctx, module_, import_counts, align, 4, I64, "i64.load32")
-    F32Load(align, _) => validate_load(ctx, module_, import_counts, align, 4, F32, "f32.load")
-    F64Load(align, _) => validate_load(ctx, module_, import_counts, align, 8, F64, "f64.load")
+    I32Load(align, _) =>
+      validate_load(ctx, module_, import_counts, align, 4, I32, "i32.load")
+    I32Load8S(align, _) | I32Load8U(align, _) =>
+      validate_load(ctx, module_, import_counts, align, 1, I32, "i32.load8")
+    I32Load16S(align, _) | I32Load16U(align, _) =>
+      validate_load(ctx, module_, import_counts, align, 2, I32, "i32.load16")
+    I64Load(align, _) =>
+      validate_load(ctx, module_, import_counts, align, 8, I64, "i64.load")
+    I64Load8S(align, _) | I64Load8U(align, _) =>
+      validate_load(ctx, module_, import_counts, align, 1, I64, "i64.load8")
+    I64Load16S(align, _) | I64Load16U(align, _) =>
+      validate_load(ctx, module_, import_counts, align, 2, I64, "i64.load16")
+    I64Load32S(align, _) | I64Load32U(align, _) =>
+      validate_load(ctx, module_, import_counts, align, 4, I64, "i64.load32")
+    F32Load(align, _) =>
+      validate_load(ctx, module_, import_counts, align, 4, F32, "f32.load")
+    F64Load(align, _) =>
+      validate_load(ctx, module_, import_counts, align, 8, F64, "f64.load")
     // Memory operations - stores (all take i32 address and value, push nothing)
-    I32Store(align, _) => validate_store(ctx, module_, import_counts, align, 4, I32, "i32.store")
-    I32Store8(align, _) => validate_store(ctx, module_, import_counts, align, 1, I32, "i32.store8")
-    I32Store16(align, _) => validate_store(ctx, module_, import_counts, align, 2, I32, "i32.store16")
-    I64Store(align, _) => validate_store(ctx, module_, import_counts, align, 8, I64, "i64.store")
-    I64Store8(align, _) => validate_store(ctx, module_, import_counts, align, 1, I64, "i64.store8")
-    I64Store16(align, _) => validate_store(ctx, module_, import_counts, align, 2, I64, "i64.store16")
-    I64Store32(align, _) => validate_store(ctx, module_, import_counts, align, 4, I64, "i64.store32")
-    F32Store(align, _) => validate_store(ctx, module_, import_counts, align, 4, F32, "f32.store")
-    F64Store(align, _) => validate_store(ctx, module_, import_counts, align, 8, F64, "f64.store")
+    I32Store(align, _) =>
+      validate_store(ctx, module_, import_counts, align, 4, I32, "i32.store")
+    I32Store8(align, _) =>
+      validate_store(ctx, module_, import_counts, align, 1, I32, "i32.store8")
+    I32Store16(align, _) =>
+      validate_store(ctx, module_, import_counts, align, 2, I32, "i32.store16")
+    I64Store(align, _) =>
+      validate_store(ctx, module_, import_counts, align, 8, I64, "i64.store")
+    I64Store8(align, _) =>
+      validate_store(ctx, module_, import_counts, align, 1, I64, "i64.store8")
+    I64Store16(align, _) =>
+      validate_store(ctx, module_, import_counts, align, 2, I64, "i64.store16")
+    I64Store32(align, _) =>
+      validate_store(ctx, module_, import_counts, align, 4, I64, "i64.store32")
+    F32Store(align, _) =>
+      validate_store(ctx, module_, import_counts, align, 4, F32, "f32.store")
+    F64Store(align, _) =>
+      validate_store(ctx, module_, import_counts, align, 8, F64, "f64.store")
     // Memory size and grow
     MemorySize(_) => {
       validate_memory_exists(module_, import_counts)
@@ -1330,12 +1373,7 @@ fn validate_instruction(
       // Validate block body
       for block_instr in instrs {
         validate_instruction(
-          module_,
-          func_type,
-          code,
-          block_ctx,
-          block_instr,
-          import_counts,
+          module_, func_type, code, block_ctx, block_instr, import_counts,
         )
       }
       let _ = block_ctx.pop_control()
@@ -1393,12 +1431,7 @@ fn validate_instruction(
       // Validate loop body
       for loop_instr in instrs {
         validate_instruction(
-          module_,
-          func_type,
-          code,
-          loop_ctx,
-          loop_instr,
-          import_counts,
+          module_, func_type, code, loop_ctx, loop_instr, import_counts,
         )
       }
       let _ = loop_ctx.pop_control()
@@ -1453,12 +1486,7 @@ fn validate_instruction(
       }
       for then_instr in then_instrs {
         validate_instruction(
-          module_,
-          func_type,
-          code,
-          then_ctx,
-          then_instr,
-          import_counts,
+          module_, func_type, code, then_ctx, then_instr, import_counts,
         )
       }
       let _ = then_ctx.pop_control()
@@ -1495,12 +1523,7 @@ fn validate_instruction(
       }
       for else_instr in else_instrs {
         validate_instruction(
-          module_,
-          func_type,
-          code,
-          else_ctx,
-          else_instr,
-          import_counts,
+          module_, func_type, code, else_ctx, else_instr, import_counts,
         )
       }
       let _ = else_ctx.pop_control()

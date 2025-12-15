@@ -177,7 +177,7 @@ fn Parser::read_name(self : Parser) -> Bytes raise ParseError {
 ///|
 /// Helper function to map heap type opcodes to RefType
 /// Returns Some(RefType) for known opcodes, None otherwise
-fn opcode_to_heap_type(byte : Byte) -> Option[RefType] {
+fn opcode_to_heap_type(byte : Byte) -> RefType? {
   match byte {
     0x70 => Some(RefType::Func)
     0x6F => Some(RefType::Extern)
