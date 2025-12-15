@@ -68,6 +68,51 @@ pub extern "C" fn rint(x : Double) -> Double = "rint"
 pub extern "C" fn rintf(x : Float) -> Float = "rintf"
 
 ///|
+/// Count the number of imported functions in a module
+fn count_imported_funcs(module_ : Module) -> Int {
+  let mut count = 0
+  for imp in module_.imports {
+    match imp.desc {
+      ImportDesc::Func(_) => count += 1
+      _ => ()
+    }
+  }
+  count
+}
+
+///|
+/// Get the type index for a function (imported or local)
+/// Returns -1 if the function index is invalid
+fn get_func_type_idx(module_ : Module, func_idx : Int, num_imported : Int) -> Int {
+  if func_idx < num_imported {
+    // Imported function - find type index from imports
+    let mut import_idx = 0
+    let mut type_idx = -1
+    for imp in module_.imports {
+      match imp.desc {
+        ImportDesc::Func(tidx) => {
+          if import_idx == func_idx {
+            type_idx = tidx.reinterpret_as_int()
+            break
+          }
+          import_idx += 1
+        }
+        _ => ()
+      }
+    }
+    type_idx
+  } else {
+    // Local function - look up in module funcs
+    let local_idx = func_idx - num_imported
+    if local_idx >= 0 && local_idx < module_.funcs.length() {
+      module_.funcs[local_idx].reinterpret_as_int()
+    } else {
+      -1
+    }
+  }
+}
+
+///|
 /// Intermediate instruction for threaded interpreter
 enum MInstr {
   WasmInstr((Runtime) -> ControlFlow)
@@ -1184,32 +1229,12 @@ fn op_br_on_non_null(rt : Runtime) -> ControlFlow {
 ///|
 fn op_call(rt : Runtime) -> ControlFlow {
   let func_idx = rt.read_imm_idx()
-  // Count imported functions
-  let mut num_imported_funcs = 0
-  for imp in rt.module_.imports {
-    match imp.desc {
-      ImportDesc::Func(_) => num_imported_funcs += 1
-      _ => ()
-    }
-  }
+  let num_imported_funcs = count_imported_funcs(rt.module_)
 
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
     // Get the imported function's type from the import descriptor
-    let mut import_idx = 0
-    let mut type_idx = -1
-    for imp in rt.module_.imports {
-      match imp.desc {
-        ImportDesc::Func(tidx) => {
-          if import_idx == func_idx {
-            type_idx = tidx.reinterpret_as_int()
-            break
-          }
-          import_idx += 1
-        }
-        _ => ()
-      }
-    }
+    let type_idx = get_func_type_idx(rt.module_, func_idx, num_imported_funcs)
     if type_idx < 0 {
       return Trap(
         RuntimeError::InvalidType("call: invalid imported function index"),
@@ -1334,14 +1359,7 @@ fn op_call_indirect(rt : Runtime) -> ControlFlow {
     return Trap(RuntimeError::InvalidType("uninitialized element"))
   }
 
-  // Count imported functions
-  let mut num_imported_funcs = 0
-  for imp in rt.module_.imports {
-    match imp.desc {
-      ImportDesc::Func(_) => num_imported_funcs += 1
-      _ => ()
-    }
-  }
+  let num_imported_funcs = count_imported_funcs(rt.module_)
 
   // Get the expected type
   let expected_type = rt.module_.types[type_idx]
@@ -1349,20 +1367,7 @@ fn op_call_indirect(rt : Runtime) -> ControlFlow {
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
     // Get the imported function's type from the import descriptor
-    let mut import_idx = 0
-    let mut actual_type_idx = -1
-    for imp in rt.module_.imports {
-      match imp.desc {
-        ImportDesc::Func(tidx) => {
-          if import_idx == func_idx {
-            actual_type_idx = tidx.reinterpret_as_int()
-            break
-          }
-          import_idx += 1
-        }
-        _ => ()
-      }
-    }
+    let actual_type_idx = get_func_type_idx(rt.module_, func_idx, num_imported_funcs)
     if actual_type_idx < 0 {
       return Trap(
         RuntimeError::InvalidType(
@@ -1497,33 +1502,12 @@ fn op_end(rt : Runtime) -> ControlFlow {
 ///|
 fn op_return_call(rt : Runtime) -> ControlFlow {
   let func_idx = rt.read_imm_idx()
-
-  // Count imported functions
-  let mut num_imported_funcs = 0
-  for imp in rt.module_.imports {
-    match imp.desc {
-      ImportDesc::Func(_) => num_imported_funcs += 1
-      _ => ()
-    }
-  }
+  let num_imported_funcs = count_imported_funcs(rt.module_)
 
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
     // Get the imported function's type from the import descriptor
-    let mut import_idx = 0
-    let mut type_idx = -1
-    for imp in rt.module_.imports {
-      match imp.desc {
-        ImportDesc::Func(tidx) => {
-          if import_idx == func_idx {
-            type_idx = tidx.reinterpret_as_int()
-            break
-          }
-          import_idx += 1
-        }
-        _ => ()
-      }
-    }
+    let type_idx = get_func_type_idx(rt.module_, func_idx, num_imported_funcs)
     if type_idx < 0 {
       return Trap(
         RuntimeError::InvalidType(
@@ -1639,14 +1623,7 @@ fn op_return_call_indirect(rt : Runtime) -> ControlFlow {
     return Trap(RuntimeError::InvalidType("uninitialized element"))
   }
 
-  // Count imported functions
-  let mut num_imported_funcs = 0
-  for imp in rt.module_.imports {
-    match imp.desc {
-      ImportDesc::Func(_) => num_imported_funcs += 1
-      _ => ()
-    }
-  }
+  let num_imported_funcs = count_imported_funcs(rt.module_)
 
   // Get the expected type
   let expected_type = rt.module_.types[type_idx]
@@ -1654,20 +1631,7 @@ fn op_return_call_indirect(rt : Runtime) -> ControlFlow {
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
     // Get the imported function's type from the import descriptor
-    let mut import_idx = 0
-    let mut actual_type_idx = -1
-    for imp in rt.module_.imports {
-      match imp.desc {
-        ImportDesc::Func(tidx) => {
-          if import_idx == func_idx {
-            actual_type_idx = tidx.reinterpret_as_int()
-            break
-          }
-          import_idx += 1
-        }
-        _ => ()
-      }
-    }
+    let actual_type_idx = get_func_type_idx(rt.module_, func_idx, num_imported_funcs)
     if actual_type_idx < 0 {
       return Trap(
         RuntimeError::InvalidType(
@@ -1807,14 +1771,7 @@ fn op_call_ref(rt : Runtime) -> ControlFlow {
     )
   }
 
-  // Count imported functions
-  let mut num_imported_funcs = 0
-  for imp in rt.module_.imports {
-    match imp.desc {
-      ImportDesc::Func(_) => num_imported_funcs += 1
-      _ => ()
-    }
-  }
+  let num_imported_funcs = count_imported_funcs(rt.module_)
 
   // Get the expected function type
   let func_type = rt.module_.types[type_idx]
@@ -1822,20 +1779,7 @@ fn op_call_ref(rt : Runtime) -> ControlFlow {
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
     // Get the imported function's type from the import descriptor
-    let mut import_idx = 0
-    let mut actual_type_idx = -1
-    for imp in rt.module_.imports {
-      match imp.desc {
-        ImportDesc::Func(tidx) => {
-          if import_idx == func_idx {
-            actual_type_idx = tidx.reinterpret_as_int()
-            break
-          }
-          import_idx += 1
-        }
-        _ => ()
-      }
-    }
+    let actual_type_idx = get_func_type_idx(rt.module_, func_idx, num_imported_funcs)
     if actual_type_idx < 0 {
       return Trap(
         RuntimeError::InvalidType("call_ref: invalid imported function index"),
@@ -1944,14 +1888,7 @@ fn op_return_call_ref(rt : Runtime) -> ControlFlow {
     )
   }
 
-  // Count imported functions
-  let mut num_imported_funcs = 0
-  for imp in rt.module_.imports {
-    match imp.desc {
-      ImportDesc::Func(_) => num_imported_funcs += 1
-      _ => ()
-    }
-  }
+  let num_imported_funcs = count_imported_funcs(rt.module_)
 
   // Get the expected function type
   let func_type = rt.module_.types[type_idx]
@@ -1959,20 +1896,7 @@ fn op_return_call_ref(rt : Runtime) -> ControlFlow {
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
     // Get the imported function's type from the import descriptor
-    let mut import_idx = 0
-    let mut actual_type_idx = -1
-    for imp in rt.module_.imports {
-      match imp.desc {
-        ImportDesc::Func(tidx) => {
-          if import_idx == func_idx {
-            actual_type_idx = tidx.reinterpret_as_int()
-            break
-          }
-          import_idx += 1
-        }
-        _ => ()
-      }
-    }
+    let actual_type_idx = get_func_type_idx(rt.module_, func_idx, num_imported_funcs)
     if actual_type_idx < 0 {
       return Trap(
         RuntimeError::InvalidType(
@@ -4428,28 +4352,8 @@ fn Runtime::compile_wasm_instr(
     Call(func_idx) => {
       // Look up function signature to properly track types
       let func_idx_int = func_idx.reinterpret_as_int()
-
-      // Count imported functions and find type index
-      let mut num_imported = 0
-      let mut type_idx = -1
-      for imp in self.module_.imports {
-        match imp.desc {
-          ImportDesc::Func(tidx) => {
-            if num_imported == func_idx_int {
-              type_idx = tidx.reinterpret_as_int()
-              break
-            }
-            num_imported += 1
-          }
-          _ => ()
-        }
-      }
-
-      // If not an import, look up in module funcs
-      if type_idx < 0 && func_idx_int >= num_imported {
-        let local_idx = func_idx_int - num_imported
-        type_idx = self.module_.funcs[local_idx].reinterpret_as_int()
-      }
+      let num_imported = count_imported_funcs(self.module_)
+      let type_idx = get_func_type_idx(self.module_, func_idx_int, num_imported)
 
       // Get the function type and update type stack
       if type_idx >= 0 {
@@ -4715,28 +4619,8 @@ fn Runtime::compile_wasm_instr(
     ReturnCall(func_idx) => {
       // Look up function signature to properly track types (same as Call)
       let func_idx_int = func_idx.reinterpret_as_int()
-
-      // Count imported functions and find type index
-      let mut num_imported = 0
-      let mut type_idx = -1
-      for imp in self.module_.imports {
-        match imp.desc {
-          ImportDesc::Func(tidx) => {
-            if num_imported == func_idx_int {
-              type_idx = tidx.reinterpret_as_int()
-              break
-            }
-            num_imported += 1
-          }
-          _ => ()
-        }
-      }
-
-      // If not an import, look up in module funcs
-      if type_idx < 0 && func_idx_int >= num_imported {
-        let local_idx = func_idx_int - num_imported
-        type_idx = self.module_.funcs[local_idx].reinterpret_as_int()
-      }
+      let num_imported = count_imported_funcs(self.module_)
+      let type_idx = get_func_type_idx(self.module_, func_idx_int, num_imported)
 
       // Get the function type and update type stack
       // For tail calls, only pop params (results go to caller, not us)
@@ -4842,15 +4726,7 @@ pub fn Runtime::compile(self : Runtime) -> Unit raise RuntimeError {
       // Call the start function
       // Start function must have type [] -> []
       let func_idx = start_idx.reinterpret_as_int()
-
-      // Count imported functions to get the actual function index
-      let mut num_imported_funcs = 0
-      for imp in self.module_.imports {
-        match imp.desc {
-          ImportDesc::Func(_) => num_imported_funcs += 1
-          _ => ()
-        }
-      }
+      let num_imported_funcs = count_imported_funcs(self.module_)
 
       // Only execute if it's a local function (not imported)
       // Imported start functions would require host environment support
@@ -4931,14 +4807,7 @@ pub fn Runtime::call_compiled(
     raise RuntimeError::FunctionNotFound("Function not found: \{func_name}")
   }
 
-  // Count imported functions to calculate local function index
-  let mut num_imported_funcs = 0
-  for imp in self.module_.imports {
-    match imp.desc {
-      ImportDesc::Func(_) => num_imported_funcs += 1
-      _ => ()
-    }
-  }
+  let num_imported_funcs = count_imported_funcs(self.module_)
 
   // Check if it's an imported function - call it directly via import resolver
   if idx < num_imported_funcs {
