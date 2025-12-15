@@ -17,5 +17,5 @@ async fn run_wasm(wasm_path : String) -> Unit {
   if results.length() > 0 {
     println("Result: \{results}")
   }
-  println("WASM module executed successfully.")
+  // println("WASM module executed successfully.")
 }
