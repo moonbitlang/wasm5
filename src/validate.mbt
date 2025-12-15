@@ -56,7 +56,7 @@ fn get_func_type_index(
   module_ : Module,
   func_idx : Int,
   import_counts : ImportCounts
-) -> Int {
+) -> Int raise ValidationError {
   if func_idx < import_counts.funcs {
     // Imported function - find type index from imports
     let mut current_import = 0
@@ -76,8 +76,26 @@ fn get_func_type_index(
     found_type_idx
   } else {
     // Local function - get type index from funcs array
-    module_.funcs[func_idx - import_counts.funcs].reinterpret_as_int()
+    let local_idx = func_idx - import_counts.funcs
+    if local_idx < 0 || local_idx >= module_.funcs.length() {
+      raise ValidationError::InvalidFunctionIndex(func_idx)
+    }
+    module_.funcs[local_idx].reinterpret_as_int()
   }
+}
+
+///|
+/// Validate a binary operation
+fn validate_binary_op(
+  ctx : ValidationCtx,
+  module_ : Module,
+  operand_type : ValType,
+  result_type : ValType,
+  op_name : String
+) -> Unit raise ValidationError {
+  ctx.poly_pop_expect(module_, operand_type, op_name)
+  ctx.poly_pop_expect(module_, operand_type, op_name)
+  ctx.stack.push(result_type)
 }
 
 ///|
@@ -851,41 +869,13 @@ fn validate_instruction(
     F64Const(_) => stack.push(F64)
 
     // Binary operations
-    I32Add
-    | I32Sub
-    | I32Mul
-    | I32DivS
-    | I32DivU
-    | I32RemS
-    | I32RemU
-    | I32And
-    | I32Or
-    | I32Xor
-    | I32Shl
-    | I32ShrS
-    | I32ShrU
-    | I32Rotl
-    | I32Rotr => {
-      ctx.poly_pop_expect(module_, I32, "i32 binary op")
-      ctx.poly_pop_expect(module_, I32, "i32 binary op")
-      stack.push(I32)
-    }
+    I32Add | I32Sub | I32Mul | I32DivS | I32DivU | I32RemS | I32RemU
+    | I32And | I32Or | I32Xor | I32Shl | I32ShrS | I32ShrU | I32Rotl | I32Rotr =>
+      validate_binary_op(ctx, module_, I32, I32, "i32 binary op")
 
     // Comparison operations
-    I32Eq
-    | I32Ne
-    | I32LtS
-    | I32LtU
-    | I32GtS
-    | I32GtU
-    | I32LeS
-    | I32LeU
-    | I32GeS
-    | I32GeU => {
-      ctx.poly_pop_expect(module_, I32, "i32 comparison")
-      ctx.poly_pop_expect(module_, I32, "i32 comparison")
-      stack.push(I32)
-    }
+    I32Eq | I32Ne | I32LtS | I32LtU | I32GtS | I32GtU | I32LeS | I32LeU | I32GeS | I32GeU =>
+      validate_binary_op(ctx, module_, I32, I32, "i32 comparison")
 
     // Unary operations
     I32Eqz | I32Clz | I32Ctz | I32Popcnt | I32Extend8S | I32Extend16S => {
@@ -894,41 +884,13 @@ fn validate_instruction(
     }
 
     // i64 binary operations
-    I64Add
-    | I64Sub
-    | I64Mul
-    | I64DivS
-    | I64DivU
-    | I64RemS
-    | I64RemU
-    | I64And
-    | I64Or
-    | I64Xor
-    | I64Shl
-    | I64ShrS
-    | I64ShrU
-    | I64Rotl
-    | I64Rotr => {
-      ctx.poly_pop_expect(module_, I64, "i64 binary op")
-      ctx.poly_pop_expect(module_, I64, "i64 binary op")
-      stack.push(I64)
-    }
+    I64Add | I64Sub | I64Mul | I64DivS | I64DivU | I64RemS | I64RemU
+    | I64And | I64Or | I64Xor | I64Shl | I64ShrS | I64ShrU | I64Rotl | I64Rotr =>
+      validate_binary_op(ctx, module_, I64, I64, "i64 binary op")
 
     // i64 comparison operations
-    I64Eq
-    | I64Ne
-    | I64LtS
-    | I64LtU
-    | I64GtS
-    | I64GtU
-    | I64LeS
-    | I64LeU
-    | I64GeS
-    | I64GeU => {
-      ctx.poly_pop_expect(module_, I64, "i64 comparison")
-      ctx.poly_pop_expect(module_, I64, "i64 comparison")
-      stack.push(I32)
-    }
+    I64Eq | I64Ne | I64LtS | I64LtU | I64GtS | I64GtU | I64LeS | I64LeU | I64GeS | I64GeU =>
+      validate_binary_op(ctx, module_, I64, I32, "i64 comparison")
 
     // i64 test operation (returns i32)
     I64Eqz => {
@@ -955,18 +917,12 @@ fn validate_instruction(
     }
 
     // f32 comparison operations
-    F32Eq | F32Ne | F32Lt | F32Gt | F32Le | F32Ge => {
-      ctx.poly_pop_expect(module_, F32, "f32 comparison")
-      ctx.poly_pop_expect(module_, F32, "f32 comparison")
-      stack.push(I32)
-    }
+    F32Eq | F32Ne | F32Lt | F32Gt | F32Le | F32Ge =>
+      validate_binary_op(ctx, module_, F32, I32, "f32 comparison")
 
     // f64 comparison operations
-    F64Eq | F64Ne | F64Lt | F64Gt | F64Le | F64Ge => {
-      ctx.poly_pop_expect(module_, F64, "f64 comparison")
-      ctx.poly_pop_expect(module_, F64, "f64 comparison")
-      stack.push(I32)
-    }
+    F64Eq | F64Ne | F64Lt | F64Gt | F64Le | F64Ge =>
+      validate_binary_op(ctx, module_, F64, I32, "f64 comparison")
 
     // f32 unary operations
     F32Abs | F32Neg | F32Ceil | F32Floor | F32Trunc | F32Nearest | F32Sqrt => {
@@ -981,18 +937,12 @@ fn validate_instruction(
     }
 
     // f32 binary operations
-    F32Add | F32Sub | F32Mul | F32Div | F32Min | F32Max | F32Copysign => {
-      ctx.poly_pop_expect(module_, F32, "f32 binary op")
-      ctx.poly_pop_expect(module_, F32, "f32 binary op")
-      stack.push(F32)
-    }
+    F32Add | F32Sub | F32Mul | F32Div | F32Min | F32Max | F32Copysign =>
+      validate_binary_op(ctx, module_, F32, F32, "f32 binary op")
 
     // f64 binary operations
-    F64Add | F64Sub | F64Mul | F64Div | F64Min | F64Max | F64Copysign => {
-      ctx.poly_pop_expect(module_, F64, "f64 binary op")
-      ctx.poly_pop_expect(module_, F64, "f64 binary op")
-      stack.push(F64)
-    }
+    F64Add | F64Sub | F64Mul | F64Div | F64Min | F64Max | F64Copysign =>
+      validate_binary_op(ctx, module_, F64, F64, "f64 binary op")
 
     // Conversion operations: i32 -> f32/f64
     F32ConvertI32S | F32ConvertI32U => {
