@@ -198,6 +198,10 @@ enum ExpectedValue {
   AnyF64Nan // nan:arithmetic for f64 - any NaN value is acceptable
   AnyFuncRef // any funcref value (including null)
   AnyExternRef // any externref value (including null)
+  // AnyRefNull matches any null reference, regardless of its static type.
+  // At runtime, all null references (nullref, nullfuncref, nullexnref,
+  // nullexternref) are represented identically as Ref(None). The type
+  // distinction only exists during validation, not at runtime.
   AnyRefNull // any null reference
 } derive(Show)
 
@@ -366,6 +370,14 @@ fn parse_expected_value(expected : Json) -> ExpectedValue raise {
     { "type": "exnref", .. } => AnyFuncRef // Treat as any reference
     // refnull: any null reference
     { "type": "refnull", .. } => AnyRefNull
+    // All null reference types map to AnyRefNull because at runtime, WebAssembly
+    // represents all null references identically as Ref(None). The type system
+    // distinguishes nullref/nullfuncref/nullexnref/nullexternref during validation,
+    // but at execution time they're indistinguishable.
+    { "type": "nullref", .. } => AnyRefNull
+    { "type": "nullfuncref", .. } => AnyRefNull
+    { "type": "nullexnref", .. } => AnyRefNull
+    { "type": "nullexternref", .. } => AnyRefNull
     _ => raise TestUnsupported::UnsupportedExpectedType("\{expected}")
   }
 }
@@ -974,7 +986,6 @@ let blacklisted_wast_files : Array[String] = [
 let whitelisted_tests : Array[(String, Set[Int])] = [
   ("local_tee.wast", Set::from_array([613])), // complicated null ref handling
   ("call.wast", Set::from_array([359])), // memory.grow is not implemented properly
-  ("ref_null.wast", Set::from_array([56, 59, 62, 65, 68, 71, 74, 77, 80])), // unsupported expected type (easy)
   // 1. didn't validate table index (easy); 
   // 2. stack polymorphism not implemented (cause it's return); 
   // 3. more type mismatch (the tailcall's return type must be same as the function's)
