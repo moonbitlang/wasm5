@@ -2,3 +2,8 @@
 target/
 .mooncakes/
 .moonagent/
+
+# Personal notes and configuration
+.claude/
+TODO.md
+wasm3.md
