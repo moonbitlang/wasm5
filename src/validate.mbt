@@ -794,6 +794,15 @@ fn ValidationCtx::get_label_types(
 // =============================================================================
 
 ///|
+/// Mark code as unreachable and clear the operand stack.
+/// This implements the WebAssembly spec requirement that when code becomes
+/// unreachable (e.g., after br, return, or tail calls), the operand stack is purged.
+fn ValidationCtx::mark_unreachable(self : ValidationCtx) -> Unit {
+  self.is_unreachable = true
+  self.stack.clear()
+}
+
+///|
 /// Pop a value from the stack, allowing empty stack in unreachable mode.
 /// Returns the type if available, or the expected type if unreachable.
 /// Only values below unreachable_stack_height are polymorphic.
@@ -837,6 +846,36 @@ fn ValidationCtx::poly_pop_expect(
     raise ValidationError::TypeMismatch(
       "\{op_name} requires \{expected}, got \{actual}",
     )
+  }
+}
+
+///|
+/// Validate that a tail call's return type matches the current function's return type.
+/// For tail calls (return_call, return_call_indirect, return_call_ref), the called
+/// function's return type must match the current function's return type via subtyping.
+fn validate_tail_call_return_type(
+  module_ : Module,
+  func_type_called : FuncType,
+  func_type : FuncType,
+  instr_name : String,
+) -> Unit raise ValidationError {
+  if func_type_called.results.length() != func_type.results.length() {
+    raise ValidationError::TypeMismatch(
+      "\{instr_name}: return type mismatch: expected \{func_type.results.length()} results, got \{func_type_called.results.length()}",
+    )
+  }
+  for i = 0; i < func_type_called.results.length(); i = i + 1 {
+    if not(
+        is_subtype(
+          module_,
+          func_type_called.results[i],
+          func_type.results[i],
+        ),
+      ) {
+      raise ValidationError::TypeMismatch(
+        "\{instr_name}: return type mismatch at position \{i}",
+      )
+    }
   }
 }
 
@@ -1584,8 +1623,7 @@ fn validate_instruction(
         }
       }
       // Mark as unreachable and record stack height
-      ctx.is_unreachable = true
-      stack.clear()
+      ctx.mark_unreachable()
     }
     Br(label) => {
       // Always validate label exists (even in unreachable code)
@@ -1615,8 +1653,7 @@ fn validate_instruction(
         }
       }
       // Mark as unreachable and record stack height
-      ctx.is_unreachable = true
-      stack.clear()
+      ctx.mark_unreachable()
     }
     BrIf(label) => {
       // Conditional branch
@@ -1711,8 +1748,7 @@ fn validate_instruction(
         }
       }
       // Code after is unreachable, record stack height
-      ctx.is_unreachable = true
-      stack.clear()
+      ctx.mark_unreachable()
     }
     BrOnNull(_label) =>
       // br_on_null: pop nullable ref, branch if null, else push non-null ref
@@ -1789,8 +1825,7 @@ fn validate_instruction(
     Nop => ()
     Unreachable => {
       // unreachable instruction marks all subsequent code as unreachable
-      ctx.is_unreachable = true
-      stack.clear()
+      ctx.mark_unreachable()
     }
     Call(func_idx) => {
       let idx = func_idx.reinterpret_as_int()
@@ -1852,27 +1887,12 @@ fn validate_instruction(
         raise ValidationError::InvalidTypeIndex(type_idx)
       }
       let func_type_called = module_.types[type_idx]
-
-      // Validate that the called function's return type matches current function's return type
-      if func_type_called.results.length() != func_type.results.length() {
-        raise ValidationError::TypeMismatch(
-          "return_call: return type mismatch: expected \{func_type.results.length()} results, got \{func_type_called.results.length()}",
-        )
-      }
-      for i = 0; i < func_type_called.results.length(); i = i + 1 {
-        if not(
-            is_subtype(
-              module_,
-              func_type_called.results[i],
-              func_type.results[i],
-            ),
-          ) {
-          raise ValidationError::TypeMismatch(
-            "return_call: return type mismatch at position \{i}",
-          )
-        }
-      }
-
+      validate_tail_call_return_type(
+        module_,
+        func_type_called,
+        func_type,
+        "return_call",
+      )
       // Pop arguments from stack (in reverse order)
       for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
         ctx.poly_pop_expect(
@@ -1882,8 +1902,7 @@ fn validate_instruction(
         )
       }
       // Mark as unreachable and clear stack - tail call doesn't return to current function
-      ctx.is_unreachable = true
-      stack.clear()
+      ctx.mark_unreachable()
     }
     ReturnCallIndirect(type_idx, table_idx) => {
       // return_call_indirect: tail call through table that returns to caller
@@ -1900,27 +1919,12 @@ fn validate_instruction(
         raise ValidationError::InvalidTypeIndex(idx)
       }
       let func_type_called = module_.types[idx]
-
-      // Validate that the called function's return type matches current function's return type
-      if func_type_called.results.length() != func_type.results.length() {
-        raise ValidationError::TypeMismatch(
-          "return_call_indirect: return type mismatch: expected \{func_type.results.length()} results, got \{func_type_called.results.length()}",
-        )
-      }
-      for i = 0; i < func_type_called.results.length(); i = i + 1 {
-        if not(
-            is_subtype(
-              module_,
-              func_type_called.results[i],
-              func_type.results[i],
-            ),
-          ) {
-          raise ValidationError::TypeMismatch(
-            "return_call_indirect: return type mismatch at position \{i}",
-          )
-        }
-      }
-
+      validate_tail_call_return_type(
+        module_,
+        func_type_called,
+        func_type,
+        "return_call_indirect",
+      )
       // Pop table index
       ctx.poly_pop_expect(module_, I32, "return_call_indirect table index")
       // Pop arguments from stack (in reverse order)
@@ -1932,8 +1936,7 @@ fn validate_instruction(
         )
       }
       // Mark as unreachable and clear stack - tail call doesn't return to current function
-      ctx.is_unreachable = true
-      stack.clear()
+      ctx.mark_unreachable()
     }
     CallRef(type_idx) => {
       // call_ref: calls function through a reference
@@ -1976,27 +1979,12 @@ fn validate_instruction(
         raise ValidationError::InvalidTypeIndex(idx)
       }
       let func_type_called = module_.types[idx]
-
-      // Validate that the called function's return type matches current function's return type
-      if func_type_called.results.length() != func_type.results.length() {
-        raise ValidationError::TypeMismatch(
-          "return_call_ref: return type mismatch: expected \{func_type.results.length()} results, got \{func_type_called.results.length()}",
-        )
-      }
-      for i = 0; i < func_type_called.results.length(); i = i + 1 {
-        if not(
-            is_subtype(
-              module_,
-              func_type_called.results[i],
-              func_type.results[i],
-            ),
-          ) {
-          raise ValidationError::TypeMismatch(
-            "return_call_ref: return type mismatch at position \{i}",
-          )
-        }
-      }
-
+      validate_tail_call_return_type(
+        module_,
+        func_type_called,
+        func_type,
+        "return_call_ref",
+      )
       // Pop the function reference
       if ctx.is_unreachable && stack.length() == 0 {
         // Polymorphic - allow
@@ -2019,8 +2007,7 @@ fn validate_instruction(
       }
 
       // Mark as unreachable and clear stack - tail call doesn't return to current function
-      ctx.is_unreachable = true
-      stack.clear()
+      ctx.mark_unreachable()
     }
   }
 }
