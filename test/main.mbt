@@ -978,12 +978,8 @@ let whitelisted_tests : Array[(String, Set[Int])] = [
   // 1. didn't validate table index (easy); 
   // 2. stack polymorphism not implemented (cause it's return); 
   // 3. more type mismatch (the tailcall's return type must be same as the function's)
-  ("return_call_indirect.wast", Set::from_array([474, 540, 553, 582])),
-  ("return_call.wast", Set::from_array([141, 148, 170, 175, 209])),
-  (
-    "return_call_ref.wast",
-    Set::from_array([183, 232, 243, 254, 265, 276, 287, 369, 379, 389]),
-  ),
+  ("return_call_indirect.wast", Set::from_array([553, 582])),
+  ("return_call_ref.wast", Set::from_array([183, 276, 369, 379])),
   // 1. nullable funcref should pass validation but trap at runtime;
   // 2. cannot use call_ref on externref or funcref
   ("call_ref.wast", Set::from_array([97, 201, 211])),
