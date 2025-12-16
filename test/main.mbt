@@ -1027,6 +1027,9 @@ let whitelisted_tests : Array[(String, Set[Int])] = [
   // 1. nullable funcref should pass validation but trap at runtime;
   // 2. cannot use call_ref on externref or funcref
   ("call_ref.wast", Set::from_array([97, 201, 211])),
+  // Test harness limitations (not WASM implementation issues):
+  // - Line 26: invoke $ModuleName syntax not supported (need registry lookup in action handler)
+  // - Lines 93,94,97: "get" action type not supported (need handler to read exported globals)
   ("exports.wast", Set::from_array([26, 93, 94, 97])),
   ("br_on_non_null.wast", Set::from_array([92])),
   ("ref_as_non_null.wast", Set::from_array([27])),
