@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MoonBit
+        uses: ./.github/actions/setup
+
+      - name: Run tests
+        run: |
+          ulimit -s 8176
+          moon run test --target native
