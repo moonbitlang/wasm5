@@ -23,7 +23,7 @@ fn reftype_to_valtype(ref_type : RefType) -> ValType {
 
 ///|
 /// Cached counts of imported resources
-struct ImportCounts {
+priv struct ImportCounts {
   funcs : Int
   tables : Int
   mems : Int
