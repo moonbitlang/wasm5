@@ -140,6 +140,7 @@ pub struct Runtime {
   mut pc : Int
   call_stack : Array[CallFrame]
   memory : Array[Byte] // Linear memory
+  memory_max : UInt? // Maximum memory size in pages (None = no limit)
   globals : Array[Value] // Global variables
   tables : Array[RuntimeTable] // Tables with limits
   imported_funcs : Array[ImportedFunc] // Imported functions
@@ -201,37 +202,30 @@ pub fn Runtime::load_with_resolver(
   resolver : ImportResolver,
 ) -> Runtime raise RuntimeError {
   // Initialize memory
-  // Limit to 256 pages (16MB) to avoid memory allocation issues
-  // WebAssembly spec allows up to 65536 pages (4GB), but we cap it for practical reasons
-  let max_pages : UInt = 256
+  // Read memory limits from module definition
+  let mut memory_min_pages : UInt = 0
+  let mut memory_max_pages : UInt? = None
 
   // Check for imported memory first, then local memory
-  let mut imported_mem_pages : UInt = 0
   for imp in m.imports {
     match imp.desc {
       ImportDesc::Mem(mem_type) => {
-        imported_mem_pages = mem_type.limits.min
+        memory_min_pages = mem_type.limits.min
+        memory_max_pages = mem_type.limits.max
         break // Only one memory allowed in MVP
       }
       _ => ()
     }
   }
-  let memory_size = if imported_mem_pages > 0 {
-    // Use imported memory limits
-    let capped_pages = if imported_mem_pages > max_pages {
-      max_pages
-    } else {
-      imported_mem_pages
-    }
-    capped_pages.reinterpret_as_int() * 65536
-  } else if m.mems.length() > 0 {
-    // Use local memory limits
-    let pages = m.mems[0].limits.min
-    let capped_pages = if pages > max_pages { max_pages } else { pages }
-    capped_pages.reinterpret_as_int() * 65536
-  } else {
-    0
+
+  // If no imported memory, check for local memory
+  if memory_min_pages == 0 && m.mems.length() > 0 {
+    memory_min_pages = m.mems[0].limits.min
+    memory_max_pages = m.mems[0].limits.max
   }
+
+  // Initialize memory with minimum size
+  let memory_size = memory_min_pages.reinterpret_as_int() * 65536
   let memory = Array::make(memory_size, b'\x00')
   // Initialize globals
   // First, add imported globals with default values (since we don't have a host environment)
@@ -342,6 +336,7 @@ pub fn Runtime::load_with_resolver(
     pc: 0,
     call_stack: [],
     memory,
+    memory_max: memory_max_pages,
     globals,
     tables,
     imported_funcs,

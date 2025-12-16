@@ -985,9 +985,8 @@ let blacklisted_wast_files : Array[String] = [
 /// These are known failing tests that won't be fixed soon
 let whitelisted_tests : Array[(String, Set[Int])] = [
   ("local_tee.wast", Set::from_array([613])), // complicated null ref handling
-  ("call.wast", Set::from_array([359])), // memory.grow is not implemented properly
-  // 1. didn't validate table index (easy); 
-  // 2. stack polymorphism not implemented (cause it's return); 
+  // 1. didn't validate table index (easy);
+  // 2. stack polymorphism not implemented (cause it's return);
   // 3. more type mismatch (the tailcall's return type must be same as the function's)
   ("return_call_indirect.wast", Set::from_array([553, 582])),
   ("return_call_ref.wast", Set::from_array([183, 276, 369, 379])),
@@ -1003,9 +1002,7 @@ let whitelisted_tests : Array[(String, Set[Int])] = [
     "conversions.wast",
     Set::from_array([195, 241, 246, 392, 438, 443, 562, 609]),
   ),
-  ("memory_grow.wast", Set::from_array([10, 13, 26])),
   ("call_indirect.wast", Set::from_array([603, 791, 995, 1038])),
-  ("memory_size.wast", Set::from_array([37, 39, 41, 43, 45, 61, 63])),
   (
     "imports.wast",
     Set::from_array([
