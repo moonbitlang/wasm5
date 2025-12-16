@@ -236,6 +236,19 @@ fn is_func_type_index(module_ : Module, type_idx : Int) -> Bool {
 }
 
 ///|
+/// Validate that all type indices in a ValType exist in the module
+fn validate_valtype(module_ : Module, val_type : ValType) -> Unit raise ValidationError {
+  match val_type {
+    Ref(RefType::TypeIndex(idx), _) => {
+      if idx < 0 || idx >= module_.types.length() {
+        raise ValidationError::UnknownType(idx)
+      }
+    }
+    _ => () // Other types don't have type indices
+  }
+}
+
+///|
 /// Check if t1 is a subtype of t2 (t1 <: t2) with module context for type lookups
 /// WebAssembly GC type hierarchy:
 /// - NullRef (none) <: all nullable reference types
@@ -312,6 +325,45 @@ fn is_subtype(module_ : Module, t1 : ValType, t2 : ValType) -> Bool {
 fn validate_module(m : Module) -> Unit raise ValidationError {
   // Compute import counts once for efficiency
   let import_counts = get_import_counts(m)
+
+  // Validate that all type indices in type definitions are valid
+  for func_type in m.types {
+    for param in func_type.params {
+      validate_valtype(m, param)
+    }
+    for result in func_type.results {
+      validate_valtype(m, result)
+    }
+  }
+
+  // Validate type indices in global types
+  for global in m.globals {
+    validate_valtype(m, global.type_.val_type)
+  }
+
+  // Validate type indices in table element types
+  for table in m.tables {
+    match table.elem_type {
+      RefType::TypeIndex(idx) => {
+        if idx < 0 || idx >= m.types.length() {
+          raise ValidationError::UnknownType(idx)
+        }
+      }
+      _ => ()
+    }
+  }
+
+  // Validate type indices in element segments
+  for elem in m.elems {
+    match elem.elem_type {
+      RefType::TypeIndex(idx) => {
+        if idx < 0 || idx >= m.types.length() {
+          raise ValidationError::UnknownType(idx)
+        }
+      }
+      _ => ()
+    }
+  }
 
   // Validate function type indices
   for i = 0; i < m.funcs.length(); i = i + 1 {
@@ -678,7 +730,10 @@ fn get_block_type(
 ) -> (Array[ValType], Array[ValType]) raise ValidationError {
   match block_type {
     Empty => ([], [])
-    Value(t) => ([], [t])
+    Value(t) => {
+      validate_valtype(module_, t)
+      ([], [t])
+    }
     TypeIndex(idx) => {
       if idx < 0 || idx >= module_.types.length() {
         raise ValidationError::InvalidTypeIndex(idx)
@@ -1884,6 +1939,8 @@ fn validate_instruction(
         )
       }
       let expected_type = result_types[0]
+      // Validate that type indices in the result type exist
+      validate_valtype(module_, expected_type)
 
       // Check how many concrete values we have BEFORE popping
       let num_concrete = stack.length()
@@ -2128,6 +2185,19 @@ fn validate_function(
   code : Code,
   import_counts : ImportCounts,
 ) -> Unit raise ValidationError {
+  // Validate type indices in function parameters
+  for param in func_type.params {
+    validate_valtype(module_, param)
+  }
+  // Validate type indices in function results
+  for result in func_type.results {
+    validate_valtype(module_, result)
+  }
+  // Validate type indices in local variables
+  for local_type in code.locals {
+    validate_valtype(module_, local_type)
+  }
+
   // Create validation context with local initialization tracking
   let ctx = ValidationCtx::new_with_locals(func_type, code)
   // Push function-level control frame with empty params and function results

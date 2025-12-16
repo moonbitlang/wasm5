@@ -684,6 +684,14 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got InvalidResultArity",
         )
       }
+    @wasm5.ValidationError::UnknownType(_) =>
+      if not(expected_error.contains("unknown type")) {
+        ctx.fail(
+          line,
+          "assert_invalid",
+          "expected '\{expected_error}' but got UnknownType",
+        )
+      }
     @wasm5.ValidationError::InvalidAlignment(_) =>
       if not(expected_error.contains("alignment")) {
         ctx.fail(
@@ -1016,10 +1024,6 @@ let whitelisted_tests : Array[(String, Set[Int])] = [
     Set::from_array([
       101, 393, 394, 395, 396, 397, 410, 411, 412, 413, 414, 666, 667, 668, 669,
     ]),
-  ),
-  (
-    "ref.wast",
-    Set::from_array([28, 32, 37, 42, 47, 52, 56, 60, 65, 69, 73, 78]),
   ),
   ("float_exprs.wast", Set::from_array([519])),
   ("br_if.wast", Set::from_array([668])),

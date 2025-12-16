@@ -47,6 +47,7 @@ pub suberror ValidationError {
   UnknownTable(Int)
   ConstantExpressionRequired(String)
   UninitializedLocal(Int) // Local with non-defaultable type used before initialization
+  UnknownType(Int) // Type index in ref type doesn't exist
 } derive(Show)
 
 ///|

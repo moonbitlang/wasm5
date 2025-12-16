@@ -636,24 +636,20 @@ fn parse_element_section(parser : Parser) -> Array[Elem] raise {
       _ => { instrs: [I32Const(0U)] } // dummy offset for passive/declarative
     }
     // Read elemkind or reftype for certain flags
-    match flags {
+    let elem_type : RefType = match flags {
       1 | 3 => {
-        let _ = parser.read_byte()
+        let _elemkind = parser.read_byte()
         // elemkind (0x00 = funcref)
+        RefType::Func
       }
       2 => {
-        let _ = parser.read_byte()
+        let _elemkind = parser.read_byte()
         // elemkind
+        RefType::Func
       }
-      5 | 7 => {
-        let _ = parser.read_reftype()
-        // reftype
-      }
-      6 => {
-        let _ = parser.read_reftype()
-        // reftype
-      }
-      _ => ()
+      5 | 7 => parser.read_reftype()
+      6 => parser.read_reftype()
+      _ => RefType::Func // flags 0 and 4: default to funcref
     }
     // Read init vector
     let init_count = parser.read_u32_leb128()
@@ -672,7 +668,7 @@ fn parse_element_section(parser : Parser) -> Array[Elem] raise {
         init.push(parser.read_u32_leb128())
       }
     }
-    elems.push({ table_idx, offset, init, is_active })
+    elems.push({ table_idx, offset, init, is_active, elem_type })
   }
   elems
 }

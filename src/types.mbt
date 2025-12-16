@@ -173,6 +173,7 @@ struct Elem {
   offset : Expr
   init : Array[UInt] // function indices
   is_active : Bool // True for active segments (flags 0,2,4,6), false for passive/declarative
+  elem_type : RefType // Element type (funcref, externref, or typed reference)
 }
 
 // Data segment (for memory initialization)
