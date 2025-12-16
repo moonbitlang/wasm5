@@ -31,6 +31,7 @@ pub suberror ValidationError {
   InvalidLocalIndex(Int)
   InvalidGlobalIndex(Int)
   StackSizeMismatch(String)
+  InvalidResultArity(String)
   InvalidAlignment(String)
   UnknownLabel(Int)
   InvalidStartFunction(String)
