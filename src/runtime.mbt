@@ -279,24 +279,27 @@ pub fn Runtime::load_with_resolver(
     tables.push({ data: table_data, max: table.limits.max })
   }
   // Initialize element segments (copy function references into tables)
+  // Only process active segments - skip passive and declarative segments
   for elem in m.elems {
-    let table_idx = elem.table_idx.reinterpret_as_int()
-    if table_idx >= 0 && table_idx < tables.length() {
-      // Evaluate offset expression
-      let offset_value = eval_const_expr(elem.offset, globals)
-      let offset = match offset_value {
-        I32(v) => v.reinterpret_as_int()
-        _ =>
-          raise RuntimeError::UnsupportedInitExpression(
-            "elem segment offset must be i32",
-          )
-      }
-      // Copy function indices into table
-      let table = tables[table_idx]
-      for i = 0; i < elem.init.length(); i = i + 1 {
-        let addr = offset + i
-        if addr >= 0 && addr < table.data.length() {
-          table.data[addr] = Some(elem.init[i].reinterpret_as_int())
+    if elem.is_active {
+      let table_idx = elem.table_idx.reinterpret_as_int()
+      if table_idx >= 0 && table_idx < tables.length() {
+        // Evaluate offset expression
+        let offset_value = eval_const_expr(elem.offset, globals)
+        let offset = match offset_value {
+          I32(v) => v.reinterpret_as_int()
+          _ =>
+            raise RuntimeError::UnsupportedInitExpression(
+              "elem segment offset must be i32",
+            )
+        }
+        // Copy function indices into table
+        let table = tables[table_idx]
+        for i = 0; i < elem.init.length(); i = i + 1 {
+          let addr = offset + i
+          if addr >= 0 && addr < table.data.length() {
+            table.data[addr] = Some(elem.init[i].reinterpret_as_int())
+          }
         }
       }
     }

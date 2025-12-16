@@ -1015,10 +1015,9 @@ let whitelisted_tests : Array[(String, Set[Int])] = [
     Set::from_array([28, 32, 37, 42, 47, 52, 56, 60, 65, 69, 73, 78]),
   ),
   ("float_exprs.wast", Set::from_array([519])),
-  ("table_set.wast", Set::from_array([91, 101])),
   ("br_if.wast", Set::from_array([668])),
   ("ref_func.wast", Set::from_array([109, 113])),
-  ("table_grow.wast", Set::from_array([107, 109, 124, 130])),
+  ("table_grow.wast", Set::from_array([124, 130])), // cross-module imports not implemented
   ("func_ptrs.wast", Set::from_array([49])),
   ("global.wast", Set::from_array([324, 377, 663, 675])),
 ]
