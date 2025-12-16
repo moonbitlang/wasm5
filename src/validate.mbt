@@ -1880,7 +1880,7 @@ fn validate_instruction(
       // For MVP, result_types should have exactly 1 type
       if result_types.length() != 1 {
         raise ValidationError::TypeMismatch(
-          "select must have exactly 1 result type, got \{result_types.length()}",
+          "invalid result arity: select must have exactly 1 result type, got \{result_types.length()}",
         )
       }
       let expected_type = result_types[0]

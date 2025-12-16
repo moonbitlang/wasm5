@@ -660,8 +660,9 @@ async fn handle_assert_invalid(
     // The WebAssembly spec uses "type mismatch" for various validation errors.
     // Our validator distinguishes TypeMismatch and StackSizeMismatch, but both
     // correspond to the spec's "type mismatch" error message.
-    @wasm5.ValidationError::TypeMismatch(_) =>
-      if not(expected_error.contains("type mismatch")) {
+    @wasm5.ValidationError::TypeMismatch(msg) =>
+      if not(expected_error.contains("type mismatch")) &&
+        not(expected_error.contains("invalid result arity") && msg.contains("invalid result arity")) {
         ctx.fail(
           line,
           "assert_invalid",
@@ -1009,7 +1010,6 @@ let whitelisted_tests : Array[(String, Set[Int])] = [
       101, 393, 394, 395, 396, 397, 410, 411, 412, 413, 414, 666, 667, 668, 669,
     ]),
   ),
-  ("select.wast", Set::from_array([368, 372])), // minor error message mismatches
   (
     "ref.wast",
     Set::from_array([28, 32, 37, 42, 47, 52, 56, 60, 65, 69, 73, 78]),
