@@ -2209,6 +2209,40 @@ fn validate_instruction(
       if tidx < 0 || tidx >= total_tables {
         raise ValidationError::UnknownTable(tidx)
       }
+
+      // Validate that the table has funcref element type (return_call_indirect requires funcref tables)
+      let table_elem_type = if tidx < import_counts.tables {
+        // Imported table - find it in imports
+        let mut import_table_idx = 0
+        let mut elem_type : RefType = RefType::Func // default
+        for imp in module_.imports {
+          match imp.desc {
+            ImportDesc::Table(table_type) => {
+              if import_table_idx == tidx {
+                elem_type = table_type.elem_type
+                break
+              }
+              import_table_idx += 1
+            }
+            _ => ()
+          }
+        }
+        elem_type
+      } else {
+        // Local table
+        let local_idx = tidx - import_counts.tables
+        module_.tables[local_idx].elem_type
+      }
+
+      // Check that table element type is funcref-compatible
+      match table_elem_type {
+        RefType::Func | RefType::TypeIndex(_) => () // OK - function references
+        _ =>
+          raise ValidationError::TypeMismatch(
+            "return_call_indirect requires funcref table, got \{table_elem_type}",
+          )
+      }
+
       let idx = type_idx.reinterpret_as_int()
       if idx < 0 || idx >= module_.types.length() {
         raise ValidationError::InvalidTypeIndex(idx)

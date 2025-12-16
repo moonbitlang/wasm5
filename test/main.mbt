@@ -635,6 +635,14 @@ fn handle_assert_trap(
             "expected trap '\{expected_error}' but got indirect call type mismatch",
           )
         }
+      } else if msg.contains("null") && msg.contains("function reference") {
+        if not(expected_error.contains("null function reference")) {
+          ctx.fail(
+            line,
+            "assert_trap",
+            "expected trap '\{expected_error}' but got null function reference",
+          )
+        }
       } else {
         ctx.fail(
           line,
@@ -1019,11 +1027,12 @@ let blacklisted_wast_files : Array[String] = [
 /// These are known failing tests that won't be fixed soon
 let whitelisted_tests : Array[(String, Set[Int])] = [
   ("local_tee.wast", Set::from_array([613])), // complicated null ref handling
-  // 1. didn't validate table index (easy);
-  // 2. stack polymorphism not implemented (cause it's return);
-  // 3. more type mismatch (the tailcall's return type must be same as the function's)
-  ("return_call_indirect.wast", Set::from_array([553, 582])),
-  ("return_call_ref.wast", Set::from_array([183, 276, 369, 379])),
+  // return_call_ref validation needs stricter type checking for function references:
+  // - Line 276: return type mismatch detection (ref null $t vs ref null func)
+  // - Line 369: externref used instead of funcref
+  // - Line 379: nullable funcref used instead of non-nullable typed reference
+  // Current validation just pops without checking reference type compatibility
+  ("return_call_ref.wast", Set::from_array([276, 369, 379])),
   // 1. nullable funcref should pass validation but trap at runtime;
   // 2. cannot use call_ref on externref or funcref
   ("call_ref.wast", Set::from_array([97, 201, 211])),
