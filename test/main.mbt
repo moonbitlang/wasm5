@@ -1036,7 +1036,6 @@ let whitelisted_tests : Array[(String, Set[Int])] = [
     "conversions.wast",
     Set::from_array([195, 241, 246, 392, 438, 443, 562, 609]),
   ),
-  ("call_indirect.wast", Set::from_array([603, 791, 995, 1038])),
   (
     "imports.wast",
     Set::from_array([
