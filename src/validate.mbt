@@ -1809,7 +1809,14 @@ fn validate_instruction(
         stack.push(result)
       }
     }
-    CallIndirect(type_idx, _table_idx) => {
+    CallIndirect(type_idx, table_idx) => {
+      // Validate table index
+      let total_tables = import_counts.tables + module_.tables.length()
+      let tidx = table_idx.reinterpret_as_int()
+      if tidx < 0 || tidx >= total_tables {
+        raise ValidationError::UnknownTable(tidx)
+      }
+
       let idx = type_idx.reinterpret_as_int()
       if idx < 0 || idx >= module_.types.length() {
         raise ValidationError::InvalidTypeIndex(idx)
@@ -1852,8 +1859,15 @@ fn validate_instruction(
       // Mark as unreachable - this is a tail call that doesn't return to current function
       ctx.is_unreachable = true
     }
-    ReturnCallIndirect(type_idx, _table_idx) => {
+    ReturnCallIndirect(type_idx, table_idx) => {
       // return_call_indirect: tail call through table that returns to caller
+      // Validate table index
+      let total_tables = import_counts.tables + module_.tables.length()
+      let tidx = table_idx.reinterpret_as_int()
+      if tidx < 0 || tidx >= total_tables {
+        raise ValidationError::UnknownTable(tidx)
+      }
+
       let idx = type_idx.reinterpret_as_int()
       if idx < 0 || idx >= module_.types.length() {
         raise ValidationError::InvalidTypeIndex(idx)

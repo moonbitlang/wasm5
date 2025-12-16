@@ -978,7 +978,7 @@ let whitelisted_tests : Array[(String, Set[Int])] = [
   // 1. didn't validate table index (easy); 
   // 2. stack polymorphism not implemented (cause it's return); 
   // 3. more type mismatch (the tailcall's return type must be same as the function's)
-  ("return_call_indirect.wast", Set::from_array([427, 468, 474, 540, 553, 582])),
+  ("return_call_indirect.wast", Set::from_array([468, 474, 540, 553, 582])),
   ("return_call.wast", Set::from_array([141, 148, 170, 175, 209])),
   (
     "return_call_ref.wast",
