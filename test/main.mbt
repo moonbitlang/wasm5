@@ -1030,7 +1030,6 @@ let whitelisted_tests : Array[(String, Set[Int])] = [
   ("ref_func.wast", Set::from_array([109, 113])),
   ("table_grow.wast", Set::from_array([124, 130])), // cross-module imports not implemented
   ("func_ptrs.wast", Set::from_array([49])),
-  ("global.wast", Set::from_array([324, 377, 663, 675])),
 ]
 
 ///|

@@ -178,6 +178,37 @@ fn validate_memory_exists(
 }
 
 ///|
+/// Validate that all instructions in an expression are valid constant expression instructions
+/// WebAssembly constant expressions can only contain:
+/// - Constant instructions: i32.const, i64.const, f32.const, f64.const
+/// - Reference instructions: ref.null, ref.func
+/// - Global access: global.get
+/// - Arithmetic: i32.add, i32.sub, i32.mul, i64.add, i64.sub, i64.mul
+fn validate_const_expr_instructions(expr : Expr) -> Unit raise ValidationError {
+  for instr in expr.instrs {
+    match instr {
+      I32Const(_)
+      | I64Const(_)
+      | F32Const(_)
+      | F64Const(_)
+      | RefNull(_)
+      | RefFunc(_)
+      | GlobalGet(_)
+      | I32Add
+      | I32Sub
+      | I32Mul
+      | I64Add
+      | I64Sub
+      | I64Mul => () // Valid constant expression instructions
+      _ =>
+        raise ValidationError::ConstantExpressionRequired(
+          "invalid instruction in constant expression: \{instr}",
+        )
+    }
+  }
+}
+
+///|
 /// Validate that a constant expression only uses immutable globals
 /// WebAssembly constant expressions can only use global.get on immutable globals
 fn validate_const_expr_globals(
@@ -407,6 +438,11 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
 
   // Validate global initializers
   for global in m.globals {
+    // Validate that only constant expression instructions are used
+    validate_const_expr_instructions(global.init)
+    // Validate that global.get only references immutable globals
+    validate_const_expr_globals(m, global.init, import_counts)
+
     // Create a validation context for the init expression
     let init_ctx = ValidationCtx::new()
     // Validate each instruction in the init expression
