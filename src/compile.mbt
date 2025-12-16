@@ -4185,6 +4185,11 @@ fn Runtime::compile_wasm_instr(
       ctx.pop_types(2)
       self.emit(WasmInstr(op_select))
     } // pop 3, push 1 => net -2
+    SelectTyped(_types) => {
+      // Runtime behavior is identical to untyped select
+      ctx.pop_types(2)
+      self.emit(WasmInstr(op_select))
+    } // pop 3, push 1 => net -2
     Nop => self.emit(WasmInstr(op_nop))
     Unreachable => self.emit(WasmInstr(op_unreachable))
     // Control flow

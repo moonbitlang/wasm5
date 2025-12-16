@@ -909,12 +909,12 @@ fn parse_instr(parser : Parser, opcode : Byte) -> Instr raise {
       // select t* - typed select with value type vector
       // Read the number of types (should be 1 for MVP)
       let num_types = parser.read_u32_leb128()
-      // Read and discard the type(s) - we treat it the same as untyped select at runtime
+      // Read the type(s)
+      let types : Array[ValType] = []
       for _ in 0U..<num_types {
-        let _ = parser.read_valtype()
-
+        types.push(parser.read_valtype())
       }
-      Select
+      SelectTyped(types)
     }
 
     // Variable instructions

@@ -1009,7 +1009,7 @@ let whitelisted_tests : Array[(String, Set[Int])] = [
       101, 393, 394, 395, 396, 397, 410, 411, 412, 413, 414, 666, 667, 668, 669,
     ]),
   ),
-  ("select.wast", Set::from_array([368, 372, 384, 392, 398, 465, 545])),
+  ("select.wast", Set::from_array([368, 372])), // minor error message mismatches
   (
     "ref.wast",
     Set::from_array([28, 32, 37, 42, 47, 52, 56, 60, 65, 69, 73, 78]),

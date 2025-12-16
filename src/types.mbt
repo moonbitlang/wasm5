@@ -210,7 +210,8 @@ pub enum Instr {
 
   // Parametric instructions
   Drop
-  Select
+  Select // 0x1B - untyped select (numeric types only)
+  SelectTyped(Array[ValType]) // 0x1C - typed select (any type)
 
   // Variable instructions
   LocalGet(UInt)
