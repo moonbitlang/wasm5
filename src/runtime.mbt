@@ -30,6 +30,7 @@ pub suberror ValidationError {
   InvalidTypeIndex(Int)
   InvalidLocalIndex(Int)
   InvalidGlobalIndex(Int)
+  UnknownGlobal(Int) // Global not available in current context (e.g., local global in table init)
   StackSizeMismatch(String)
   InvalidResultArity(String)
   InvalidAlignment(String)

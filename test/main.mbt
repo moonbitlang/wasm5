@@ -748,6 +748,14 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got UnknownExportedTable",
         )
       }
+    @wasm5.ValidationError::UnknownGlobal(_) =>
+      if not(expected_error.contains("unknown global")) {
+        ctx.fail(
+          line,
+          "assert_invalid",
+          "expected '\{expected_error}' but got UnknownGlobal",
+        )
+      }
     @wasm5.ValidationError::UnknownExportedGlobal(_) =>
       if not(expected_error.contains("unknown global")) {
         ctx.fail(

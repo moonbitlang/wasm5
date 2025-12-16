@@ -209,6 +209,51 @@ fn validate_const_expr_instructions(expr : Expr) -> Unit raise ValidationError {
 }
 
 ///|
+/// Validate that a table init expression only references imported globals
+/// Table initialization happens before local globals are initialized,
+/// so only imported globals are available
+fn validate_table_init_expr(
+  m : Module,
+  expr : Expr,
+  import_counts : ImportCounts,
+) -> Unit raise ValidationError {
+  // First check that instructions are valid constant expression instructions
+  validate_const_expr_instructions(expr)
+
+  // Then check that global.get only references imported globals
+  for instr in expr.instrs {
+    match instr {
+      GlobalGet(idx) => {
+        let global_idx = idx.reinterpret_as_int()
+        // Must be an imported global (index < import_counts.globals)
+        if global_idx >= import_counts.globals {
+          raise ValidationError::UnknownGlobal(global_idx)
+        }
+        // Also check that the imported global is immutable
+        let mut import_global_idx = 0
+        for imp in m.imports {
+          match imp.desc {
+            ImportDesc::Global(gt) => {
+              if import_global_idx == global_idx {
+                if gt.mutable {
+                  raise ValidationError::ConstantExpressionRequired(
+                    "table initializer global.get must reference immutable global",
+                  )
+                }
+                break
+              }
+              import_global_idx += 1
+            }
+            _ => ()
+          }
+        }
+      }
+      _ => ()
+    }
+  }
+}
+
+///|
 /// Validate that a constant expression only uses immutable globals
 /// WebAssembly constant expressions can only use global.get on immutable globals
 fn validate_const_expr_globals(
@@ -545,6 +590,9 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
             "table with non-nullable element type must have initializer",
           )
         Some(init_expr) => {
+          // Validate that table init only references imported globals
+          validate_table_init_expr(m, init_expr, import_counts)
+
           // For non-nullable tables, ref.null is not allowed
           for instr in init_expr.instrs {
             match instr {
@@ -594,6 +642,9 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
       // Nullable table with initializer - validate the init type
       match table.init {
         Some(init_expr) => {
+          // Validate that table init only references imported globals
+          validate_table_init_expr(m, init_expr, import_counts)
+
           let init_ctx = ValidationCtx::new()
           let dummy_func_type : FuncType = { params: [], results: [] }
           let dummy_code : Code = {
