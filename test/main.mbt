@@ -151,7 +151,17 @@ fn register_module(
         let wrapper = make_import_wrapper(entry, export_name_str, arity)
         ctx.resolver.add_func(name_bytes, export_name, wrapper)
       }
-      _ => () // Skip non-function exports for now
+      @wasm5.ExportDesc::Global(global_idx) => {
+        // Export a global value
+        let global_idx_int = global_idx.reinterpret_as_int()
+        // Get the global value from the runtime
+        let globals = runtime.get_globals()
+        if global_idx_int >= 0 && global_idx_int < globals.length() {
+          let global_value = globals[global_idx_int]
+          ctx.resolver.add_global(name_bytes, exp.name, global_value)
+        }
+      }
+      _ => () // Skip other export types for now
     }
   }
 }

@@ -85,10 +85,11 @@ pub fn ImportedFunc::new(
 
 ///|
 /// Import resolver for linking modules
-/// Maps (module_name, field_name) to ImportedFunc
+/// Maps (module_name, field_name) to ImportedFunc or global Value
 /// Using Bytes keys to match how WebAssembly module imports work
 struct ImportResolverEntry {
   funcs : Map[Bytes, ImportedFunc]
+  globals : Map[Bytes, Value]
 }
 
 ///|
@@ -113,8 +114,26 @@ pub fn ImportResolver::add_func(
   match self.modules.get(module_) {
     Some(entry) => entry.funcs[name] = func
     None => {
-      let entry : ImportResolverEntry = { funcs: Map::new() }
+      let entry : ImportResolverEntry = { funcs: Map::new(), globals: Map::new() }
       entry.funcs[name] = func
+      self.modules[module_] = entry
+    }
+  }
+}
+
+///|
+/// Add an imported global to the resolver
+pub fn ImportResolver::add_global(
+  self : ImportResolver,
+  module_ : Bytes,
+  name : Bytes,
+  value : Value,
+) -> Unit {
+  match self.modules.get(module_) {
+    Some(entry) => entry.globals[name] = value
+    None => {
+      let entry : ImportResolverEntry = { funcs: Map::new(), globals: Map::new() }
+      entry.globals[name] = value
       self.modules[module_] = entry
     }
   }
@@ -129,6 +148,19 @@ pub fn ImportResolver::get_func(
 ) -> ImportedFunc? {
   match self.modules.get(module_) {
     Some(entry) => entry.funcs.get(name)
+    None => None
+  }
+}
+
+///|
+/// Look up an imported global
+pub fn ImportResolver::get_global(
+  self : ImportResolver,
+  module_ : Bytes,
+  name : Bytes,
+) -> Value? {
+  match self.modules.get(module_) {
+    Some(entry) => entry.globals.get(name)
     None => None
   }
 }
@@ -154,6 +186,12 @@ pub struct Runtime {
 /// Get the module from the runtime
 pub fn Runtime::get_module(self : Runtime) -> Module {
   self.module_
+}
+
+///|
+/// Get the globals array from the runtime
+pub fn Runtime::get_globals(self : Runtime) -> Array[Value] {
+  self.globals
 }
 
 ///|
@@ -231,20 +269,28 @@ pub fn Runtime::load_with_resolver(
   let memory_size = memory_min_pages.reinterpret_as_int() * 65536
   let memory = Array::make(memory_size, b'\x00')
   // Initialize globals
-  // First, add imported globals with default values (since we don't have a host environment)
+  // First, add imported globals - try to get from resolver, otherwise use default values
   let globals : Array[Value] = []
   for imp in m.imports {
     match imp.desc {
-      ImportDesc::Global(gt) =>
-        match gt.val_type {
-          ValType::I32 => globals.push(Value::I32(666U)) // spectest global_i32 = 666
-          ValType::I64 => globals.push(Value::I64(666UL)) // spectest global_i64 = 666
-          ValType::F32 => globals.push(Value::F32(666.6))
-          ValType::F64 => globals.push(Value::F64(666.6))
-          ValType::FuncRef => globals.push(Value::Ref(None))
-          ValType::ExternRef => globals.push(Value::Ref(None))
-          _ => globals.push(Value::I32(0U))
+      ImportDesc::Global(gt) => {
+        // Try to get the global value from the resolver
+        let value = match resolver.get_global(imp.module_, imp.name) {
+          Some(v) => v
+          None =>
+            // Fall back to default values (for spectest)
+            match gt.val_type {
+              ValType::I32 => Value::I32(666U) // spectest global_i32 = 666
+              ValType::I64 => Value::I64(666UL) // spectest global_i64 = 666
+              ValType::F32 => Value::F32(666.6)
+              ValType::F64 => Value::F64(666.6)
+              ValType::FuncRef => Value::Ref(None)
+              ValType::ExternRef => Value::Ref(None)
+              _ => Value::I32(0U)
+            }
         }
+        globals.push(value)
+      }
       _ => ()
     }
   }
