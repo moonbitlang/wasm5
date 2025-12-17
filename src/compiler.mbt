@@ -1207,6 +1207,13 @@ pub fn Runtime::compile(self : Runtime) -> Unit raise RuntimeError {
 }
 
 ///|
+#owned(rt)
+extern "C" fn apply_func_ref(
+  f : FuncRef[(Runtime) -> RetCode],
+  rt : Runtime,
+) -> RetCode = "apply_func_ref"
+
+///|
 fn Runtime::execute(self : Runtime) -> Unit raise RuntimeError {
   self.running = true
   while self.running {
@@ -1215,7 +1222,7 @@ fn Runtime::execute(self : Runtime) -> Unit raise RuntimeError {
         "Expected instruction at PC \{self.pc}",
       )
     }
-    let ret = f(self)
+    let ret = apply_func_ref(f, self)
     if ret != OK {
       raise ret.to_error(self.error_detail)
     }

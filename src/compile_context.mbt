@@ -30,7 +30,7 @@ fn RetCode::to_error(self : RetCode, detail : String) -> RuntimeError {
 /// Intermediate instruction for threaded interpreter
 /// Operations return RetCode (0 = OK, non-zero = error)
 pub enum MInstr {
-  WasmInstr((Runtime) -> RetCode)
+  WasmInstr(FuncRef[(Runtime) -> RetCode])
   ImmediateI32(UInt)
   ImmediateIdx(Int)
 }
