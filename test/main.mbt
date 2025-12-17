@@ -1027,12 +1027,6 @@ let blacklisted_wast_files : Array[String] = [
 /// These are known failing tests that won't be fixed soon
 let whitelisted_tests : Array[(String, Set[Int])] = [
   ("local_tee.wast", Set::from_array([613])), // complicated null ref handling
-  // return_call_ref validation needs stricter type checking for function references:
-  // - Line 276: return type mismatch detection (ref null $t vs ref null func)
-  // - Line 369: externref used instead of funcref
-  // - Line 379: nullable funcref used instead of non-nullable typed reference
-  // Current validation just pops without checking reference type compatibility
-  ("return_call_ref.wast", Set::from_array([276, 369, 379])),
   // 1. nullable funcref should pass validation but trap at runtime;
   // 2. cannot use call_ref on externref or funcref
   ("call_ref.wast", Set::from_array([97, 201, 211])),
@@ -1057,6 +1051,13 @@ let whitelisted_tests : Array[(String, Set[Int])] = [
   ("float_exprs.wast", Set::from_array([519])),
   ("br_if.wast", Set::from_array([668])),
   ("ref_func.wast", Set::from_array([109, 113])),
+  // Line 276: return_call_ref return type mismatch validation issue
+  // Function $f23 returns (ref null $t) but calls return_call_ref $t3 which returns (ref func).
+  // Validation correctly detects Ref(Func, false) is not a subtype of Ref(TypeIndex($t), true),
+  // but the module is still being accepted. The subtyping check returns false as expected,
+  // but somehow the ValidationError is not properly propagating or the test has an edge case
+  // with how multi-function modules are validated. Requires deeper investigation.
+  ("return_call_ref.wast", Set::from_array([276])),
   ("table_grow.wast", Set::from_array([124, 130])), // cross-module imports not implemented
   ("func_ptrs.wast", Set::from_array([49])),
 ]

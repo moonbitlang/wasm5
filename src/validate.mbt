@@ -17,7 +17,8 @@ fn reftype_to_valtype(ref_type : RefType) -> ValType {
     RefType::NoFunc => ValType::NullFuncRef
     RefType::NoExtern => ValType::NullExternRef
     RefType::NoExn => ValType::NullExnRef
-    RefType::TypeIndex(_) => ValType::FuncRef // Treat typed references as funcref for now
+    // TypeIndex: return nullable typed reference (ref null $t)
+    RefType::TypeIndex(_) => ValType::Ref(ref_type, true)
   }
 }
 
@@ -1016,15 +1017,11 @@ fn validate_tail_call_return_type(
     )
   }
   for i = 0; i < func_type_called.results.length(); i = i + 1 {
-    if not(
-        is_subtype(
-          module_,
-          func_type_called.results[i],
-          func_type.results[i],
-        ),
-      ) {
+    let called_result = func_type_called.results[i]
+    let expected_result = func_type.results[i]
+    if not(is_subtype(module_, called_result, expected_result)) {
       raise ValidationError::TypeMismatch(
-        "\{instr_name}: return type mismatch at position \{i}",
+        "\{instr_name}: return type mismatch at position \{i}: expected \{expected_result}, got \{called_result}",
       )
     }
   }
@@ -2322,8 +2319,34 @@ fn validate_instruction(
           "return_call_ref expects funcref on stack",
         )
       } else {
-        let _ = stack.unsafe_pop()
-        // Pop funcref
+        let ref_type = stack.unsafe_pop()
+        // Validate that the reference is a typed function reference
+        // return_call_ref requires a reference to a specific function type, not general funcref
+        match ref_type {
+          // Only typed function references are valid
+          Ref(RefType::TypeIndex(_), _) => ()
+          // General function references are invalid - they could be any function type
+          FuncRef | NullFuncRef | Ref(RefType::Func, _) =>
+            raise ValidationError::TypeMismatch(
+              "return_call_ref requires typed function reference (ref $t), got general funcref",
+            )
+          // Externref is invalid for return_call_ref
+          ExternRef | NullExternRef | Ref(RefType::Extern, _) =>
+            raise ValidationError::TypeMismatch(
+              "return_call_ref expects function reference, got externref",
+            )
+          // Other reference types are invalid
+          AnyRef | NullRef | EqRef | I31Ref | StructRef | ArrayRef | ExnRef
+          | NullExnRef | Ref(_, _) =>
+            raise ValidationError::TypeMismatch(
+              "return_call_ref expects function reference, got \{ref_type}",
+            )
+          // Non-reference types are invalid
+          I32 | I64 | F32 | F64 | V128 =>
+            raise ValidationError::TypeMismatch(
+              "return_call_ref expects function reference, got \{ref_type}",
+            )
+        }
       }
 
       // Pop arguments from stack (in reverse order)
