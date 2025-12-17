@@ -1208,21 +1208,18 @@ pub fn Runtime::compile(self : Runtime) -> Unit raise RuntimeError {
 
 ///|
 #owned(rt)
-extern "C" fn apply_func_ref(
-  f : FuncRef[(Runtime) -> RetCode],
-  rt : Runtime,
-) -> RetCode = "apply_func_ref"
+extern "C" fn next_op(rt : Runtime) -> RetCode = "next_op"
 
 ///|
 fn Runtime::execute(self : Runtime) -> Unit raise RuntimeError {
   self.running = true
   while self.running {
-    guard self.ops.unsafe_get(self.pc) is WasmInstr(f) else {
+    guard self.ops.unsafe_get(self.pc) is WasmInstr(_f) else {
       raise RuntimeError::UnimplementedInstruction(
         "Expected instruction at PC \{self.pc}",
       )
     }
-    let ret = apply_func_ref(f, self)
+    let ret = next_op(self)
     if ret != OK {
       raise ret.to_error(self.error_detail)
     }
