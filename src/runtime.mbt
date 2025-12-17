@@ -187,6 +187,7 @@ pub struct Runtime {
   tables : Array[RuntimeTable] // Tables with limits
   imported_funcs : Array[ImportedFunc] // Imported functions
   data_segments : Array[Array[Byte]] // Data segments for bulk memory ops
+  mut error_detail : String // Error detail for debugging (populated on error)
 }
 
 ///|
@@ -401,6 +402,7 @@ pub fn Runtime::load_with_resolver(
     tables,
     imported_funcs,
     data_segments,
+    error_detail: "",
   }
 }
 

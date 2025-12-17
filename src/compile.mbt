@@ -117,14 +117,38 @@ fn get_func_type_idx(
 }
 
 ///|
+/// Return code for operations - simple integer enum for efficient ABI
+pub enum RetCode {
+  OK = 0
+  DivisionByZero = 1
+  IntegerOverflow = 2
+  MemoryOutOfBounds = 3
+  Unreachable = 4
+  InvalidType = 5
+  FunctionNotCompiled = 6
+  UnsupportedLocalType = 7
+} derive(Eq)
+
+///|
+/// Convert RetCode to RuntimeError using error_detail from Runtime
+fn RetCode::to_error(self : RetCode, detail : String) -> RuntimeError {
+  match self {
+    OK => abort("OK is not an error")
+    DivisionByZero => RuntimeError::DivisionByZero
+    IntegerOverflow => RuntimeError::IntegerOverflow
+    MemoryOutOfBounds => RuntimeError::MemoryOutOfBounds
+    Unreachable => RuntimeError::Unreachable
+    InvalidType => RuntimeError::InvalidType(detail)
+    FunctionNotCompiled => RuntimeError::FunctionNotCompiled(detail)
+    UnsupportedLocalType => RuntimeError::UnsupportedLocalType(detail)
+  }
+}
+
+///|
 /// Intermediate instruction for threaded interpreter
-/// Operations directly mutate rt.pc and raise on error
-/// - Next: rt.pc += 1
-/// - Jump: rt.pc = target
-/// - End: rt.running = false
-/// - Trap: raise RuntimeError
+/// Operations return RetCode (0 = OK, non-zero = error)
 enum MInstr {
-  WasmInstr((Runtime) -> Unit raise RuntimeError)
+  WasmInstr((Runtime) -> RetCode)
   ImmediateI32(UInt)
   ImmediateIdx(Int)
 }
@@ -354,160 +378,178 @@ fn Runtime::pop_i32(self : Runtime) -> UInt {
 // ============================================================================
 
 ///|
-fn op_i32_const(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_const(rt : Runtime) -> RetCode {
   let value = rt.read_imm_i32()
   rt.stack.push(Value::I32(value))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_add(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_add(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(a + b))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_sub(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_sub(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(a - b))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_mul(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_mul(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(a * b))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_div_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_div_s(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   if b == 0U {
-    raise RuntimeError::DivisionByZero
+    return DivisionByZero
   }
   if a == 0x80000000U && b == 0xFFFFFFFFU {
-    raise RuntimeError::IntegerOverflow
+    return IntegerOverflow
   }
   let result = (a.reinterpret_as_int() / b.reinterpret_as_int()).reinterpret_as_uint()
   rt.stack.push(Value::I32(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_div_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_div_u(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   if b == 0U {
-    raise RuntimeError::DivisionByZero
+    return DivisionByZero
   }
   rt.stack.push(Value::I32(a / b))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_rem_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_rem_s(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   if b == 0U {
-    raise RuntimeError::DivisionByZero
+    return DivisionByZero
   }
   let result = (a.reinterpret_as_int() % b.reinterpret_as_int()).reinterpret_as_uint()
   rt.stack.push(Value::I32(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_rem_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_rem_u(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   if b == 0U {
-    raise RuntimeError::DivisionByZero
+    return DivisionByZero
   }
   rt.stack.push(Value::I32(a % b))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_and(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_and(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(a & b))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_or(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_or(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(a | b))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_xor(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_xor(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(a ^ b))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_shl(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_shl(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   let shift = (b & 0x1FU).reinterpret_as_int()
   rt.stack.push(Value::I32(a << shift))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_shr_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_shr_s(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   let shift = (b & 0x1FU).reinterpret_as_int()
   let result = (a.reinterpret_as_int() >> shift).reinterpret_as_uint()
   rt.stack.push(Value::I32(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_shr_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_shr_u(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   let shift = (b & 0x1FU).reinterpret_as_int()
   rt.stack.push(Value::I32(a >> shift))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_rotl(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_rotl(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   let rotation = (b & 0x1FU).reinterpret_as_int()
   let result = (a << rotation) | (a >> (32 - rotation))
   rt.stack.push(Value::I32(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_rotr(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_rotr(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   let rotation = (b & 0x1FU).reinterpret_as_int()
   let result = (a >> rotation) | (a << (32 - rotation))
   rt.stack.push(Value::I32(result))
   rt.pc += 1
+  OK
 }
 
 // Comparison operations
 
 ///|
-fn op_i32_eq(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_eq(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(if a == b { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_ne(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_ne(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(if a != b { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_lt_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_lt_s(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   let result = if a.reinterpret_as_int() < b.reinterpret_as_int() {
     1U
@@ -516,17 +558,19 @@ fn op_i32_lt_s(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::I32(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_lt_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_lt_u(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(if a < b { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_gt_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_gt_s(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   let result = if a.reinterpret_as_int() > b.reinterpret_as_int() {
     1U
@@ -535,17 +579,19 @@ fn op_i32_gt_s(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::I32(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_gt_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_gt_u(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(if a > b { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_le_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_le_s(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   let result = if a.reinterpret_as_int() <= b.reinterpret_as_int() {
     1U
@@ -554,17 +600,19 @@ fn op_i32_le_s(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::I32(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_le_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_le_u(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(if a <= b { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_ge_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_ge_s(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   let result = if a.reinterpret_as_int() >= b.reinterpret_as_int() {
     1U
@@ -573,70 +621,79 @@ fn op_i32_ge_s(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::I32(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_ge_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_ge_u(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(if a >= b { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 // Unary operations
 
 ///|
-fn op_i32_eqz(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_eqz(rt : Runtime) -> RetCode {
   let a = rt.pop_i32()
   rt.stack.push(Value::I32(if a == 0U { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_clz(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_clz(rt : Runtime) -> RetCode {
   let a = rt.pop_i32()
   rt.stack.push(Value::I32(a.clz().reinterpret_as_uint()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_ctz(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_ctz(rt : Runtime) -> RetCode {
   let a = rt.pop_i32()
   rt.stack.push(Value::I32(a.ctz().reinterpret_as_uint()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_popcnt(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_popcnt(rt : Runtime) -> RetCode {
   let a = rt.pop_i32()
   rt.stack.push(Value::I32(a.popcnt().reinterpret_as_uint()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_extend8_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_extend8_s(rt : Runtime) -> RetCode {
   let a = rt.pop_i32()
   let byte = a & 0xFFU
   let result = if (byte & 0x80U) != 0U { byte | 0xFFFFFF00U } else { byte }
   rt.stack.push(Value::I32(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_extend16_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_extend16_s(rt : Runtime) -> RetCode {
   let a = rt.pop_i32()
   let half = a & 0xFFFFU
   let result = if (half & 0x8000U) != 0U { half | 0xFFFF0000U } else { half }
   rt.stack.push(Value::I32(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_wrap_i64(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_wrap_i64(rt : Runtime) -> RetCode {
   match rt.stack.unsafe_pop() {
     Value::I64(v) => rt.stack.push(Value::I32((v & 0xFFFFFFFFUL).to_uint()))
     _ => abort("Type error: expected i64")
   }
   rt.pc += 1
+  OK
 }
 
 // ============================================================================
@@ -662,179 +719,199 @@ fn Runtime::pop_i64(self : Runtime) -> UInt64 {
 }
 
 ///|
-fn op_i64_const(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_const(rt : Runtime) -> RetCode {
   // Read two i32 immediates to form i64
   let low = rt.read_imm_i32()
   let high = rt.read_imm_i32()
   let value = low.to_uint64() | (high.to_uint64() << 32)
   rt.stack.push(Value::I64(value))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f32_const(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_const(rt : Runtime) -> RetCode {
   let bits = rt.read_imm_i32()
   rt.stack.push(Value::F32(Float::reinterpret_from_uint(bits)))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_const(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_const(rt : Runtime) -> RetCode {
   let low = rt.read_imm_i32()
   let high = rt.read_imm_i32()
   let bits = low.to_uint64() | (high.to_uint64() << 32)
   rt.stack.push(Value::F64(bits.reinterpret_as_double()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_add(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_add(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I64(a + b))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_sub(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_sub(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I64(a - b))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_mul(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_mul(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I64(a * b))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_div_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_div_s(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   if b == 0UL {
-    raise RuntimeError::DivisionByZero
+    return DivisionByZero
   }
   if a == 0x8000000000000000UL && b == 0xFFFFFFFFFFFFFFFFUL {
-    raise RuntimeError::IntegerOverflow
+    return IntegerOverflow
   }
   let result = (a.reinterpret_as_int64() / b.reinterpret_as_int64()).reinterpret_as_uint64()
   rt.stack.push(Value::I64(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_div_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_div_u(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   if b == 0UL {
-    raise RuntimeError::DivisionByZero
+    return DivisionByZero
   }
   rt.stack.push(Value::I64(a / b))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_rem_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_rem_s(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   if b == 0UL {
-    raise RuntimeError::DivisionByZero
+    return DivisionByZero
   }
   let result = (a.reinterpret_as_int64() % b.reinterpret_as_int64()).reinterpret_as_uint64()
   rt.stack.push(Value::I64(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_rem_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_rem_u(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   if b == 0UL {
-    raise RuntimeError::DivisionByZero
+    return DivisionByZero
   }
   rt.stack.push(Value::I64(a % b))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_and(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_and(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I64(a & b))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_or(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_or(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I64(a | b))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_xor(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_xor(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I64(a ^ b))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_shl(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_shl(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   let shift = (b & 0x3FUL).to_int()
   rt.stack.push(Value::I64(a << shift))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_shr_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_shr_s(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   let shift = (b & 0x3FUL).to_int()
   let result = (a.reinterpret_as_int64() >> shift).reinterpret_as_uint64()
   rt.stack.push(Value::I64(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_shr_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_shr_u(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   let shift = (b & 0x3FUL).to_int()
   rt.stack.push(Value::I64(a >> shift))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_rotl(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_rotl(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   let rotation = (b & 0x3FUL).to_int()
   let result = (a << rotation) | (a >> (64 - rotation))
   rt.stack.push(Value::I64(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_rotr(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_rotr(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   let rotation = (b & 0x3FUL).to_int()
   let result = (a >> rotation) | (a << (64 - rotation))
   rt.stack.push(Value::I64(result))
   rt.pc += 1
+  OK
 }
 
 // i64 comparison operations
 
 ///|
-fn op_i64_eq(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_eq(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I32(if a == b { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_ne(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_ne(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I32(if a != b { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_lt_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_lt_s(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   let result = if a.reinterpret_as_int64() < b.reinterpret_as_int64() {
     1U
@@ -843,17 +920,19 @@ fn op_i64_lt_s(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::I32(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_lt_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_lt_u(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I32(if a < b { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_gt_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_gt_s(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   let result = if a.reinterpret_as_int64() > b.reinterpret_as_int64() {
     1U
@@ -862,17 +941,19 @@ fn op_i64_gt_s(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::I32(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_gt_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_gt_u(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I32(if a > b { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_le_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_le_s(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   let result = if a.reinterpret_as_int64() <= b.reinterpret_as_int64() {
     1U
@@ -881,17 +962,19 @@ fn op_i64_le_s(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::I32(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_le_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_le_u(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I32(if a <= b { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_ge_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_ge_s(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   let result = if a.reinterpret_as_int64() >= b.reinterpret_as_int64() {
     1U
@@ -900,47 +983,53 @@ fn op_i64_ge_s(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::I32(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_ge_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_ge_u(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I32(if a >= b { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 // i64 unary operations
 
 ///|
-fn op_i64_eqz(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_eqz(rt : Runtime) -> RetCode {
   let a = rt.pop_i64()
   rt.stack.push(Value::I32(if a == 0UL { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_clz(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_clz(rt : Runtime) -> RetCode {
   let a = rt.pop_i64()
   rt.stack.push(Value::I64(a.clz().to_uint64()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_ctz(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_ctz(rt : Runtime) -> RetCode {
   let a = rt.pop_i64()
   rt.stack.push(Value::I64(a.ctz().to_uint64()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_popcnt(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_popcnt(rt : Runtime) -> RetCode {
   let a = rt.pop_i64()
   rt.stack.push(Value::I64(a.popcnt().to_uint64()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_extend8_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_extend8_s(rt : Runtime) -> RetCode {
   let a = rt.pop_i64()
   let byte = a & 0xFFUL
   let result = if (byte & 0x80UL) != 0UL {
@@ -950,10 +1039,11 @@ fn op_i64_extend8_s(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::I64(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_extend16_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_extend16_s(rt : Runtime) -> RetCode {
   let a = rt.pop_i64()
   let half = a & 0xFFFFUL
   let result = if (half & 0x8000UL) != 0UL {
@@ -963,10 +1053,11 @@ fn op_i64_extend16_s(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::I64(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_extend32_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_extend32_s(rt : Runtime) -> RetCode {
   let a = rt.pop_i64()
   let word = a & 0xFFFFFFFFUL
   let result = if (word & 0x80000000UL) != 0UL {
@@ -976,21 +1067,24 @@ fn op_i64_extend32_s(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::I64(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_extend_i32_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_extend_i32_s(rt : Runtime) -> RetCode {
   let a = rt.pop_i32()
   let result = a.reinterpret_as_int().to_int64().reinterpret_as_uint64()
   rt.stack.push(Value::I64(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_extend_i32_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_extend_i32_u(rt : Runtime) -> RetCode {
   let a = rt.pop_i32()
   rt.stack.push(Value::I64(a.to_uint64()))
   rt.pc += 1
+  OK
 }
 
 // ============================================================================
@@ -998,26 +1092,29 @@ fn op_i64_extend_i32_u(rt : Runtime) -> Unit raise RuntimeError {
 // ============================================================================
 
 ///|
-fn op_local_get(rt : Runtime) -> Unit raise RuntimeError {
+fn op_local_get(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
   rt.stack.push(rt.locals[idx])
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_local_set(rt : Runtime) -> Unit raise RuntimeError {
+fn op_local_set(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
   let value = rt.stack.unsafe_pop()
   rt.locals[idx] = value
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_local_tee(rt : Runtime) -> Unit raise RuntimeError {
+fn op_local_tee(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
   let value = rt.stack[rt.stack.length() - 1]
   rt.locals[idx] = value
   rt.pc += 1
+  OK
 }
 
 // ============================================================================
@@ -1025,18 +1122,20 @@ fn op_local_tee(rt : Runtime) -> Unit raise RuntimeError {
 // ============================================================================
 
 ///|
-fn op_drop(rt : Runtime) -> Unit raise RuntimeError {
+fn op_drop(rt : Runtime) -> RetCode {
   let _ = rt.stack.unsafe_pop()
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_select(rt : Runtime) -> Unit raise RuntimeError {
+fn op_select(rt : Runtime) -> RetCode {
   let cond = rt.pop_i32()
   let val2 = rt.stack.unsafe_pop()
   let val1 = rt.stack.unsafe_pop()
   rt.stack.push(if cond != 0U { val1 } else { val2 })
   rt.pc += 1
+  OK
 }
 
 // ============================================================================
@@ -1044,7 +1143,7 @@ fn op_select(rt : Runtime) -> Unit raise RuntimeError {
 // ============================================================================
 
 ///|
-fn op_if(rt : Runtime) -> Unit raise RuntimeError {
+fn op_if(rt : Runtime) -> RetCode {
   let else_pc = rt.read_imm_idx()
   let cond = rt.pop_i32()
   if cond != 0U {
@@ -1052,13 +1151,14 @@ fn op_if(rt : Runtime) -> Unit raise RuntimeError {
   } else {
     rt.pc = else_pc
   }
+  OK
 }
 
 // NOTE: op_else, op_end_block, op_push_block_target, op_push_loop_target removed
 // Branch targets are now computed at compile time and embedded directly in branch instructions
 
 ///|
-fn op_br(rt : Runtime) -> Unit raise RuntimeError {
+fn op_br(rt : Runtime) -> RetCode {
   let target_pc = rt.read_imm_idx()
   let arity = rt.read_imm_idx()
   let drop_count = rt.read_imm_idx()
@@ -1080,10 +1180,11 @@ fn op_br(rt : Runtime) -> Unit raise RuntimeError {
     rt.stack.push(results[i])
   }
   rt.pc = target_pc
+  OK
 }
 
 ///|
-fn op_br_if(rt : Runtime) -> Unit raise RuntimeError {
+fn op_br_if(rt : Runtime) -> RetCode {
   let target_pc = rt.read_imm_idx()
   let arity = rt.read_imm_idx()
   let drop_count = rt.read_imm_idx()
@@ -1109,10 +1210,11 @@ fn op_br_if(rt : Runtime) -> Unit raise RuntimeError {
   } else {
     rt.pc += 1
   }
+  OK
 }
 
 ///|
-fn op_br_table(rt : Runtime) -> Unit raise RuntimeError {
+fn op_br_table(rt : Runtime) -> RetCode {
   let num_labels = rt.read_imm_idx()
   let arity = rt.read_imm_idx()
   let index = rt.pop_i32().reinterpret_as_int()
@@ -1150,10 +1252,11 @@ fn op_br_table(rt : Runtime) -> Unit raise RuntimeError {
     rt.stack.push(results[i])
   }
   rt.pc = target_pc
+  OK
 }
 
 ///|
-fn op_br_on_null(rt : Runtime) -> Unit raise RuntimeError {
+fn op_br_on_null(rt : Runtime) -> RetCode {
   let target_pc = rt.read_imm_idx()
   let arity = rt.read_imm_idx()
   let drop_count = rt.read_imm_idx()
@@ -1187,10 +1290,11 @@ fn op_br_on_null(rt : Runtime) -> Unit raise RuntimeError {
     rt.stack.push(ref_val)
     rt.pc += 1
   }
+  OK
 }
 
 ///|
-fn op_br_on_non_null(rt : Runtime) -> Unit raise RuntimeError {
+fn op_br_on_non_null(rt : Runtime) -> RetCode {
   let target_pc = rt.read_imm_idx()
   let arity = rt.read_imm_idx()
   let drop_count = rt.read_imm_idx()
@@ -1224,10 +1328,11 @@ fn op_br_on_non_null(rt : Runtime) -> Unit raise RuntimeError {
     // Null - don't push anything, continue
     rt.pc += 1
   }
+  OK
 }
 
 ///|
-fn op_call(rt : Runtime) -> Unit raise RuntimeError {
+fn op_call(rt : Runtime) -> RetCode {
   let func_idx = rt.read_imm_idx()
   let num_imported_funcs = count_imported_funcs(rt.module_)
 
@@ -1236,7 +1341,8 @@ fn op_call(rt : Runtime) -> Unit raise RuntimeError {
     // Get the imported function's type from the import descriptor
     let type_idx = get_func_type_idx(rt.module_, func_idx, num_imported_funcs)
     if type_idx < 0 {
-      raise RuntimeError::InvalidType("call: invalid imported function index")
+      rt.error_detail = "call: invalid imported function index"
+      return InvalidType
     }
     let func_type = rt.module_.types[type_idx]
 
@@ -1257,7 +1363,7 @@ fn op_call(rt : Runtime) -> Unit raise RuntimeError {
       rt.stack.push(results[i])
     }
     rt.pc += 1
-    return
+    return OK
   }
 
   // Adjust index for local functions
@@ -1266,9 +1372,8 @@ fn op_call(rt : Runtime) -> Unit raise RuntimeError {
   let func_type = rt.module_.types[type_idx]
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
-    raise RuntimeError::FunctionNotCompiled(
-      "Function not compiled: \{func_idx}",
-    )
+    rt.error_detail = "Function not compiled: \{func_idx}"
+    return FunctionNotCompiled
   }
 
   // Pop arguments
@@ -1305,20 +1410,21 @@ fn op_call(rt : Runtime) -> Unit raise RuntimeError {
       | ValType::StructRef
       | ValType::ArrayRef
       | ValType::Ref(_, _) => rt.locals.push(Value::Ref(None))
-      _ =>
-        raise RuntimeError::UnsupportedLocalType(
-          "Unsupported local type: \{local_type}",
-        )
+      _ => {
+        rt.error_detail = "Unsupported local type: \{local_type}"
+        return UnsupportedLocalType
+      }
     }
   }
   rt.pc = callee_pc
+  OK
 }
 
 ///|
-fn op_return(rt : Runtime) -> Unit raise RuntimeError {
+fn op_return(rt : Runtime) -> RetCode {
   if rt.call_stack.length() == 0 {
     rt.running = false
-    return
+    return OK
   }
   let return_value : Value? = if rt.stack.length() > 0 {
     Some(rt.stack.unsafe_pop())
@@ -1332,10 +1438,11 @@ fn op_return(rt : Runtime) -> Unit raise RuntimeError {
     None => ()
   }
   rt.pc = frame.return_pc + 1
+  OK
 }
 
 ///|
-fn op_call_indirect(rt : Runtime) -> Unit raise RuntimeError {
+fn op_call_indirect(rt : Runtime) -> RetCode {
   let type_idx = rt.read_imm_idx()
   let table_idx = rt.read_imm_idx()
 
@@ -1344,17 +1451,20 @@ fn op_call_indirect(rt : Runtime) -> Unit raise RuntimeError {
 
   // Check table bounds
   if table_idx < 0 || table_idx >= rt.tables.length() {
-    raise RuntimeError::InvalidType("call_indirect: invalid table index")
+    rt.error_detail = "call_indirect: invalid table index"
+    return InvalidType
   }
   let table = rt.tables[table_idx].data
   if elem_idx < 0 || elem_idx >= table.length() {
-    raise RuntimeError::InvalidType("undefined element")
+    rt.error_detail = "undefined element"
+    return InvalidType
   }
 
   // Get function reference from table
   let func_ref = table[elem_idx]
   guard func_ref is Some(func_idx) else {
-    raise RuntimeError::InvalidType("uninitialized element")
+    rt.error_detail = "uninitialized element"
+    return InvalidType
   }
   let num_imported_funcs = count_imported_funcs(rt.module_)
 
@@ -1370,25 +1480,27 @@ fn op_call_indirect(rt : Runtime) -> Unit raise RuntimeError {
       num_imported_funcs,
     )
     if actual_type_idx < 0 {
-      raise RuntimeError::InvalidType(
-        "call_indirect: invalid imported function index",
-      )
+      rt.error_detail = "call_indirect: invalid imported function index"
+      return InvalidType
     }
     let actual_type = rt.module_.types[actual_type_idx]
 
     // Check type signature matches
     if expected_type.params.length() != actual_type.params.length() ||
       expected_type.results.length() != actual_type.results.length() {
-      raise RuntimeError::InvalidType("indirect call type mismatch")
+      rt.error_detail = "indirect call type mismatch"
+      return InvalidType
     }
     for i = 0; i < expected_type.params.length(); i = i + 1 {
       if expected_type.params[i] != actual_type.params[i] {
-        raise RuntimeError::InvalidType("indirect call type mismatch")
+        rt.error_detail = "indirect call type mismatch"
+        return InvalidType
       }
     }
     for i = 0; i < expected_type.results.length(); i = i + 1 {
       if expected_type.results[i] != actual_type.results[i] {
-        raise RuntimeError::InvalidType("indirect call type mismatch")
+        rt.error_detail = "indirect call type mismatch"
+        return InvalidType
       }
     }
 
@@ -1406,7 +1518,7 @@ fn op_call_indirect(rt : Runtime) -> Unit raise RuntimeError {
       rt.stack.push(results[i])
     }
     rt.pc += 1
-    return
+    return OK
   }
 
   // Adjust to local function index
@@ -1414,7 +1526,8 @@ fn op_call_indirect(rt : Runtime) -> Unit raise RuntimeError {
 
   // Check function index bounds
   if local_func_idx < 0 || local_func_idx >= rt.module_.codes.length() {
-    raise RuntimeError::InvalidType("call_indirect: invalid function index")
+    rt.error_detail = "call_indirect: invalid function index"
+    return InvalidType
   }
 
   // Get the actual function type
@@ -1424,23 +1537,25 @@ fn op_call_indirect(rt : Runtime) -> Unit raise RuntimeError {
   // Check type signature matches
   if expected_type.params.length() != actual_type.params.length() ||
     expected_type.results.length() != actual_type.results.length() {
-    raise RuntimeError::InvalidType("indirect call type mismatch")
+    rt.error_detail = "indirect call type mismatch"
+    return InvalidType
   }
   for i = 0; i < expected_type.params.length(); i = i + 1 {
     if expected_type.params[i] != actual_type.params[i] {
-      raise RuntimeError::InvalidType("indirect call type mismatch")
+      rt.error_detail = "indirect call type mismatch"
+      return InvalidType
     }
   }
   for i = 0; i < expected_type.results.length(); i = i + 1 {
     if expected_type.results[i] != actual_type.results[i] {
-      raise RuntimeError::InvalidType("indirect call type mismatch")
+      rt.error_detail = "indirect call type mismatch"
+      return InvalidType
     }
   }
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
-    raise RuntimeError::FunctionNotCompiled(
-      "Function not compiled: \{func_idx}",
-    )
+    rt.error_detail = "Function not compiled: \{func_idx}"
+    return FunctionNotCompiled
   }
 
   // Pop arguments
@@ -1477,26 +1592,28 @@ fn op_call_indirect(rt : Runtime) -> Unit raise RuntimeError {
       | ValType::StructRef
       | ValType::ArrayRef
       | ValType::Ref(_, _) => rt.locals.push(Value::Ref(None))
-      _ =>
-        raise RuntimeError::UnsupportedLocalType(
-          "Unsupported local type: \{local_type}",
-        )
+      _ => {
+        rt.error_detail = "Unsupported local type: \{local_type}"
+        return UnsupportedLocalType
+      }
     }
   }
   rt.pc = callee_pc
+  OK
 }
 
 ///|
-fn op_end(rt : Runtime) -> Unit raise RuntimeError {
+fn op_end(rt : Runtime) -> RetCode {
   if rt.call_stack.length() > 0 {
     op_return(rt)
   } else {
     rt.running = false
+    OK
   }
 }
 
 ///|
-fn op_return_call(rt : Runtime) -> Unit raise RuntimeError {
+fn op_return_call(rt : Runtime) -> RetCode {
   let func_idx = rt.read_imm_idx()
   let num_imported_funcs = count_imported_funcs(rt.module_)
 
@@ -1505,9 +1622,8 @@ fn op_return_call(rt : Runtime) -> Unit raise RuntimeError {
     // Get the imported function's type from the import descriptor
     let type_idx = get_func_type_idx(rt.module_, func_idx, num_imported_funcs)
     if type_idx < 0 {
-      raise RuntimeError::InvalidType(
-        "return_call: invalid imported function index",
-      )
+      rt.error_detail = "return_call: invalid imported function index"
+      return InvalidType
     }
     let func_type = rt.module_.types[type_idx]
 
@@ -1534,10 +1650,10 @@ fn op_return_call(rt : Runtime) -> Unit raise RuntimeError {
       rt.pc = frame.return_pc
       rt.locals = frame.locals
       rt.pc += 1
-      return
+      return OK
     } else {
       rt.running = false
-      return
+      return OK
     }
   }
 
@@ -1547,9 +1663,8 @@ fn op_return_call(rt : Runtime) -> Unit raise RuntimeError {
   let func_type = rt.module_.types[type_idx]
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
-    raise RuntimeError::FunctionNotCompiled(
-      "Function not compiled: \{func_idx}",
-    )
+    rt.error_detail = "Function not compiled: \{func_idx}"
+    return FunctionNotCompiled
   }
 
   // Pop arguments
@@ -1583,17 +1698,18 @@ fn op_return_call(rt : Runtime) -> Unit raise RuntimeError {
       | ValType::StructRef
       | ValType::ArrayRef
       | ValType::Ref(_, _) => rt.locals.push(Value::Ref(None))
-      _ =>
-        raise RuntimeError::UnsupportedLocalType(
-          "Unsupported local type: \{local_type}",
-        )
+      _ => {
+        rt.error_detail = "Unsupported local type: \{local_type}"
+        return UnsupportedLocalType
+      }
     }
   }
   rt.pc = callee_pc
+  OK
 }
 
 ///|
-fn op_return_call_indirect(rt : Runtime) -> Unit raise RuntimeError {
+fn op_return_call_indirect(rt : Runtime) -> RetCode {
   let type_idx = rt.read_imm_idx()
   let table_idx = rt.read_imm_idx()
 
@@ -1602,17 +1718,20 @@ fn op_return_call_indirect(rt : Runtime) -> Unit raise RuntimeError {
 
   // Check table bounds
   if table_idx < 0 || table_idx >= rt.tables.length() {
-    raise RuntimeError::InvalidType("return_call_indirect: invalid table index")
+    rt.error_detail = "return_call_indirect: invalid table index"
+    return InvalidType
   }
   let table = rt.tables[table_idx].data
   if elem_idx < 0 || elem_idx >= table.length() {
-    raise RuntimeError::InvalidType("undefined element")
+    rt.error_detail = "undefined element"
+    return InvalidType
   }
 
   // Get function reference from table
   let func_ref = table[elem_idx]
   guard func_ref is Some(func_idx) else {
-    raise RuntimeError::InvalidType("uninitialized element")
+    rt.error_detail = "uninitialized element"
+    return InvalidType
   }
   let num_imported_funcs = count_imported_funcs(rt.module_)
 
@@ -1628,25 +1747,27 @@ fn op_return_call_indirect(rt : Runtime) -> Unit raise RuntimeError {
       num_imported_funcs,
     )
     if actual_type_idx < 0 {
-      raise RuntimeError::InvalidType(
-        "return_call_indirect: invalid imported function index",
-      )
+      rt.error_detail = "return_call_indirect: invalid imported function index"
+      return InvalidType
     }
     let actual_type = rt.module_.types[actual_type_idx]
 
     // Check type signature matches
     if expected_type.params.length() != actual_type.params.length() ||
       expected_type.results.length() != actual_type.results.length() {
-      raise RuntimeError::InvalidType("indirect call type mismatch")
+      rt.error_detail = "indirect call type mismatch"
+      return InvalidType
     }
     for i = 0; i < expected_type.params.length(); i = i + 1 {
       if expected_type.params[i] != actual_type.params[i] {
-        raise RuntimeError::InvalidType("indirect call type mismatch")
+        rt.error_detail = "indirect call type mismatch"
+        return InvalidType
       }
     }
     for i = 0; i < expected_type.results.length(); i = i + 1 {
       if expected_type.results[i] != actual_type.results[i] {
-        raise RuntimeError::InvalidType("indirect call type mismatch")
+        rt.error_detail = "indirect call type mismatch"
+        return InvalidType
       }
     }
 
@@ -1669,10 +1790,10 @@ fn op_return_call_indirect(rt : Runtime) -> Unit raise RuntimeError {
       rt.pc = frame.return_pc
       rt.locals = frame.locals
       rt.pc += 1
-      return
+      return OK
     } else {
       rt.running = false
-      return
+      return OK
     }
   }
 
@@ -1681,9 +1802,8 @@ fn op_return_call_indirect(rt : Runtime) -> Unit raise RuntimeError {
 
   // Check function index bounds
   if local_func_idx < 0 || local_func_idx >= rt.module_.codes.length() {
-    raise RuntimeError::InvalidType(
-      "return_call_indirect: invalid function index",
-    )
+    rt.error_detail = "return_call_indirect: invalid function index"
+    return InvalidType
   }
 
   // Get the actual function type
@@ -1693,23 +1813,25 @@ fn op_return_call_indirect(rt : Runtime) -> Unit raise RuntimeError {
   // Check type signature matches
   if expected_type.params.length() != actual_type.params.length() ||
     expected_type.results.length() != actual_type.results.length() {
-    raise RuntimeError::InvalidType("indirect call type mismatch")
+    rt.error_detail = "indirect call type mismatch"
+    return InvalidType
   }
   for i = 0; i < expected_type.params.length(); i = i + 1 {
     if expected_type.params[i] != actual_type.params[i] {
-      raise RuntimeError::InvalidType("indirect call type mismatch")
+      rt.error_detail = "indirect call type mismatch"
+      return InvalidType
     }
   }
   for i = 0; i < expected_type.results.length(); i = i + 1 {
     if expected_type.results[i] != actual_type.results[i] {
-      raise RuntimeError::InvalidType("indirect call type mismatch")
+      rt.error_detail = "indirect call type mismatch"
+      return InvalidType
     }
   }
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
-    raise RuntimeError::FunctionNotCompiled(
-      "Function not compiled: \{func_idx}",
-    )
+    rt.error_detail = "Function not compiled: \{func_idx}"
+    return FunctionNotCompiled
   }
 
   // Pop arguments
@@ -1743,25 +1865,25 @@ fn op_return_call_indirect(rt : Runtime) -> Unit raise RuntimeError {
       | ValType::StructRef
       | ValType::ArrayRef
       | ValType::Ref(_, _) => rt.locals.push(Value::Ref(None))
-      _ =>
-        raise RuntimeError::UnsupportedLocalType(
-          "Unsupported local type: \{local_type}",
-        )
+      _ => {
+        rt.error_detail = "Unsupported local type: \{local_type}"
+        return UnsupportedLocalType
+      }
     }
   }
   rt.pc = callee_pc
+  OK
 }
 
 ///|
-fn op_call_ref(rt : Runtime) -> Unit raise RuntimeError {
+fn op_call_ref(rt : Runtime) -> RetCode {
   let type_idx = rt.read_imm_idx()
 
   // Pop the function reference from the stack
   let func_ref_value = rt.stack.unsafe_pop()
   guard func_ref_value is Ref(Some(func_idx)) else {
-    raise RuntimeError::InvalidType(
-      "call_ref: null or invalid function reference",
-    )
+    rt.error_detail = "call_ref: null or invalid function reference"
+    return InvalidType
   }
   let num_imported_funcs = count_imported_funcs(rt.module_)
 
@@ -1777,16 +1899,16 @@ fn op_call_ref(rt : Runtime) -> Unit raise RuntimeError {
       num_imported_funcs,
     )
     if actual_type_idx < 0 {
-      raise RuntimeError::InvalidType(
-        "call_ref: invalid imported function index",
-      )
+      rt.error_detail = "call_ref: invalid imported function index"
+      return InvalidType
     }
     let actual_type = rt.module_.types[actual_type_idx]
 
     // Check type signature matches
     if func_type.params.length() != actual_type.params.length() ||
       func_type.results.length() != actual_type.results.length() {
-      raise RuntimeError::InvalidType("call_ref: type mismatch")
+      rt.error_detail = "call_ref: type mismatch"
+      return InvalidType
     }
 
     // Call the imported function
@@ -1803,13 +1925,14 @@ fn op_call_ref(rt : Runtime) -> Unit raise RuntimeError {
       rt.stack.push(results[i])
     }
     rt.pc += 1
-    return
+    return OK
   }
 
   // Adjust index for local functions
   let local_func_idx = func_idx - num_imported_funcs
   if local_func_idx < 0 || local_func_idx >= rt.module_.codes.length() {
-    raise RuntimeError::InvalidType("call_ref: invalid function index")
+    rt.error_detail = "call_ref: invalid function index"
+    return InvalidType
   }
   let actual_type_idx = rt.module_.funcs[local_func_idx].reinterpret_as_int()
   let actual_type = rt.module_.types[actual_type_idx]
@@ -1817,13 +1940,13 @@ fn op_call_ref(rt : Runtime) -> Unit raise RuntimeError {
   // Check type signature matches
   if func_type.params.length() != actual_type.params.length() ||
     func_type.results.length() != actual_type.results.length() {
-    raise RuntimeError::InvalidType("call_ref: type mismatch")
+    rt.error_detail = "call_ref: type mismatch"
+    return InvalidType
   }
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
-    raise RuntimeError::FunctionNotCompiled(
-      "Function not compiled: \{func_idx}",
-    )
+    rt.error_detail = "Function not compiled: \{func_idx}"
+    return FunctionNotCompiled
   }
 
   // Pop arguments
@@ -1860,25 +1983,25 @@ fn op_call_ref(rt : Runtime) -> Unit raise RuntimeError {
       | ValType::StructRef
       | ValType::ArrayRef
       | ValType::Ref(_, _) => rt.locals.push(Value::Ref(None))
-      _ =>
-        raise RuntimeError::UnsupportedLocalType(
-          "Unsupported local type: \{local_type}",
-        )
+      _ => {
+        rt.error_detail = "Unsupported local type: \{local_type}"
+        return UnsupportedLocalType
+      }
     }
   }
   rt.pc = callee_pc
+  OK
 }
 
 ///|
-fn op_return_call_ref(rt : Runtime) -> Unit raise RuntimeError {
+fn op_return_call_ref(rt : Runtime) -> RetCode {
   let type_idx = rt.read_imm_idx()
 
   // Pop the function reference from the stack
   let func_ref_value = rt.stack.unsafe_pop()
   guard func_ref_value is Ref(Some(func_idx)) else {
-    raise RuntimeError::InvalidType(
-      "return_call_ref: null or invalid function reference",
-    )
+    rt.error_detail = "return_call_ref: null or invalid function reference"
+    return InvalidType
   }
   let num_imported_funcs = count_imported_funcs(rt.module_)
 
@@ -1894,16 +2017,16 @@ fn op_return_call_ref(rt : Runtime) -> Unit raise RuntimeError {
       num_imported_funcs,
     )
     if actual_type_idx < 0 {
-      raise RuntimeError::InvalidType(
-        "return_call_ref: invalid imported function index",
-      )
+      rt.error_detail = "return_call_ref: invalid imported function index"
+      return InvalidType
     }
     let actual_type = rt.module_.types[actual_type_idx]
 
     // Check type signature matches
     if func_type.params.length() != actual_type.params.length() ||
       func_type.results.length() != actual_type.results.length() {
-      raise RuntimeError::InvalidType("return_call_ref: type mismatch")
+      rt.error_detail = "return_call_ref: type mismatch"
+      return InvalidType
     }
 
     // Call the imported function
@@ -1925,17 +2048,18 @@ fn op_return_call_ref(rt : Runtime) -> Unit raise RuntimeError {
       rt.pc = frame.return_pc
       rt.locals = frame.locals
       rt.pc += 1
-      return
+      return OK
     } else {
       rt.running = false
-      return
+      return OK
     }
   }
 
   // Adjust index for local functions
   let local_func_idx = func_idx - num_imported_funcs
   if local_func_idx < 0 || local_func_idx >= rt.module_.codes.length() {
-    raise RuntimeError::InvalidType("return_call_ref: invalid function index")
+    rt.error_detail = "return_call_ref: invalid function index"
+    return InvalidType
   }
   let actual_type_idx = rt.module_.funcs[local_func_idx].reinterpret_as_int()
   let actual_type = rt.module_.types[actual_type_idx]
@@ -1943,13 +2067,13 @@ fn op_return_call_ref(rt : Runtime) -> Unit raise RuntimeError {
   // Check type signature matches
   if func_type.params.length() != actual_type.params.length() ||
     func_type.results.length() != actual_type.results.length() {
-    raise RuntimeError::InvalidType("return_call_ref: type mismatch")
+    rt.error_detail = "return_call_ref: type mismatch"
+    return InvalidType
   }
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
-    raise RuntimeError::FunctionNotCompiled(
-      "Function not compiled: \{func_idx}",
-    )
+    rt.error_detail = "Function not compiled: \{func_idx}"
+    return FunctionNotCompiled
   }
 
   // Pop arguments
@@ -1983,23 +2107,25 @@ fn op_return_call_ref(rt : Runtime) -> Unit raise RuntimeError {
       | ValType::StructRef
       | ValType::ArrayRef
       | ValType::Ref(_, _) => rt.locals.push(Value::Ref(None))
-      _ =>
-        raise RuntimeError::UnsupportedLocalType(
-          "Unsupported local type: \{local_type}",
-        )
+      _ => {
+        rt.error_detail = "Unsupported local type: \{local_type}"
+        return UnsupportedLocalType
+      }
     }
   }
   rt.pc = callee_pc
+  OK
 }
 
 ///|
-fn op_nop(rt : Runtime) -> Unit raise RuntimeError {
+fn op_nop(rt : Runtime) -> RetCode {
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_unreachable(_rt : Runtime) -> Unit raise RuntimeError {
-  raise RuntimeError::Unreachable
+fn op_unreachable(_rt : Runtime) -> RetCode {
+  return Unreachable
 }
 
 // =============================================================================
@@ -2024,14 +2150,14 @@ fn op_unreachable(_rt : Runtime) -> Unit raise RuntimeError {
 // =============================================================================
 
 ///|
-fn op_i32_load(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_load(rt : Runtime) -> RetCode {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   // Use 64-bit arithmetic to detect overflow
   // Base address is treated as unsigned 32-bit value
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_uint()
@@ -2040,16 +2166,17 @@ fn op_i32_load(rt : Runtime) -> Unit raise RuntimeError {
   let b3 = rt.memory[addr + 3].to_uint()
   rt.stack.push(Value::I32(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_store(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_store(rt : Runtime) -> RetCode {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let value = rt.pop_i32()
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFU).to_byte()
@@ -2057,17 +2184,18 @@ fn op_i32_store(rt : Runtime) -> Unit raise RuntimeError {
   rt.memory[addr + 2] = ((value >> 16) & 0xFFU).to_byte()
   rt.memory[addr + 3] = ((value >> 24) & 0xFFU).to_byte()
   rt.pc += 1
+  OK
 }
 
 // Additional memory load operations
 
 ///|
-fn op_i32_load8_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_load8_s(rt : Runtime) -> RetCode {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 1UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b = rt.memory[addr].to_int()
@@ -2075,28 +2203,30 @@ fn op_i32_load8_s(rt : Runtime) -> Unit raise RuntimeError {
   let value = if b >= 128 { b - 256 } else { b }
   rt.stack.push(Value::I32(value.reinterpret_as_uint()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_load8_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_load8_u(rt : Runtime) -> RetCode {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 1UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.stack.push(Value::I32(rt.memory[addr].to_uint()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_load16_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_load16_s(rt : Runtime) -> RetCode {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 2UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_int()
@@ -2106,30 +2236,32 @@ fn op_i32_load16_s(rt : Runtime) -> Unit raise RuntimeError {
   let value = if value16 >= 32768 { value16 - 65536 } else { value16 }
   rt.stack.push(Value::I32(value.reinterpret_as_uint()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_load16_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_load16_u(rt : Runtime) -> RetCode {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 2UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_uint()
   let b1 = rt.memory[addr + 1].to_uint()
   rt.stack.push(Value::I32(b0 | (b1 << 8)))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_load(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_load(rt : Runtime) -> RetCode {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 8UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_uint64()
@@ -2153,16 +2285,17 @@ fn op_i64_load(rt : Runtime) -> Unit raise RuntimeError {
     ),
   )
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_store(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_store(rt : Runtime) -> RetCode {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let value = rt.pop_i64()
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 8UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFUL).to_byte()
@@ -2174,15 +2307,16 @@ fn op_i64_store(rt : Runtime) -> Unit raise RuntimeError {
   rt.memory[addr + 6] = ((value >> 48) & 0xFFUL).to_byte()
   rt.memory[addr + 7] = ((value >> 56) & 0xFFUL).to_byte()
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_load8_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_load8_s(rt : Runtime) -> RetCode {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 1UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b = rt.memory[addr].to_int64()
@@ -2190,28 +2324,30 @@ fn op_i64_load8_s(rt : Runtime) -> Unit raise RuntimeError {
   let value = if b >= 128L { b - 256L } else { b }
   rt.stack.push(Value::I64(value.reinterpret_as_uint64()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_load8_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_load8_u(rt : Runtime) -> RetCode {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 1UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.stack.push(Value::I64(rt.memory[addr].to_uint64()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_load16_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_load16_s(rt : Runtime) -> RetCode {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 2UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_int64()
@@ -2221,30 +2357,32 @@ fn op_i64_load16_s(rt : Runtime) -> Unit raise RuntimeError {
   let value = if value16 >= 32768L { value16 - 65536L } else { value16 }
   rt.stack.push(Value::I64(value.reinterpret_as_uint64()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_load16_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_load16_u(rt : Runtime) -> RetCode {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 2UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_uint64()
   let b1 = rt.memory[addr + 1].to_uint64()
   rt.stack.push(Value::I64(b0 | (b1 << 8)))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_load32_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_load32_s(rt : Runtime) -> RetCode {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_int64()
@@ -2260,15 +2398,16 @@ fn op_i64_load32_s(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::I64(value.reinterpret_as_uint64()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_load32_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_load32_u(rt : Runtime) -> RetCode {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_uint64()
@@ -2277,15 +2416,16 @@ fn op_i64_load32_u(rt : Runtime) -> Unit raise RuntimeError {
   let b3 = rt.memory[addr + 3].to_uint64()
   rt.stack.push(Value::I64(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f32_load(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_load(rt : Runtime) -> RetCode {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_uint()
@@ -2295,15 +2435,16 @@ fn op_f32_load(rt : Runtime) -> Unit raise RuntimeError {
   let bits = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
   rt.stack.push(Value::F32(Float::reinterpret_from_uint(bits)))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_load(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_load(rt : Runtime) -> RetCode {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 8UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_uint64()
@@ -2324,16 +2465,17 @@ fn op_f64_load(rt : Runtime) -> Unit raise RuntimeError {
     (b7 << 56)
   rt.stack.push(Value::F64(bits.reinterpret_as_double()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f32_store(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_store(rt : Runtime) -> RetCode {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let value = rt.pop_f32().reinterpret_as_uint()
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFU).to_byte()
@@ -2341,16 +2483,17 @@ fn op_f32_store(rt : Runtime) -> Unit raise RuntimeError {
   rt.memory[addr + 2] = ((value >> 16) & 0xFFU).to_byte()
   rt.memory[addr + 3] = ((value >> 24) & 0xFFU).to_byte()
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_store(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_store(rt : Runtime) -> RetCode {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let value = rt.pop_f64().reinterpret_as_uint64()
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 8UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFUL).to_byte()
@@ -2362,76 +2505,81 @@ fn op_f64_store(rt : Runtime) -> Unit raise RuntimeError {
   rt.memory[addr + 6] = ((value >> 48) & 0xFFUL).to_byte()
   rt.memory[addr + 7] = ((value >> 56) & 0xFFUL).to_byte()
   rt.pc += 1
+  OK
 }
 
 // Narrow store operations
 
 ///|
-fn op_i32_store8(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_store8(rt : Runtime) -> RetCode {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let value = rt.pop_i32()
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 1UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFU).to_byte()
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_store16(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_store16(rt : Runtime) -> RetCode {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let value = rt.pop_i32()
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 2UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFU).to_byte()
   rt.memory[addr + 1] = ((value >> 8) & 0xFFU).to_byte()
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_store8(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_store8(rt : Runtime) -> RetCode {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let value = rt.pop_i64()
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 1UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFUL).to_byte()
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_store16(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_store16(rt : Runtime) -> RetCode {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let value = rt.pop_i64()
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 2UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFUL).to_byte()
   rt.memory[addr + 1] = ((value >> 8) & 0xFFUL).to_byte()
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_store32(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_store32(rt : Runtime) -> RetCode {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   let value = rt.pop_i64()
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFUL).to_byte()
@@ -2439,6 +2587,7 @@ fn op_i64_store32(rt : Runtime) -> Unit raise RuntimeError {
   rt.memory[addr + 2] = ((value >> 16) & 0xFFUL).to_byte()
   rt.memory[addr + 3] = ((value >> 24) & 0xFFUL).to_byte()
   rt.pc += 1
+  OK
 }
 
 // Memory size and grow operations
@@ -2448,15 +2597,16 @@ fn op_i64_store32(rt : Runtime) -> Unit raise RuntimeError {
 let wasm_page_size : Int = 65536
 
 ///|
-fn op_memory_size(rt : Runtime) -> Unit raise RuntimeError {
+fn op_memory_size(rt : Runtime) -> RetCode {
   // Return current memory size in pages
   let size_in_pages = rt.memory.length() / wasm_page_size
   rt.stack.push(Value::I32(size_in_pages.reinterpret_as_uint()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_memory_grow(rt : Runtime) -> Unit raise RuntimeError {
+fn op_memory_grow(rt : Runtime) -> RetCode {
   let delta_pages = rt.pop_i32().reinterpret_as_int()
   let old_size_pages = rt.memory.length() / wasm_page_size
 
@@ -2464,7 +2614,7 @@ fn op_memory_grow(rt : Runtime) -> Unit raise RuntimeError {
   if delta_pages < 0 {
     rt.stack.push(Value::I32(0xFFFFFFFFU)) // -1 indicates failure
     rt.pc += 1
-    return
+    return OK
   }
   let new_size_pages = old_size_pages + delta_pages
 
@@ -2477,7 +2627,7 @@ fn op_memory_grow(rt : Runtime) -> Unit raise RuntimeError {
   if new_size_pages > max_pages {
     rt.stack.push(Value::I32(0xFFFFFFFFU)) // -1 indicates failure
     rt.pc += 1
-    return
+    return OK
   }
 
   // Grow the memory by appending zero bytes
@@ -2489,6 +2639,7 @@ fn op_memory_grow(rt : Runtime) -> Unit raise RuntimeError {
   // Return old size in pages (success)
   rt.stack.push(Value::I32(old_size_pages.reinterpret_as_uint()))
   rt.pc += 1
+  OK
 }
 
 // =============================================================================
@@ -2496,7 +2647,7 @@ fn op_memory_grow(rt : Runtime) -> Unit raise RuntimeError {
 // =============================================================================
 
 ///|
-fn op_memory_copy(rt : Runtime) -> Unit raise RuntimeError {
+fn op_memory_copy(rt : Runtime) -> RetCode {
   let n = rt.pop_i32().reinterpret_as_int()
   let src = rt.pop_i32().reinterpret_as_int()
   let dest = rt.pop_i32().reinterpret_as_int()
@@ -2507,7 +2658,7 @@ fn op_memory_copy(rt : Runtime) -> Unit raise RuntimeError {
     n < 0 ||
     src + n > rt.memory.length() ||
     dest + n > rt.memory.length() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
 
   // Handle overlapping regions correctly
@@ -2525,17 +2676,18 @@ fn op_memory_copy(rt : Runtime) -> Unit raise RuntimeError {
     }
   }
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_memory_fill(rt : Runtime) -> Unit raise RuntimeError {
+fn op_memory_fill(rt : Runtime) -> RetCode {
   let n = rt.pop_i32().reinterpret_as_int()
   let val = rt.pop_i32().reinterpret_as_int() & 0xFF // Truncate to byte
   let dest = rt.pop_i32().reinterpret_as_int()
 
   // Check bounds
   if dest < 0 || n < 0 || dest + n > rt.memory.length() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
 
   // Fill memory
@@ -2544,10 +2696,11 @@ fn op_memory_fill(rt : Runtime) -> Unit raise RuntimeError {
     rt.memory[dest + i] = byte_val
   }
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_memory_init(rt : Runtime) -> Unit raise RuntimeError {
+fn op_memory_init(rt : Runtime) -> RetCode {
   let data_idx = rt.read_imm_idx()
   let n = rt.pop_i32().reinterpret_as_int()
   let src = rt.pop_i32().reinterpret_as_int()
@@ -2555,7 +2708,8 @@ fn op_memory_init(rt : Runtime) -> Unit raise RuntimeError {
 
   // Check data segment index
   if data_idx < 0 || data_idx >= rt.data_segments.length() {
-    raise RuntimeError::InvalidType("unknown data segment")
+    rt.error_detail = "unknown data segment"
+    return InvalidType
   }
   let data = rt.data_segments[data_idx]
 
@@ -2565,7 +2719,7 @@ fn op_memory_init(rt : Runtime) -> Unit raise RuntimeError {
     n < 0 ||
     src + n > data.length() ||
     dest + n > rt.memory.length() {
-    raise RuntimeError::MemoryOutOfBounds
+    return MemoryOutOfBounds
   }
 
   // Copy from data segment to memory
@@ -2573,20 +2727,23 @@ fn op_memory_init(rt : Runtime) -> Unit raise RuntimeError {
     rt.memory[dest + i] = data[src + i]
   }
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_data_drop(rt : Runtime) -> Unit raise RuntimeError {
+fn op_data_drop(rt : Runtime) -> RetCode {
   let data_idx = rt.read_imm_idx()
 
   // Check data segment index
   if data_idx < 0 || data_idx >= rt.data_segments.length() {
-    raise RuntimeError::InvalidType("unknown data segment")
+    rt.error_detail = "unknown data segment"
+    return InvalidType
   }
 
   // Drop the data segment (make it empty)
   rt.data_segments[data_idx] = []
   rt.pc += 1
+  OK
 }
 
 // =============================================================================
@@ -2594,7 +2751,7 @@ fn op_data_drop(rt : Runtime) -> Unit raise RuntimeError {
 // =============================================================================
 
 ///|
-fn op_table_init(rt : Runtime) -> Unit raise RuntimeError {
+fn op_table_init(rt : Runtime) -> RetCode {
   let _table_idx = rt.read_imm_idx()
   let _elem_idx = rt.read_imm_idx()
   let _n = rt.pop_i32()
@@ -2602,10 +2759,11 @@ fn op_table_init(rt : Runtime) -> Unit raise RuntimeError {
   let _dest = rt.pop_i32()
   // TODO: Implement table.init
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_table_copy(rt : Runtime) -> Unit raise RuntimeError {
+fn op_table_copy(rt : Runtime) -> RetCode {
   let _dst_table_idx = rt.read_imm_idx()
   let _src_table_idx = rt.read_imm_idx()
   let _n = rt.pop_i32()
@@ -2613,13 +2771,15 @@ fn op_table_copy(rt : Runtime) -> Unit raise RuntimeError {
   let _dest = rt.pop_i32()
   // TODO: Implement table.copy
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_elem_drop(rt : Runtime) -> Unit raise RuntimeError {
+fn op_elem_drop(rt : Runtime) -> RetCode {
   let _elem_idx = rt.read_imm_idx()
   // TODO: Implement elem.drop
   rt.pc += 1
+  OK
 }
 
 // =============================================================================
@@ -2627,58 +2787,69 @@ fn op_elem_drop(rt : Runtime) -> Unit raise RuntimeError {
 // =============================================================================
 
 ///|
-fn op_table_size(rt : Runtime) -> Unit raise RuntimeError {
+fn op_table_size(rt : Runtime) -> RetCode {
   let table_idx = rt.read_imm_idx()
   if table_idx < 0 || table_idx >= rt.tables.length() {
-    raise RuntimeError::InvalidType("table index out of bounds")
+    rt.error_detail = "table index out of bounds"
+    return InvalidType
   }
   let size = rt.tables[table_idx].data.length()
   rt.stack.push(Value::I32(size.reinterpret_as_uint()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_table_get(rt : Runtime) -> Unit raise RuntimeError {
+fn op_table_get(rt : Runtime) -> RetCode {
   let table_idx = rt.read_imm_idx()
   if table_idx < 0 || table_idx >= rt.tables.length() {
-    raise RuntimeError::InvalidType("table index out of bounds")
+    rt.error_detail = "table index out of bounds"
+    return InvalidType
   }
   let elem_idx = rt.pop_i32().reinterpret_as_int()
   let table = rt.tables[table_idx].data
   if elem_idx < 0 || elem_idx >= table.length() {
-    raise RuntimeError::InvalidType("table element index out of bounds")
+    rt.error_detail = "table element index out of bounds"
+    return InvalidType
   }
   // Return the function reference (or null)
   rt.stack.push(Value::Ref(table[elem_idx]))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_table_set(rt : Runtime) -> Unit raise RuntimeError {
+fn op_table_set(rt : Runtime) -> RetCode {
   let table_idx = rt.read_imm_idx()
   if table_idx < 0 || table_idx >= rt.tables.length() {
-    raise RuntimeError::InvalidType("table index out of bounds")
+    rt.error_detail = "table index out of bounds"
+    return InvalidType
   }
   let ref_value = match rt.stack.unsafe_pop() {
     Value::Ref(r) => r
-    _ => raise RuntimeError::InvalidType("expected funcref for table.set")
+    _ => {
+      rt.error_detail = "expected funcref for table.set"
+      return InvalidType
+    }
   }
   let elem_idx = rt.pop_i32().reinterpret_as_int()
   let table = rt.tables[table_idx].data
   if elem_idx < 0 || elem_idx >= table.length() {
-    raise RuntimeError::InvalidType("table element index out of bounds")
+    rt.error_detail = "table element index out of bounds"
+    return InvalidType
   }
   table[elem_idx] = ref_value
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_table_grow(rt : Runtime) -> Unit raise RuntimeError {
+fn op_table_grow(rt : Runtime) -> RetCode {
   let table_idx = rt.read_imm_idx()
   if table_idx < 0 || table_idx >= rt.tables.length() {
     rt.stack.push(Value::I32(0xFFFFFFFFU)) // -1 indicates failure
     rt.pc += 1
-    return
+    return OK
   }
   let delta = rt.pop_i32().reinterpret_as_int()
   let init_value = match rt.stack.unsafe_pop() {
@@ -2686,7 +2857,7 @@ fn op_table_grow(rt : Runtime) -> Unit raise RuntimeError {
     _ => {
       rt.stack.push(Value::I32(0xFFFFFFFFU))
       rt.pc += 1
-      return
+      return OK
     }
   }
   let runtime_table = rt.tables[table_idx]
@@ -2695,7 +2866,7 @@ fn op_table_grow(rt : Runtime) -> Unit raise RuntimeError {
   if delta < 0 {
     rt.stack.push(Value::I32(0xFFFFFFFFU)) // -1 indicates failure
     rt.pc += 1
-    return
+    return OK
   }
   let new_size = old_size + delta
 
@@ -2706,7 +2877,7 @@ fn op_table_grow(rt : Runtime) -> Unit raise RuntimeError {
         // Would exceed max - return -1 (failure)
         rt.stack.push(Value::I32(0xFFFFFFFFU))
         rt.pc += 1
-        return
+        return OK
       }
     None => () // No max limit
   }
@@ -2717,6 +2888,7 @@ fn op_table_grow(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::I32(old_size.reinterpret_as_uint()))
   rt.pc += 1
+  OK
 }
 
 // =============================================================================
@@ -2724,24 +2896,26 @@ fn op_table_grow(rt : Runtime) -> Unit raise RuntimeError {
 // =============================================================================
 
 ///|
-fn op_ref_null(rt : Runtime) -> Unit raise RuntimeError {
+fn op_ref_null(rt : Runtime) -> RetCode {
   // ref.null pushes a null reference onto the stack
   // The heap type is encoded in the immediate but we don't need it at runtime
   let _ = rt.read_imm_idx() // Skip the heap type encoding
   rt.stack.push(Value::Ref(None))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_ref_func(rt : Runtime) -> Unit raise RuntimeError {
+fn op_ref_func(rt : Runtime) -> RetCode {
   // ref.func pushes a reference to the given function onto the stack
   let func_idx = rt.read_imm_idx()
   rt.stack.push(Value::Ref(Some(func_idx)))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_ref_is_null(rt : Runtime) -> Unit raise RuntimeError {
+fn op_ref_is_null(rt : Runtime) -> RetCode {
   // ref.is_null tests whether a reference is null
   let ref_val = rt.stack.unsafe_pop()
   let is_null = match ref_val {
@@ -2751,6 +2925,7 @@ fn op_ref_is_null(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::I32(is_null))
   rt.pc += 1
+  OK
 }
 
 // Float operations
@@ -2786,179 +2961,203 @@ fn Runtime::pop_two_f64(self : Runtime) -> (Double, Double) {
 }
 
 ///|
-fn op_f32_eq(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_eq(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::I32(if a == b { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f32_ne(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_ne(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::I32(if a != b { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f32_lt(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_lt(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::I32(if a < b { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f32_gt(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_gt(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::I32(if a > b { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f32_le(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_le(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::I32(if a <= b { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f32_ge(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_ge(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::I32(if a >= b { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_eq(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_eq(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::I32(if a == b { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_ne(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_ne(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::I32(if a != b { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_lt(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_lt(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::I32(if a < b { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_gt(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_gt(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::I32(if a > b { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_le(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_le(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::I32(if a <= b { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_ge(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_ge(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::I32(if a >= b { 1U } else { 0U }))
   rt.pc += 1
+  OK
 }
 
 // Float unary operations
 
 ///|
-fn op_f32_neg(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_neg(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   rt.stack.push(Value::F32(-a))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f32_abs(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_abs(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   rt.stack.push(Value::F32(a.abs()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f32_sqrt(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_sqrt(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a.sqrt())))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f32_ceil(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_ceil(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a.ceil())))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f32_floor(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_floor(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a.floor())))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f32_trunc(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_trunc(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a.trunc())))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f32_nearest(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_nearest(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   rt.stack.push(Value::F32(canonicalize_f32(rintf(a))))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_neg(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_neg(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   rt.stack.push(Value::F64(-a))
   rt.pc += 1
+  OK
 }
 
 // Float binary operations
 
 ///|
-fn op_f32_add(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_add(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a + b)))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f32_sub(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_sub(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a - b)))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f32_mul(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_mul(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a * b)))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f32_div(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_div(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a / b)))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f32_min(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_min(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   let result = if a.is_nan() || b.is_nan() {
     canonical_nan_f32
@@ -2986,10 +3185,11 @@ fn op_f32_min(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::F32(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f32_max(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_max(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   let result = if a.is_nan() || b.is_nan() {
     canonical_nan_f32
@@ -3017,10 +3217,11 @@ fn op_f32_max(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::F32(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f32_copysign(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_copysign(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   let a_bits = a.reinterpret_as_uint()
   let b_bits = b.reinterpret_as_uint()
@@ -3028,38 +3229,43 @@ fn op_f32_copysign(rt : Runtime) -> Unit raise RuntimeError {
   let result_bits = (a_bits & sign_mask.lnot()) | (b_bits & sign_mask)
   rt.stack.push(Value::F32(Float::reinterpret_from_uint(result_bits)))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_add(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_add(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a + b)))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_sub(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_sub(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a - b)))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_mul(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_mul(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a * b)))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_div(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_div(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a / b)))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_min(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_min(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   // WebAssembly min semantics: if either is NaN, return canonical NaN
   let result = if a.is_nan() || b.is_nan() {
@@ -3087,10 +3293,11 @@ fn op_f64_min(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::F64(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_max(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_max(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   // WebAssembly max semantics: if either is NaN, return canonical NaN
   let result = if a.is_nan() || b.is_nan() {
@@ -3118,10 +3325,11 @@ fn op_f64_max(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::F64(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_copysign(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_copysign(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   let a_bits = a.reinterpret_as_uint64()
   let b_bits = b.reinterpret_as_uint64()
@@ -3129,108 +3337,123 @@ fn op_f64_copysign(rt : Runtime) -> Unit raise RuntimeError {
   let result_bits = (a_bits & sign_mask.lnot()) | (b_bits & sign_mask)
   rt.stack.push(Value::F64(result_bits.reinterpret_as_double()))
   rt.pc += 1
+  OK
 }
 
 // Float unary operations
 
 ///|
-fn op_f64_abs(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_abs(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   rt.stack.push(Value::F64(a.abs()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_sqrt(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_sqrt(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a.sqrt())))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_ceil(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_ceil(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a.ceil())))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_floor(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_floor(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a.floor())))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_trunc(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_trunc(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a.trunc())))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_nearest(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_nearest(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   rt.stack.push(Value::F64(canonicalize_f64(rint(a))))
   rt.pc += 1
+  OK
 }
 
 // Float conversion operations
 
 ///|
-fn op_f64_convert_i64_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_convert_i64_u(rt : Runtime) -> RetCode {
   let a = rt.pop_i64()
   rt.stack.push(Value::F64(a.to_double()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_convert_i64_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_convert_i64_s(rt : Runtime) -> RetCode {
   let a = rt.pop_i64().reinterpret_as_int64()
   rt.stack.push(Value::F64(a.to_double()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_convert_i32_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_convert_i32_u(rt : Runtime) -> RetCode {
   let a = rt.pop_i32()
   rt.stack.push(Value::F64(a.to_double()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_convert_i32_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_convert_i32_s(rt : Runtime) -> RetCode {
   let a = rt.pop_i32().reinterpret_as_int()
   rt.stack.push(Value::F64(a.to_double()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_promote_f32(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_promote_f32(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   rt.stack.push(Value::F64(a.to_double()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f32_demote_f64(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_demote_f64(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   rt.stack.push(Value::F32(Float::from_double(a)))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f32_convert_i32_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_convert_i32_s(rt : Runtime) -> RetCode {
   let a = rt.pop_i32().reinterpret_as_int()
   rt.stack.push(Value::F32(Float::from_int(a)))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f32_convert_i32_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_convert_i32_u(rt : Runtime) -> RetCode {
   let a = rt.pop_i32()
   rt.stack.push(Value::F32(Float::from_double(a.to_double())))
   rt.pc += 1
+  OK
 }
 
 ///|
@@ -3240,131 +3463,141 @@ extern "C" fn f32_from_i64(a : Int64) -> Float = "f32_from_i64"
 extern "C" fn f32_from_u64(a : UInt64) -> Float = "f32_from_u64"
 
 ///|
-fn op_f32_convert_i64_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_convert_i64_s(rt : Runtime) -> RetCode {
   let a = rt.pop_i64().reinterpret_as_int64()
   rt.stack.push(Value::F32(f32_from_i64(a)))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f32_convert_i64_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_convert_i64_u(rt : Runtime) -> RetCode {
   let a = rt.pop_i64()
   rt.stack.push(Value::F32(f32_from_u64(a)))
   rt.pc += 1
+  OK
 }
 
 // Truncation operations (with trapping on overflow/NaN)
 
 ///|
-fn op_i64_trunc_f64_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_trunc_f64_s(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   // Trap on NaN or out of range
   if a.is_nan() {
-    raise RuntimeError::IntegerOverflow
+    return IntegerOverflow
   }
   if a >= 9223372036854775808.0 || a < -9223372036854775808.0 {
-    raise RuntimeError::IntegerOverflow
+    return IntegerOverflow
   }
   rt.stack.push(Value::I64(a.to_int64().reinterpret_as_uint64()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_trunc_f64_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_trunc_f64_u(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   // Trap on NaN or out of range
   if a.is_nan() {
-    raise RuntimeError::IntegerOverflow
+    return IntegerOverflow
   }
   if a >= 18446744073709551616.0 || a <= -1.0 {
-    raise RuntimeError::IntegerOverflow
+    return IntegerOverflow
   }
   rt.stack.push(Value::I64(a.to_uint64()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_trunc_f32_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_trunc_f32_s(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   // Trap on NaN or out of range
   if a.is_nan() {
-    raise RuntimeError::IntegerOverflow // "invalid conversion to integer"
+    return IntegerOverflow // "invalid conversion to integer"
   }
   if a >= 2147483648.0 || a < -2147483648.0 {
-    raise RuntimeError::IntegerOverflow
+    return IntegerOverflow
   }
   rt.stack.push(Value::I32(a.to_int().reinterpret_as_uint()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_trunc_f32_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_trunc_f32_u(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   // Trap on NaN or out of range
   if a.is_nan() {
-    raise RuntimeError::IntegerOverflow
+    return IntegerOverflow
   }
   if a >= 4294967296.0 || a <= -1.0 {
-    raise RuntimeError::IntegerOverflow
+    return IntegerOverflow
   }
   rt.stack.push(Value::I32(a.to_double().to_uint64().to_uint()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_trunc_f64_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_trunc_f64_s(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   // Trap on NaN or out of range
   if a.is_nan() {
-    raise RuntimeError::IntegerOverflow
+    return IntegerOverflow
   }
   if a >= 2147483648.0 || a <= -2147483649.0 {
-    raise RuntimeError::IntegerOverflow
+    return IntegerOverflow
   }
   rt.stack.push(Value::I32(a.to_int().reinterpret_as_uint()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_trunc_f64_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_trunc_f64_u(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   // Trap on NaN or out of range
   if a.is_nan() {
-    raise RuntimeError::IntegerOverflow
+    return IntegerOverflow
   }
   if a >= 4294967296.0 || a <= -1.0 {
-    raise RuntimeError::IntegerOverflow
+    return IntegerOverflow
   }
   rt.stack.push(Value::I32(a.to_uint64().to_uint()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_trunc_f32_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_trunc_f32_s(rt : Runtime) -> RetCode {
   let a = rt.pop_f32().to_double()
   // Trap on NaN or out of range
   if a.is_nan() {
-    raise RuntimeError::IntegerOverflow
+    return IntegerOverflow
   }
   if a >= 9223372036854775808.0 || a < -9223372036854775808.0 {
-    raise RuntimeError::IntegerOverflow
+    return IntegerOverflow
   }
   rt.stack.push(Value::I64(a.to_int64().reinterpret_as_uint64()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_trunc_f32_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_trunc_f32_u(rt : Runtime) -> RetCode {
   let a = rt.pop_f32().to_double()
   // Trap on NaN or out of range
   if a.is_nan() {
-    raise RuntimeError::IntegerOverflow
+    return IntegerOverflow
   }
   if a >= 18446744073709551616.0 || a <= -1.0 {
-    raise RuntimeError::IntegerOverflow
+    return IntegerOverflow
   }
   rt.stack.push(Value::I64(a.to_uint64()))
   rt.pc += 1
+  OK
 }
 
 // =============================================================================
@@ -3374,7 +3607,7 @@ fn op_i64_trunc_f32_u(rt : Runtime) -> Unit raise RuntimeError {
 // overflow/NaN, they "saturate" to the min/max value or return 0 for NaN.
 
 ///|
-fn op_i32_trunc_sat_f32_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_trunc_sat_f32_s(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   let result = if a.is_nan() {
     0U
@@ -3389,10 +3622,11 @@ fn op_i32_trunc_sat_f32_s(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::I32(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_trunc_sat_f32_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_trunc_sat_f32_u(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   let result = if a.is_nan() {
     0U
@@ -3407,10 +3641,11 @@ fn op_i32_trunc_sat_f32_u(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::I32(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_trunc_sat_f64_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_trunc_sat_f64_s(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   let result = if a.is_nan() {
     0U
@@ -3425,10 +3660,11 @@ fn op_i32_trunc_sat_f64_s(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::I32(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i32_trunc_sat_f64_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_trunc_sat_f64_u(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   let result = if a.is_nan() {
     0U
@@ -3443,10 +3679,11 @@ fn op_i32_trunc_sat_f64_u(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::I32(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_trunc_sat_f32_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_trunc_sat_f32_s(rt : Runtime) -> RetCode {
   let a = rt.pop_f32().to_double()
   let result = if a.is_nan() {
     0UL
@@ -3461,10 +3698,11 @@ fn op_i64_trunc_sat_f32_s(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::I64(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_trunc_sat_f32_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_trunc_sat_f32_u(rt : Runtime) -> RetCode {
   let a = rt.pop_f32().to_double()
   let result = if a.is_nan() {
     0UL
@@ -3479,10 +3717,11 @@ fn op_i64_trunc_sat_f32_u(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::I64(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_trunc_sat_f64_s(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_trunc_sat_f64_s(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   let result = if a.is_nan() {
     0UL
@@ -3497,10 +3736,11 @@ fn op_i64_trunc_sat_f64_s(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::I64(result))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_trunc_sat_f64_u(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_trunc_sat_f64_u(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   let result = if a.is_nan() {
     0UL
@@ -3515,53 +3755,60 @@ fn op_i64_trunc_sat_f64_u(rt : Runtime) -> Unit raise RuntimeError {
   }
   rt.stack.push(Value::I64(result))
   rt.pc += 1
+  OK
 }
 
 // Reinterpret operations
 
 ///|
-fn op_i32_reinterpret_f32(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i32_reinterpret_f32(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   rt.stack.push(Value::I32(a.reinterpret_as_uint()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_i64_reinterpret_f64(rt : Runtime) -> Unit raise RuntimeError {
+fn op_i64_reinterpret_f64(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   rt.stack.push(Value::I64(a.reinterpret_as_uint64()))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f32_reinterpret_i32(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f32_reinterpret_i32(rt : Runtime) -> RetCode {
   let a = rt.pop_i32()
   rt.stack.push(Value::F32(Float::reinterpret_from_uint(a)))
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_f64_reinterpret_i64(rt : Runtime) -> Unit raise RuntimeError {
+fn op_f64_reinterpret_i64(rt : Runtime) -> RetCode {
   let a = rt.pop_i64()
   rt.stack.push(Value::F64(a.reinterpret_as_double()))
   rt.pc += 1
+  OK
 }
 
 // Global operations
 
 ///|
-fn op_global_get(rt : Runtime) -> Unit raise RuntimeError {
+fn op_global_get(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
   rt.stack.push(rt.globals[idx])
   rt.pc += 1
+  OK
 }
 
 ///|
-fn op_global_set(rt : Runtime) -> Unit raise RuntimeError {
+fn op_global_set(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
   let value = rt.stack.unsafe_pop()
   rt.globals[idx] = value
   rt.pc += 1
+  OK
 }
 
 // ============================================================================
@@ -4781,7 +5028,10 @@ fn Runtime::execute(self : Runtime) -> Unit raise RuntimeError {
         "Expected instruction at PC \{self.pc}",
       )
     }
-    f(self) // Operation mutates pc directly, raises on error
+    let ret = f(self)
+    if ret != OK {
+      raise ret.to_error(self.error_detail)
+    }
   }
 }
 
