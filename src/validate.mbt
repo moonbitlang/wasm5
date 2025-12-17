@@ -314,13 +314,15 @@ fn is_func_type_index(module_ : Module, type_idx : Int) -> Bool {
 
 ///|
 /// Validate that all type indices in a ValType exist in the module
-fn validate_valtype(module_ : Module, val_type : ValType) -> Unit raise ValidationError {
+fn validate_valtype(
+  module_ : Module,
+  val_type : ValType,
+) -> Unit raise ValidationError {
   match val_type {
-    Ref(RefType::TypeIndex(idx), _) => {
+    Ref(RefType::TypeIndex(idx), _) =>
       if idx < 0 || idx >= module_.types.length() {
         raise ValidationError::UnknownType(idx)
       }
-    }
     _ => () // Other types don't have type indices
   }
 }
@@ -421,11 +423,10 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
   // Validate type indices in table element types
   for table in m.tables {
     match table.elem_type {
-      RefType::TypeIndex(idx) => {
+      RefType::TypeIndex(idx) =>
         if idx < 0 || idx >= m.types.length() {
           raise ValidationError::UnknownType(idx)
         }
-      }
       _ => ()
     }
   }
@@ -433,11 +434,10 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
   // Validate type indices in element segments
   for elem in m.elems {
     match elem.elem_type {
-      RefType::TypeIndex(idx) => {
+      RefType::TypeIndex(idx) =>
         if idx < 0 || idx >= m.types.length() {
           raise ValidationError::UnknownType(idx)
         }
-      }
       _ => ()
     }
   }
@@ -645,7 +645,6 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
         Some(init_expr) => {
           // Validate that table init only references imported globals
           validate_table_init_expr(m, init_expr, import_counts)
-
           let init_ctx = ValidationCtx::new()
           let dummy_func_type : FuncType = { params: [], results: [] }
           let dummy_code : Code = {
@@ -1479,9 +1478,7 @@ fn validate_instruction(
       if ctx.is_unreachable && stack.length() == 0 {
         // Polymorphic - allow
       } else if stack.length() < 1 {
-        raise ValidationError::TypeMismatch(
-          "table.set expects value on stack",
-        )
+        raise ValidationError::TypeMismatch("table.set expects value on stack")
       } else {
         let actual_type = stack.unsafe_pop()
         if not(is_subtype(module_, actual_type, expected_type)) {
@@ -1973,7 +1970,6 @@ fn validate_instruction(
           I32 | I64 | F32 | F64 => true
           _ => false
         }
-
         if not(is_val1_numeric) || not(is_val2_numeric) {
           raise ValidationError::TypeMismatch(
             "untyped select requires numeric types, got \{val1} and \{val2}",
@@ -2054,7 +2050,6 @@ fn validate_instruction(
             "select value type mismatch: expected \{expected_type}, got \{val2}",
           )
         }
-
         stack.push(expected_type)
       } else if num_concrete == 1 {
         // Only valid in unreachable code (one concrete, one polymorphic)
@@ -2081,10 +2076,9 @@ fn validate_instruction(
       }
     }
     Nop => ()
-    Unreachable => {
+    Unreachable =>
       // unreachable instruction marks all subsequent code as unreachable
       ctx.mark_unreachable()
-    }
     Call(func_idx) => {
       let idx = func_idx.reinterpret_as_int()
       let total_funcs = import_counts.funcs + module_.funcs.length()
@@ -2147,7 +2141,6 @@ fn validate_instruction(
             "call_indirect requires funcref table, got \{table_elem_type}",
           )
       }
-
       let idx = type_idx.reinterpret_as_int()
       if idx < 0 || idx >= module_.types.length() {
         raise ValidationError::InvalidTypeIndex(idx)
@@ -2180,10 +2173,7 @@ fn validate_instruction(
       }
       let func_type_called = module_.types[type_idx]
       validate_tail_call_return_type(
-        module_,
-        func_type_called,
-        func_type,
-        "return_call",
+        module_, func_type_called, func_type, "return_call",
       )
       // Pop arguments from stack (in reverse order)
       for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
@@ -2239,17 +2229,13 @@ fn validate_instruction(
             "return_call_indirect requires funcref table, got \{table_elem_type}",
           )
       }
-
       let idx = type_idx.reinterpret_as_int()
       if idx < 0 || idx >= module_.types.length() {
         raise ValidationError::InvalidTypeIndex(idx)
       }
       let func_type_called = module_.types[idx]
       validate_tail_call_return_type(
-        module_,
-        func_type_called,
-        func_type,
-        "return_call_indirect",
+        module_, func_type_called, func_type, "return_call_indirect",
       )
       // Pop table index
       ctx.poly_pop_expect(module_, I32, "return_call_indirect table index")
@@ -2306,10 +2292,7 @@ fn validate_instruction(
       }
       let func_type_called = module_.types[idx]
       validate_tail_call_return_type(
-        module_,
-        func_type_called,
-        func_type,
-        "return_call_ref",
+        module_, func_type_called, func_type, "return_call_ref",
       )
       // Pop the function reference
       if ctx.is_unreachable && stack.length() == 0 {
@@ -2336,8 +2319,15 @@ fn validate_instruction(
               "return_call_ref expects function reference, got externref",
             )
           // Other reference types are invalid
-          AnyRef | NullRef | EqRef | I31Ref | StructRef | ArrayRef | ExnRef
-          | NullExnRef | Ref(_, _) =>
+          AnyRef
+          | NullRef
+          | EqRef
+          | I31Ref
+          | StructRef
+          | ArrayRef
+          | ExnRef
+          | NullExnRef
+          | Ref(_, _) =>
             raise ValidationError::TypeMismatch(
               "return_call_ref expects function reference, got \{ref_type}",
             )

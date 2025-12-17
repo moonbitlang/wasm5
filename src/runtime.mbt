@@ -114,7 +114,10 @@ pub fn ImportResolver::add_func(
   match self.modules.get(module_) {
     Some(entry) => entry.funcs[name] = func
     None => {
-      let entry : ImportResolverEntry = { funcs: Map::new(), globals: Map::new() }
+      let entry : ImportResolverEntry = {
+        funcs: Map::new(),
+        globals: Map::new(),
+      }
       entry.funcs[name] = func
       self.modules[module_] = entry
     }
@@ -132,7 +135,10 @@ pub fn ImportResolver::add_global(
   match self.modules.get(module_) {
     Some(entry) => entry.globals[name] = value
     None => {
-      let entry : ImportResolverEntry = { funcs: Map::new(), globals: Map::new() }
+      let entry : ImportResolverEntry = {
+        funcs: Map::new(),
+        globals: Map::new(),
+      }
       entry.globals[name] = value
       self.modules[module_] = entry
     }
@@ -173,6 +179,7 @@ pub struct Runtime {
   stack : Array[Value]
   mut locals : Array[Value]
   mut pc : Int
+  mut running : Bool // Execution loop control flag
   call_stack : Array[CallFrame]
   memory : Array[Byte] // Linear memory
   memory_max : UInt? // Maximum memory size in pages (None = no limit)
@@ -386,6 +393,7 @@ pub fn Runtime::load_with_resolver(
     stack: [],
     locals: [],
     pc: 0,
+    running: false,
     call_stack: [],
     memory,
     memory_max: memory_max_pages,
