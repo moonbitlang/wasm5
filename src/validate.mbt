@@ -442,6 +442,19 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
     }
   }
 
+  // Validate type indices in imported functions
+  for imp in m.imports {
+    match imp.desc {
+      ImportDesc::Func(tidx) => {
+        let type_idx = tidx.reinterpret_as_int()
+        if type_idx < 0 || type_idx >= m.types.length() {
+          raise ValidationError::InvalidTypeIndex(type_idx)
+        }
+      }
+      _ => ()
+    }
+  }
+
   // Validate function type indices
   for i in 0..<m.funcs.length() {
     let type_idx = m.funcs[i].reinterpret_as_int()
