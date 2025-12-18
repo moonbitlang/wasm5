@@ -1040,7 +1040,7 @@ let whitelisted_tests : Array[(String, Set[Int])] = [
   ("unreached-invalid.wast", Set::from_array([676, 687])),
   (
     "conversions.wast",
-    Set::from_array([195, 241, 246, 392, 438, 443, 562, 609]),
+    Set::from_array([195, 241, 246, 392, 438, 443]),
   ),
   // All imports.wast tests now pass!
   ("float_exprs.wast", Set::from_array([519])),

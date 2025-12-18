@@ -465,7 +465,9 @@ pub fn op_f64_convert_i32_s(rt : Runtime) -> RetCode {
 ///|
 pub fn op_f64_promote_f32(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
-  rt.stack.push(Value::F64(a.to_double()))
+  let result = a.to_double()
+  // Canonicalize NaN to ensure positive canonical NaN
+  rt.stack.push(Value::F64(canonicalize_f64(result)))
   rt.pc += 1
   OK
 }
@@ -473,7 +475,9 @@ pub fn op_f64_promote_f32(rt : Runtime) -> RetCode {
 ///|
 pub fn op_f32_demote_f64(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
-  rt.stack.push(Value::F32(Float::from_double(a)))
+  let result = Float::from_double(a)
+  // Canonicalize NaN to ensure positive canonical NaN
+  rt.stack.push(Value::F32(canonicalize_f32(result)))
   rt.pc += 1
   OK
 }
