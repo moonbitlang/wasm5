@@ -382,10 +382,9 @@ fn is_subtype(module_ : Module, t1 : ValType, t2 : ValType) -> Bool {
       is_func_type_index(module_, n)
     (Ref(RefType::TypeIndex(n), _), Ref(RefType::Func, true)) =>
       is_func_type_index(module_, n)
-    // FuncRef is compatible with nullable typed function reference
-    // only if the type index refers to a function type
-    (FuncRef, Ref(RefType::TypeIndex(n), true)) =>
-      is_func_type_index(module_, n)
+    // NOTE: FuncRef is NOT a subtype of typed function references
+    // General funcref cannot be used where specific typed reference is required
+    // (FuncRef, Ref(RefType::TypeIndex(n), true)) => false
     (FuncRef, Ref(RefType::Func, true)) => true
     // Ref(Any, _) is compatible with AnyRef
     (Ref(RefType::Any, _), AnyRef) => true
@@ -1927,16 +1926,31 @@ fn validate_instruction(
     }
     BrOnNull(_label) =>
       // br_on_null: pop nullable ref, branch if null, else push non-null ref
-      // For now, just pop a reference value (any reference type)
+      // The fallthrough path pushes the reference with nullable=false
       if not(ctx.is_unreachable) && stack.length() < 1 {
         raise ValidationError::TypeMismatch(
           "br_on_null expects reference on stack",
         )
       } else if stack.length() >= 1 {
-        let _ = stack.unsafe_pop()
-        // Push back a reference (simplified - same type for now)
-        // TODO: properly track non-null type narrowing
-        stack.push(FuncRef) // Placeholder
+        let popped = stack.unsafe_pop()
+        // Make the reference non-nullable for the fallthrough case
+        let non_null_type = match popped {
+          // Nullable typed ref becomes non-nullable
+          ValType::Ref(ht, true) => ValType::Ref(ht, false)
+          // Already non-nullable - keep as is (shouldn't happen, but handle it)
+          ValType::Ref(ht, false) => ValType::Ref(ht, false)
+          // Generic nullable refs become non-nullable refs
+          FuncRef => ValType::Ref(RefType::Func, false)
+          ExternRef => ValType::Ref(RefType::Extern, false)
+          AnyRef => ValType::Ref(RefType::Any, false)
+          // Null types become their non-null counterparts
+          NullFuncRef => ValType::Ref(RefType::Func, false)
+          NullExternRef => ValType::Ref(RefType::Extern, false)
+          NullRef => ValType::Ref(RefType::Any, false)
+          // Other types shouldn't be here, but keep them
+          _ => popped
+        }
+        stack.push(non_null_type)
       }
     BrOnNonNull(_label) =>
       // br_on_non_null: pop nullable ref, branch if non-null (with the value), else continue
@@ -2265,22 +2279,17 @@ fn validate_instruction(
     }
     CallRef(type_idx) => {
       // call_ref: calls function through a reference
-      // Stack: [args...] [funcref] -> [results...]
+      // Stack: [args...] [(ref null $type_idx)] -> [results...]
       let idx = type_idx.reinterpret_as_int()
       if idx < 0 || idx >= module_.types.length() {
         raise ValidationError::InvalidTypeIndex(idx)
       }
       let func_type_called = module_.types[idx]
 
-      // Pop the function reference
-      if ctx.is_unreachable && stack.length() == 0 {
-        // Polymorphic - allow
-      } else if stack.length() < 1 {
-        raise ValidationError::TypeMismatch("call_ref expects funcref on stack")
-      } else {
-        let _ = stack.unsafe_pop()
-        // Pop funcref (we don't type-check it strictly for now)
-      }
+      // Pop the function reference - must be (ref null $type_idx)
+      // Cannot be generic funcref or externref
+      let expected_ref_type = ValType::Ref(RefType::TypeIndex(idx), true)
+      ctx.poly_pop_expect(module_, expected_ref_type, "call_ref")
 
       // Pop arguments from stack (in reverse order)
       for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
@@ -2299,6 +2308,7 @@ fn validate_instruction(
     ReturnCallRef(type_idx) => {
       // return_call_ref: tail call through a reference
       // Like doing a call_ref followed by return - must match current function's return type
+      // Stack: [args...] [(ref null $type_idx)] -> (unreachable)
       let idx = type_idx.reinterpret_as_int()
       if idx < 0 || idx >= module_.types.length() {
         raise ValidationError::InvalidTypeIndex(idx)
@@ -2307,50 +2317,11 @@ fn validate_instruction(
       validate_tail_call_return_type(
         module_, func_type_called, func_type, "return_call_ref",
       )
-      // Pop the function reference
-      if ctx.is_unreachable && stack.length() == 0 {
-        // Polymorphic - allow
-      } else if stack.length() < 1 {
-        raise ValidationError::TypeMismatch(
-          "return_call_ref expects funcref on stack",
-        )
-      } else {
-        let ref_type = stack.unsafe_pop()
-        // Validate that the reference is a typed function reference
-        // return_call_ref requires a reference to a specific function type, not general funcref
-        match ref_type {
-          // Only typed function references are valid
-          Ref(RefType::TypeIndex(_), _) => ()
-          // General function references are invalid - they could be any function type
-          FuncRef | NullFuncRef | Ref(RefType::Func, _) =>
-            raise ValidationError::TypeMismatch(
-              "return_call_ref requires typed function reference (ref $t), got general funcref",
-            )
-          // Externref is invalid for return_call_ref
-          ExternRef | NullExternRef | Ref(RefType::Extern, _) =>
-            raise ValidationError::TypeMismatch(
-              "return_call_ref expects function reference, got externref",
-            )
-          // Other reference types are invalid
-          AnyRef
-          | NullRef
-          | EqRef
-          | I31Ref
-          | StructRef
-          | ArrayRef
-          | ExnRef
-          | NullExnRef
-          | Ref(_, _) =>
-            raise ValidationError::TypeMismatch(
-              "return_call_ref expects function reference, got \{ref_type}",
-            )
-          // Non-reference types are invalid
-          I32 | I64 | F32 | F64 | V128 =>
-            raise ValidationError::TypeMismatch(
-              "return_call_ref expects function reference, got \{ref_type}",
-            )
-        }
-      }
+
+      // Pop the function reference - must be (ref null $type_idx)
+      // Cannot be generic funcref or externref
+      let expected_ref_type = ValType::Ref(RefType::TypeIndex(idx), true)
+      ctx.poly_pop_expect(module_, expected_ref_type, "return_call_ref")
 
       // Pop arguments from stack (in reverse order)
       for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
