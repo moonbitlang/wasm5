@@ -1045,7 +1045,7 @@ let whitelisted_tests : Array[(String, Set[Int])] = [
   (
     "imports.wast",
     Set::from_array([
-      393, 394, 395, 396, 397, 410, 411, 412, 413, 414, 666, 667, 668, 669,
+      666, 667, 668, 669,
     ]),
   ),
   ("float_exprs.wast", Set::from_array([519])),

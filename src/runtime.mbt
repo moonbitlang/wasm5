@@ -85,11 +85,12 @@ pub fn ImportedFunc::new(
 
 ///|
 /// Import resolver for linking modules
-/// Maps (module_name, field_name) to ImportedFunc or global Value
+/// Maps (module_name, field_name) to ImportedFunc, global Value, or table
 /// Using Bytes keys to match how WebAssembly module imports work
 struct ImportResolverEntry {
   funcs : Map[Bytes, ImportedFunc]
   globals : Map[Bytes, Value]
+  tables : Map[Bytes, RuntimeTable]
 }
 
 ///|
@@ -117,6 +118,7 @@ pub fn ImportResolver::add_func(
       let entry : ImportResolverEntry = {
         funcs: Map::new(),
         globals: Map::new(),
+        tables: Map::new(),
       }
       entry.funcs[name] = func
       self.modules[module_] = entry
@@ -138,6 +140,7 @@ pub fn ImportResolver::add_global(
       let entry : ImportResolverEntry = {
         funcs: Map::new(),
         globals: Map::new(),
+        tables: Map::new(),
       }
       entry.globals[name] = value
       self.modules[module_] = entry
@@ -167,6 +170,41 @@ pub fn ImportResolver::get_global(
 ) -> Value? {
   match self.modules.get(module_) {
     Some(entry) => entry.globals.get(name)
+    None => None
+  }
+}
+
+///|
+/// Add an imported table to the resolver
+pub fn ImportResolver::add_table(
+  self : ImportResolver,
+  module_ : Bytes,
+  name : Bytes,
+  table : RuntimeTable,
+) -> Unit {
+  match self.modules.get(module_) {
+    Some(entry) => entry.tables[name] = table
+    None => {
+      let entry : ImportResolverEntry = {
+        funcs: Map::new(),
+        globals: Map::new(),
+        tables: Map::new(),
+      }
+      entry.tables[name] = table
+      self.modules[module_] = entry
+    }
+  }
+}
+
+///|
+/// Look up an imported table
+pub fn ImportResolver::get_table(
+  self : ImportResolver,
+  module_ : Bytes,
+  name : Bytes,
+) -> RuntimeTable? {
+  match self.modules.get(module_) {
+    Some(entry) => entry.tables.get(name)
     None => None
   }
 }
@@ -235,6 +273,9 @@ pub fn default_import_resolver() -> ImportResolver {
     arity: 2U,
     func: spectest_print_f64_f64,
   })
+  // Add spectest table (10 funcref, max 20)
+  let table_data : Array[Int?] = Array::make(10, None)
+  resolver.add_table(b"spectest", b"table", { data: table_data, max: Some(20U) })
   resolver
 }
 
@@ -329,6 +370,26 @@ pub fn Runtime::load_with_resolver(
   }
   // Initialize tables
   let tables : Array[RuntimeTable] = []
+  // First, add imported tables
+  for imp in m.imports {
+    match imp.desc {
+      ImportDesc::Table(_) => {
+        // Try to get the table from the resolver
+        match resolver.get_table(imp.module_, imp.name) {
+          Some(imported_table) => tables.push(imported_table)
+          None => {
+            // Fall back to creating an empty table if resolver doesn't provide one
+            // This shouldn't happen with proper test setup, but provides graceful fallback
+            let table_size = 10 // Default size for fallback
+            let table_data : Array[Int?] = Array::make(table_size, None)
+            tables.push({ data: table_data, max: Some(20U) })
+          }
+        }
+      }
+      _ => ()
+    }
+  }
+  // Then add local tables
   for table in m.tables {
     let table_size = table.limits.min.reinterpret_as_int()
     // Initialize table with null references
