@@ -1837,31 +1837,21 @@ fn validate_instruction(
       // Pop i32 condition
       ctx.poly_pop_expect(module_, I32, "br_if condition")
 
-      // Validate that branch target's required values are on stack
-      // Unlike br, we DON'T pop them (they stay for fallthrough case)
-      if not(ctx.is_unreachable) || stack.length() > 0 {
-        if stack.length() < target_types.length() {
-          if ctx.is_unreachable {
-            // In unreachable code, missing values are polymorphic - OK
-          } else {
-            raise ValidationError::TypeMismatch(
-              "br_if: expected \{target_types.length()} values on stack for branch target",
-            )
-          }
-        } else {
-          // Validate types for the branch target (with subtyping)
-          for i in 0..<target_types.length() {
-            let stack_idx = stack.length() - target_types.length() + i
-            if not(is_subtype(module_, stack[stack_idx], target_types[i])) {
-              raise ValidationError::TypeMismatch(
-                "br_if: branch target type mismatch: expected \{target_types[i]}, got \{stack[stack_idx]}",
-              )
-            }
-          }
-        }
+      // Pop the label types (checking subtyping) and push them back
+      // This "widens" the types to the label types
+      // e.g., if stack has (ref null $t) and label expects funcref,
+      // after br_if the stack will have funcref (not the more specific ref null $t)
+      for i = target_types.length() - 1; i >= 0; i = i - 1 {
+        ctx.poly_pop_expect(module_, target_types[i], "br_if target value")
       }
+
+      // Push label types back onto stack for fallthrough case
+      for target_type in target_types {
+        stack.push(target_type)
+      }
+
       // Note: Unlike br, br_if does NOT mark as unreachable
-      // Stack remains unchanged (values stay for fallthrough)
+      // Stack now has the label types (potentially wider than original)
     }
     BrTable(labels, default_label) => {
       // Table branch - pop i32 index
