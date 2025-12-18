@@ -326,7 +326,10 @@ pub fn default_import_resolver() -> ImportResolver {
   // Add spectest memory (1 page initial, 2 pages max)
   let memory_size = 1 * 65536 // 1 page = 65536 bytes
   let memory_data : Array[Byte] = Array::make(memory_size, b'\x00')
-  resolver.add_memory(b"spectest", b"memory", { data: memory_data, max: Some(2U) })
+  resolver.add_memory(b"spectest", b"memory", {
+    data: memory_data,
+    max: Some(2U),
+  })
   resolver
 }
 
@@ -434,7 +437,7 @@ pub fn Runtime::load_with_resolver(
   // First, add imported tables
   for imp in m.imports {
     match imp.desc {
-      ImportDesc::Table(_) => {
+      ImportDesc::Table(_) =>
         // Try to get the table from the resolver
         match resolver.get_table(imp.module_, imp.name) {
           Some(imported_table) => tables.push(imported_table)
@@ -446,7 +449,6 @@ pub fn Runtime::load_with_resolver(
             tables.push({ data: table_data, max: Some(20U) })
           }
         }
-      }
       _ => ()
     }
   }

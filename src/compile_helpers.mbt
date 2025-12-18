@@ -131,7 +131,7 @@ pub fn Runtime::pop_arguments(self : Runtime, num_params : Int) -> Array[Value] 
 pub fn Runtime::initialize_locals(
   self : Runtime,
   args : Array[Value],
-  code : Code
+  code : Code,
 ) -> RetCode {
   self.locals = []
   for arg in args {
@@ -171,7 +171,7 @@ pub fn check_type_signature_match(
   expected : FuncType,
   actual : FuncType,
   error_msg : String,
-  rt : Runtime
+  rt : Runtime,
 ) -> RetCode {
   if expected.params.length() != actual.params.length() ||
     expected.results.length() != actual.results.length() {
@@ -199,7 +199,7 @@ pub fn Runtime::call_imported_function(
   self : Runtime,
   func_idx : Int,
   args : Array[Value],
-  expected_results : Int
+  expected_results : Int,
 ) -> Unit {
   let imported_func = self.imported_funcs[func_idx]
   let results = (imported_func.func)(args)

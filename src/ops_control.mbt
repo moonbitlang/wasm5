@@ -1,3 +1,4 @@
+///|
 pub fn op_local_get(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
   rt.stack.push(rt.locals[idx])
@@ -266,7 +267,6 @@ pub fn op_call(rt : Runtime) -> RetCode {
     rt.error_detail = "Function not compiled: \{func_idx}"
     return FunctionNotCompiled
   }
-
   let args = rt.pop_arguments(func_type.params.length())
 
   // Save frame
@@ -277,7 +277,6 @@ pub fn op_call(rt : Runtime) -> RetCode {
   if init_result != OK {
     return init_result
   }
-
   rt.pc = callee_pc
   OK
 }
@@ -349,15 +348,11 @@ pub fn op_call_indirect(rt : Runtime) -> RetCode {
 
     // Check type signature matches
     let check_result = check_type_signature_match(
-      expected_type,
-      actual_type,
-      "indirect call type mismatch",
-      rt,
+      expected_type, actual_type, "indirect call type mismatch", rt,
     )
     if check_result != OK {
       return check_result
     }
-
     let args = rt.pop_arguments(actual_type.params.length())
     rt.call_imported_function(func_idx, args, expected_type.results.length())
     rt.pc += 1
@@ -379,21 +374,16 @@ pub fn op_call_indirect(rt : Runtime) -> RetCode {
 
   // Check type signature matches
   let check_result = check_type_signature_match(
-    expected_type,
-    actual_type,
-    "indirect call type mismatch",
-    rt,
+    expected_type, actual_type, "indirect call type mismatch", rt,
   )
   if check_result != OK {
     return check_result
   }
-
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     rt.error_detail = "Function not compiled: \{func_idx}"
     return FunctionNotCompiled
   }
-
   let args = rt.pop_arguments(actual_type.params.length())
 
   // Save frame
@@ -404,7 +394,6 @@ pub fn op_call_indirect(rt : Runtime) -> RetCode {
   if init_result != OK {
     return init_result
   }
-
   rt.pc = callee_pc
   OK
 }
@@ -447,7 +436,6 @@ pub fn op_return_call(rt : Runtime) -> RetCode {
     rt.error_detail = "Function not compiled: \{func_idx}"
     return FunctionNotCompiled
   }
-
   let args = rt.pop_arguments(func_type.params.length())
 
   // For tail call: replace current locals instead of pushing new frame
@@ -455,7 +443,6 @@ pub fn op_return_call(rt : Runtime) -> RetCode {
   if init_result != OK {
     return init_result
   }
-
   rt.pc = callee_pc
   OK
 }
@@ -506,15 +493,11 @@ pub fn op_return_call_indirect(rt : Runtime) -> RetCode {
 
     // Check type signature matches
     let check_result = check_type_signature_match(
-      expected_type,
-      actual_type,
-      "indirect call type mismatch",
-      rt,
+      expected_type, actual_type, "indirect call type mismatch", rt,
     )
     if check_result != OK {
       return check_result
     }
-
     let args = rt.pop_arguments(actual_type.params.length())
     rt.call_imported_function(func_idx, args, expected_type.results.length())
     return rt.handle_tail_call_return()
@@ -535,21 +518,16 @@ pub fn op_return_call_indirect(rt : Runtime) -> RetCode {
 
   // Check type signature matches
   let check_result = check_type_signature_match(
-    expected_type,
-    actual_type,
-    "indirect call type mismatch",
-    rt,
+    expected_type, actual_type, "indirect call type mismatch", rt,
   )
   if check_result != OK {
     return check_result
   }
-
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     rt.error_detail = "Function not compiled: \{func_idx}"
     return FunctionNotCompiled
   }
-
   let args = rt.pop_arguments(actual_type.params.length())
 
   // For tail call: replace current locals instead of pushing new frame
@@ -557,7 +535,6 @@ pub fn op_return_call_indirect(rt : Runtime) -> RetCode {
   if init_result != OK {
     return init_result
   }
-
   rt.pc = callee_pc
   OK
 }
@@ -593,15 +570,11 @@ pub fn op_call_ref(rt : Runtime) -> RetCode {
 
     // Check type signature matches
     let check_result = check_type_signature_match(
-      func_type,
-      actual_type,
-      "call_ref: type mismatch",
-      rt,
+      func_type, actual_type, "call_ref: type mismatch", rt,
     )
     if check_result != OK {
       return check_result
     }
-
     let args = rt.pop_arguments(func_type.params.length())
     rt.call_imported_function(func_idx, args, func_type.results.length())
     rt.pc += 1
@@ -619,21 +592,16 @@ pub fn op_call_ref(rt : Runtime) -> RetCode {
 
   // Check type signature matches
   let check_result = check_type_signature_match(
-    func_type,
-    actual_type,
-    "call_ref: type mismatch",
-    rt,
+    func_type, actual_type, "call_ref: type mismatch", rt,
   )
   if check_result != OK {
     return check_result
   }
-
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     rt.error_detail = "Function not compiled: \{func_idx}"
     return FunctionNotCompiled
   }
-
   let args = rt.pop_arguments(func_type.params.length())
 
   // Save frame
@@ -644,7 +612,6 @@ pub fn op_call_ref(rt : Runtime) -> RetCode {
   if init_result != OK {
     return init_result
   }
-
   rt.pc = callee_pc
   OK
 }
@@ -680,15 +647,11 @@ pub fn op_return_call_ref(rt : Runtime) -> RetCode {
 
     // Check type signature matches
     let check_result = check_type_signature_match(
-      func_type,
-      actual_type,
-      "return_call_ref: type mismatch",
-      rt,
+      func_type, actual_type, "return_call_ref: type mismatch", rt,
     )
     if check_result != OK {
       return check_result
     }
-
     let args = rt.pop_arguments(func_type.params.length())
     rt.call_imported_function(func_idx, args, func_type.results.length())
     return rt.handle_tail_call_return()
@@ -705,21 +668,16 @@ pub fn op_return_call_ref(rt : Runtime) -> RetCode {
 
   // Check type signature matches
   let check_result = check_type_signature_match(
-    func_type,
-    actual_type,
-    "return_call_ref: type mismatch",
-    rt,
+    func_type, actual_type, "return_call_ref: type mismatch", rt,
   )
   if check_result != OK {
     return check_result
   }
-
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     rt.error_detail = "Function not compiled: \{func_idx}"
     return FunctionNotCompiled
   }
-
   let args = rt.pop_arguments(func_type.params.length())
 
   // For tail call: replace current locals instead of pushing new frame
@@ -727,7 +685,6 @@ pub fn op_return_call_ref(rt : Runtime) -> RetCode {
   if init_result != OK {
     return init_result
   }
-
   rt.pc = callee_pc
   OK
 }
@@ -923,6 +880,8 @@ pub fn op_ref_is_null(rt : Runtime) -> RetCode {
   rt.pc += 1
   OK
 }
+
+///|
 pub fn op_global_get(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
   rt.stack.push(rt.globals[idx])

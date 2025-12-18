@@ -1,3 +1,4 @@
+///|
 pub fn op_f32_eq(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::I32(if a == b { 1U } else { 0U }))
