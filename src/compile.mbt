@@ -117,6 +117,112 @@ fn get_func_type_idx(
 }
 
 ///|
+/// Pop function arguments from the stack
+fn Runtime::pop_arguments(self : Runtime, num_params : Int) -> Array[Value] {
+  let args : Array[Value] = Array::make(num_params, Value::I32(0U))
+  for i = num_params - 1; i >= 0; i = i - 1 {
+    args[i] = self.stack.unsafe_pop()
+  }
+  args
+}
+
+///|
+/// Initialize local variables for a function call
+fn Runtime::initialize_locals(
+  self : Runtime,
+  args : Array[Value],
+  code : Code
+) -> RetCode {
+  self.locals = []
+  for arg in args {
+    self.locals.push(arg)
+  }
+  for local_type in code.locals {
+    match local_type {
+      ValType::I32 => self.locals.push(Value::I32(0U))
+      ValType::I64 => self.locals.push(Value::I64(0UL))
+      ValType::F32 => self.locals.push(Value::F32(0.0))
+      ValType::F64 => self.locals.push(Value::F64(0.0))
+      ValType::FuncRef => self.locals.push(Value::Ref(None))
+      ValType::ExternRef => self.locals.push(Value::Ref(None))
+      ValType::AnyRef
+      | ValType::ExnRef
+      | ValType::NullRef
+      | ValType::NullFuncRef
+      | ValType::NullExnRef
+      | ValType::NullExternRef
+      | ValType::EqRef
+      | ValType::I31Ref
+      | ValType::StructRef
+      | ValType::ArrayRef
+      | ValType::Ref(_, _) => self.locals.push(Value::Ref(None))
+      _ => {
+        self.error_detail = "Unsupported local type: \{local_type}"
+        return UnsupportedLocalType
+      }
+    }
+  }
+  OK
+}
+
+///|
+/// Check if two function type signatures match
+fn check_type_signature_match(
+  expected : FuncType,
+  actual : FuncType,
+  error_msg : String,
+  rt : Runtime
+) -> RetCode {
+  if expected.params.length() != actual.params.length() ||
+    expected.results.length() != actual.results.length() {
+    rt.error_detail = error_msg
+    return InvalidType
+  }
+  for i = 0; i < expected.params.length(); i = i + 1 {
+    if expected.params[i] != actual.params[i] {
+      rt.error_detail = error_msg
+      return InvalidType
+    }
+  }
+  for i = 0; i < expected.results.length(); i = i + 1 {
+    if expected.results[i] != actual.results[i] {
+      rt.error_detail = error_msg
+      return InvalidType
+    }
+  }
+  OK
+}
+
+///|
+/// Call an imported function and push results onto the stack
+fn Runtime::call_imported_function(
+  self : Runtime,
+  func_idx : Int,
+  args : Array[Value],
+  expected_results : Int
+) -> Unit {
+  let imported_func = self.imported_funcs[func_idx]
+  let results = (imported_func.func)(args)
+  for i = 0; i < expected_results && i < results.length(); i = i + 1 {
+    self.stack.push(results[i])
+  }
+}
+
+///|
+/// Handle return from a tail call (return_call variants)
+fn Runtime::handle_tail_call_return(self : Runtime) -> RetCode {
+  if self.call_stack.length() > 0 {
+    let frame = self.call_stack.unsafe_pop()
+    self.pc = frame.return_pc
+    self.locals = frame.locals
+    self.pc += 1
+  } else {
+    self.running = false
+  }
+  OK
+}
+
+///|
 /// Return code for operations - simple integer enum for efficient ABI
 pub enum RetCode {
   OK = 0
@@ -1345,23 +1451,8 @@ fn op_call(rt : Runtime) -> RetCode {
       return InvalidType
     }
     let func_type = rt.module_.types[type_idx]
-
-    // Pop arguments based on function type
-    let num_params = func_type.params.length()
-    let args : Array[Value] = Array::make(num_params, Value::I32(0U))
-    for i = num_params - 1; i >= 0; i = i - 1 {
-      args[i] = rt.stack.unsafe_pop()
-    }
-
-    // Call the imported function
-    let imported_func = rt.imported_funcs[func_idx]
-    let results = (imported_func.func)(args)
-
-    // Push only the expected number of results based on function type
-    let num_results = func_type.results.length()
-    for i = 0; i < num_results && i < results.length(); i = i + 1 {
-      rt.stack.push(results[i])
-    }
+    let args = rt.pop_arguments(func_type.params.length())
+    rt.call_imported_function(func_idx, args, func_type.results.length())
     rt.pc += 1
     return OK
   }
@@ -1376,46 +1467,17 @@ fn op_call(rt : Runtime) -> RetCode {
     return FunctionNotCompiled
   }
 
-  // Pop arguments
-  let num_params = func_type.params.length()
-  let args : Array[Value] = Array::make(num_params, Value::I32(0U))
-  for i = num_params - 1; i >= 0; i = i - 1 {
-    args[i] = rt.stack.unsafe_pop()
-  }
+  let args = rt.pop_arguments(func_type.params.length())
 
   // Save frame
   rt.call_stack.push(CallFrame::{ return_pc: rt.pc, locals: rt.locals })
 
   // Set up new locals
-  rt.locals = []
-  for arg in args {
-    rt.locals.push(arg)
+  let init_result = rt.initialize_locals(args, code)
+  if init_result != OK {
+    return init_result
   }
-  for local_type in code.locals {
-    match local_type {
-      ValType::I32 => rt.locals.push(Value::I32(0U))
-      ValType::I64 => rt.locals.push(Value::I64(0UL))
-      ValType::F32 => rt.locals.push(Value::F32(0.0))
-      ValType::F64 => rt.locals.push(Value::F64(0.0))
-      ValType::FuncRef => rt.locals.push(Value::Ref(None))
-      ValType::ExternRef => rt.locals.push(Value::Ref(None))
-      ValType::AnyRef
-      | ValType::ExnRef
-      | ValType::NullRef
-      | ValType::NullFuncRef
-      | ValType::NullExnRef
-      | ValType::NullExternRef
-      | ValType::EqRef
-      | ValType::I31Ref
-      | ValType::StructRef
-      | ValType::ArrayRef
-      | ValType::Ref(_, _) => rt.locals.push(Value::Ref(None))
-      _ => {
-        rt.error_detail = "Unsupported local type: \{local_type}"
-        return UnsupportedLocalType
-      }
-    }
-  }
+
   rt.pc = callee_pc
   OK
 }
@@ -1486,37 +1548,18 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
     let actual_type = rt.module_.types[actual_type_idx]
 
     // Check type signature matches
-    if expected_type.params.length() != actual_type.params.length() ||
-      expected_type.results.length() != actual_type.results.length() {
-      rt.error_detail = "indirect call type mismatch"
-      return InvalidType
-    }
-    for i = 0; i < expected_type.params.length(); i = i + 1 {
-      if expected_type.params[i] != actual_type.params[i] {
-        rt.error_detail = "indirect call type mismatch"
-        return InvalidType
-      }
-    }
-    for i = 0; i < expected_type.results.length(); i = i + 1 {
-      if expected_type.results[i] != actual_type.results[i] {
-        rt.error_detail = "indirect call type mismatch"
-        return InvalidType
-      }
+    let check_result = check_type_signature_match(
+      expected_type,
+      actual_type,
+      "indirect call type mismatch",
+      rt,
+    )
+    if check_result != OK {
+      return check_result
     }
 
-    // Call the imported function
-    let imported_func = rt.imported_funcs[func_idx]
-    let num_params = actual_type.params.length()
-    let args : Array[Value] = Array::make(num_params, Value::I32(0U))
-    for i = num_params - 1; i >= 0; i = i - 1 {
-      args[i] = rt.stack.unsafe_pop()
-    }
-    let results = (imported_func.func)(args)
-    // Push only the expected number of results based on function type
-    let num_results = expected_type.results.length()
-    for i = 0; i < num_results && i < results.length(); i = i + 1 {
-      rt.stack.push(results[i])
-    }
+    let args = rt.pop_arguments(actual_type.params.length())
+    rt.call_imported_function(func_idx, args, expected_type.results.length())
     rt.pc += 1
     return OK
   }
@@ -1535,69 +1578,33 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
   let actual_type = rt.module_.types[actual_type_idx]
 
   // Check type signature matches
-  if expected_type.params.length() != actual_type.params.length() ||
-    expected_type.results.length() != actual_type.results.length() {
-    rt.error_detail = "indirect call type mismatch"
-    return InvalidType
+  let check_result = check_type_signature_match(
+    expected_type,
+    actual_type,
+    "indirect call type mismatch",
+    rt,
+  )
+  if check_result != OK {
+    return check_result
   }
-  for i = 0; i < expected_type.params.length(); i = i + 1 {
-    if expected_type.params[i] != actual_type.params[i] {
-      rt.error_detail = "indirect call type mismatch"
-      return InvalidType
-    }
-  }
-  for i = 0; i < expected_type.results.length(); i = i + 1 {
-    if expected_type.results[i] != actual_type.results[i] {
-      rt.error_detail = "indirect call type mismatch"
-      return InvalidType
-    }
-  }
+
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     rt.error_detail = "Function not compiled: \{func_idx}"
     return FunctionNotCompiled
   }
 
-  // Pop arguments
-  let num_params = actual_type.params.length()
-  let args : Array[Value] = Array::make(num_params, Value::I32(0U))
-  for i = num_params - 1; i >= 0; i = i - 1 {
-    args[i] = rt.stack.unsafe_pop()
-  }
+  let args = rt.pop_arguments(actual_type.params.length())
 
   // Save frame
   rt.call_stack.push(CallFrame::{ return_pc: rt.pc, locals: rt.locals })
 
   // Set up new locals
-  rt.locals = []
-  for arg in args {
-    rt.locals.push(arg)
+  let init_result = rt.initialize_locals(args, code)
+  if init_result != OK {
+    return init_result
   }
-  for local_type in code.locals {
-    match local_type {
-      ValType::I32 => rt.locals.push(Value::I32(0U))
-      ValType::I64 => rt.locals.push(Value::I64(0UL))
-      ValType::F32 => rt.locals.push(Value::F32(0.0))
-      ValType::F64 => rt.locals.push(Value::F64(0.0))
-      ValType::FuncRef => rt.locals.push(Value::Ref(None))
-      ValType::ExternRef => rt.locals.push(Value::Ref(None))
-      ValType::AnyRef
-      | ValType::ExnRef
-      | ValType::NullRef
-      | ValType::NullFuncRef
-      | ValType::NullExnRef
-      | ValType::NullExternRef
-      | ValType::EqRef
-      | ValType::I31Ref
-      | ValType::StructRef
-      | ValType::ArrayRef
-      | ValType::Ref(_, _) => rt.locals.push(Value::Ref(None))
-      _ => {
-        rt.error_detail = "Unsupported local type: \{local_type}"
-        return UnsupportedLocalType
-      }
-    }
-  }
+
   rt.pc = callee_pc
   OK
 }
@@ -1626,35 +1633,9 @@ fn op_return_call(rt : Runtime) -> RetCode {
       return InvalidType
     }
     let func_type = rt.module_.types[type_idx]
-
-    // Pop arguments based on function type
-    let num_params = func_type.params.length()
-    let args : Array[Value] = Array::make(num_params, Value::I32(0U))
-    for i = num_params - 1; i >= 0; i = i - 1 {
-      args[i] = rt.stack.unsafe_pop()
-    }
-
-    // Call the imported function
-    let imported_func = rt.imported_funcs[func_idx]
-    let results = (imported_func.func)(args)
-
-    // Push only the expected number of results based on function type
-    let num_results = func_type.results.length()
-    for i = 0; i < num_results && i < results.length(); i = i + 1 {
-      rt.stack.push(results[i])
-    }
-
-    // Return to caller (tail call ends current function)
-    if rt.call_stack.length() > 0 {
-      let frame = rt.call_stack.unsafe_pop()
-      rt.pc = frame.return_pc
-      rt.locals = frame.locals
-      rt.pc += 1
-      return OK
-    } else {
-      rt.running = false
-      return OK
-    }
+    let args = rt.pop_arguments(func_type.params.length())
+    rt.call_imported_function(func_idx, args, func_type.results.length())
+    return rt.handle_tail_call_return()
   }
 
   // Adjust index for local functions
@@ -1667,43 +1648,14 @@ fn op_return_call(rt : Runtime) -> RetCode {
     return FunctionNotCompiled
   }
 
-  // Pop arguments
-  let num_params = func_type.params.length()
-  let args : Array[Value] = Array::make(num_params, Value::I32(0U))
-  for i = num_params - 1; i >= 0; i = i - 1 {
-    args[i] = rt.stack.unsafe_pop()
-  }
+  let args = rt.pop_arguments(func_type.params.length())
 
   // For tail call: replace current locals instead of pushing new frame
-  rt.locals = []
-  for arg in args {
-    rt.locals.push(arg)
+  let init_result = rt.initialize_locals(args, code)
+  if init_result != OK {
+    return init_result
   }
-  for local_type in code.locals {
-    match local_type {
-      ValType::I32 => rt.locals.push(Value::I32(0U))
-      ValType::I64 => rt.locals.push(Value::I64(0UL))
-      ValType::F32 => rt.locals.push(Value::F32(0.0))
-      ValType::F64 => rt.locals.push(Value::F64(0.0))
-      ValType::FuncRef => rt.locals.push(Value::Ref(None))
-      ValType::ExternRef => rt.locals.push(Value::Ref(None))
-      ValType::AnyRef
-      | ValType::ExnRef
-      | ValType::NullRef
-      | ValType::NullFuncRef
-      | ValType::NullExnRef
-      | ValType::NullExternRef
-      | ValType::EqRef
-      | ValType::I31Ref
-      | ValType::StructRef
-      | ValType::ArrayRef
-      | ValType::Ref(_, _) => rt.locals.push(Value::Ref(None))
-      _ => {
-        rt.error_detail = "Unsupported local type: \{local_type}"
-        return UnsupportedLocalType
-      }
-    }
-  }
+
   rt.pc = callee_pc
   OK
 }
@@ -1753,48 +1705,19 @@ fn op_return_call_indirect(rt : Runtime) -> RetCode {
     let actual_type = rt.module_.types[actual_type_idx]
 
     // Check type signature matches
-    if expected_type.params.length() != actual_type.params.length() ||
-      expected_type.results.length() != actual_type.results.length() {
-      rt.error_detail = "indirect call type mismatch"
-      return InvalidType
-    }
-    for i = 0; i < expected_type.params.length(); i = i + 1 {
-      if expected_type.params[i] != actual_type.params[i] {
-        rt.error_detail = "indirect call type mismatch"
-        return InvalidType
-      }
-    }
-    for i = 0; i < expected_type.results.length(); i = i + 1 {
-      if expected_type.results[i] != actual_type.results[i] {
-        rt.error_detail = "indirect call type mismatch"
-        return InvalidType
-      }
+    let check_result = check_type_signature_match(
+      expected_type,
+      actual_type,
+      "indirect call type mismatch",
+      rt,
+    )
+    if check_result != OK {
+      return check_result
     }
 
-    // Call the imported function
-    let imported_func = rt.imported_funcs[func_idx]
-    let num_params = actual_type.params.length()
-    let args : Array[Value] = Array::make(num_params, Value::I32(0U))
-    for i = num_params - 1; i >= 0; i = i - 1 {
-      args[i] = rt.stack.unsafe_pop()
-    }
-    let results = (imported_func.func)(args)
-    // Push only the expected number of results based on function type
-    let num_results = expected_type.results.length()
-    for i = 0; i < num_results && i < results.length(); i = i + 1 {
-      rt.stack.push(results[i])
-    }
-    // Return to caller (tail call ends current function)
-    if rt.call_stack.length() > 0 {
-      let frame = rt.call_stack.unsafe_pop()
-      rt.pc = frame.return_pc
-      rt.locals = frame.locals
-      rt.pc += 1
-      return OK
-    } else {
-      rt.running = false
-      return OK
-    }
+    let args = rt.pop_arguments(actual_type.params.length())
+    rt.call_imported_function(func_idx, args, expected_type.results.length())
+    return rt.handle_tail_call_return()
   }
 
   // Adjust to local function index
@@ -1811,66 +1734,30 @@ fn op_return_call_indirect(rt : Runtime) -> RetCode {
   let actual_type = rt.module_.types[actual_type_idx]
 
   // Check type signature matches
-  if expected_type.params.length() != actual_type.params.length() ||
-    expected_type.results.length() != actual_type.results.length() {
-    rt.error_detail = "indirect call type mismatch"
-    return InvalidType
+  let check_result = check_type_signature_match(
+    expected_type,
+    actual_type,
+    "indirect call type mismatch",
+    rt,
+  )
+  if check_result != OK {
+    return check_result
   }
-  for i = 0; i < expected_type.params.length(); i = i + 1 {
-    if expected_type.params[i] != actual_type.params[i] {
-      rt.error_detail = "indirect call type mismatch"
-      return InvalidType
-    }
-  }
-  for i = 0; i < expected_type.results.length(); i = i + 1 {
-    if expected_type.results[i] != actual_type.results[i] {
-      rt.error_detail = "indirect call type mismatch"
-      return InvalidType
-    }
-  }
+
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     rt.error_detail = "Function not compiled: \{func_idx}"
     return FunctionNotCompiled
   }
 
-  // Pop arguments
-  let num_params = actual_type.params.length()
-  let args : Array[Value] = Array::make(num_params, Value::I32(0U))
-  for i = num_params - 1; i >= 0; i = i - 1 {
-    args[i] = rt.stack.unsafe_pop()
-  }
+  let args = rt.pop_arguments(actual_type.params.length())
 
   // For tail call: replace current locals instead of pushing new frame
-  rt.locals = []
-  for arg in args {
-    rt.locals.push(arg)
+  let init_result = rt.initialize_locals(args, code)
+  if init_result != OK {
+    return init_result
   }
-  for local_type in code.locals {
-    match local_type {
-      ValType::I32 => rt.locals.push(Value::I32(0U))
-      ValType::I64 => rt.locals.push(Value::I64(0UL))
-      ValType::F32 => rt.locals.push(Value::F32(0.0))
-      ValType::F64 => rt.locals.push(Value::F64(0.0))
-      ValType::FuncRef => rt.locals.push(Value::Ref(None))
-      ValType::ExternRef => rt.locals.push(Value::Ref(None))
-      ValType::AnyRef
-      | ValType::ExnRef
-      | ValType::NullRef
-      | ValType::NullFuncRef
-      | ValType::NullExnRef
-      | ValType::NullExternRef
-      | ValType::EqRef
-      | ValType::I31Ref
-      | ValType::StructRef
-      | ValType::ArrayRef
-      | ValType::Ref(_, _) => rt.locals.push(Value::Ref(None))
-      _ => {
-        rt.error_detail = "Unsupported local type: \{local_type}"
-        return UnsupportedLocalType
-      }
-    }
-  }
+
   rt.pc = callee_pc
   OK
 }
@@ -1905,25 +1792,18 @@ fn op_call_ref(rt : Runtime) -> RetCode {
     let actual_type = rt.module_.types[actual_type_idx]
 
     // Check type signature matches
-    if func_type.params.length() != actual_type.params.length() ||
-      func_type.results.length() != actual_type.results.length() {
-      rt.error_detail = "call_ref: type mismatch"
-      return InvalidType
+    let check_result = check_type_signature_match(
+      func_type,
+      actual_type,
+      "call_ref: type mismatch",
+      rt,
+    )
+    if check_result != OK {
+      return check_result
     }
 
-    // Call the imported function
-    let imported_func = rt.imported_funcs[func_idx]
-    let num_params = func_type.params.length()
-    let args : Array[Value] = Array::make(num_params, Value::I32(0U))
-    for i = num_params - 1; i >= 0; i = i - 1 {
-      args[i] = rt.stack.unsafe_pop()
-    }
-    let results = (imported_func.func)(args)
-    // Push only the expected number of results based on function type
-    let num_results = func_type.results.length()
-    for i = 0; i < num_results && i < results.length(); i = i + 1 {
-      rt.stack.push(results[i])
-    }
+    let args = rt.pop_arguments(func_type.params.length())
+    rt.call_imported_function(func_idx, args, func_type.results.length())
     rt.pc += 1
     return OK
   }
@@ -1938,57 +1818,33 @@ fn op_call_ref(rt : Runtime) -> RetCode {
   let actual_type = rt.module_.types[actual_type_idx]
 
   // Check type signature matches
-  if func_type.params.length() != actual_type.params.length() ||
-    func_type.results.length() != actual_type.results.length() {
-    rt.error_detail = "call_ref: type mismatch"
-    return InvalidType
+  let check_result = check_type_signature_match(
+    func_type,
+    actual_type,
+    "call_ref: type mismatch",
+    rt,
+  )
+  if check_result != OK {
+    return check_result
   }
+
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     rt.error_detail = "Function not compiled: \{func_idx}"
     return FunctionNotCompiled
   }
 
-  // Pop arguments
-  let num_params = func_type.params.length()
-  let args : Array[Value] = Array::make(num_params, Value::I32(0U))
-  for i = num_params - 1; i >= 0; i = i - 1 {
-    args[i] = rt.stack.unsafe_pop()
-  }
+  let args = rt.pop_arguments(func_type.params.length())
 
   // Save frame
   rt.call_stack.push(CallFrame::{ return_pc: rt.pc, locals: rt.locals })
 
   // Set up new locals
-  rt.locals = []
-  for arg in args {
-    rt.locals.push(arg)
+  let init_result = rt.initialize_locals(args, code)
+  if init_result != OK {
+    return init_result
   }
-  for local_type in code.locals {
-    match local_type {
-      ValType::I32 => rt.locals.push(Value::I32(0U))
-      ValType::I64 => rt.locals.push(Value::I64(0UL))
-      ValType::F32 => rt.locals.push(Value::F32(0.0))
-      ValType::F64 => rt.locals.push(Value::F64(0.0))
-      ValType::FuncRef => rt.locals.push(Value::Ref(None))
-      ValType::ExternRef => rt.locals.push(Value::Ref(None))
-      ValType::AnyRef
-      | ValType::ExnRef
-      | ValType::NullRef
-      | ValType::NullFuncRef
-      | ValType::NullExnRef
-      | ValType::NullExternRef
-      | ValType::EqRef
-      | ValType::I31Ref
-      | ValType::StructRef
-      | ValType::ArrayRef
-      | ValType::Ref(_, _) => rt.locals.push(Value::Ref(None))
-      _ => {
-        rt.error_detail = "Unsupported local type: \{local_type}"
-        return UnsupportedLocalType
-      }
-    }
-  }
+
   rt.pc = callee_pc
   OK
 }
@@ -2023,36 +1879,19 @@ fn op_return_call_ref(rt : Runtime) -> RetCode {
     let actual_type = rt.module_.types[actual_type_idx]
 
     // Check type signature matches
-    if func_type.params.length() != actual_type.params.length() ||
-      func_type.results.length() != actual_type.results.length() {
-      rt.error_detail = "return_call_ref: type mismatch"
-      return InvalidType
+    let check_result = check_type_signature_match(
+      func_type,
+      actual_type,
+      "return_call_ref: type mismatch",
+      rt,
+    )
+    if check_result != OK {
+      return check_result
     }
 
-    // Call the imported function
-    let imported_func = rt.imported_funcs[func_idx]
-    let num_params = func_type.params.length()
-    let args : Array[Value] = Array::make(num_params, Value::I32(0U))
-    for i = num_params - 1; i >= 0; i = i - 1 {
-      args[i] = rt.stack.unsafe_pop()
-    }
-    let results = (imported_func.func)(args)
-    // Push only the expected number of results based on function type
-    let num_results = func_type.results.length()
-    for i = 0; i < num_results && i < results.length(); i = i + 1 {
-      rt.stack.push(results[i])
-    }
-    // Return to caller (tail call ends current function)
-    if rt.call_stack.length() > 0 {
-      let frame = rt.call_stack.unsafe_pop()
-      rt.pc = frame.return_pc
-      rt.locals = frame.locals
-      rt.pc += 1
-      return OK
-    } else {
-      rt.running = false
-      return OK
-    }
+    let args = rt.pop_arguments(func_type.params.length())
+    rt.call_imported_function(func_idx, args, func_type.results.length())
+    return rt.handle_tail_call_return()
   }
 
   // Adjust index for local functions
@@ -2065,54 +1904,30 @@ fn op_return_call_ref(rt : Runtime) -> RetCode {
   let actual_type = rt.module_.types[actual_type_idx]
 
   // Check type signature matches
-  if func_type.params.length() != actual_type.params.length() ||
-    func_type.results.length() != actual_type.results.length() {
-    rt.error_detail = "return_call_ref: type mismatch"
-    return InvalidType
+  let check_result = check_type_signature_match(
+    func_type,
+    actual_type,
+    "return_call_ref: type mismatch",
+    rt,
+  )
+  if check_result != OK {
+    return check_result
   }
+
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     rt.error_detail = "Function not compiled: \{func_idx}"
     return FunctionNotCompiled
   }
 
-  // Pop arguments
-  let num_params = func_type.params.length()
-  let args : Array[Value] = Array::make(num_params, Value::I32(0U))
-  for i = num_params - 1; i >= 0; i = i - 1 {
-    args[i] = rt.stack.unsafe_pop()
-  }
+  let args = rt.pop_arguments(func_type.params.length())
 
   // For tail call: replace current locals instead of pushing new frame
-  rt.locals = []
-  for arg in args {
-    rt.locals.push(arg)
+  let init_result = rt.initialize_locals(args, code)
+  if init_result != OK {
+    return init_result
   }
-  for local_type in code.locals {
-    match local_type {
-      ValType::I32 => rt.locals.push(Value::I32(0U))
-      ValType::I64 => rt.locals.push(Value::I64(0UL))
-      ValType::F32 => rt.locals.push(Value::F32(0.0))
-      ValType::F64 => rt.locals.push(Value::F64(0.0))
-      ValType::FuncRef => rt.locals.push(Value::Ref(None))
-      ValType::ExternRef => rt.locals.push(Value::Ref(None))
-      ValType::AnyRef
-      | ValType::ExnRef
-      | ValType::NullRef
-      | ValType::NullFuncRef
-      | ValType::NullExnRef
-      | ValType::NullExternRef
-      | ValType::EqRef
-      | ValType::I31Ref
-      | ValType::StructRef
-      | ValType::ArrayRef
-      | ValType::Ref(_, _) => rt.locals.push(Value::Ref(None))
-      _ => {
-        rt.error_detail = "Unsupported local type: \{local_type}"
-        return UnsupportedLocalType
-      }
-    }
-  }
+
   rt.pc = callee_pc
   OK
 }
@@ -5074,34 +4889,9 @@ pub fn Runtime::call_compiled(
       "Function not compiled: \{func_name}",
     )
   }
-  self.locals = []
-  for arg in args {
-    self.locals.push(arg)
-  }
-  for local_type in code.locals {
-    match local_type {
-      ValType::I32 => self.locals.push(Value::I32(0U))
-      ValType::I64 => self.locals.push(Value::I64(0UL))
-      ValType::F32 => self.locals.push(Value::F32(0.0))
-      ValType::F64 => self.locals.push(Value::F64(0.0))
-      ValType::FuncRef
-      | ValType::ExternRef
-      | ValType::AnyRef
-      | ValType::ExnRef
-      | ValType::NullRef
-      | ValType::NullFuncRef
-      | ValType::NullExnRef
-      | ValType::NullExternRef
-      | ValType::EqRef
-      | ValType::I31Ref
-      | ValType::StructRef
-      | ValType::ArrayRef
-      | ValType::Ref(_, _) => self.locals.push(Value::Ref(None))
-      _ =>
-        raise RuntimeError::UnsupportedLocalType(
-          "Unsupported local type: \{local_type}",
-        )
-    }
+  let init_result = self.initialize_locals(args, code)
+  if init_result != OK {
+    raise init_result.to_error(self.error_detail)
   }
   self.stack.clear()
   self.call_stack.clear()
