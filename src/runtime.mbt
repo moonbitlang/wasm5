@@ -84,13 +84,21 @@ pub fn ImportedFunc::new(
 }
 
 ///|
+/// Imported memory with its limits
+pub struct ImportedMemory {
+  data : Array[Byte]
+  max : UInt? // Maximum size in pages (None = no limit)
+}
+
+///|
 /// Import resolver for linking modules
-/// Maps (module_name, field_name) to ImportedFunc, global Value, or table
+/// Maps (module_name, field_name) to ImportedFunc, global Value, table, or memory
 /// Using Bytes keys to match how WebAssembly module imports work
 struct ImportResolverEntry {
   funcs : Map[Bytes, ImportedFunc]
   globals : Map[Bytes, Value]
   tables : Map[Bytes, RuntimeTable]
+  memories : Map[Bytes, ImportedMemory]
 }
 
 ///|
@@ -119,6 +127,7 @@ pub fn ImportResolver::add_func(
         funcs: Map::new(),
         globals: Map::new(),
         tables: Map::new(),
+        memories: Map::new(),
       }
       entry.funcs[name] = func
       self.modules[module_] = entry
@@ -141,6 +150,7 @@ pub fn ImportResolver::add_global(
         funcs: Map::new(),
         globals: Map::new(),
         tables: Map::new(),
+        memories: Map::new(),
       }
       entry.globals[name] = value
       self.modules[module_] = entry
@@ -189,6 +199,7 @@ pub fn ImportResolver::add_table(
         funcs: Map::new(),
         globals: Map::new(),
         tables: Map::new(),
+        memories: Map::new(),
       }
       entry.tables[name] = table
       self.modules[module_] = entry
@@ -205,6 +216,42 @@ pub fn ImportResolver::get_table(
 ) -> RuntimeTable? {
   match self.modules.get(module_) {
     Some(entry) => entry.tables.get(name)
+    None => None
+  }
+}
+
+///|
+/// Add an imported memory to the resolver
+pub fn ImportResolver::add_memory(
+  self : ImportResolver,
+  module_ : Bytes,
+  name : Bytes,
+  memory : ImportedMemory,
+) -> Unit {
+  match self.modules.get(module_) {
+    Some(entry) => entry.memories[name] = memory
+    None => {
+      let entry : ImportResolverEntry = {
+        funcs: Map::new(),
+        globals: Map::new(),
+        tables: Map::new(),
+        memories: Map::new(),
+      }
+      entry.memories[name] = memory
+      self.modules[module_] = entry
+    }
+  }
+}
+
+///|
+/// Look up an imported memory
+pub fn ImportResolver::get_memory(
+  self : ImportResolver,
+  module_ : Bytes,
+  name : Bytes,
+) -> ImportedMemory? {
+  match self.modules.get(module_) {
+    Some(entry) => entry.memories.get(name)
     None => None
   }
 }
@@ -276,6 +323,10 @@ pub fn default_import_resolver() -> ImportResolver {
   // Add spectest table (10 funcref, max 20)
   let table_data : Array[Int?] = Array::make(10, None)
   resolver.add_table(b"spectest", b"table", { data: table_data, max: Some(20U) })
+  // Add spectest memory (1 page initial, 2 pages max)
+  let memory_size = 1 * 65536 // 1 page = 65536 bytes
+  let memory_data : Array[Byte] = Array::make(memory_size, b'\x00')
+  resolver.add_memory(b"spectest", b"memory", { data: memory_data, max: Some(2U) })
   resolver
 }
 
@@ -292,16 +343,28 @@ pub fn Runtime::load_with_resolver(
   resolver : ImportResolver,
 ) -> Runtime raise RuntimeError {
   // Initialize memory
-  // Read memory limits from module definition
-  let mut memory_min_pages : UInt = 0
+  let mut memory : Array[Byte] = []
   let mut memory_max_pages : UInt? = None
 
-  // Check for imported memory first, then local memory
+  // Check for imported memory first
+  let mut has_imported_memory = false
   for imp in m.imports {
     match imp.desc {
       ImportDesc::Mem(mem_type) => {
-        memory_min_pages = mem_type.limits.min
-        memory_max_pages = mem_type.limits.max
+        has_imported_memory = true
+        // Try to get the memory from the resolver
+        match resolver.get_memory(imp.module_, imp.name) {
+          Some(imported_mem) => {
+            memory = imported_mem.data
+            memory_max_pages = imported_mem.max
+          }
+          None => {
+            // Fall back to creating memory with the specified limits
+            let memory_size = mem_type.limits.min.reinterpret_as_int() * 65536
+            memory = Array::make(memory_size, b'\x00')
+            memory_max_pages = mem_type.limits.max
+          }
+        }
         break // Only one memory allowed in MVP
       }
       _ => ()
@@ -309,14 +372,12 @@ pub fn Runtime::load_with_resolver(
   }
 
   // If no imported memory, check for local memory
-  if memory_min_pages == 0 && m.mems.length() > 0 {
-    memory_min_pages = m.mems[0].limits.min
+  if not(has_imported_memory) && m.mems.length() > 0 {
+    let memory_min_pages = m.mems[0].limits.min
     memory_max_pages = m.mems[0].limits.max
+    let memory_size = memory_min_pages.reinterpret_as_int() * 65536
+    memory = Array::make(memory_size, b'\x00')
   }
-
-  // Initialize memory with minimum size
-  let memory_size = memory_min_pages.reinterpret_as_int() * 65536
-  let memory = Array::make(memory_size, b'\x00')
   // Initialize globals
   // First, add imported globals - try to get from resolver, otherwise use default values
   let globals : Array[Value] = []

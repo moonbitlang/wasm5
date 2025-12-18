@@ -1042,12 +1042,7 @@ let whitelisted_tests : Array[(String, Set[Int])] = [
     "conversions.wast",
     Set::from_array([195, 241, 246, 392, 438, 443, 562, 609]),
   ),
-  (
-    "imports.wast",
-    Set::from_array([
-      666, 667, 668, 669,
-    ]),
-  ),
+  // All imports.wast tests now pass!
   ("float_exprs.wast", Set::from_array([519])),
   ("br_if.wast", Set::from_array([668])),
   ("ref_func.wast", Set::from_array([109, 113])),
