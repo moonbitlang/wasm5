@@ -1039,7 +1039,43 @@ let whitelisted_tests : Array[(String, Set[Int])] = [
   // All imports.wast tests now pass!
   // All conversions.wast tests now pass!
   // All float_exprs.wast tests now pass!
-  // ("br_if.wast", Set::from_array([668])),
+  // All br_if.wast tests now pass!
+  //
+  // ref_func.wast failures: Lines 109, 113 - Undeclared function reference validation
+  //
+  // These tests expect validation errors when ref.func is used on functions that aren't
+  // "declared" (i.e., don't appear in element segments, globals, or exports).
+  //
+  // DIFFICULTY: HIGH - Requires extensive refactoring with cascading effects
+  //
+  // What needs to be implemented:
+  // 1. Add declared_funcs: Set[Int] field to ValidationCtx (tracking C.refs from spec)
+  // 2. Create collect_declared_funcs() to scan:
+  //    - Element segments (including inline table initializers like (table (elem $f)))
+  //    - Global initializers that use ref.func
+  //    - Exported functions
+  // 3. Thread declared_funcs through all validation contexts:
+  //    - Function bodies: validate_function() → ValidationCtx::new_with_locals()
+  //    - Global initializers: Multiple places where init_ctx is created
+  //    - Table initializers: Two separate code paths for nullable/non-nullable tables
+  // 4. Add validation check in RefFunc instruction to ensure function is declared
+  // 5. Update test harness to accept "undeclared function reference" errors
+  //
+  // COMPLICATIONS discovered during implementation attempt:
+  // - Parser complexity: Inline elem syntax (table (elem $f)) may be parsed into separate
+  //   elem segments or table.init fields depending on syntax - requires deep parser knowledge
+  // - Validation order: declared_funcs must be collected BEFORE validating any expressions
+  //   that might contain ref.func, but globals/tables themselves declare functions
+  // - Cascading failures: Implementation broke 162 tests across br_table.wast and table.wast
+  //   due to modules using ref.func in ways that should be valid but weren't properly handled
+  // - Edge cases: Functions can be declared through multiple mechanisms (elem segments,
+  //   declarative segments, global init, table init, exports) - all must be tracked
+  //
+  // RECOMMENDATION: This requires a comprehensive audit of all places where constant
+  // expressions are validated and ensuring declared_funcs is available everywhere.
+  // The cascading test failures suggest missing edge cases in how declarations are collected
+  // or validated. A more thorough understanding of the parser's handling of inline elem
+  // segments is needed before attempting this fix.
   ("ref_func.wast", Set::from_array([109, 113])),
   // Line 276: return_call_ref return type mismatch validation issue
   // Function $f23 returns (ref null $t) but calls return_call_ref $t3 which returns (ref func).
