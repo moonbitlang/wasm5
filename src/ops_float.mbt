@@ -505,6 +505,12 @@ extern "C" fn f32_from_i64(a : Int64) -> Float = "f32_from_i64"
 extern "C" fn f32_from_u64(a : UInt64) -> Float = "f32_from_u64"
 
 ///|
+extern "C" fn u64_from_f32(a : Float) -> UInt64 = "u64_from_f32"
+
+///|
+extern "C" fn u64_from_f64(a : Double) -> UInt64 = "u64_from_f64"
+
+///|
 pub fn op_f32_convert_i64_s(rt : Runtime) -> RetCode {
   let a = rt.pop_i64().reinterpret_as_int64()
   rt.stack.push(Value::F32(f32_from_i64(a)))
@@ -547,7 +553,8 @@ pub fn op_i64_trunc_f64_u(rt : Runtime) -> RetCode {
   if a >= 18446744073709551616.0 || a <= -1.0 {
     return IntegerOverflow
   }
-  rt.stack.push(Value::I64(a.to_uint64()))
+  // Use C function for proper conversion at precision boundaries
+  rt.stack.push(Value::I64(u64_from_f64(a)))
   rt.pc += 1
   OK
 }
@@ -629,15 +636,17 @@ pub fn op_i64_trunc_f32_s(rt : Runtime) -> RetCode {
 
 ///|
 pub fn op_i64_trunc_f32_u(rt : Runtime) -> RetCode {
-  let a = rt.pop_f32().to_double()
+  let a = rt.pop_f32()
   // Trap on NaN or out of range
   if a.is_nan() {
     return IntegerOverflow
   }
-  if a >= 18446744073709551616.0 || a <= -1.0 {
+  let a_double = a.to_double()
+  if a_double >= 18446744073709551616.0 || a_double <= -1.0 {
     return IntegerOverflow
   }
-  rt.stack.push(Value::I64(a.to_uint64()))
+  // Use C function for proper conversion at precision boundaries
+  rt.stack.push(Value::I64(u64_from_f32(a)))
   rt.pc += 1
   OK
 }
@@ -745,17 +754,19 @@ pub fn op_i64_trunc_sat_f32_s(rt : Runtime) -> RetCode {
 
 ///|
 pub fn op_i64_trunc_sat_f32_u(rt : Runtime) -> RetCode {
-  let a = rt.pop_f32().to_double()
+  let a = rt.pop_f32()
+  let a_double = a.to_double()
   let result = if a.is_nan() {
     0UL
-  } else if a >= 18446744073709551616.0 {
+  } else if a_double >= 18446744073709551616.0 {
     // >= 2^64, saturate to max u64
     0xFFFFFFFFFFFFFFFFUL
-  } else if a <= -1.0 {
+  } else if a_double <= -1.0 {
     // negative, saturate to 0
     0UL
   } else {
-    a.to_uint64()
+    // Use C function for proper conversion at precision boundaries
+    u64_from_f32(a)
   }
   rt.stack.push(Value::I64(result))
   rt.pc += 1
@@ -793,7 +804,8 @@ pub fn op_i64_trunc_sat_f64_u(rt : Runtime) -> RetCode {
     // negative, saturate to 0
     0UL
   } else {
-    a.to_uint64()
+    // Use C function for proper conversion at precision boundaries
+    u64_from_f64(a)
   }
   rt.stack.push(Value::I64(result))
   rt.pc += 1
