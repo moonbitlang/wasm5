@@ -1040,7 +1040,7 @@ let whitelisted_tests : Array[(String, Set[Int])] = [
   ("unreached-invalid.wast", Set::from_array([676, 687])),
   // All imports.wast tests now pass!
   // All conversions.wast tests now pass!
-  ("float_exprs.wast", Set::from_array([519])),
+  // ("float_exprs.wast", Set::from_array([519])),
   ("br_if.wast", Set::from_array([668])),
   ("ref_func.wast", Set::from_array([109, 113])),
   // Line 276: return_call_ref return type mismatch validation issue
