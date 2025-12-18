@@ -48,7 +48,7 @@ enum RefType {
 /// - Numeric types (i32, i64, f32, f64, v128): defaultable (default: 0)
 /// - Nullable reference types: defaultable (default: null)
 /// - Non-nullable reference types: NOT defaultable (must be initialized)
-pub fn ValType::is_defaultable(self : ValType) -> Bool {
+fn ValType::is_defaultable(self : ValType) -> Bool {
   match self {
     // Numeric types are always defaultable
     I32 | I64 | F32 | F64 | V128 => true

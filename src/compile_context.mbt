@@ -13,7 +13,7 @@ pub enum RetCode {
 
 ///|
 /// Convert RetCode to RuntimeError using error_detail from Runtime
-pub fn RetCode::to_error(self : RetCode, detail : String) -> RuntimeError {
+fn RetCode::to_error(self : RetCode, detail : String) -> RuntimeError {
   match self {
     OK => abort("OK is not an error")
     DivisionByZero => RuntimeError::DivisionByZero
@@ -72,17 +72,17 @@ pub struct CompileCtx {
 }
 
 ///|
-pub fn CompileCtx::new() -> CompileCtx {
+fn CompileCtx::new() -> CompileCtx {
   { type_stack: [], control_stack: [] }
 }
 
 ///|
-pub fn CompileCtx::push_type(self : CompileCtx, t : ValType) -> Unit {
+fn CompileCtx::push_type(self : CompileCtx, t : ValType) -> Unit {
   self.type_stack.push(t)
 }
 
 ///|
-pub fn CompileCtx::pop_type(self : CompileCtx) -> Unit {
+fn CompileCtx::pop_type(self : CompileCtx) -> Unit {
   if self.type_stack.length() > 0 {
     let _ = self.type_stack.unsafe_pop()
 
@@ -90,14 +90,14 @@ pub fn CompileCtx::pop_type(self : CompileCtx) -> Unit {
 }
 
 ///|
-pub fn CompileCtx::pop_types(self : CompileCtx, n : Int) -> Unit {
+fn CompileCtx::pop_types(self : CompileCtx, n : Int) -> Unit {
   for _ in 0..<n {
     self.pop_type()
   }
 }
 
 ///|
-pub fn CompileCtx::push_types(
+fn CompileCtx::push_types(
   self : CompileCtx,
   types : Array[ValType],
 ) -> Unit {
@@ -107,7 +107,7 @@ pub fn CompileCtx::push_types(
 }
 
 ///|
-pub fn CompileCtx::push_control(
+fn CompileCtx::push_control(
   self : CompileCtx,
   kind : CompileBlockKind,
   params : Array[ValType],
@@ -130,13 +130,13 @@ pub fn CompileCtx::push_control(
 }
 
 ///|
-pub fn CompileCtx::pop_control(self : CompileCtx) -> CompileBlock {
+fn CompileCtx::pop_control(self : CompileCtx) -> CompileBlock {
   self.control_stack.unsafe_pop()
 }
 
 ///|
 /// Truncate type stack to a given height
-pub fn CompileCtx::truncate_stack(self : CompileCtx, height : Int) -> Unit {
+fn CompileCtx::truncate_stack(self : CompileCtx, height : Int) -> Unit {
   while self.type_stack.length() > height {
     let _ = self.type_stack.unsafe_pop()
 
@@ -147,7 +147,7 @@ pub fn CompileCtx::truncate_stack(self : CompileCtx, height : Int) -> Unit {
 /// Get the branch target arity for a given label depth
 /// For blocks/if: arity = number of result types
 /// For loops: arity = number of param types (loop restarts)
-pub fn CompileCtx::get_branch_arity(self : CompileCtx, label : Int) -> Int {
+fn CompileCtx::get_branch_arity(self : CompileCtx, label : Int) -> Int {
   let idx = self.control_stack.length() - 1 - label
   let block = self.control_stack[idx]
   match block.kind {
@@ -158,7 +158,7 @@ pub fn CompileCtx::get_branch_arity(self : CompileCtx, label : Int) -> Int {
 
 ///|
 /// Get the stack height at the target block's entry
-pub fn CompileCtx::get_target_stack_height(
+fn CompileCtx::get_target_stack_height(
   self : CompileCtx,
   label : Int,
 ) -> Int {
@@ -168,7 +168,7 @@ pub fn CompileCtx::get_target_stack_height(
 
 ///|
 /// Calculate how many values to drop when branching to a label
-pub fn CompileCtx::calc_drop_count(
+fn CompileCtx::calc_drop_count(
   self : CompileCtx,
   label : Int,
   arity : Int,
@@ -182,21 +182,21 @@ pub fn CompileCtx::calc_drop_count(
 /// Get the target PC for a branch to the given label
 /// For loops, this is the known start PC
 /// For blocks/if, returns the current target_pc (may be placeholder if not yet known)
-pub fn CompileCtx::get_target_pc(self : CompileCtx, label : Int) -> Int {
+fn CompileCtx::get_target_pc(self : CompileCtx, label : Int) -> Int {
   let idx = self.control_stack.length() - 1 - label
   self.control_stack[idx].target_pc
 }
 
 ///|
 /// Check if the target block is a loop (target PC is already known)
-pub fn CompileCtx::is_loop_target(self : CompileCtx, label : Int) -> Bool {
+fn CompileCtx::is_loop_target(self : CompileCtx, label : Int) -> Bool {
   let idx = self.control_stack.length() - 1 - label
   self.control_stack[idx].kind == LoopKind
 }
 
 ///|
 /// Register a slot that needs to be patched with the target PC when the block ends
-pub fn CompileCtx::add_br_patch(
+fn CompileCtx::add_br_patch(
   self : CompileCtx,
   label : Int,
   slot : Int,
@@ -207,7 +207,7 @@ pub fn CompileCtx::add_br_patch(
 
 ///|
 /// Get block type from BlockType enum (similar to validation's get_block_type)
-pub fn get_compile_block_type(
+fn get_compile_block_type(
   module_ : Module,
   block_type : BlockType,
 ) -> (Array[ValType], Array[ValType]) {

@@ -42,7 +42,7 @@ pub let canonical_nan_f32 : Float = Float::reinterpret_from_uint(0x7fc0_0000U)
 ///|
 /// Canonicalize NaN values - if value is NaN, return canonical NaN.
 /// This ensures WebAssembly spec compliance for NaN bit patterns.
-pub fn canonicalize_f64(v : Double) -> Double {
+fn canonicalize_f64(v : Double) -> Double {
   if v.is_nan() {
     canonical_nan_f64
   } else {
@@ -53,7 +53,7 @@ pub fn canonicalize_f64(v : Double) -> Double {
 ///|
 /// Canonicalize NaN values - if value is NaN, return canonical NaN.
 /// This ensures WebAssembly spec compliance for NaN bit patterns.
-pub fn canonicalize_f32(v : Float) -> Float {
+fn canonicalize_f32(v : Float) -> Float {
   if v.is_nan() {
     canonical_nan_f32
   } else {
@@ -69,7 +69,7 @@ pub extern "C" fn rintf(x : Float) -> Float = "rintf"
 
 ///|
 /// Count the number of imported functions in a module
-pub fn count_imported_funcs(module_ : Module) -> Int {
+fn count_imported_funcs(module_ : Module) -> Int {
   let mut count = 0
   for imp in module_.imports {
     match imp.desc {
@@ -83,7 +83,7 @@ pub fn count_imported_funcs(module_ : Module) -> Int {
 ///|
 /// Get the type index for a function (imported or local)
 /// Returns -1 if the function index is invalid
-pub fn get_func_type_idx(
+fn get_func_type_idx(
   module_ : Module,
   func_idx : Int,
   num_imported : Int,
@@ -118,7 +118,7 @@ pub fn get_func_type_idx(
 
 ///|
 /// Pop function arguments from the stack
-pub fn Runtime::pop_arguments(self : Runtime, num_params : Int) -> Array[Value] {
+fn Runtime::pop_arguments(self : Runtime, num_params : Int) -> Array[Value] {
   let args : Array[Value] = Array::make(num_params, Value::I32(0U))
   for i = num_params - 1; i >= 0; i = i - 1 {
     args[i] = self.stack.unsafe_pop()
@@ -128,7 +128,7 @@ pub fn Runtime::pop_arguments(self : Runtime, num_params : Int) -> Array[Value] 
 
 ///|
 /// Initialize local variables for a function call
-pub fn Runtime::initialize_locals(
+fn Runtime::initialize_locals(
   self : Runtime,
   args : Array[Value],
   code : Code,
@@ -167,7 +167,7 @@ pub fn Runtime::initialize_locals(
 
 ///|
 /// Check if two function type signatures match
-pub fn check_type_signature_match(
+fn check_type_signature_match(
   expected : FuncType,
   actual : FuncType,
   error_msg : String,
@@ -195,7 +195,7 @@ pub fn check_type_signature_match(
 
 ///|
 /// Call an imported function and push results onto the stack
-pub fn Runtime::call_imported_function(
+fn Runtime::call_imported_function(
   self : Runtime,
   func_idx : Int,
   args : Array[Value],
@@ -215,7 +215,7 @@ pub fn Runtime::call_imported_function(
 
 ///|
 /// Handle return from a tail call (return_call variants)
-pub fn Runtime::handle_tail_call_return(self : Runtime) -> RetCode {
+fn Runtime::handle_tail_call_return(self : Runtime) -> RetCode {
   if self.call_stack.length() > 0 {
     let frame = self.call_stack.unsafe_pop()
     self.pc = frame.return_pc
@@ -229,13 +229,13 @@ pub fn Runtime::handle_tail_call_return(self : Runtime) -> RetCode {
 
 ///|
 /// Emit an instruction to the ops array
-pub fn Runtime::emit(self : Runtime, instr : MInstr) -> Unit {
+fn Runtime::emit(self : Runtime, instr : MInstr) -> Unit {
   self.ops.push(instr)
 }
 
 ///|
 /// Read immediate i32 value and advance PC
-pub fn Runtime::read_imm_i32(self : Runtime) -> UInt {
+fn Runtime::read_imm_i32(self : Runtime) -> UInt {
   self.pc += 1
   guard self.ops.unsafe_get(self.pc) is ImmediateI32(value)
   value
@@ -243,7 +243,7 @@ pub fn Runtime::read_imm_i32(self : Runtime) -> UInt {
 
 ///|
 /// Read immediate index value and advance PC
-pub fn Runtime::read_imm_idx(self : Runtime) -> Int {
+fn Runtime::read_imm_idx(self : Runtime) -> Int {
   self.pc += 1
   guard self.ops.unsafe_get(self.pc) is ImmediateIdx(value)
   value
@@ -254,7 +254,7 @@ pub fn Runtime::read_imm_idx(self : Runtime) -> Int {
 // ============================================================================
 
 ///|
-pub fn Runtime::pop_two_i32(self : Runtime) -> (UInt, UInt) {
+fn Runtime::pop_two_i32(self : Runtime) -> (UInt, UInt) {
   let b = self.stack.unsafe_pop()
   let a = self.stack.unsafe_pop()
   match (a, b) {
@@ -264,7 +264,7 @@ pub fn Runtime::pop_two_i32(self : Runtime) -> (UInt, UInt) {
 }
 
 ///|
-pub fn Runtime::pop_i32(self : Runtime) -> UInt {
+fn Runtime::pop_i32(self : Runtime) -> UInt {
   match self.stack.unsafe_pop() {
     Value::I32(v) => v
     _ => abort("Type error: expected i32")
@@ -272,7 +272,7 @@ pub fn Runtime::pop_i32(self : Runtime) -> UInt {
 }
 
 ///|
-pub fn Runtime::pop_two_i64(self : Runtime) -> (UInt64, UInt64) {
+fn Runtime::pop_two_i64(self : Runtime) -> (UInt64, UInt64) {
   let b = self.stack.unsafe_pop()
   let a = self.stack.unsafe_pop()
   match (a, b) {
@@ -282,7 +282,7 @@ pub fn Runtime::pop_two_i64(self : Runtime) -> (UInt64, UInt64) {
 }
 
 ///|
-pub fn Runtime::pop_i64(self : Runtime) -> UInt64 {
+fn Runtime::pop_i64(self : Runtime) -> UInt64 {
   match self.stack.unsafe_pop() {
     Value::I64(v) => v
     _ => abort("Type error: expected i64")
@@ -290,7 +290,7 @@ pub fn Runtime::pop_i64(self : Runtime) -> UInt64 {
 }
 
 ///|
-pub fn Runtime::pop_f32(self : Runtime) -> Float {
+fn Runtime::pop_f32(self : Runtime) -> Float {
   match self.stack.unsafe_pop() {
     Value::F32(v) => v
     _ => abort("Type error: expected f32")
@@ -298,14 +298,14 @@ pub fn Runtime::pop_f32(self : Runtime) -> Float {
 }
 
 ///|
-pub fn Runtime::pop_two_f32(self : Runtime) -> (Float, Float) {
+fn Runtime::pop_two_f32(self : Runtime) -> (Float, Float) {
   let b = self.pop_f32()
   let a = self.pop_f32()
   (a, b)
 }
 
 ///|
-pub fn Runtime::pop_f64(self : Runtime) -> Double {
+fn Runtime::pop_f64(self : Runtime) -> Double {
   match self.stack.unsafe_pop() {
     Value::F64(v) => v
     _ => abort("Type error: expected f64")
@@ -313,7 +313,7 @@ pub fn Runtime::pop_f64(self : Runtime) -> Double {
 }
 
 ///|
-pub fn Runtime::pop_two_f64(self : Runtime) -> (Double, Double) {
+fn Runtime::pop_two_f64(self : Runtime) -> (Double, Double) {
   let b = self.pop_f64()
   let a = self.pop_f64()
   (a, b)

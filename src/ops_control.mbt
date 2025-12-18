@@ -1,5 +1,5 @@
 ///|
-pub fn op_local_get(rt : Runtime) -> RetCode {
+fn op_local_get(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
   rt.stack.push(rt.locals[idx])
   rt.pc += 1
@@ -7,7 +7,7 @@ pub fn op_local_get(rt : Runtime) -> RetCode {
 }
 
 ///|
-pub fn op_local_set(rt : Runtime) -> RetCode {
+fn op_local_set(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
   let value = rt.stack.unsafe_pop()
   rt.locals[idx] = value
@@ -16,7 +16,7 @@ pub fn op_local_set(rt : Runtime) -> RetCode {
 }
 
 ///|
-pub fn op_local_tee(rt : Runtime) -> RetCode {
+fn op_local_tee(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
   let value = rt.stack[rt.stack.length() - 1]
   rt.locals[idx] = value
@@ -29,14 +29,14 @@ pub fn op_local_tee(rt : Runtime) -> RetCode {
 // ============================================================================
 
 ///|
-pub fn op_drop(rt : Runtime) -> RetCode {
+fn op_drop(rt : Runtime) -> RetCode {
   let _ = rt.stack.unsafe_pop()
   rt.pc += 1
   OK
 }
 
 ///|
-pub fn op_select(rt : Runtime) -> RetCode {
+fn op_select(rt : Runtime) -> RetCode {
   let cond = rt.pop_i32()
   let val2 = rt.stack.unsafe_pop()
   let val1 = rt.stack.unsafe_pop()
@@ -50,7 +50,7 @@ pub fn op_select(rt : Runtime) -> RetCode {
 // ============================================================================
 
 ///|
-pub fn op_if(rt : Runtime) -> RetCode {
+fn op_if(rt : Runtime) -> RetCode {
   let else_pc = rt.read_imm_idx()
   let cond = rt.pop_i32()
   if cond != 0U {
@@ -65,7 +65,7 @@ pub fn op_if(rt : Runtime) -> RetCode {
 // Branch targets are now computed at compile time and embedded directly in branch instructions
 
 ///|
-pub fn op_br(rt : Runtime) -> RetCode {
+fn op_br(rt : Runtime) -> RetCode {
   let target_pc = rt.read_imm_idx()
   let arity = rt.read_imm_idx()
   let drop_count = rt.read_imm_idx()
@@ -91,7 +91,7 @@ pub fn op_br(rt : Runtime) -> RetCode {
 }
 
 ///|
-pub fn op_br_if(rt : Runtime) -> RetCode {
+fn op_br_if(rt : Runtime) -> RetCode {
   let target_pc = rt.read_imm_idx()
   let arity = rt.read_imm_idx()
   let drop_count = rt.read_imm_idx()
@@ -121,7 +121,7 @@ pub fn op_br_if(rt : Runtime) -> RetCode {
 }
 
 ///|
-pub fn op_br_table(rt : Runtime) -> RetCode {
+fn op_br_table(rt : Runtime) -> RetCode {
   let num_labels = rt.read_imm_idx()
   let arity = rt.read_imm_idx()
   let index = rt.pop_i32().reinterpret_as_int()
@@ -163,7 +163,7 @@ pub fn op_br_table(rt : Runtime) -> RetCode {
 }
 
 ///|
-pub fn op_br_on_null(rt : Runtime) -> RetCode {
+fn op_br_on_null(rt : Runtime) -> RetCode {
   let target_pc = rt.read_imm_idx()
   let arity = rt.read_imm_idx()
   let drop_count = rt.read_imm_idx()
@@ -201,7 +201,7 @@ pub fn op_br_on_null(rt : Runtime) -> RetCode {
 }
 
 ///|
-pub fn op_br_on_non_null(rt : Runtime) -> RetCode {
+fn op_br_on_non_null(rt : Runtime) -> RetCode {
   let target_pc = rt.read_imm_idx()
   let arity = rt.read_imm_idx()
   let drop_count = rt.read_imm_idx()
@@ -239,7 +239,7 @@ pub fn op_br_on_non_null(rt : Runtime) -> RetCode {
 }
 
 ///|
-pub fn op_call(rt : Runtime) -> RetCode {
+fn op_call(rt : Runtime) -> RetCode {
   let func_idx = rt.read_imm_idx()
   let num_imported_funcs = count_imported_funcs(rt.module_)
 
@@ -282,7 +282,7 @@ pub fn op_call(rt : Runtime) -> RetCode {
 }
 
 ///|
-pub fn op_return(rt : Runtime) -> RetCode {
+fn op_return(rt : Runtime) -> RetCode {
   if rt.call_stack.length() == 0 {
     rt.running = false
     return OK
@@ -303,7 +303,7 @@ pub fn op_return(rt : Runtime) -> RetCode {
 }
 
 ///|
-pub fn op_call_indirect(rt : Runtime) -> RetCode {
+fn op_call_indirect(rt : Runtime) -> RetCode {
   let type_idx = rt.read_imm_idx()
   let table_idx = rt.read_imm_idx()
 
@@ -399,7 +399,7 @@ pub fn op_call_indirect(rt : Runtime) -> RetCode {
 }
 
 ///|
-pub fn op_end(rt : Runtime) -> RetCode {
+fn op_end(rt : Runtime) -> RetCode {
   if rt.call_stack.length() > 0 {
     op_return(rt)
   } else {
@@ -409,7 +409,7 @@ pub fn op_end(rt : Runtime) -> RetCode {
 }
 
 ///|
-pub fn op_return_call(rt : Runtime) -> RetCode {
+fn op_return_call(rt : Runtime) -> RetCode {
   let func_idx = rt.read_imm_idx()
   let num_imported_funcs = count_imported_funcs(rt.module_)
 
@@ -448,7 +448,7 @@ pub fn op_return_call(rt : Runtime) -> RetCode {
 }
 
 ///|
-pub fn op_return_call_indirect(rt : Runtime) -> RetCode {
+fn op_return_call_indirect(rt : Runtime) -> RetCode {
   let type_idx = rt.read_imm_idx()
   let table_idx = rt.read_imm_idx()
 
@@ -540,7 +540,7 @@ pub fn op_return_call_indirect(rt : Runtime) -> RetCode {
 }
 
 ///|
-pub fn op_call_ref(rt : Runtime) -> RetCode {
+fn op_call_ref(rt : Runtime) -> RetCode {
   let type_idx = rt.read_imm_idx()
 
   // Pop the function reference from the stack
@@ -617,7 +617,7 @@ pub fn op_call_ref(rt : Runtime) -> RetCode {
 }
 
 ///|
-pub fn op_return_call_ref(rt : Runtime) -> RetCode {
+fn op_return_call_ref(rt : Runtime) -> RetCode {
   let type_idx = rt.read_imm_idx()
 
   // Pop the function reference from the stack
@@ -690,13 +690,13 @@ pub fn op_return_call_ref(rt : Runtime) -> RetCode {
 }
 
 ///|
-pub fn op_nop(rt : Runtime) -> RetCode {
+fn op_nop(rt : Runtime) -> RetCode {
   rt.pc += 1
   OK
 }
 
 ///|
-pub fn op_unreachable(_rt : Runtime) -> RetCode {
+fn op_unreachable(_rt : Runtime) -> RetCode {
   return Unreachable
 }
 // =============================================================================
@@ -704,7 +704,7 @@ pub fn op_unreachable(_rt : Runtime) -> RetCode {
 // =============================================================================
 
 ///|
-pub fn op_table_init(rt : Runtime) -> RetCode {
+fn op_table_init(rt : Runtime) -> RetCode {
   let _table_idx = rt.read_imm_idx()
   let _elem_idx = rt.read_imm_idx()
   let _n = rt.pop_i32()
@@ -716,7 +716,7 @@ pub fn op_table_init(rt : Runtime) -> RetCode {
 }
 
 ///|
-pub fn op_table_copy(rt : Runtime) -> RetCode {
+fn op_table_copy(rt : Runtime) -> RetCode {
   let _dst_table_idx = rt.read_imm_idx()
   let _src_table_idx = rt.read_imm_idx()
   let _n = rt.pop_i32()
@@ -728,7 +728,7 @@ pub fn op_table_copy(rt : Runtime) -> RetCode {
 }
 
 ///|
-pub fn op_elem_drop(rt : Runtime) -> RetCode {
+fn op_elem_drop(rt : Runtime) -> RetCode {
   let _elem_idx = rt.read_imm_idx()
   // TODO: Implement elem.drop
   rt.pc += 1
@@ -740,7 +740,7 @@ pub fn op_elem_drop(rt : Runtime) -> RetCode {
 // =============================================================================
 
 ///|
-pub fn op_table_size(rt : Runtime) -> RetCode {
+fn op_table_size(rt : Runtime) -> RetCode {
   let table_idx = rt.read_imm_idx()
   if table_idx < 0 || table_idx >= rt.tables.length() {
     rt.error_detail = "table index out of bounds"
@@ -753,7 +753,7 @@ pub fn op_table_size(rt : Runtime) -> RetCode {
 }
 
 ///|
-pub fn op_table_get(rt : Runtime) -> RetCode {
+fn op_table_get(rt : Runtime) -> RetCode {
   let table_idx = rt.read_imm_idx()
   if table_idx < 0 || table_idx >= rt.tables.length() {
     rt.error_detail = "table index out of bounds"
@@ -772,7 +772,7 @@ pub fn op_table_get(rt : Runtime) -> RetCode {
 }
 
 ///|
-pub fn op_table_set(rt : Runtime) -> RetCode {
+fn op_table_set(rt : Runtime) -> RetCode {
   let table_idx = rt.read_imm_idx()
   if table_idx < 0 || table_idx >= rt.tables.length() {
     rt.error_detail = "table index out of bounds"
@@ -797,7 +797,7 @@ pub fn op_table_set(rt : Runtime) -> RetCode {
 }
 
 ///|
-pub fn op_table_grow(rt : Runtime) -> RetCode {
+fn op_table_grow(rt : Runtime) -> RetCode {
   let table_idx = rt.read_imm_idx()
   if table_idx < 0 || table_idx >= rt.tables.length() {
     rt.stack.push(Value::I32(0xFFFFFFFFU)) // -1 indicates failure
@@ -849,7 +849,7 @@ pub fn op_table_grow(rt : Runtime) -> RetCode {
 // =============================================================================
 
 ///|
-pub fn op_ref_null(rt : Runtime) -> RetCode {
+fn op_ref_null(rt : Runtime) -> RetCode {
   // ref.null pushes a null reference onto the stack
   // The heap type is encoded in the immediate but we don't need it at runtime
   let _ = rt.read_imm_idx() // Skip the heap type encoding
@@ -859,7 +859,7 @@ pub fn op_ref_null(rt : Runtime) -> RetCode {
 }
 
 ///|
-pub fn op_ref_func(rt : Runtime) -> RetCode {
+fn op_ref_func(rt : Runtime) -> RetCode {
   // ref.func pushes a reference to the given function onto the stack
   let func_idx = rt.read_imm_idx()
   rt.stack.push(Value::Ref(Some(func_idx)))
@@ -868,7 +868,7 @@ pub fn op_ref_func(rt : Runtime) -> RetCode {
 }
 
 ///|
-pub fn op_ref_is_null(rt : Runtime) -> RetCode {
+fn op_ref_is_null(rt : Runtime) -> RetCode {
   // ref.is_null tests whether a reference is null
   let ref_val = rt.stack.unsafe_pop()
   let is_null = match ref_val {
@@ -882,7 +882,7 @@ pub fn op_ref_is_null(rt : Runtime) -> RetCode {
 }
 
 ///|
-pub fn op_global_get(rt : Runtime) -> RetCode {
+fn op_global_get(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
   rt.stack.push(rt.globals[idx])
   rt.pc += 1
@@ -890,7 +890,7 @@ pub fn op_global_get(rt : Runtime) -> RetCode {
 }
 
 ///|
-pub fn op_global_set(rt : Runtime) -> RetCode {
+fn op_global_set(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
   let value = rt.stack.unsafe_pop()
   rt.globals[idx] = value
