@@ -178,13 +178,13 @@ pub fn check_type_signature_match(
     rt.error_detail = error_msg
     return InvalidType
   }
-  for i = 0; i < expected.params.length(); i = i + 1 {
+  for i in 0..<expected.params.length() {
     if expected.params[i] != actual.params[i] {
       rt.error_detail = error_msg
       return InvalidType
     }
   }
-  for i = 0; i < expected.results.length(); i = i + 1 {
+  for i in 0..<expected.results.length() {
     if expected.results[i] != actual.results[i] {
       rt.error_detail = error_msg
       return InvalidType
@@ -203,7 +203,12 @@ pub fn Runtime::call_imported_function(
 ) -> Unit {
   let imported_func = self.imported_funcs[func_idx]
   let results = (imported_func.func)(args)
-  for i = 0; i < expected_results && i < results.length(); i = i + 1 {
+  let count = if expected_results < results.length() {
+    expected_results
+  } else {
+    results.length()
+  }
+  for i in 0..<count {
     self.stack.push(results[i])
   }
 }

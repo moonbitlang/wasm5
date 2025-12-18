@@ -443,7 +443,7 @@ fn validate_module(m : Module) -> Unit raise ValidationError {
   }
 
   // Validate function type indices
-  for i = 0; i < m.funcs.length(); i = i + 1 {
+  for i in 0..<m.funcs.length() {
     let type_idx = m.funcs[i].reinterpret_as_int()
     if type_idx < 0 || type_idx >= m.types.length() {
       raise ValidationError::InvalidTypeIndex(type_idx)
@@ -873,11 +873,11 @@ fn ValidationCtx::new_with_locals(
   let total_locals = func_type.params.length() + code.locals.length()
   let initialized = Array::make(total_locals, false)
   // Parameters are always initialized
-  for i = 0; i < func_type.params.length(); i = i + 1 {
+  for i in 0..<func_type.params.length() {
     initialized[i] = true
   }
   // Locals with defaultable types are initialized to their default value
-  for i = 0; i < code.locals.length(); i = i + 1 {
+  for i in 0..<code.locals.length() {
     let local_type = code.locals[i]
     if local_type.is_defaultable() {
       initialized[func_type.params.length() + i] = true
@@ -1015,7 +1015,7 @@ fn validate_tail_call_return_type(
       "\{instr_name}: return type mismatch: expected \{func_type.results.length()} results, got \{func_type_called.results.length()}",
     )
   }
-  for i = 0; i < func_type_called.results.length(); i = i + 1 {
+  for i in 0..<func_type_called.results.length() {
     let called_result = func_type_called.results[i]
     let expected_result = func_type.results[i]
     if not(is_subtype(module_, called_result, expected_result)) {
@@ -1573,7 +1573,7 @@ fn validate_instruction(
       block_ctx.push_control(params, results)
       // Copy initialized locals from parent context
       // After block, we don't propagate back (block might branch out early)
-      for i = 0; i < ctx.initialized_locals.length(); i = i + 1 {
+      for i in 0..<ctx.initialized_locals.length() {
         block_ctx.initialized_locals.push(ctx.initialized_locals[i])
       }
       // Validate block body
@@ -1598,7 +1598,7 @@ fn validate_instruction(
         )
       } else {
         // Exact match - validate result types (with subtyping)
-        for i = 0; i < results.length(); i = i + 1 {
+        for i in 0..<results.length() {
           if not(is_subtype(module_, block_ctx.stack[i], results[i])) {
             raise ValidationError::TypeMismatch(
               "block result type mismatch: expected \{results[i]}, got \{block_ctx.stack[i]}",
@@ -1631,7 +1631,7 @@ fn validate_instruction(
       loop_ctx.push_control(params, params) // Loop's br target uses params, not results
       // Copy initialized locals from parent context
       // Loop is similar to block - don't propagate back
-      for i = 0; i < ctx.initialized_locals.length(); i = i + 1 {
+      for i in 0..<ctx.initialized_locals.length() {
         loop_ctx.initialized_locals.push(ctx.initialized_locals[i])
       }
       // Validate loop body
@@ -1655,7 +1655,7 @@ fn validate_instruction(
         )
       } else {
         // Exact match - validate result types (with subtyping)
-        for i = 0; i < results.length(); i = i + 1 {
+        for i in 0..<results.length() {
           if not(is_subtype(module_, loop_ctx.stack[i], results[i])) {
             raise ValidationError::TypeMismatch(
               "loop result type mismatch: expected \{results[i]}, got \{loop_ctx.stack[i]}",
@@ -1687,7 +1687,7 @@ fn validate_instruction(
       }
       then_ctx.push_control(params, results)
       // Copy initialized locals from parent context
-      for i = 0; i < ctx.initialized_locals.length(); i = i + 1 {
+      for i in 0..<ctx.initialized_locals.length() {
         then_ctx.initialized_locals.push(ctx.initialized_locals[i])
       }
       for then_instr in then_instrs {
@@ -1705,7 +1705,7 @@ fn validate_instruction(
         )
       } else {
         // Exact match - validate result types (with subtyping)
-        for i = 0; i < results.length(); i = i + 1 {
+        for i in 0..<results.length() {
           if not(is_subtype(module_, then_ctx.stack[i], results[i])) {
             raise ValidationError::TypeMismatch(
               "if then branch result type mismatch: expected \{results[i]}, got \{then_ctx.stack[i]}",
@@ -1724,7 +1724,7 @@ fn validate_instruction(
       }
       else_ctx.push_control(params, results)
       // Copy initialized locals from parent context (independently from then branch)
-      for i = 0; i < ctx.initialized_locals.length(); i = i + 1 {
+      for i in 0..<ctx.initialized_locals.length() {
         else_ctx.initialized_locals.push(ctx.initialized_locals[i])
       }
       for else_instr in else_instrs {
@@ -1742,7 +1742,7 @@ fn validate_instruction(
         )
       } else {
         // Exact match - validate result types (with subtyping)
-        for i = 0; i < results.length(); i = i + 1 {
+        for i in 0..<results.length() {
           if not(is_subtype(module_, else_ctx.stack[i], results[i])) {
             raise ValidationError::TypeMismatch(
               "if else branch result type mismatch: expected \{results[i]}, got \{else_ctx.stack[i]}",
@@ -1774,7 +1774,7 @@ fn validate_instruction(
           }
         } else {
           // Validate result types for concrete values (with subtyping)
-          for i = 0; i < func_type.results.length(); i = i + 1 {
+          for i in 0..<func_type.results.length() {
             let stack_idx = stack.length() - func_type.results.length() + i
             if not(is_subtype(module_, stack[stack_idx], func_type.results[i])) {
               raise ValidationError::TypeMismatch(
@@ -1804,7 +1804,7 @@ fn validate_instruction(
           }
         } else {
           // Validate types for the branch target (with subtyping)
-          for i = 0; i < target_types.length(); i = i + 1 {
+          for i in 0..<target_types.length() {
             let stack_idx = stack.length() - target_types.length() + i
             if not(is_subtype(module_, stack[stack_idx], target_types[i])) {
               raise ValidationError::TypeMismatch(
@@ -1838,7 +1838,7 @@ fn validate_instruction(
           }
         } else {
           // Validate types for the branch target (with subtyping)
-          for i = 0; i < target_types.length(); i = i + 1 {
+          for i in 0..<target_types.length() {
             let stack_idx = stack.length() - target_types.length() + i
             if not(is_subtype(module_, stack[stack_idx], target_types[i])) {
               raise ValidationError::TypeMismatch(
@@ -1876,7 +1876,7 @@ fn validate_instruction(
 
         // TODO: Re-enable once we fix the type mismatch bug
         // Check types match exactly (WebAssembly spec requires exact match)
-        // for i = 0; i < label_types.length(); i = i + 1 {
+        // for i in 0..<label_types.length() {
         //   if label_types[i] != default_types[i] {
         //     raise ValidationError::TypeMismatch(
         //       "br_table: all labels must have same types (label \{label} has \{label_types[i]}, default has \{default_types[i]} at position \{i})",
@@ -1899,7 +1899,7 @@ fn validate_instruction(
           }
         } else {
           // Validate types for concrete values (with subtyping)
-          for i = 0; i < target_types.length(); i = i + 1 {
+          for i in 0..<target_types.length() {
             let stack_idx = stack.length() - target_types.length() + i
             if not(is_subtype(module_, stack[stack_idx], target_types[i])) {
               raise ValidationError::TypeMismatch(
@@ -2406,7 +2406,7 @@ fn validate_function(
     }
   } else {
     // Check types from top of stack (with subtyping)
-    for i = 0; i < func_type.results.length(); i = i + 1 {
+    for i in 0..<func_type.results.length() {
       // Stack type must be a subtype of expected return type
       if not(is_subtype(module_, stack[i], func_type.results[i])) {
         raise ValidationError::TypeMismatch(

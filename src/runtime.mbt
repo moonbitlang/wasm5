@@ -303,7 +303,7 @@ pub fn Runtime::load_with_resolver(
     }
   }
   // Then add local globals
-  for i = 0; i < m.globals.length(); i = i + 1 {
+  for i in 0..<m.globals.length() {
     let global = m.globals[i]
     let value = eval_const_expr(global.init, globals)
     globals.push(value)
@@ -320,7 +320,7 @@ pub fn Runtime::load_with_resolver(
         )
     }
     // Copy data bytes into memory
-    for i = 0; i < data.init.length(); i = i + 1 {
+    for i in 0..<data.init.length() {
       let addr = offset + i
       if addr >= 0 && addr < memory.length() {
         memory[addr] = data.init[i]
@@ -352,7 +352,7 @@ pub fn Runtime::load_with_resolver(
         }
         // Copy function indices into table
         let table = tables[table_idx]
-        for i = 0; i < elem.init.length(); i = i + 1 {
+        for i in 0..<elem.init.length() {
           let addr = offset + i
           if addr >= 0 && addr < table.data.length() {
             table.data[addr] = Some(elem.init[i].reinterpret_as_int())
@@ -383,7 +383,7 @@ pub fn Runtime::load_with_resolver(
   let data_segments : Array[Array[Byte]] = []
   for data in m.datas {
     let segment : Array[Byte] = []
-    for i = 0; i < data.init.length(); i = i + 1 {
+    for i in 0..<data.init.length() {
       segment.push(data.init[i])
     }
     data_segments.push(segment)

@@ -1270,7 +1270,7 @@ pub fn Runtime::call_compiled(
   self.pc = start_pc
   self.execute()
   let results : Array[Value] = []
-  for _i = 0; _i < func_type.results.length(); _i = _i + 1 {
+  for _ in 0..<func_type.results.length() {
     if self.stack.length() > 0 {
       results.push(self.stack.unsafe_pop())
     }
