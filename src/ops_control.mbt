@@ -265,7 +265,6 @@ fn op_call(rt : Runtime) -> RetCode {
     let type_idx = get_func_type_idx(rt.module_, func_idx, num_imported_funcs)
     if type_idx < 0 {
       rt.error_detail = "call: invalid imported function index"
-      rt.running = false
       return InvalidType
     }
     let func_type = rt.module_.types[type_idx]
@@ -282,7 +281,6 @@ fn op_call(rt : Runtime) -> RetCode {
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     rt.error_detail = "Function not compiled: \{func_idx}"
-    rt.running = false
     return FunctionNotCompiled
   }
   let args = rt.pop_arguments(func_type.params.length())
@@ -293,7 +291,6 @@ fn op_call(rt : Runtime) -> RetCode {
   // Set up new locals
   let init_result = rt.initialize_locals(args, code)
   if init_result != OK {
-    rt.running = false
     return init_result
   }
   rt.pc = callee_pc
@@ -304,7 +301,6 @@ fn op_call(rt : Runtime) -> RetCode {
 #tailcall
 fn op_return(rt : Runtime) -> RetCode {
   if rt.call_stack.length() == 0 {
-    rt.running = false
     return OK
   }
   let return_value : Value? = if rt.stack.length() > 0 {
@@ -334,13 +330,11 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
   // Check table bounds
   if table_idx < 0 || table_idx >= rt.tables.length() {
     rt.error_detail = "call_indirect: invalid table index"
-    rt.running = false
     return InvalidType
   }
   let table = rt.tables[table_idx].data
   if elem_idx < 0 || elem_idx >= table.length() {
     rt.error_detail = "undefined element"
-    rt.running = false
     return InvalidType
   }
 
@@ -348,7 +342,6 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
   let func_ref = table[elem_idx]
   guard func_ref is Some(func_idx) else {
     rt.error_detail = "uninitialized element"
-    rt.running = false
     return InvalidType
   }
   let num_imported_funcs = count_imported_funcs(rt.module_)
@@ -366,7 +359,6 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
     )
     if actual_type_idx < 0 {
       rt.error_detail = "call_indirect: invalid imported function index"
-      rt.running = false
       return InvalidType
     }
     let actual_type = rt.module_.types[actual_type_idx]
@@ -376,7 +368,6 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
       expected_type, actual_type, "indirect call type mismatch", rt,
     )
     if check_result != OK {
-      rt.running = false
       return check_result
     }
     let args = rt.pop_arguments(actual_type.params.length())
@@ -391,7 +382,6 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
   // Check function index bounds
   if local_func_idx < 0 || local_func_idx >= rt.module_.codes.length() {
     rt.error_detail = "call_indirect: invalid function index"
-    rt.running = false
     return InvalidType
   }
 
@@ -404,13 +394,11 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
     expected_type, actual_type, "indirect call type mismatch", rt,
   )
   if check_result != OK {
-    rt.running = false
     return check_result
   }
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     rt.error_detail = "Function not compiled: \{func_idx}"
-    rt.running = false
     return FunctionNotCompiled
   }
   let args = rt.pop_arguments(actual_type.params.length())
@@ -421,7 +409,6 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
   // Set up new locals
   let init_result = rt.initialize_locals(args, code)
   if init_result != OK {
-    rt.running = false
     return init_result
   }
   rt.pc = callee_pc
@@ -434,7 +421,6 @@ fn op_end(rt : Runtime) -> RetCode {
   if rt.call_stack.length() > 0 {
     return op_return(rt)
   } else {
-    rt.running = false
     OK
   }
 }
@@ -451,7 +437,6 @@ fn op_return_call(rt : Runtime) -> RetCode {
     let type_idx = get_func_type_idx(rt.module_, func_idx, num_imported_funcs)
     if type_idx < 0 {
       rt.error_detail = "return_call: invalid imported function index"
-      rt.running = false
       return InvalidType
     }
     let func_type = rt.module_.types[type_idx]
@@ -467,7 +452,6 @@ fn op_return_call(rt : Runtime) -> RetCode {
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     rt.error_detail = "Function not compiled: \{func_idx}"
-    rt.running = false
     return FunctionNotCompiled
   }
   let args = rt.pop_arguments(func_type.params.length())
@@ -475,7 +459,6 @@ fn op_return_call(rt : Runtime) -> RetCode {
   // For tail call: replace current locals instead of pushing new frame
   let init_result = rt.initialize_locals(args, code)
   if init_result != OK {
-    rt.running = false
     return init_result
   }
   rt.pc = callee_pc
@@ -494,13 +477,11 @@ fn op_return_call_indirect(rt : Runtime) -> RetCode {
   // Check table bounds
   if table_idx < 0 || table_idx >= rt.tables.length() {
     rt.error_detail = "return_call_indirect: invalid table index"
-    rt.running = false
     return InvalidType
   }
   let table = rt.tables[table_idx].data
   if elem_idx < 0 || elem_idx >= table.length() {
     rt.error_detail = "undefined element"
-    rt.running = false
     return InvalidType
   }
 
@@ -508,7 +489,6 @@ fn op_return_call_indirect(rt : Runtime) -> RetCode {
   let func_ref = table[elem_idx]
   guard func_ref is Some(func_idx) else {
     rt.error_detail = "uninitialized element"
-    rt.running = false
     return InvalidType
   }
   let num_imported_funcs = count_imported_funcs(rt.module_)
@@ -526,7 +506,6 @@ fn op_return_call_indirect(rt : Runtime) -> RetCode {
     )
     if actual_type_idx < 0 {
       rt.error_detail = "return_call_indirect: invalid imported function index"
-      rt.running = false
       return InvalidType
     }
     let actual_type = rt.module_.types[actual_type_idx]
@@ -536,7 +515,6 @@ fn op_return_call_indirect(rt : Runtime) -> RetCode {
       expected_type, actual_type, "indirect call type mismatch", rt,
     )
     if check_result != OK {
-      rt.running = false
       return check_result
     }
     let args = rt.pop_arguments(actual_type.params.length())
@@ -550,7 +528,6 @@ fn op_return_call_indirect(rt : Runtime) -> RetCode {
   // Check function index bounds
   if local_func_idx < 0 || local_func_idx >= rt.module_.codes.length() {
     rt.error_detail = "return_call_indirect: invalid function index"
-    rt.running = false
     return InvalidType
   }
 
@@ -563,13 +540,11 @@ fn op_return_call_indirect(rt : Runtime) -> RetCode {
     expected_type, actual_type, "indirect call type mismatch", rt,
   )
   if check_result != OK {
-    rt.running = false
     return check_result
   }
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     rt.error_detail = "Function not compiled: \{func_idx}"
-    rt.running = false
     return FunctionNotCompiled
   }
   let args = rt.pop_arguments(actual_type.params.length())
@@ -577,7 +552,6 @@ fn op_return_call_indirect(rt : Runtime) -> RetCode {
   // For tail call: replace current locals instead of pushing new frame
   let init_result = rt.initialize_locals(args, code)
   if init_result != OK {
-    rt.running = false
     return init_result
   }
   rt.pc = callee_pc
@@ -593,7 +567,6 @@ fn op_call_ref(rt : Runtime) -> RetCode {
   let func_ref_value = rt.stack.unsafe_pop()
   guard func_ref_value is Ref(Some(func_idx)) else {
     rt.error_detail = "call_ref: null or invalid function reference"
-    rt.running = false
     return InvalidType
   }
   let num_imported_funcs = count_imported_funcs(rt.module_)
@@ -611,7 +584,6 @@ fn op_call_ref(rt : Runtime) -> RetCode {
     )
     if actual_type_idx < 0 {
       rt.error_detail = "call_ref: invalid imported function index"
-      rt.running = false
       return InvalidType
     }
     let actual_type = rt.module_.types[actual_type_idx]
@@ -621,7 +593,6 @@ fn op_call_ref(rt : Runtime) -> RetCode {
       func_type, actual_type, "call_ref: type mismatch", rt,
     )
     if check_result != OK {
-      rt.running = false
       return check_result
     }
     let args = rt.pop_arguments(func_type.params.length())
@@ -634,7 +605,6 @@ fn op_call_ref(rt : Runtime) -> RetCode {
   let local_func_idx = func_idx - num_imported_funcs
   if local_func_idx < 0 || local_func_idx >= rt.module_.codes.length() {
     rt.error_detail = "call_ref: invalid function index"
-    rt.running = false
     return InvalidType
   }
   let actual_type_idx = rt.module_.funcs[local_func_idx].reinterpret_as_int()
@@ -645,13 +615,11 @@ fn op_call_ref(rt : Runtime) -> RetCode {
     func_type, actual_type, "call_ref: type mismatch", rt,
   )
   if check_result != OK {
-    rt.running = false
     return check_result
   }
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     rt.error_detail = "Function not compiled: \{func_idx}"
-    rt.running = false
     return FunctionNotCompiled
   }
   let args = rt.pop_arguments(func_type.params.length())
@@ -662,7 +630,6 @@ fn op_call_ref(rt : Runtime) -> RetCode {
   // Set up new locals
   let init_result = rt.initialize_locals(args, code)
   if init_result != OK {
-    rt.running = false
     return init_result
   }
   rt.pc = callee_pc
@@ -678,7 +645,6 @@ fn op_return_call_ref(rt : Runtime) -> RetCode {
   let func_ref_value = rt.stack.unsafe_pop()
   guard func_ref_value is Ref(Some(func_idx)) else {
     rt.error_detail = "return_call_ref: null or invalid function reference"
-    rt.running = false
     return InvalidType
   }
   let num_imported_funcs = count_imported_funcs(rt.module_)
@@ -696,7 +662,6 @@ fn op_return_call_ref(rt : Runtime) -> RetCode {
     )
     if actual_type_idx < 0 {
       rt.error_detail = "return_call_ref: invalid imported function index"
-      rt.running = false
       return InvalidType
     }
     let actual_type = rt.module_.types[actual_type_idx]
@@ -706,7 +671,6 @@ fn op_return_call_ref(rt : Runtime) -> RetCode {
       func_type, actual_type, "return_call_ref: type mismatch", rt,
     )
     if check_result != OK {
-      rt.running = false
       return check_result
     }
     let args = rt.pop_arguments(func_type.params.length())
@@ -718,7 +682,6 @@ fn op_return_call_ref(rt : Runtime) -> RetCode {
   let local_func_idx = func_idx - num_imported_funcs
   if local_func_idx < 0 || local_func_idx >= rt.module_.codes.length() {
     rt.error_detail = "return_call_ref: invalid function index"
-    rt.running = false
     return InvalidType
   }
   let actual_type_idx = rt.module_.funcs[local_func_idx].reinterpret_as_int()
@@ -729,13 +692,11 @@ fn op_return_call_ref(rt : Runtime) -> RetCode {
     func_type, actual_type, "return_call_ref: type mismatch", rt,
   )
   if check_result != OK {
-    rt.running = false
     return check_result
   }
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     rt.error_detail = "Function not compiled: \{func_idx}"
-    rt.running = false
     return FunctionNotCompiled
   }
   let args = rt.pop_arguments(func_type.params.length())
@@ -743,7 +704,6 @@ fn op_return_call_ref(rt : Runtime) -> RetCode {
   // For tail call: replace current locals instead of pushing new frame
   let init_result = rt.initialize_locals(args, code)
   if init_result != OK {
-    rt.running = false
     return init_result
   }
   rt.pc = callee_pc
@@ -760,7 +720,6 @@ fn op_nop(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_unreachable(rt : Runtime) -> RetCode {
-  rt.running = false
   return Unreachable
 }
 // =============================================================================
@@ -812,7 +771,6 @@ fn op_table_size(rt : Runtime) -> RetCode {
   let table_idx = rt.read_imm_idx()
   if table_idx < 0 || table_idx >= rt.tables.length() {
     rt.error_detail = "table index out of bounds"
-    rt.running = false
     return InvalidType
   }
   let size = rt.tables[table_idx].data.length()
@@ -827,14 +785,12 @@ fn op_table_get(rt : Runtime) -> RetCode {
   let table_idx = rt.read_imm_idx()
   if table_idx < 0 || table_idx >= rt.tables.length() {
     rt.error_detail = "table index out of bounds"
-    rt.running = false
     return InvalidType
   }
   let elem_idx = rt.pop_i32().reinterpret_as_int()
   let table = rt.tables[table_idx].data
   if elem_idx < 0 || elem_idx >= table.length() {
     rt.error_detail = "table element index out of bounds"
-    rt.running = false
     return InvalidType
   }
   // Return the function reference (or null)
@@ -849,14 +805,12 @@ fn op_table_set(rt : Runtime) -> RetCode {
   let table_idx = rt.read_imm_idx()
   if table_idx < 0 || table_idx >= rt.tables.length() {
     rt.error_detail = "table index out of bounds"
-    rt.running = false
     return InvalidType
   }
   let ref_value = match rt.stack.unsafe_pop() {
     Value::Ref(r) => r
     _ => {
       rt.error_detail = "expected funcref for table.set"
-      rt.running = false
       return InvalidType
     }
   }
@@ -864,7 +818,6 @@ fn op_table_set(rt : Runtime) -> RetCode {
   let table = rt.tables[table_idx].data
   if elem_idx < 0 || elem_idx >= table.length() {
     rt.error_detail = "table element index out of bounds"
-    rt.running = false
     return InvalidType
   }
   table[elem_idx] = ref_value

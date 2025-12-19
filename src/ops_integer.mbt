@@ -43,11 +43,9 @@ fn op_i32_mul(rt : Runtime) -> RetCode {
 fn op_i32_div_s(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   if b == 0U {
-    rt.running = false
     return DivisionByZero
   }
   if a == 0x80000000U && b == 0xFFFFFFFFU {
-    rt.running = false
     return IntegerOverflow
   }
   let result = (a.reinterpret_as_int() / b.reinterpret_as_int()).reinterpret_as_uint()
@@ -61,7 +59,6 @@ fn op_i32_div_s(rt : Runtime) -> RetCode {
 fn op_i32_div_u(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   if b == 0U {
-    rt.running = false
     return DivisionByZero
   }
   rt.stack.push(Value::I32(a / b))
@@ -74,7 +71,6 @@ fn op_i32_div_u(rt : Runtime) -> RetCode {
 fn op_i32_rem_s(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   if b == 0U {
-    rt.running = false
     return DivisionByZero
   }
   let result = (a.reinterpret_as_int() % b.reinterpret_as_int()).reinterpret_as_uint()
@@ -88,7 +84,6 @@ fn op_i32_rem_s(rt : Runtime) -> RetCode {
 fn op_i32_rem_u(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i32()
   if b == 0U {
-    rt.running = false
     return DivisionByZero
   }
   rt.stack.push(Value::I32(a % b))
@@ -427,11 +422,9 @@ fn op_i64_mul(rt : Runtime) -> RetCode {
 fn op_i64_div_s(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   if b == 0UL {
-    rt.running = false
     return DivisionByZero
   }
   if a == 0x8000000000000000UL && b == 0xFFFFFFFFFFFFFFFFUL {
-    rt.running = false
     return IntegerOverflow
   }
   let result = (a.reinterpret_as_int64() / b.reinterpret_as_int64()).reinterpret_as_uint64()
@@ -445,7 +438,6 @@ fn op_i64_div_s(rt : Runtime) -> RetCode {
 fn op_i64_div_u(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   if b == 0UL {
-    rt.running = false
     return DivisionByZero
   }
   rt.stack.push(Value::I64(a / b))
@@ -458,7 +450,6 @@ fn op_i64_div_u(rt : Runtime) -> RetCode {
 fn op_i64_rem_s(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   if b == 0UL {
-    rt.running = false
     return DivisionByZero
   }
   let result = (a.reinterpret_as_int64() % b.reinterpret_as_int64()).reinterpret_as_uint64()
@@ -472,7 +463,6 @@ fn op_i64_rem_s(rt : Runtime) -> RetCode {
 fn op_i64_rem_u(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   if b == 0UL {
-    rt.running = false
     return DivisionByZero
   }
   rt.stack.push(Value::I64(a % b))

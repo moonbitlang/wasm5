@@ -14,7 +14,6 @@ fn op_i32_load(rt : Runtime) -> RetCode {
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    rt.running = false
     return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
@@ -35,7 +34,6 @@ fn op_i32_store(rt : Runtime) -> RetCode {
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    rt.running = false
     return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
@@ -56,7 +54,6 @@ fn op_i32_load8_s(rt : Runtime) -> RetCode {
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 1UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    rt.running = false
     return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
@@ -75,7 +72,6 @@ fn op_i32_load8_u(rt : Runtime) -> RetCode {
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 1UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    rt.running = false
     return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
@@ -91,7 +87,6 @@ fn op_i32_load16_s(rt : Runtime) -> RetCode {
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 2UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    rt.running = false
     return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
@@ -112,7 +107,6 @@ fn op_i32_load16_u(rt : Runtime) -> RetCode {
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 2UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    rt.running = false
     return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
@@ -130,7 +124,6 @@ fn op_i64_load(rt : Runtime) -> RetCode {
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 8UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    rt.running = false
     return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
@@ -166,7 +159,6 @@ fn op_i64_store(rt : Runtime) -> RetCode {
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 8UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    rt.running = false
     return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
@@ -189,7 +181,6 @@ fn op_i64_load8_s(rt : Runtime) -> RetCode {
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 1UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    rt.running = false
     return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
@@ -208,7 +199,6 @@ fn op_i64_load8_u(rt : Runtime) -> RetCode {
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 1UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    rt.running = false
     return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
@@ -224,7 +214,6 @@ fn op_i64_load16_s(rt : Runtime) -> RetCode {
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 2UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    rt.running = false
     return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
@@ -245,7 +234,6 @@ fn op_i64_load16_u(rt : Runtime) -> RetCode {
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 2UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    rt.running = false
     return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
@@ -263,7 +251,6 @@ fn op_i64_load32_s(rt : Runtime) -> RetCode {
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    rt.running = false
     return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
@@ -290,7 +277,6 @@ fn op_i64_load32_u(rt : Runtime) -> RetCode {
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    rt.running = false
     return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
@@ -310,7 +296,6 @@ fn op_f32_load(rt : Runtime) -> RetCode {
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    rt.running = false
     return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
@@ -331,7 +316,6 @@ fn op_f64_load(rt : Runtime) -> RetCode {
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 8UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    rt.running = false
     return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
@@ -364,7 +348,6 @@ fn op_f32_store(rt : Runtime) -> RetCode {
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    rt.running = false
     return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
@@ -384,7 +367,6 @@ fn op_f64_store(rt : Runtime) -> RetCode {
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 8UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    rt.running = false
     return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
@@ -410,7 +392,6 @@ fn op_i32_store8(rt : Runtime) -> RetCode {
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 1UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    rt.running = false
     return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
@@ -427,7 +408,6 @@ fn op_i32_store16(rt : Runtime) -> RetCode {
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 2UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    rt.running = false
     return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
@@ -445,7 +425,6 @@ fn op_i64_store8(rt : Runtime) -> RetCode {
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 1UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    rt.running = false
     return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
@@ -462,7 +441,6 @@ fn op_i64_store16(rt : Runtime) -> RetCode {
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 2UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    rt.running = false
     return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
@@ -480,7 +458,6 @@ fn op_i64_store32(rt : Runtime) -> RetCode {
   let base = rt.pop_i32().to_uint64()
   let effective_addr = base + offset
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    rt.running = false
     return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
@@ -563,7 +540,6 @@ fn op_memory_copy(rt : Runtime) -> RetCode {
     n < 0 ||
     src + n > rt.memory.length() ||
     dest + n > rt.memory.length() {
-    rt.running = false
     return MemoryOutOfBounds
   }
 
@@ -594,7 +570,6 @@ fn op_memory_fill(rt : Runtime) -> RetCode {
 
   // Check bounds
   if dest < 0 || n < 0 || dest + n > rt.memory.length() {
-    rt.running = false
     return MemoryOutOfBounds
   }
 
@@ -628,7 +603,6 @@ fn op_memory_init(rt : Runtime) -> RetCode {
     n < 0 ||
     src + n > data.length() ||
     dest + n > rt.memory.length() {
-    rt.running = false
     return MemoryOutOfBounds
   }
 

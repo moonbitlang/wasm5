@@ -1214,7 +1214,6 @@ extern "C" fn next_op(rt : Runtime) -> RetCode = "next_op"
 /// Start the threaded interpreter execution
 /// Calls next_op() which kicks off the tail-call chain
 fn Runtime::execute(self : Runtime) -> Unit raise RuntimeError {
-  self.running = true
   let ret = next_op(self)
   if ret != OK {
     raise ret.to_error(self.error_detail)
