@@ -1,200 +1,225 @@
 ///|
+#tailcall
 fn op_f32_eq(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::I32(if a == b { 1U } else { 0U }))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f32_ne(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::I32(if a != b { 1U } else { 0U }))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f32_lt(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::I32(if a < b { 1U } else { 0U }))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f32_gt(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::I32(if a > b { 1U } else { 0U }))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f32_le(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::I32(if a <= b { 1U } else { 0U }))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f32_ge(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::I32(if a >= b { 1U } else { 0U }))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f64_eq(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::I32(if a == b { 1U } else { 0U }))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f64_ne(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::I32(if a != b { 1U } else { 0U }))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f64_lt(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::I32(if a < b { 1U } else { 0U }))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f64_gt(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::I32(if a > b { 1U } else { 0U }))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f64_le(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::I32(if a <= b { 1U } else { 0U }))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f64_ge(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::I32(if a >= b { 1U } else { 0U }))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 // Float unary operations
 
 ///|
+#tailcall
 fn op_f32_neg(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   rt.stack.push(Value::F32(-a))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f32_abs(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   rt.stack.push(Value::F32(a.abs()))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f32_sqrt(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a.sqrt())))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f32_ceil(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a.ceil())))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f32_floor(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a.floor())))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f32_trunc(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a.trunc())))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f32_nearest(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   rt.stack.push(Value::F32(canonicalize_f32(rintf(a))))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f64_neg(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   rt.stack.push(Value::F64(-a))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 // Float binary operations
 
 ///|
+#tailcall
 fn op_f32_add(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a + b)))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f32_sub(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a - b)))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f32_mul(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a * b)))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f32_div(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a / b)))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f32_min(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   let result = if a.is_nan() || b.is_nan() {
@@ -223,10 +248,11 @@ fn op_f32_min(rt : Runtime) -> RetCode {
   }
   rt.stack.push(Value::F32(result))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f32_max(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   let result = if a.is_nan() || b.is_nan() {
@@ -255,10 +281,11 @@ fn op_f32_max(rt : Runtime) -> RetCode {
   }
   rt.stack.push(Value::F32(result))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f32_copysign(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
   let a_bits = a.reinterpret_as_uint()
@@ -267,42 +294,47 @@ fn op_f32_copysign(rt : Runtime) -> RetCode {
   let result_bits = (a_bits & sign_mask.lnot()) | (b_bits & sign_mask)
   rt.stack.push(Value::F32(Float::reinterpret_from_uint(result_bits)))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f64_add(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a + b)))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f64_sub(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a - b)))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f64_mul(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a * b)))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f64_div(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a / b)))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f64_min(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   // WebAssembly min semantics: if either is NaN, return canonical NaN
@@ -331,10 +363,11 @@ fn op_f64_min(rt : Runtime) -> RetCode {
   }
   rt.stack.push(Value::F64(result))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f64_max(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   // WebAssembly max semantics: if either is NaN, return canonical NaN
@@ -363,10 +396,11 @@ fn op_f64_max(rt : Runtime) -> RetCode {
   }
   rt.stack.push(Value::F64(result))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f64_copysign(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
   let a_bits = a.reinterpret_as_uint64()
@@ -375,127 +409,141 @@ fn op_f64_copysign(rt : Runtime) -> RetCode {
   let result_bits = (a_bits & sign_mask.lnot()) | (b_bits & sign_mask)
   rt.stack.push(Value::F64(result_bits.reinterpret_as_double()))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 // Float unary operations
 
 ///|
+#tailcall
 fn op_f64_abs(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   rt.stack.push(Value::F64(a.abs()))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f64_sqrt(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a.sqrt())))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f64_ceil(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a.ceil())))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f64_floor(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a.floor())))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f64_trunc(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a.trunc())))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f64_nearest(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   rt.stack.push(Value::F64(canonicalize_f64(rint(a))))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 // Float conversion operations
 
 ///|
+#tailcall
 fn op_f64_convert_i64_u(rt : Runtime) -> RetCode {
   let a = rt.pop_i64()
   rt.stack.push(Value::F64(a.to_double()))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f64_convert_i64_s(rt : Runtime) -> RetCode {
   let a = rt.pop_i64().reinterpret_as_int64()
   rt.stack.push(Value::F64(a.to_double()))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f64_convert_i32_u(rt : Runtime) -> RetCode {
   let a = rt.pop_i32()
   rt.stack.push(Value::F64(a.to_double()))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f64_convert_i32_s(rt : Runtime) -> RetCode {
   let a = rt.pop_i32().reinterpret_as_int()
   rt.stack.push(Value::F64(a.to_double()))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f64_promote_f32(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   let result = a.to_double()
   // Canonicalize NaN to ensure positive canonical NaN
   rt.stack.push(Value::F64(canonicalize_f64(result)))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f32_demote_f64(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   let result = Float::from_double(a)
   // Canonicalize NaN to ensure positive canonical NaN
   rt.stack.push(Value::F32(canonicalize_f32(result)))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f32_convert_i32_s(rt : Runtime) -> RetCode {
   let a = rt.pop_i32().reinterpret_as_int()
   rt.stack.push(Value::F32(Float::from_int(a)))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f32_convert_i32_u(rt : Runtime) -> RetCode {
   let a = rt.pop_i32()
   rt.stack.push(Value::F32(Float::from_double(a.to_double())))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
@@ -511,24 +559,27 @@ extern "C" fn u64_from_f32(a : Float) -> UInt64 = "u64_from_f32"
 extern "C" fn u64_from_f64(a : Double) -> UInt64 = "u64_from_f64"
 
 ///|
+#tailcall
 fn op_f32_convert_i64_s(rt : Runtime) -> RetCode {
   let a = rt.pop_i64().reinterpret_as_int64()
   rt.stack.push(Value::F32(f32_from_i64(a)))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f32_convert_i64_u(rt : Runtime) -> RetCode {
   let a = rt.pop_i64()
   rt.stack.push(Value::F32(f32_from_u64(a)))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 // Truncation operations (with trapping on overflow/NaN)
 
 ///|
+#tailcall
 fn op_i64_trunc_f64_s(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   // Trap on NaN or out of range
@@ -540,10 +591,11 @@ fn op_i64_trunc_f64_s(rt : Runtime) -> RetCode {
   }
   rt.stack.push(Value::I64(a.to_int64().reinterpret_as_uint64()))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_i64_trunc_f64_u(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   // Trap on NaN or out of range
@@ -556,10 +608,11 @@ fn op_i64_trunc_f64_u(rt : Runtime) -> RetCode {
   // Use C function for proper conversion at precision boundaries
   rt.stack.push(Value::I64(u64_from_f64(a)))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_i32_trunc_f32_s(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   // Trap on NaN or out of range
@@ -571,10 +624,11 @@ fn op_i32_trunc_f32_s(rt : Runtime) -> RetCode {
   }
   rt.stack.push(Value::I32(a.to_int().reinterpret_as_uint()))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_i32_trunc_f32_u(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   // Trap on NaN or out of range
@@ -586,10 +640,11 @@ fn op_i32_trunc_f32_u(rt : Runtime) -> RetCode {
   }
   rt.stack.push(Value::I32(a.to_double().to_uint64().to_uint()))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_i32_trunc_f64_s(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   // Trap on NaN or out of range
@@ -601,10 +656,11 @@ fn op_i32_trunc_f64_s(rt : Runtime) -> RetCode {
   }
   rt.stack.push(Value::I32(a.to_int().reinterpret_as_uint()))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_i32_trunc_f64_u(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   // Trap on NaN or out of range
@@ -616,10 +672,11 @@ fn op_i32_trunc_f64_u(rt : Runtime) -> RetCode {
   }
   rt.stack.push(Value::I32(a.to_uint64().to_uint()))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_i64_trunc_f32_s(rt : Runtime) -> RetCode {
   let a = rt.pop_f32().to_double()
   // Trap on NaN or out of range
@@ -631,10 +688,11 @@ fn op_i64_trunc_f32_s(rt : Runtime) -> RetCode {
   }
   rt.stack.push(Value::I64(a.to_int64().reinterpret_as_uint64()))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_i64_trunc_f32_u(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   // Trap on NaN or out of range
@@ -648,7 +706,7 @@ fn op_i64_trunc_f32_u(rt : Runtime) -> RetCode {
   // Use C function for proper conversion at precision boundaries
   rt.stack.push(Value::I64(u64_from_f32(a)))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 // =============================================================================
@@ -658,6 +716,7 @@ fn op_i64_trunc_f32_u(rt : Runtime) -> RetCode {
 // overflow/NaN, they "saturate" to the min/max value or return 0 for NaN.
 
 ///|
+#tailcall
 fn op_i32_trunc_sat_f32_s(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   let result = if a.is_nan() {
@@ -673,10 +732,11 @@ fn op_i32_trunc_sat_f32_s(rt : Runtime) -> RetCode {
   }
   rt.stack.push(Value::I32(result))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_i32_trunc_sat_f32_u(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   let result = if a.is_nan() {
@@ -692,10 +752,11 @@ fn op_i32_trunc_sat_f32_u(rt : Runtime) -> RetCode {
   }
   rt.stack.push(Value::I32(result))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_i32_trunc_sat_f64_s(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   let result = if a.is_nan() {
@@ -711,10 +772,11 @@ fn op_i32_trunc_sat_f64_s(rt : Runtime) -> RetCode {
   }
   rt.stack.push(Value::I32(result))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_i32_trunc_sat_f64_u(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   let result = if a.is_nan() {
@@ -730,10 +792,11 @@ fn op_i32_trunc_sat_f64_u(rt : Runtime) -> RetCode {
   }
   rt.stack.push(Value::I32(result))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_i64_trunc_sat_f32_s(rt : Runtime) -> RetCode {
   let a = rt.pop_f32().to_double()
   let result = if a.is_nan() {
@@ -749,10 +812,11 @@ fn op_i64_trunc_sat_f32_s(rt : Runtime) -> RetCode {
   }
   rt.stack.push(Value::I64(result))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_i64_trunc_sat_f32_u(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   let a_double = a.to_double()
@@ -770,10 +834,11 @@ fn op_i64_trunc_sat_f32_u(rt : Runtime) -> RetCode {
   }
   rt.stack.push(Value::I64(result))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_i64_trunc_sat_f64_s(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   let result = if a.is_nan() {
@@ -789,10 +854,11 @@ fn op_i64_trunc_sat_f64_s(rt : Runtime) -> RetCode {
   }
   rt.stack.push(Value::I64(result))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_i64_trunc_sat_f64_u(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   let result = if a.is_nan() {
@@ -809,41 +875,45 @@ fn op_i64_trunc_sat_f64_u(rt : Runtime) -> RetCode {
   }
   rt.stack.push(Value::I64(result))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 // Reinterpret operations
 
 ///|
+#tailcall
 fn op_i32_reinterpret_f32(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   rt.stack.push(Value::I32(a.reinterpret_as_uint()))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_i64_reinterpret_f64(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   rt.stack.push(Value::I64(a.reinterpret_as_uint64()))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f32_reinterpret_i32(rt : Runtime) -> RetCode {
   let a = rt.pop_i32()
   rt.stack.push(Value::F32(Float::reinterpret_from_uint(a)))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 ///|
+#tailcall
 fn op_f64_reinterpret_i64(rt : Runtime) -> RetCode {
   let a = rt.pop_i64()
   rt.stack.push(Value::F64(a.reinterpret_as_double()))
   rt.pc += 1
-  OK
+  return next_op(rt)
 }
 
 // Global operations
