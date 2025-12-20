@@ -6,8 +6,12 @@
     "moonbitlang/async/process",
     "moonbitlang/async",
     {
-      "path": "moonbitlang/wasm5/src",
-      "alias": "wasm5"
+      "path": "moonbitlang/wasm5/src/runtime",
+      "alias": "wasm5_runtime"
+    },
+    {
+      "path": "moonbitlang/wasm5/src/core",
+      "alias": "wasm5_core"
     },
     {
       "path": "moonbitlang/wasm5/src/parse",

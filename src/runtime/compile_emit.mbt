@@ -6,609 +6,609 @@
 fn Runtime::compile_wasm_instr(
   self : Runtime,
   ctx : CompileCtx,
-  instr : Instr,
+  instr : @core.Instr,
 ) -> Unit raise RuntimeError {
   match instr {
     // Constants
-    I32Const(value) => {
+    @core.Instr::I32Const(value) => {
       self.emit(WasmInstr(op_i32_const))
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(ImmediateI32(value))
     }
     // Arithmetic (binary: pop 2, push 1)
-    I32Add => {
+    @core.Instr::I32Add => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i32_add))
     }
-    I32Sub => {
+    @core.Instr::I32Sub => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i32_sub))
     }
-    I32Mul => {
+    @core.Instr::I32Mul => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i32_mul))
     }
-    I32DivS => {
+    @core.Instr::I32DivS => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i32_div_s))
     }
-    I32DivU => {
+    @core.Instr::I32DivU => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i32_div_u))
     }
-    I32RemS => {
+    @core.Instr::I32RemS => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i32_rem_s))
     }
-    I32RemU => {
+    @core.Instr::I32RemU => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i32_rem_u))
     }
     // Bitwise (binary: pop 2, push 1)
-    I32And => {
+    @core.Instr::I32And => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i32_and))
     }
-    I32Or => {
+    @core.Instr::I32Or => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i32_or))
     }
-    I32Xor => {
+    @core.Instr::I32Xor => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i32_xor))
     }
-    I32Shl => {
+    @core.Instr::I32Shl => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i32_shl))
     }
-    I32ShrS => {
+    @core.Instr::I32ShrS => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i32_shr_s))
     }
-    I32ShrU => {
+    @core.Instr::I32ShrU => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i32_shr_u))
     }
-    I32Rotl => {
+    @core.Instr::I32Rotl => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i32_rotl))
     }
-    I32Rotr => {
+    @core.Instr::I32Rotr => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i32_rotr))
     }
     // Comparison (binary: pop 2, push 1 i32)
-    I32Eq => {
+    @core.Instr::I32Eq => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i32_eq))
     }
-    I32Ne => {
+    @core.Instr::I32Ne => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i32_ne))
     }
-    I32LtS => {
+    @core.Instr::I32LtS => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i32_lt_s))
     }
-    I32LtU => {
+    @core.Instr::I32LtU => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i32_lt_u))
     }
-    I32GtS => {
+    @core.Instr::I32GtS => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i32_gt_s))
     }
-    I32GtU => {
+    @core.Instr::I32GtU => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i32_gt_u))
     }
-    I32LeS => {
+    @core.Instr::I32LeS => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i32_le_s))
     }
-    I32LeU => {
+    @core.Instr::I32LeU => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i32_le_u))
     }
-    I32GeS => {
+    @core.Instr::I32GeS => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i32_ge_s))
     }
-    I32GeU => {
+    @core.Instr::I32GeU => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i32_ge_u))
     }
     // Unary (pop 1, push 1)
-    I32Eqz => self.emit(WasmInstr(op_i32_eqz)) // i32 -> i32
-    I32Clz => self.emit(WasmInstr(op_i32_clz)) // i32 -> i32
-    I32Ctz => self.emit(WasmInstr(op_i32_ctz)) // i32 -> i32
-    I32Popcnt => self.emit(WasmInstr(op_i32_popcnt)) // i32 -> i32
-    I32Extend8S => self.emit(WasmInstr(op_i32_extend8_s)) // i32 -> i32
-    I32Extend16S => self.emit(WasmInstr(op_i32_extend16_s)) // i32 -> i32
-    I32WrapI64 => {
+    @core.Instr::I32Eqz => self.emit(WasmInstr(op_i32_eqz)) // i32 -> i32
+    @core.Instr::I32Clz => self.emit(WasmInstr(op_i32_clz)) // i32 -> i32
+    @core.Instr::I32Ctz => self.emit(WasmInstr(op_i32_ctz)) // i32 -> i32
+    @core.Instr::I32Popcnt => self.emit(WasmInstr(op_i32_popcnt)) // i32 -> i32
+    @core.Instr::I32Extend8S => self.emit(WasmInstr(op_i32_extend8_s)) // i32 -> i32
+    @core.Instr::I32Extend16S => self.emit(WasmInstr(op_i32_extend16_s)) // i32 -> i32
+    @core.Instr::I32WrapI64 => {
       ctx.pop_type()
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_i32_wrap_i64))
     } // i64 -> i32
     // i64 Constants
-    I64Const(value) => {
+    @core.Instr::I64Const(value) => {
       self.emit(WasmInstr(op_i64_const))
       // Split i64 into two i32 immediates
       self.emit(ImmediateI32((value & 0xFFFFFFFFUL).to_uint()))
       self.emit(ImmediateI32((value >> 32).to_uint()))
-      ctx.push_type(I64)
+      ctx.push_type(@core.ValType::I64)
     }
     // f32/f64 Constants
-    F32Const(value) => {
+    @core.Instr::F32Const(value) => {
       self.emit(WasmInstr(op_f32_const))
       self.emit(ImmediateI32(value.reinterpret_as_uint()))
-      ctx.push_type(F32)
+      ctx.push_type(@core.ValType::F32)
     }
-    F64Const(value) => {
+    @core.Instr::F64Const(value) => {
       self.emit(WasmInstr(op_f64_const))
       let bits = value.reinterpret_as_uint64()
       self.emit(ImmediateI32((bits & 0xFFFFFFFFUL).to_uint()))
       self.emit(ImmediateI32((bits >> 32).to_uint()))
-      ctx.push_type(F64)
+      ctx.push_type(@core.ValType::F64)
     }
     // i64 Arithmetic (binary: pop 2, push 1)
-    I64Add => {
+    @core.Instr::I64Add => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i64_add))
     }
-    I64Sub => {
+    @core.Instr::I64Sub => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i64_sub))
     }
-    I64Mul => {
+    @core.Instr::I64Mul => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i64_mul))
     }
-    I64DivS => {
+    @core.Instr::I64DivS => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i64_div_s))
     }
-    I64DivU => {
+    @core.Instr::I64DivU => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i64_div_u))
     }
-    I64RemS => {
+    @core.Instr::I64RemS => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i64_rem_s))
     }
-    I64RemU => {
+    @core.Instr::I64RemU => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i64_rem_u))
     }
     // i64 Bitwise (binary: pop 2, push 1)
-    I64And => {
+    @core.Instr::I64And => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i64_and))
     }
-    I64Or => {
+    @core.Instr::I64Or => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i64_or))
     }
-    I64Xor => {
+    @core.Instr::I64Xor => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i64_xor))
     }
-    I64Shl => {
+    @core.Instr::I64Shl => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i64_shl))
     }
-    I64ShrS => {
+    @core.Instr::I64ShrS => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i64_shr_s))
     }
-    I64ShrU => {
+    @core.Instr::I64ShrU => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i64_shr_u))
     }
-    I64Rotl => {
+    @core.Instr::I64Rotl => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i64_rotl))
     }
-    I64Rotr => {
+    @core.Instr::I64Rotr => {
       ctx.pop_type()
       self.emit(WasmInstr(op_i64_rotr))
     }
     // i64 Comparison (pop 2 i64, push 1 i32)
-    I64Eq => {
+    @core.Instr::I64Eq => {
       ctx.pop_types(2)
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_i64_eq))
     }
-    I64Ne => {
+    @core.Instr::I64Ne => {
       ctx.pop_types(2)
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_i64_ne))
     }
-    I64LtS => {
+    @core.Instr::I64LtS => {
       ctx.pop_types(2)
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_i64_lt_s))
     }
-    I64LtU => {
+    @core.Instr::I64LtU => {
       ctx.pop_types(2)
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_i64_lt_u))
     }
-    I64GtS => {
+    @core.Instr::I64GtS => {
       ctx.pop_types(2)
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_i64_gt_s))
     }
-    I64GtU => {
+    @core.Instr::I64GtU => {
       ctx.pop_types(2)
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_i64_gt_u))
     }
-    I64LeS => {
+    @core.Instr::I64LeS => {
       ctx.pop_types(2)
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_i64_le_s))
     }
-    I64LeU => {
+    @core.Instr::I64LeU => {
       ctx.pop_types(2)
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_i64_le_u))
     }
-    I64GeS => {
+    @core.Instr::I64GeS => {
       ctx.pop_types(2)
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_i64_ge_s))
     }
-    I64GeU => {
+    @core.Instr::I64GeU => {
       ctx.pop_types(2)
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_i64_ge_u))
     }
     // i64 Unary
-    I64Eqz => {
+    @core.Instr::I64Eqz => {
       ctx.pop_type()
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_i64_eqz))
     } // i64 -> i32
-    I64Clz => self.emit(WasmInstr(op_i64_clz)) // i64 -> i64
-    I64Ctz => self.emit(WasmInstr(op_i64_ctz)) // i64 -> i64
-    I64Popcnt => self.emit(WasmInstr(op_i64_popcnt)) // i64 -> i64
-    I64Extend8S => self.emit(WasmInstr(op_i64_extend8_s)) // i64 -> i64
-    I64Extend16S => self.emit(WasmInstr(op_i64_extend16_s)) // i64 -> i64
-    I64Extend32S => self.emit(WasmInstr(op_i64_extend32_s)) // i64 -> i64
-    I64ExtendI32S => {
+    @core.Instr::I64Clz => self.emit(WasmInstr(op_i64_clz)) // i64 -> i64
+    @core.Instr::I64Ctz => self.emit(WasmInstr(op_i64_ctz)) // i64 -> i64
+    @core.Instr::I64Popcnt => self.emit(WasmInstr(op_i64_popcnt)) // i64 -> i64
+    @core.Instr::I64Extend8S => self.emit(WasmInstr(op_i64_extend8_s)) // i64 -> i64
+    @core.Instr::I64Extend16S => self.emit(WasmInstr(op_i64_extend16_s)) // i64 -> i64
+    @core.Instr::I64Extend32S => self.emit(WasmInstr(op_i64_extend32_s)) // i64 -> i64
+    @core.Instr::I64ExtendI32S => {
       ctx.pop_type()
-      ctx.push_type(I64)
+      ctx.push_type(@core.ValType::I64)
       self.emit(WasmInstr(op_i64_extend_i32_s))
     } // i32 -> i64
-    I64ExtendI32U => {
+    @core.Instr::I64ExtendI32U => {
       ctx.pop_type()
-      ctx.push_type(I64)
+      ctx.push_type(@core.ValType::I64)
       self.emit(WasmInstr(op_i64_extend_i32_u))
     } // i32 -> i64
     // Float comparisons (pop 2, push i32)
-    F32Eq => {
+    @core.Instr::F32Eq => {
       ctx.pop_types(2)
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_f32_eq))
     }
-    F32Ne => {
+    @core.Instr::F32Ne => {
       ctx.pop_types(2)
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_f32_ne))
     }
-    F32Lt => {
+    @core.Instr::F32Lt => {
       ctx.pop_types(2)
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_f32_lt))
     }
-    F32Gt => {
+    @core.Instr::F32Gt => {
       ctx.pop_types(2)
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_f32_gt))
     }
-    F32Le => {
+    @core.Instr::F32Le => {
       ctx.pop_types(2)
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_f32_le))
     }
-    F32Ge => {
+    @core.Instr::F32Ge => {
       ctx.pop_types(2)
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_f32_ge))
     }
-    F64Eq => {
+    @core.Instr::F64Eq => {
       ctx.pop_types(2)
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_f64_eq))
     }
-    F64Ne => {
+    @core.Instr::F64Ne => {
       ctx.pop_types(2)
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_f64_ne))
     }
-    F64Lt => {
+    @core.Instr::F64Lt => {
       ctx.pop_types(2)
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_f64_lt))
     }
-    F64Gt => {
+    @core.Instr::F64Gt => {
       ctx.pop_types(2)
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_f64_gt))
     }
-    F64Le => {
+    @core.Instr::F64Le => {
       ctx.pop_types(2)
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_f64_le))
     }
-    F64Ge => {
+    @core.Instr::F64Ge => {
       ctx.pop_types(2)
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_f64_ge))
     }
     // Float unary (same type in/out)
-    F32Neg => self.emit(WasmInstr(op_f32_neg))
-    F32Abs => self.emit(WasmInstr(op_f32_abs))
-    F32Sqrt => self.emit(WasmInstr(op_f32_sqrt))
-    F32Ceil => self.emit(WasmInstr(op_f32_ceil))
-    F32Floor => self.emit(WasmInstr(op_f32_floor))
-    F32Trunc => self.emit(WasmInstr(op_f32_trunc))
-    F32Nearest => self.emit(WasmInstr(op_f32_nearest))
-    F64Neg => self.emit(WasmInstr(op_f64_neg))
-    F64Abs => self.emit(WasmInstr(op_f64_abs))
-    F64Sqrt => self.emit(WasmInstr(op_f64_sqrt))
-    F64Ceil => self.emit(WasmInstr(op_f64_ceil))
-    F64Floor => self.emit(WasmInstr(op_f64_floor))
-    F64Trunc => self.emit(WasmInstr(op_f64_trunc))
-    F64Nearest => self.emit(WasmInstr(op_f64_nearest))
+    @core.Instr::F32Neg => self.emit(WasmInstr(op_f32_neg))
+    @core.Instr::F32Abs => self.emit(WasmInstr(op_f32_abs))
+    @core.Instr::F32Sqrt => self.emit(WasmInstr(op_f32_sqrt))
+    @core.Instr::F32Ceil => self.emit(WasmInstr(op_f32_ceil))
+    @core.Instr::F32Floor => self.emit(WasmInstr(op_f32_floor))
+    @core.Instr::F32Trunc => self.emit(WasmInstr(op_f32_trunc))
+    @core.Instr::F32Nearest => self.emit(WasmInstr(op_f32_nearest))
+    @core.Instr::F64Neg => self.emit(WasmInstr(op_f64_neg))
+    @core.Instr::F64Abs => self.emit(WasmInstr(op_f64_abs))
+    @core.Instr::F64Sqrt => self.emit(WasmInstr(op_f64_sqrt))
+    @core.Instr::F64Ceil => self.emit(WasmInstr(op_f64_ceil))
+    @core.Instr::F64Floor => self.emit(WasmInstr(op_f64_floor))
+    @core.Instr::F64Trunc => self.emit(WasmInstr(op_f64_trunc))
+    @core.Instr::F64Nearest => self.emit(WasmInstr(op_f64_nearest))
     // Float binary (pop 2, push 1)
-    F32Add => {
+    @core.Instr::F32Add => {
       ctx.pop_type()
       self.emit(WasmInstr(op_f32_add))
     }
-    F32Sub => {
+    @core.Instr::F32Sub => {
       ctx.pop_type()
       self.emit(WasmInstr(op_f32_sub))
     }
-    F32Mul => {
+    @core.Instr::F32Mul => {
       ctx.pop_type()
       self.emit(WasmInstr(op_f32_mul))
     }
-    F32Div => {
+    @core.Instr::F32Div => {
       ctx.pop_type()
       self.emit(WasmInstr(op_f32_div))
     }
-    F32Min => {
+    @core.Instr::F32Min => {
       ctx.pop_type()
       self.emit(WasmInstr(op_f32_min))
     }
-    F32Max => {
+    @core.Instr::F32Max => {
       ctx.pop_type()
       self.emit(WasmInstr(op_f32_max))
     }
-    F32Copysign => {
+    @core.Instr::F32Copysign => {
       ctx.pop_type()
       self.emit(WasmInstr(op_f32_copysign))
     }
-    F64Add => {
+    @core.Instr::F64Add => {
       ctx.pop_type()
       self.emit(WasmInstr(op_f64_add))
     }
-    F64Sub => {
+    @core.Instr::F64Sub => {
       ctx.pop_type()
       self.emit(WasmInstr(op_f64_sub))
     }
-    F64Mul => {
+    @core.Instr::F64Mul => {
       ctx.pop_type()
       self.emit(WasmInstr(op_f64_mul))
     }
-    F64Div => {
+    @core.Instr::F64Div => {
       ctx.pop_type()
       self.emit(WasmInstr(op_f64_div))
     }
-    F64Min => {
+    @core.Instr::F64Min => {
       ctx.pop_type()
       self.emit(WasmInstr(op_f64_min))
     }
-    F64Max => {
+    @core.Instr::F64Max => {
       ctx.pop_type()
       self.emit(WasmInstr(op_f64_max))
     }
-    F64Copysign => {
+    @core.Instr::F64Copysign => {
       ctx.pop_type()
       self.emit(WasmInstr(op_f64_copysign))
     }
     // Float conversions
-    F64ConvertI64U => {
+    @core.Instr::F64ConvertI64U => {
       ctx.pop_type()
-      ctx.push_type(F64)
+      ctx.push_type(@core.ValType::F64)
       self.emit(WasmInstr(op_f64_convert_i64_u))
     }
-    F64ConvertI64S => {
+    @core.Instr::F64ConvertI64S => {
       ctx.pop_type()
-      ctx.push_type(F64)
+      ctx.push_type(@core.ValType::F64)
       self.emit(WasmInstr(op_f64_convert_i64_s))
     }
-    F64ConvertI32U => {
+    @core.Instr::F64ConvertI32U => {
       ctx.pop_type()
-      ctx.push_type(F64)
+      ctx.push_type(@core.ValType::F64)
       self.emit(WasmInstr(op_f64_convert_i32_u))
     }
-    F64ConvertI32S => {
+    @core.Instr::F64ConvertI32S => {
       ctx.pop_type()
-      ctx.push_type(F64)
+      ctx.push_type(@core.ValType::F64)
       self.emit(WasmInstr(op_f64_convert_i32_s))
     }
-    F64PromoteF32 => {
+    @core.Instr::F64PromoteF32 => {
       ctx.pop_type()
-      ctx.push_type(F64)
+      ctx.push_type(@core.ValType::F64)
       self.emit(WasmInstr(op_f64_promote_f32))
     }
-    F32DemoteF64 => {
+    @core.Instr::F32DemoteF64 => {
       ctx.pop_type()
-      ctx.push_type(F32)
+      ctx.push_type(@core.ValType::F32)
       self.emit(WasmInstr(op_f32_demote_f64))
     }
-    F32ConvertI32S => {
+    @core.Instr::F32ConvertI32S => {
       ctx.pop_type()
-      ctx.push_type(F32)
+      ctx.push_type(@core.ValType::F32)
       self.emit(WasmInstr(op_f32_convert_i32_s))
     }
-    F32ConvertI32U => {
+    @core.Instr::F32ConvertI32U => {
       ctx.pop_type()
-      ctx.push_type(F32)
+      ctx.push_type(@core.ValType::F32)
       self.emit(WasmInstr(op_f32_convert_i32_u))
     }
-    F32ConvertI64S => {
+    @core.Instr::F32ConvertI64S => {
       ctx.pop_type()
-      ctx.push_type(F32)
+      ctx.push_type(@core.ValType::F32)
       self.emit(WasmInstr(op_f32_convert_i64_s))
     }
-    F32ConvertI64U => {
+    @core.Instr::F32ConvertI64U => {
       ctx.pop_type()
-      ctx.push_type(F32)
+      ctx.push_type(@core.ValType::F32)
       self.emit(WasmInstr(op_f32_convert_i64_u))
     }
     // Truncations
-    I64TruncF64S => {
+    @core.Instr::I64TruncF64S => {
       ctx.pop_type()
-      ctx.push_type(I64)
+      ctx.push_type(@core.ValType::I64)
       self.emit(WasmInstr(op_i64_trunc_f64_s))
     }
-    I64TruncF64U => {
+    @core.Instr::I64TruncF64U => {
       ctx.pop_type()
-      ctx.push_type(I64)
+      ctx.push_type(@core.ValType::I64)
       self.emit(WasmInstr(op_i64_trunc_f64_u))
     }
-    I32TruncF32S => {
+    @core.Instr::I32TruncF32S => {
       ctx.pop_type()
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_i32_trunc_f32_s))
     }
-    I32TruncF32U => {
+    @core.Instr::I32TruncF32U => {
       ctx.pop_type()
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_i32_trunc_f32_u))
     }
-    I32TruncF64S => {
+    @core.Instr::I32TruncF64S => {
       ctx.pop_type()
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_i32_trunc_f64_s))
     }
-    I32TruncF64U => {
+    @core.Instr::I32TruncF64U => {
       ctx.pop_type()
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_i32_trunc_f64_u))
     }
-    I64TruncF32S => {
+    @core.Instr::I64TruncF32S => {
       ctx.pop_type()
-      ctx.push_type(I64)
+      ctx.push_type(@core.ValType::I64)
       self.emit(WasmInstr(op_i64_trunc_f32_s))
     }
-    I64TruncF32U => {
+    @core.Instr::I64TruncF32U => {
       ctx.pop_type()
-      ctx.push_type(I64)
+      ctx.push_type(@core.ValType::I64)
       self.emit(WasmInstr(op_i64_trunc_f32_u))
     }
     // Saturating truncations
-    I32TruncSatF32S => {
+    @core.Instr::I32TruncSatF32S => {
       ctx.pop_type()
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_i32_trunc_sat_f32_s))
     }
-    I32TruncSatF32U => {
+    @core.Instr::I32TruncSatF32U => {
       ctx.pop_type()
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_i32_trunc_sat_f32_u))
     }
-    I32TruncSatF64S => {
+    @core.Instr::I32TruncSatF64S => {
       ctx.pop_type()
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_i32_trunc_sat_f64_s))
     }
-    I32TruncSatF64U => {
+    @core.Instr::I32TruncSatF64U => {
       ctx.pop_type()
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_i32_trunc_sat_f64_u))
     }
-    I64TruncSatF32S => {
+    @core.Instr::I64TruncSatF32S => {
       ctx.pop_type()
-      ctx.push_type(I64)
+      ctx.push_type(@core.ValType::I64)
       self.emit(WasmInstr(op_i64_trunc_sat_f32_s))
     }
-    I64TruncSatF32U => {
+    @core.Instr::I64TruncSatF32U => {
       ctx.pop_type()
-      ctx.push_type(I64)
+      ctx.push_type(@core.ValType::I64)
       self.emit(WasmInstr(op_i64_trunc_sat_f32_u))
     }
-    I64TruncSatF64S => {
+    @core.Instr::I64TruncSatF64S => {
       ctx.pop_type()
-      ctx.push_type(I64)
+      ctx.push_type(@core.ValType::I64)
       self.emit(WasmInstr(op_i64_trunc_sat_f64_s))
     }
-    I64TruncSatF64U => {
+    @core.Instr::I64TruncSatF64U => {
       ctx.pop_type()
-      ctx.push_type(I64)
+      ctx.push_type(@core.ValType::I64)
       self.emit(WasmInstr(op_i64_trunc_sat_f64_u))
     }
     // Reinterpret (same size, different type)
-    I32ReinterpretF32 => {
+    @core.Instr::I32ReinterpretF32 => {
       ctx.pop_type()
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_i32_reinterpret_f32))
     }
-    I64ReinterpretF64 => {
+    @core.Instr::I64ReinterpretF64 => {
       ctx.pop_type()
-      ctx.push_type(I64)
+      ctx.push_type(@core.ValType::I64)
       self.emit(WasmInstr(op_i64_reinterpret_f64))
     }
-    F32ReinterpretI32 => {
+    @core.Instr::F32ReinterpretI32 => {
       ctx.pop_type()
-      ctx.push_type(F32)
+      ctx.push_type(@core.ValType::F32)
       self.emit(WasmInstr(op_f32_reinterpret_i32))
     }
-    F64ReinterpretI64 => {
+    @core.Instr::F64ReinterpretI64 => {
       ctx.pop_type()
-      ctx.push_type(F64)
+      ctx.push_type(@core.ValType::F64)
       self.emit(WasmInstr(op_f64_reinterpret_i64))
     }
     // Locals - we don't track local types here, just use a placeholder
-    LocalGet(_idx) => {
+    @core.Instr::LocalGet(_idx) => {
       self.emit(WasmInstr(op_local_get))
       self.emit(ImmediateIdx(_idx.reinterpret_as_int()))
       // We need to push the local's type, but we don't have access to it here
-      // For simplicity, push I32 as placeholder (the exact type doesn't matter for branch arity)
-      ctx.push_type(I32)
+      // For simplicity, push @core.ValType::I32 as placeholder (the exact type doesn't matter for branch arity)
+      ctx.push_type(@core.ValType::I32)
     }
-    LocalSet(_idx) => {
+    @core.Instr::LocalSet(_idx) => {
       ctx.pop_type()
       self.emit(WasmInstr(op_local_set))
       self.emit(ImmediateIdx(_idx.reinterpret_as_int()))
     }
-    LocalTee(_idx) => {
+    @core.Instr::LocalTee(_idx) => {
       // Tee keeps the value on stack
       self.emit(WasmInstr(op_local_tee))
       self.emit(ImmediateIdx(_idx.reinterpret_as_int()))
     }
     // Stack
-    Drop => {
+    @core.Instr::Drop => {
       ctx.pop_type()
       self.emit(WasmInstr(op_drop))
     }
-    Select => {
+    @core.Instr::Select => {
       ctx.pop_types(2)
       self.emit(WasmInstr(op_select))
     } // pop 3, push 1 => net -2
-    SelectTyped(_types) => {
+    @core.Instr::SelectTyped(_types) => {
       // Runtime behavior is identical to untyped select
       ctx.pop_types(2)
       self.emit(WasmInstr(op_select))
     } // pop 3, push 1 => net -2
-    Nop => self.emit(WasmInstr(op_nop))
-    Unreachable => self.emit(WasmInstr(op_unreachable))
+    @core.Instr::Nop => self.emit(WasmInstr(op_nop))
+    @core.Instr::Unreachable => self.emit(WasmInstr(op_unreachable))
     // Control flow
-    Block(block_type, instrs) => {
+    @core.Instr::Block(block_type, instrs) => {
       let (params, results) = get_compile_block_type(self.module_, block_type)
       // Push control frame - target_pc is 0 (placeholder), will be patched at block end
       ctx.push_control(BlockKind, params, results, 0)
@@ -627,7 +627,7 @@ fn Runtime::compile_wasm_instr(
       ctx.truncate_stack(block.stack_height_at_entry)
       ctx.push_types(block.results)
     }
-    Loop(block_type, instrs) => {
+    @core.Instr::Loop(block_type, instrs) => {
       let (params, results) = get_compile_block_type(self.module_, block_type)
       // For loops, target_pc is the start (where br jumps back to)
       let loop_start = self.ops.length()
@@ -641,7 +641,7 @@ fn Runtime::compile_wasm_instr(
       ctx.truncate_stack(block.stack_height_at_entry)
       ctx.push_types(block.results)
     }
-    Br(label) => {
+    @core.Instr::Br(label) => {
       let label_int = label.reinterpret_as_int()
       let arity = ctx.get_branch_arity(label_int)
       let drop_count = ctx.calc_drop_count(label_int, arity)
@@ -649,17 +649,17 @@ fn Runtime::compile_wasm_instr(
       // Emit target PC slot - for loops it's known, for blocks we need to patch
       let target_pc_slot = self.ops.length()
       if ctx.is_loop_target(label_int) {
-        // Loop target is known
+        // @core.Instr::Loop target is known
         self.emit(ImmediateIdx(ctx.get_target_pc(label_int)))
       } else {
-        // Block/if target - emit placeholder and register for patching
+        // @core.Instr::Block/if target - emit placeholder and register for patching
         self.emit(ImmediateIdx(0))
         ctx.add_br_patch(label_int, target_pc_slot)
       }
       self.emit(ImmediateIdx(arity))
       self.emit(ImmediateIdx(drop_count))
     }
-    BrIf(label) => {
+    @core.Instr::BrIf(label) => {
       ctx.pop_type() // Pop condition
       let label_int = label.reinterpret_as_int()
       let arity = ctx.get_branch_arity(label_int)
@@ -676,7 +676,7 @@ fn Runtime::compile_wasm_instr(
       self.emit(ImmediateIdx(arity))
       self.emit(ImmediateIdx(drop_count))
     }
-    BrTable(labels, default_label) => {
+    @core.Instr::BrTable(labels, default_label) => {
       ctx.pop_type() // Pop index
       // Use default label for arity calculation (all must have same arity per validation)
       let default_int = default_label.reinterpret_as_int()
@@ -708,7 +708,7 @@ fn Runtime::compile_wasm_instr(
       }
       self.emit(ImmediateIdx(default_drop))
     }
-    BrOnNull(label) => {
+    @core.Instr::BrOnNull(label) => {
       // br_on_null: branch if ref is null, leaving ref on stack if not null
       ctx.pop_type() // Pop the reference type
       let label_int = label.reinterpret_as_int()
@@ -725,9 +725,9 @@ fn Runtime::compile_wasm_instr(
       self.emit(ImmediateIdx(arity))
       self.emit(ImmediateIdx(drop_count))
       // In fallthrough case, ref is pushed back
-      ctx.push_type(FuncRef)
+      ctx.push_type(@core.ValType::FuncRef)
     }
-    BrOnNonNull(label) => {
+    @core.Instr::BrOnNonNull(label) => {
       // br_on_non_null: branch if ref is not null
       ctx.pop_type() // Pop the reference type
       let label_int = label.reinterpret_as_int()
@@ -745,7 +745,7 @@ fn Runtime::compile_wasm_instr(
       self.emit(ImmediateIdx(drop_count))
       // In fallthrough case (null), ref is discarded
     }
-    If(block_type, then_instrs, else_instrs) => {
+    @core.Instr::If(block_type, then_instrs, else_instrs) => {
       ctx.pop_type() // Pop condition
       let (params, results) = get_compile_block_type(self.module_, block_type)
       // Push control frame - target_pc is 0 (placeholder), will be patched at if end
@@ -787,7 +787,7 @@ fn Runtime::compile_wasm_instr(
       ctx.truncate_stack(block.stack_height_at_entry)
       ctx.push_types(block.results)
     }
-    Call(func_idx) => {
+    @core.Instr::Call(func_idx) => {
       // Look up function signature to properly track types
       let func_idx_int = func_idx.reinterpret_as_int()
       let num_imported = count_imported_funcs(self.module_)
@@ -806,238 +806,238 @@ fn Runtime::compile_wasm_instr(
       self.emit(WasmInstr(op_call))
       self.emit(ImmediateIdx(func_idx_int))
     }
-    Return => self.emit(WasmInstr(op_return))
+    @core.Instr::Return => self.emit(WasmInstr(op_return))
     // Memory instructions (load: pop addr, push value; store: pop addr+value)
-    I32Load(_align, offset) => {
+    @core.Instr::I32Load(_align, offset) => {
       // pop i32 addr, push i32 value
       self.emit(WasmInstr(op_i32_load))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I32Store(_align, offset) => {
+    @core.Instr::I32Store(_align, offset) => {
       ctx.pop_types(2) // pop addr and value
       self.emit(WasmInstr(op_i32_store))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I32Load8S(_align, offset) => {
+    @core.Instr::I32Load8S(_align, offset) => {
       self.emit(WasmInstr(op_i32_load8_s))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I32Load8U(_align, offset) => {
+    @core.Instr::I32Load8U(_align, offset) => {
       self.emit(WasmInstr(op_i32_load8_u))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I32Load16S(_align, offset) => {
+    @core.Instr::I32Load16S(_align, offset) => {
       self.emit(WasmInstr(op_i32_load16_s))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I32Load16U(_align, offset) => {
+    @core.Instr::I32Load16U(_align, offset) => {
       self.emit(WasmInstr(op_i32_load16_u))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I32Store8(_align, offset) => {
+    @core.Instr::I32Store8(_align, offset) => {
       ctx.pop_types(2)
       self.emit(WasmInstr(op_i32_store8))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I32Store16(_align, offset) => {
+    @core.Instr::I32Store16(_align, offset) => {
       ctx.pop_types(2)
       self.emit(WasmInstr(op_i32_store16))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Load(_align, offset) => {
+    @core.Instr::I64Load(_align, offset) => {
       ctx.pop_type()
-      ctx.push_type(I64)
+      ctx.push_type(@core.ValType::I64)
       self.emit(WasmInstr(op_i64_load))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Store(_align, offset) => {
+    @core.Instr::I64Store(_align, offset) => {
       ctx.pop_types(2)
       self.emit(WasmInstr(op_i64_store))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Load8S(_align, offset) => {
+    @core.Instr::I64Load8S(_align, offset) => {
       ctx.pop_type()
-      ctx.push_type(I64)
+      ctx.push_type(@core.ValType::I64)
       self.emit(WasmInstr(op_i64_load8_s))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Load8U(_align, offset) => {
+    @core.Instr::I64Load8U(_align, offset) => {
       ctx.pop_type()
-      ctx.push_type(I64)
+      ctx.push_type(@core.ValType::I64)
       self.emit(WasmInstr(op_i64_load8_u))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Load16S(_align, offset) => {
+    @core.Instr::I64Load16S(_align, offset) => {
       ctx.pop_type()
-      ctx.push_type(I64)
+      ctx.push_type(@core.ValType::I64)
       self.emit(WasmInstr(op_i64_load16_s))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Load16U(_align, offset) => {
+    @core.Instr::I64Load16U(_align, offset) => {
       ctx.pop_type()
-      ctx.push_type(I64)
+      ctx.push_type(@core.ValType::I64)
       self.emit(WasmInstr(op_i64_load16_u))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Load32S(_align, offset) => {
+    @core.Instr::I64Load32S(_align, offset) => {
       ctx.pop_type()
-      ctx.push_type(I64)
+      ctx.push_type(@core.ValType::I64)
       self.emit(WasmInstr(op_i64_load32_s))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Load32U(_align, offset) => {
+    @core.Instr::I64Load32U(_align, offset) => {
       ctx.pop_type()
-      ctx.push_type(I64)
+      ctx.push_type(@core.ValType::I64)
       self.emit(WasmInstr(op_i64_load32_u))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Store8(_align, offset) => {
+    @core.Instr::I64Store8(_align, offset) => {
       ctx.pop_types(2)
       self.emit(WasmInstr(op_i64_store8))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Store16(_align, offset) => {
+    @core.Instr::I64Store16(_align, offset) => {
       ctx.pop_types(2)
       self.emit(WasmInstr(op_i64_store16))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Store32(_align, offset) => {
+    @core.Instr::I64Store32(_align, offset) => {
       ctx.pop_types(2)
       self.emit(WasmInstr(op_i64_store32))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    F32Load(_align, offset) => {
+    @core.Instr::F32Load(_align, offset) => {
       ctx.pop_type()
-      ctx.push_type(F32)
+      ctx.push_type(@core.ValType::F32)
       self.emit(WasmInstr(op_f32_load))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    F32Store(_align, offset) => {
+    @core.Instr::F32Store(_align, offset) => {
       ctx.pop_types(2)
       self.emit(WasmInstr(op_f32_store))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    F64Load(_align, offset) => {
+    @core.Instr::F64Load(_align, offset) => {
       ctx.pop_type()
-      ctx.push_type(F64)
+      ctx.push_type(@core.ValType::F64)
       self.emit(WasmInstr(op_f64_load))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    F64Store(_align, offset) => {
+    @core.Instr::F64Store(_align, offset) => {
       ctx.pop_types(2)
       self.emit(WasmInstr(op_f64_store))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
     // Global instructions
-    GlobalGet(_idx) => {
-      ctx.push_type(I32) // Placeholder type
+    @core.Instr::GlobalGet(_idx) => {
+      ctx.push_type(@core.ValType::I32) // Placeholder type
       self.emit(WasmInstr(op_global_get))
       self.emit(ImmediateIdx(_idx.reinterpret_as_int()))
     }
-    GlobalSet(_idx) => {
+    @core.Instr::GlobalSet(_idx) => {
       ctx.pop_type()
       self.emit(WasmInstr(op_global_set))
       self.emit(ImmediateIdx(_idx.reinterpret_as_int()))
     }
     // Memory size and grow
-    MemorySize(_) => {
-      ctx.push_type(I32)
+    @core.Instr::MemorySize(_) => {
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_memory_size))
     }
-    MemoryGrow(_) => self.emit(WasmInstr(op_memory_grow)) // i32 -> i32
+    @core.Instr::MemoryGrow(_) => self.emit(WasmInstr(op_memory_grow)) // i32 -> i32
 
     // Bulk memory instructions
-    MemoryCopy => {
+    @core.Instr::MemoryCopy => {
       ctx.pop_types(3) // pop dest, src, n
       self.emit(WasmInstr(op_memory_copy))
     }
-    MemoryFill => {
+    @core.Instr::MemoryFill => {
       ctx.pop_types(3) // pop dest, val, n
       self.emit(WasmInstr(op_memory_fill))
     }
-    MemoryInit(data_idx) => {
+    @core.Instr::MemoryInit(data_idx) => {
       ctx.pop_types(3) // pop dest, src, n
       self.emit(WasmInstr(op_memory_init))
       self.emit(ImmediateIdx(data_idx.reinterpret_as_int()))
     }
-    DataDrop(data_idx) => {
+    @core.Instr::DataDrop(data_idx) => {
       self.emit(WasmInstr(op_data_drop))
       self.emit(ImmediateIdx(data_idx.reinterpret_as_int()))
     }
 
     // Table bulk operations
-    TableInit(table_idx, elem_idx) => {
+    @core.Instr::TableInit(table_idx, elem_idx) => {
       ctx.pop_types(3) // pop dest, src, n
       self.emit(WasmInstr(op_table_init))
       self.emit(ImmediateIdx(table_idx.reinterpret_as_int()))
       self.emit(ImmediateIdx(elem_idx.reinterpret_as_int()))
     }
-    TableCopy(dst_table_idx, src_table_idx) => {
+    @core.Instr::TableCopy(dst_table_idx, src_table_idx) => {
       ctx.pop_types(3) // pop dest, src, n
       self.emit(WasmInstr(op_table_copy))
       self.emit(ImmediateIdx(dst_table_idx.reinterpret_as_int()))
       self.emit(ImmediateIdx(src_table_idx.reinterpret_as_int()))
     }
-    ElemDrop(elem_idx) => {
+    @core.Instr::ElemDrop(elem_idx) => {
       self.emit(WasmInstr(op_elem_drop))
       self.emit(ImmediateIdx(elem_idx.reinterpret_as_int()))
     }
 
     // Table instructions
-    TableSize(table_idx) => {
-      ctx.push_type(I32)
+    @core.Instr::TableSize(table_idx) => {
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_table_size))
       self.emit(ImmediateIdx(table_idx.reinterpret_as_int()))
     }
-    TableGet(table_idx) => {
+    @core.Instr::TableGet(table_idx) => {
       // pop i32 index, push ref
       self.emit(WasmInstr(op_table_get))
       self.emit(ImmediateIdx(table_idx.reinterpret_as_int()))
     }
-    TableSet(table_idx) => {
+    @core.Instr::TableSet(table_idx) => {
       ctx.pop_types(2) // pop index and ref
       self.emit(WasmInstr(op_table_set))
       self.emit(ImmediateIdx(table_idx.reinterpret_as_int()))
     }
-    TableGrow(table_idx) => {
+    @core.Instr::TableGrow(table_idx) => {
       ctx.pop_type() // pop count, keep delta -> result
       self.emit(WasmInstr(op_table_grow))
       self.emit(ImmediateIdx(table_idx.reinterpret_as_int()))
     }
     // Reference instructions
-    RefNull(_ref_type) => {
-      ctx.push_type(FuncRef) // Use FuncRef as placeholder
+    @core.Instr::RefNull(_ref_type) => {
+      ctx.push_type(@core.ValType::FuncRef) // Use @core.ValType::FuncRef as placeholder
       self.emit(WasmInstr(op_ref_null))
       // Encode the ref type as an immediate
       let type_idx = match _ref_type {
-        Func => 0
-        Extern => 1
-        Any => 2
-        Eq => 3
-        I31 => 4
-        Struct => 5
-        Array => 6
-        Exn => 7
-        None => 8
-        NoFunc => 9
-        NoExtern => 10
-        NoExn => 11
-        TypeIndex(idx) => idx
+        @core.RefType::Func => 0
+        @core.RefType::Extern => 1
+        @core.RefType::Any => 2
+        @core.RefType::Eq => 3
+        @core.RefType::I31 => 4
+        @core.RefType::Struct => 5
+        @core.RefType::Array => 6
+        @core.RefType::Exn => 7
+        @core.RefType::None => 8
+        @core.RefType::NoFunc => 9
+        @core.RefType::NoExtern => 10
+        @core.RefType::NoExn => 11
+        @core.RefType::TypeIndex(idx) => idx
       }
       self.emit(ImmediateIdx(type_idx))
     }
-    RefFunc(func_idx) => {
-      ctx.push_type(FuncRef)
+    @core.Instr::RefFunc(func_idx) => {
+      ctx.push_type(@core.ValType::FuncRef)
       self.emit(WasmInstr(op_ref_func))
       self.emit(ImmediateIdx(func_idx.reinterpret_as_int()))
     }
-    RefIsNull => {
+    @core.Instr::RefIsNull => {
       ctx.pop_type()
-      ctx.push_type(I32)
+      ctx.push_type(@core.ValType::I32)
       self.emit(WasmInstr(op_ref_is_null))
     }
     // Indirect call
-    CallIndirect(type_idx, table_idx) => {
+    @core.Instr::CallIndirect(type_idx, table_idx) => {
       // Pop table index (i32)
       ctx.pop_type()
       // Get function type to properly track types
@@ -1054,8 +1054,8 @@ fn Runtime::compile_wasm_instr(
       self.emit(ImmediateIdx(table_idx.reinterpret_as_int()))
     }
     // Tail calls
-    ReturnCall(func_idx) => {
-      // Look up function signature to properly track types (same as Call)
+    @core.Instr::ReturnCall(func_idx) => {
+      // Look up function signature to properly track types (same as @core.Instr::Call)
       let func_idx_int = func_idx.reinterpret_as_int()
       let num_imported = count_imported_funcs(self.module_)
       let type_idx = get_func_type_idx(self.module_, func_idx_int, num_imported)
@@ -1069,7 +1069,7 @@ fn Runtime::compile_wasm_instr(
       self.emit(WasmInstr(op_return_call))
       self.emit(ImmediateIdx(func_idx_int))
     }
-    ReturnCallIndirect(type_idx, table_idx) => {
+    @core.Instr::ReturnCallIndirect(type_idx, table_idx) => {
       // Pop table index (i32)
       ctx.pop_type()
       // Get function type to properly track types
@@ -1082,7 +1082,7 @@ fn Runtime::compile_wasm_instr(
       self.emit(ImmediateIdx(table_idx.reinterpret_as_int()))
     }
     // Typed function references
-    CallRef(type_idx) => {
+    @core.Instr::CallRef(type_idx) => {
       // Pop the function reference
       ctx.pop_type()
       // Get function type to properly track types
@@ -1097,7 +1097,7 @@ fn Runtime::compile_wasm_instr(
       self.emit(WasmInstr(op_call_ref))
       self.emit(ImmediateIdx(type_idx_int))
     }
-    ReturnCallRef(type_idx) => {
+    @core.Instr::ReturnCallRef(type_idx) => {
       // Pop the function reference
       ctx.pop_type()
       // Get function type to properly track types
