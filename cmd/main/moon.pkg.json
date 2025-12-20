@@ -5,6 +5,10 @@
       "path": "moonbitlang/wasm5/src",
       "alias": "wasm5"
     },
+    {
+      "path": "moonbitlang/wasm5/src/parse",
+      "alias": "wasm5_parse"
+    },
     "moonbitlang/async",
     "moonbitlang/async/fs"
   ]

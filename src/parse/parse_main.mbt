@@ -1,5 +1,5 @@
 ///|
-pub fn parse(b : Bytes) -> Module raise {
+pub fn parse(b : Bytes) -> @core.Module raise {
   let parser = Parser::new(b)
 
   // Parse magic number
@@ -8,7 +8,7 @@ pub fn parse(b : Bytes) -> Module raise {
     magic[1].to_int() != 0x61 ||
     magic[2].to_int() != 0x73 ||
     magic[3].to_int() != 0x6D {
-    raise ParseError::InvalidMagic
+    raise @core.ParseError::InvalidMagic
   }
 
   // Parse version
@@ -17,21 +17,21 @@ pub fn parse(b : Bytes) -> Module raise {
     version[1].to_int() != 0x00 ||
     version[2].to_int() != 0x00 ||
     version[3].to_int() != 0x00 {
-    raise ParseError::UnsupportedVersion
+    raise @core.ParseError::UnsupportedVersion
   }
 
   // Parse sections
-  let mut types : Array[FuncType] = []
+  let mut types : Array[@core.FuncType] = []
   let mut funcs : Array[UInt] = []
-  let mut tables : Array[TableType] = []
-  let mut mems : Array[MemType] = []
-  let mut globals : Array[Global] = []
-  let mut elems : Array[Elem] = []
-  let mut datas : Array[Data] = []
+  let mut tables : Array[@core.TableType] = []
+  let mut mems : Array[@core.MemType] = []
+  let mut globals : Array[@core.Global] = []
+  let mut elems : Array[@core.Elem] = []
+  let mut datas : Array[@core.Data] = []
   let mut start : UInt? = None
-  let mut imports : Array[Import] = []
-  let mut exports : Array[Export] = []
-  let mut codes : Array[Code] = []
+  let mut imports : Array[@core.Import] = []
+  let mut exports : Array[@core.Export] = []
+  let mut codes : Array[@core.Code] = []
   while not(parser.eof()) {
     let section_id = parser.read_byte()
     let section_size = parser.read_u32_leb128()
@@ -56,7 +56,7 @@ pub fn parse(b : Bytes) -> Module raise {
         parser.pos = section_start + section_size.reinterpret_as_int()
     }
   }
-  let module_ = Module::{
+  let module_ = @core.Module::{
     types,
     funcs,
     tables,
@@ -71,6 +71,6 @@ pub fn parse(b : Bytes) -> Module raise {
   }
 
   // Validate the module
-  validate_module(module_)
+  @validate.validate_module(module_)
   module_
 }

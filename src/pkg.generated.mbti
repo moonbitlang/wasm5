@@ -8,14 +8,12 @@ pub let canonical_nan_f64 : Double
 
 pub fn default_import_resolver() -> ImportResolver
 
-pub fn parse(Bytes) -> Module raise
-
 pub fn rint(Double) -> Double
 
 pub fn rintf(Float) -> Float
 
 // Errors
-pub suberror ParseError {
+pub(all) suberror ParseError {
   UnexpectedEof
   InvalidMagic
   UnsupportedVersion
@@ -37,7 +35,7 @@ pub suberror RuntimeError {
 }
 pub impl Show for RuntimeError
 
-pub suberror ValidationError {
+pub(all) suberror ValidationError {
   TypeMismatch(String)
   InvalidFunctionIndex(Int)
   InvalidTypeIndex(Int)
@@ -66,7 +64,11 @@ pub suberror ValidationError {
 pub impl Show for ValidationError
 
 // Types and methods
-type BlockType
+pub(all) enum BlockType {
+  Empty
+  Value(ValType)
+  TypeIndex(Int)
+}
 pub impl Show for BlockType
 
 pub struct CallFrame {
@@ -74,7 +76,11 @@ pub struct CallFrame {
   locals : Array[Value]
 }
 
-type Code
+pub(all) struct Code {
+  locals : Array[ValType]
+  body : Expr
+  mut compiled : Int?
+}
 
 pub struct CompileBlock {
   kind : CompileBlockKind
@@ -97,16 +103,27 @@ pub struct CompileCtx {
   control_stack : Array[CompileBlock]
 }
 
-type Data
+pub(all) struct Data {
+  mem_idx : UInt
+  offset : Expr
+  init : BytesView
+  is_active : Bool
+}
 
-type Elem
+pub(all) struct Elem {
+  table_idx : UInt
+  offset : Expr
+  init : Array[UInt]
+  is_active : Bool
+  elem_type : RefType
+}
 
-pub struct Export {
+pub(all) struct Export {
   name : Bytes
   desc : ExportDesc
 }
 
-pub enum ExportDesc {
+pub(all) enum ExportDesc {
   Func(UInt)
   Table(UInt)
   Mem(UInt)
@@ -114,26 +131,32 @@ pub enum ExportDesc {
   Tag(UInt)
 }
 
-pub struct Expr {
+pub(all) struct Expr {
   instrs : Array[Instr]
 }
 
-pub struct FuncType {
+pub(all) struct FuncType {
   params : Array[ValType]
   results : Array[ValType]
 }
 
-type Global
+pub(all) struct Global {
+  type_ : GlobalType
+  init : Expr
+}
 
-type GlobalType
+pub(all) struct GlobalType {
+  val_type : ValType
+  mutable : Bool
+}
 
-pub struct Import {
+pub(all) struct Import {
   module_ : Bytes
   name : Bytes
   desc : ImportDesc
 }
 
-pub enum ImportDesc {
+pub(all) enum ImportDesc {
   Func(UInt)
   Table(TableType)
   Mem(MemType)
@@ -167,7 +190,7 @@ pub struct ImportedMemory {
   max : UInt?
 }
 
-pub enum Instr {
+pub(all) enum Instr {
   Unreachable
   Nop
   Block(BlockType, Array[Instr])
@@ -375,15 +398,22 @@ pub enum Instr {
 }
 pub impl Show for Instr
 
+pub(all) struct Limits {
+  min : UInt
+  max : UInt?
+}
+
 pub enum MInstr {
   WasmInstr((Runtime) -> RetCode)
   ImmediateI32(UInt)
   ImmediateIdx(Int)
 }
 
-type MemType
+pub(all) struct MemType {
+  limits : Limits
+}
 
-pub struct Module {
+pub(all) struct Module {
   types : Array[FuncType]
   funcs : Array[UInt]
   tables : Array[TableType]
@@ -397,7 +427,21 @@ pub struct Module {
   codes : Array[Code]
 }
 
-type RefType
+pub(all) enum RefType {
+  Func
+  Extern
+  Any
+  Eq
+  I31
+  Struct
+  Array
+  Exn
+  None
+  NoFunc
+  NoExtern
+  NoExn
+  TypeIndex(Int)
+}
 pub impl Eq for RefType
 pub impl Show for RefType
 
@@ -438,9 +482,34 @@ pub fn Runtime::load_with_resolver(Module, ImportResolver) -> Self raise Runtime
 
 type RuntimeTable
 
-type TableType
+pub(all) struct TableType {
+  elem_type : RefType
+  limits : Limits
+  init : Expr?
+  nullable : Bool
+}
 
-type ValType
+pub(all) enum ValType {
+  I32
+  I64
+  F32
+  F64
+  V128
+  FuncRef
+  ExternRef
+  AnyRef
+  ExnRef
+  NullRef
+  NullFuncRef
+  NullExnRef
+  NullExternRef
+  EqRef
+  I31Ref
+  StructRef
+  ArrayRef
+  Ref(RefType, Bool)
+}
+pub fn ValType::is_defaultable(Self) -> Bool
 pub impl Eq for ValType
 pub impl Show for ValType
 

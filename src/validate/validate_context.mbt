@@ -1,11 +1,11 @@
 ///|
 /// Validation context that tracks both the type stack and unreachable state
 priv struct ValidationCtx {
-  stack : Array[ValType]
+  stack : Array[@core.ValType]
   mut is_unreachable : Bool
   // Stack of control frames - each frame tracks the expected result types
   // For br validation, we need to know what types the target label expects
-  control_stack : Array[(Array[ValType], Array[ValType])] // (params, results) for each control frame
+  control_stack : Array[(Array[@core.ValType], Array[@core.ValType])] // (params, results) for each control frame
   // Track which locals are initialized (for non-defaultable types)
   // Index corresponds to local index (params first, then locals)
   initialized_locals : Array[Bool]
@@ -25,8 +25,8 @@ fn ValidationCtx::new() -> ValidationCtx {
 /// Create a validation context with initialized locals tracking
 /// Params are always initialized; locals are initialized only if defaultable
 fn ValidationCtx::new_with_locals(
-  func_type : FuncType,
-  code : Code,
+  func_type : @core.FuncType,
+  code : @core.Code,
 ) -> ValidationCtx {
   let total_locals = func_type.params.length() + code.locals.length()
   let initialized = Array::make(total_locals, false)
@@ -52,8 +52,8 @@ fn ValidationCtx::new_with_locals(
 ///|
 fn ValidationCtx::push_control(
   self : ValidationCtx,
-  params : Array[ValType],
-  results : Array[ValType],
+  params : Array[@core.ValType],
+  results : Array[@core.ValType],
 ) -> Unit {
   self.control_stack.push((params, results))
 }
@@ -61,7 +61,7 @@ fn ValidationCtx::push_control(
 ///|
 fn ValidationCtx::pop_control(
   self : ValidationCtx,
-) -> (Array[ValType], Array[ValType]) {
+) -> (Array[@core.ValType], Array[@core.ValType]) {
   self.control_stack.unsafe_pop()
 }
 
@@ -69,19 +69,19 @@ fn ValidationCtx::pop_control(
 fn ValidationCtx::get_label_types(
   self : ValidationCtx,
   label : UInt,
-) -> Array[ValType] raise ValidationError {
+) -> Array[@core.ValType] raise @core.ValidationError {
   // Labels are relative depth: 0 is innermost, 1 is next outer, etc.
   let idx = self.control_stack.length() - 1 - label.reinterpret_as_int()
   if idx >= 0 && idx < self.control_stack.length() {
     let (_, results) = self.control_stack[idx]
     results
   } else {
-    raise ValidationError::UnknownLabel(label.reinterpret_as_int())
+    raise @core.ValidationError::UnknownLabel(label.reinterpret_as_int())
   }
 }
 
 // =============================================================================
-// Polymorphic Stack Operations for Unreachable Code
+// Polymorphic Stack Operations for @core.Instr::Unreachable @core.Code
 // =============================================================================
 //
 // In WebAssembly, after an unconditional control flow instruction (br, return,
@@ -117,8 +117,8 @@ fn ValidationCtx::mark_unreachable(self : ValidationCtx) -> Unit {
 /// Only values below unreachable_stack_height are polymorphic.
 fn ValidationCtx::poly_pop(
   self : ValidationCtx,
-  expected : ValType,
-) -> ValType raise ValidationError {
+  expected : @core.ValType,
+) -> @core.ValType raise @core.ValidationError {
   if self.stack.length() > 0 {
     self.stack.unsafe_pop()
   } else if self.is_unreachable {
@@ -126,7 +126,7 @@ fn ValidationCtx::poly_pop(
     // (popping from below the unreachable boundary)
     expected
   } else {
-    raise ValidationError::TypeMismatch(
+    raise @core.ValidationError::TypeMismatch(
       "expected value on stack, got empty stack",
     )
   }
@@ -138,10 +138,10 @@ fn ValidationCtx::poly_pop(
 /// Uses subtyping: actual type must be a subtype of expected type.
 fn ValidationCtx::poly_pop_expect(
   self : ValidationCtx,
-  module_ : Module,
-  expected : ValType,
+  module_ : @core.Module,
+  expected : @core.ValType,
   op_name : String,
-) -> Unit raise ValidationError {
+) -> Unit raise @core.ValidationError {
   // In unreachable mode, concrete values are those currently on the stack
   // (they were pushed after unreachable). Polymorphic values are those
   // we pop from an empty stack (they would have been there before unreachable).
@@ -152,7 +152,7 @@ fn ValidationCtx::poly_pop_expect(
   // Use subtyping: actual must be a subtype of expected
   if (not(self.is_unreachable) || is_concrete_value) &&
     not(is_subtype(module_, actual, expected)) {
-    raise ValidationError::TypeMismatch(
+    raise @core.ValidationError::TypeMismatch(
       "\{op_name} requires \{expected}, got \{actual}",
     )
   }
