@@ -1,0 +1,460 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/wasm5/src"
+
+// Values
+pub let canonical_nan_f32 : Float
+
+pub let canonical_nan_f64 : Double
+
+pub fn default_import_resolver() -> ImportResolver
+
+pub fn parse(Bytes) -> Module raise
+
+pub fn rint(Double) -> Double
+
+pub fn rintf(Float) -> Float
+
+// Errors
+pub suberror ParseError {
+  UnexpectedEof
+  InvalidMagic
+  UnsupportedVersion
+  InvalidFormat(String)
+}
+pub impl Show for ParseError
+
+pub suberror RuntimeError {
+  DivisionByZero
+  IntegerOverflow
+  MemoryOutOfBounds
+  InvalidType(String)
+  FunctionNotFound(String)
+  UnimplementedInstruction(String)
+  Unreachable
+  FunctionNotCompiled(String)
+  UnsupportedLocalType(String)
+  UnsupportedInitExpression(String)
+}
+pub impl Show for RuntimeError
+
+pub suberror ValidationError {
+  TypeMismatch(String)
+  InvalidFunctionIndex(Int)
+  InvalidTypeIndex(Int)
+  InvalidLocalIndex(Int)
+  InvalidGlobalIndex(Int)
+  UnknownGlobal(Int)
+  StackSizeMismatch(String)
+  InvalidResultArity(String)
+  InvalidAlignment(String)
+  UnknownLabel(Int)
+  InvalidStartFunction(String)
+  UnknownMemory(Int)
+  InvalidMemorySize(String)
+  ImmutableGlobal(Int)
+  DuplicateExport(String)
+  UnknownExportedFunction(Int)
+  UnknownExportedMemory(Int)
+  UnknownExportedTable(Int)
+  UnknownExportedGlobal(Int)
+  InvalidTableSize(String)
+  UnknownTable(Int)
+  ConstantExpressionRequired(String)
+  UninitializedLocal(Int)
+  UnknownType(Int)
+}
+pub impl Show for ValidationError
+
+// Types and methods
+type BlockType
+pub impl Show for BlockType
+
+pub struct CallFrame {
+  return_pc : Int
+  locals : Array[Value]
+}
+
+type Code
+
+pub struct CompileBlock {
+  kind : CompileBlockKind
+  params : Array[ValType]
+  results : Array[ValType]
+  stack_height_at_entry : Int
+  target_pc : Int
+  pending_br_patches : Array[Int]
+}
+
+pub enum CompileBlockKind {
+  BlockKind
+  LoopKind
+  IfKind
+}
+pub impl Eq for CompileBlockKind
+
+pub struct CompileCtx {
+  type_stack : Array[ValType]
+  control_stack : Array[CompileBlock]
+}
+
+type Data
+
+type Elem
+
+pub struct Export {
+  name : Bytes
+  desc : ExportDesc
+}
+
+pub enum ExportDesc {
+  Func(UInt)
+  Table(UInt)
+  Mem(UInt)
+  Global(UInt)
+  Tag(UInt)
+}
+
+pub struct Expr {
+  instrs : Array[Instr]
+}
+
+pub struct FuncType {
+  params : Array[ValType]
+  results : Array[ValType]
+}
+
+type Global
+
+type GlobalType
+
+pub struct Import {
+  module_ : Bytes
+  name : Bytes
+  desc : ImportDesc
+}
+
+pub enum ImportDesc {
+  Func(UInt)
+  Table(TableType)
+  Mem(MemType)
+  Global(GlobalType)
+  Tag(UInt)
+}
+
+pub struct ImportResolver {
+  modules : Map[Bytes, ImportResolverEntry]
+}
+pub fn ImportResolver::add_func(Self, Bytes, Bytes, ImportedFunc) -> Unit
+pub fn ImportResolver::add_global(Self, Bytes, Bytes, Value) -> Unit
+pub fn ImportResolver::add_memory(Self, Bytes, Bytes, ImportedMemory) -> Unit
+pub fn ImportResolver::add_table(Self, Bytes, Bytes, RuntimeTable) -> Unit
+pub fn ImportResolver::get_func(Self, Bytes, Bytes) -> ImportedFunc?
+pub fn ImportResolver::get_global(Self, Bytes, Bytes) -> Value?
+pub fn ImportResolver::get_memory(Self, Bytes, Bytes) -> ImportedMemory?
+pub fn ImportResolver::get_table(Self, Bytes, Bytes) -> RuntimeTable?
+pub fn ImportResolver::new() -> Self
+
+type ImportResolverEntry
+
+pub struct ImportedFunc {
+  arity : UInt
+  func : (Array[Value]) -> Array[Value]
+}
+pub fn ImportedFunc::new(UInt, (Array[Value]) -> Array[Value]) -> Self
+
+pub struct ImportedMemory {
+  data : Array[Byte]
+  max : UInt?
+}
+
+pub enum Instr {
+  Unreachable
+  Nop
+  Block(BlockType, Array[Instr])
+  Loop(BlockType, Array[Instr])
+  If(BlockType, Array[Instr], Array[Instr])
+  Br(UInt)
+  BrIf(UInt)
+  BrTable(Array[UInt], UInt)
+  BrOnNull(UInt)
+  BrOnNonNull(UInt)
+  Return
+  Call(UInt)
+  CallIndirect(UInt, UInt)
+  ReturnCall(UInt)
+  ReturnCallIndirect(UInt, UInt)
+  CallRef(UInt)
+  ReturnCallRef(UInt)
+  Drop
+  Select
+  SelectTyped(Array[ValType])
+  LocalGet(UInt)
+  LocalSet(UInt)
+  LocalTee(UInt)
+  GlobalGet(UInt)
+  GlobalSet(UInt)
+  I32Load(UInt, UInt)
+  I64Load(UInt, UInt)
+  F32Load(UInt, UInt)
+  F64Load(UInt, UInt)
+  I32Load8S(UInt, UInt)
+  I32Load8U(UInt, UInt)
+  I32Load16S(UInt, UInt)
+  I32Load16U(UInt, UInt)
+  I64Load8S(UInt, UInt)
+  I64Load8U(UInt, UInt)
+  I64Load16S(UInt, UInt)
+  I64Load16U(UInt, UInt)
+  I64Load32S(UInt, UInt)
+  I64Load32U(UInt, UInt)
+  I32Store(UInt, UInt)
+  I64Store(UInt, UInt)
+  F32Store(UInt, UInt)
+  F64Store(UInt, UInt)
+  I32Store8(UInt, UInt)
+  I32Store16(UInt, UInt)
+  I64Store8(UInt, UInt)
+  I64Store16(UInt, UInt)
+  I64Store32(UInt, UInt)
+  MemorySize(UInt)
+  MemoryGrow(UInt)
+  TableGet(UInt)
+  TableSet(UInt)
+  TableSize(UInt)
+  TableGrow(UInt)
+  TableInit(UInt, UInt)
+  TableCopy(UInt, UInt)
+  ElemDrop(UInt)
+  MemoryInit(UInt)
+  DataDrop(UInt)
+  MemoryCopy
+  MemoryFill
+  RefNull(RefType)
+  RefFunc(UInt)
+  RefIsNull
+  I32Const(UInt)
+  I64Const(UInt64)
+  F32Const(Float)
+  F64Const(Double)
+  I32Eqz
+  I32Eq
+  I32Ne
+  I32LtS
+  I32LtU
+  I32GtS
+  I32GtU
+  I32LeS
+  I32LeU
+  I32GeS
+  I32GeU
+  I32Clz
+  I32Ctz
+  I32Popcnt
+  I32Add
+  I32Sub
+  I32Mul
+  I32DivS
+  I32DivU
+  I32RemS
+  I32RemU
+  I32And
+  I32Or
+  I32Xor
+  I32Shl
+  I32ShrS
+  I32ShrU
+  I32Rotl
+  I32Rotr
+  I64Eqz
+  I64Eq
+  I64Ne
+  I64LtS
+  I64LtU
+  I64GtS
+  I64GtU
+  I64LeS
+  I64LeU
+  I64GeS
+  I64GeU
+  I64Clz
+  I64Ctz
+  I64Popcnt
+  I64Add
+  I64Sub
+  I64Mul
+  I64DivS
+  I64DivU
+  I64RemS
+  I64RemU
+  I64And
+  I64Or
+  I64Xor
+  I64Shl
+  I64ShrS
+  I64ShrU
+  I64Rotl
+  I64Rotr
+  F32Eq
+  F32Ne
+  F32Lt
+  F32Gt
+  F32Le
+  F32Ge
+  F32Abs
+  F32Neg
+  F32Ceil
+  F32Floor
+  F32Trunc
+  F32Nearest
+  F32Sqrt
+  F32Add
+  F32Sub
+  F32Mul
+  F32Div
+  F32Min
+  F32Max
+  F32Copysign
+  F64Eq
+  F64Ne
+  F64Lt
+  F64Gt
+  F64Le
+  F64Ge
+  F64Abs
+  F64Neg
+  F64Ceil
+  F64Floor
+  F64Trunc
+  F64Nearest
+  F64Sqrt
+  F64Add
+  F64Sub
+  F64Mul
+  F64Div
+  F64Min
+  F64Max
+  F64Copysign
+  I32WrapI64
+  I32TruncF32S
+  I32TruncF32U
+  I32TruncF64S
+  I32TruncF64U
+  I64ExtendI32S
+  I64ExtendI32U
+  I64TruncF32S
+  I64TruncF32U
+  I64TruncF64S
+  I64TruncF64U
+  F32ConvertI32S
+  F32ConvertI32U
+  F32ConvertI64S
+  F32ConvertI64U
+  F32DemoteF64
+  F64ConvertI32S
+  F64ConvertI32U
+  F64ConvertI64S
+  F64ConvertI64U
+  F64PromoteF32
+  I32ReinterpretF32
+  I64ReinterpretF64
+  F32ReinterpretI32
+  F64ReinterpretI64
+  I32Extend8S
+  I32Extend16S
+  I64Extend8S
+  I64Extend16S
+  I64Extend32S
+  I32TruncSatF32S
+  I32TruncSatF32U
+  I32TruncSatF64S
+  I32TruncSatF64U
+  I64TruncSatF32S
+  I64TruncSatF32U
+  I64TruncSatF64S
+  I64TruncSatF64U
+}
+pub impl Show for Instr
+
+pub enum MInstr {
+  WasmInstr((Runtime) -> RetCode)
+  ImmediateI32(UInt)
+  ImmediateIdx(Int)
+}
+
+type MemType
+
+pub struct Module {
+  types : Array[FuncType]
+  funcs : Array[UInt]
+  tables : Array[TableType]
+  mems : Array[MemType]
+  globals : Array[Global]
+  elems : Array[Elem]
+  datas : Array[Data]
+  start : UInt?
+  imports : Array[Import]
+  exports : Array[Export]
+  codes : Array[Code]
+}
+
+type RefType
+pub impl Eq for RefType
+pub impl Show for RefType
+
+pub enum RetCode {
+  OK
+  DivisionByZero
+  IntegerOverflow
+  MemoryOutOfBounds
+  Unreachable
+  InvalidType
+  FunctionNotCompiled
+  UnsupportedLocalType
+}
+pub impl Eq for RetCode
+
+pub struct Runtime {
+  module_ : Module
+  ops : Array[MInstr]
+  stack : Array[Value]
+  mut locals : Array[Value]
+  mut pc : Int
+  mut running : Bool
+  call_stack : Array[CallFrame]
+  memory : Array[Byte]
+  memory_max : UInt?
+  globals : Array[Value]
+  tables : Array[RuntimeTable]
+  imported_funcs : Array[ImportedFunc]
+  data_segments : Array[Array[Byte]]
+  mut error_detail : String
+}
+pub fn Runtime::call_compiled(Self, Bytes, Array[Value]) -> Array[Value] raise RuntimeError
+pub fn Runtime::compile(Self) -> Unit raise RuntimeError
+pub fn Runtime::get_globals(Self) -> Array[Value]
+pub fn Runtime::get_module(Self) -> Module
+pub fn Runtime::load(Module) -> Self raise RuntimeError
+pub fn Runtime::load_with_resolver(Module, ImportResolver) -> Self raise RuntimeError
+
+type RuntimeTable
+
+type TableType
+
+type ValType
+pub impl Eq for ValType
+pub impl Show for ValType
+
+pub(all) enum Value {
+  I32(UInt)
+  I64(UInt64)
+  F32(Float)
+  F64(Double)
+  Ref(Int?)
+}
+pub impl Eq for Value
+pub impl Show for Value
+
+// Type aliases
+
+// Traits
+
