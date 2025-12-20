@@ -97,10 +97,7 @@ fn CompileCtx::pop_types(self : CompileCtx, n : Int) -> Unit {
 }
 
 ///|
-fn CompileCtx::push_types(
-  self : CompileCtx,
-  types : Array[ValType],
-) -> Unit {
+fn CompileCtx::push_types(self : CompileCtx, types : Array[ValType]) -> Unit {
   for t in types {
     self.push_type(t)
   }
@@ -158,10 +155,7 @@ fn CompileCtx::get_branch_arity(self : CompileCtx, label : Int) -> Int {
 
 ///|
 /// Get the stack height at the target block's entry
-fn CompileCtx::get_target_stack_height(
-  self : CompileCtx,
-  label : Int,
-) -> Int {
+fn CompileCtx::get_target_stack_height(self : CompileCtx, label : Int) -> Int {
   let idx = self.control_stack.length() - 1 - label
   self.control_stack[idx].stack_height_at_entry
 }
@@ -196,11 +190,7 @@ fn CompileCtx::is_loop_target(self : CompileCtx, label : Int) -> Bool {
 
 ///|
 /// Register a slot that needs to be patched with the target PC when the block ends
-fn CompileCtx::add_br_patch(
-  self : CompileCtx,
-  label : Int,
-  slot : Int,
-) -> Unit {
+fn CompileCtx::add_br_patch(self : CompileCtx, label : Int, slot : Int) -> Unit {
   let idx = self.control_stack.length() - 1 - label
   self.control_stack[idx].pending_br_patches.push(slot)
 }

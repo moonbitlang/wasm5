@@ -1,0 +1,24 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/wasm5/test"
+
+// Values
+
+// Errors
+type TestUnsupported
+
+// Types and methods
+type ExpectedValue
+pub impl Show for ExpectedValue
+
+type ModuleRegistry
+
+type RegisteredModule
+
+type TestContext
+
+type TestFailure
+
+// Type aliases
+
+// Traits
+
