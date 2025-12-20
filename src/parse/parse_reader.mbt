@@ -15,42 +15,45 @@ fn Parser::eof(self : Parser) -> Bool {
 }
 
 ///|
-fn Parser::read_byte(self : Parser) -> Byte raise ParseError {
+fn Parser::read_byte(self : Parser) -> Byte raise @core.ParseError {
   if self.pos < self.bytes.length() {
     let byte = self.bytes.unsafe_get(self.pos)
     self.pos = self.pos + 1
     byte
   } else {
-    raise ParseError::UnexpectedEof
+    raise @core.ParseError::UnexpectedEof
   }
 }
 
 ///|
-fn Parser::read_bytes(self : Parser, n : UInt) -> BytesView raise ParseError {
+fn Parser::read_bytes(
+  self : Parser,
+  n : UInt,
+) -> BytesView raise @core.ParseError {
   let n_int = UInt::reinterpret_as_int(n)
   guard n_int >= 0 else {
-    raise ParseError::InvalidFormat("bytes length beyond Int max value")
+    raise @core.ParseError::InvalidFormat("bytes length beyond Int max value")
   }
   if self.pos + n_int <= self.bytes.length() {
     let result = self.bytes[self.pos:self.pos + n_int]
     self.pos = self.pos + n_int
     result
   } else {
-    raise ParseError::UnexpectedEof
+    raise @core.ParseError::UnexpectedEof
   }
 }
 
 // LEB128 decoding
 
 ///|
-fn Parser::read_u32_leb128(self : Parser) -> UInt raise ParseError {
-  fn read_loop(shift : Int, result : UInt) -> UInt raise ParseError {
+fn Parser::read_u32_leb128(self : Parser) -> UInt raise @core.ParseError {
+  fn read_loop(shift : Int, result : UInt) -> UInt raise @core.ParseError {
     let byte = self.read_byte()
     // Check for overflow: shift >= 28 means we're on the 5th byte (bits 28-34)
     // For a valid u32, the 5th byte must have value <= 0x0F (only 4 bits used)
     // and no continuation bit (high bit must be 0)
     if shift >= 28 && byte > 0x0F {
-      raise ParseError::InvalidFormat(
+      raise @core.ParseError::InvalidFormat(
         "LEB128 u32 overflow: value exceeds 32 bits",
       )
     }
@@ -61,7 +64,7 @@ fn Parser::read_u32_leb128(self : Parser) -> UInt raise ParseError {
     } else {
       if shift >= 28 {
         // Continuation bit set on 5th byte - invalid
-        raise ParseError::InvalidFormat(
+        raise @core.ParseError::InvalidFormat(
           "LEB128 u32 overflow: too many continuation bytes",
         )
       }
@@ -73,7 +76,7 @@ fn Parser::read_u32_leb128(self : Parser) -> UInt raise ParseError {
 }
 
 ///|
-fn Parser::read_i32_leb128(self : Parser) -> Int raise ParseError {
+fn Parser::read_i32_leb128(self : Parser) -> Int raise @core.ParseError {
   let mut result = 0
   let mut shift = 0
   let mut byte = 0
@@ -85,7 +88,7 @@ fn Parser::read_i32_leb128(self : Parser) -> Int raise ParseError {
       break
     }
     if shift >= 35 {
-      raise ParseError::InvalidFormat("LEB128 i32 too long")
+      raise @core.ParseError::InvalidFormat("LEB128 i32 too long")
     }
   }
 
@@ -99,7 +102,7 @@ fn Parser::read_i32_leb128(self : Parser) -> Int raise ParseError {
 }
 
 ///|
-fn Parser::read_i64_leb128(self : Parser) -> Int64 raise ParseError {
+fn Parser::read_i64_leb128(self : Parser) -> Int64 raise @core.ParseError {
   let mut result = 0L
   let mut shift = 0
   let mut byte = 0
@@ -111,7 +114,7 @@ fn Parser::read_i64_leb128(self : Parser) -> Int64 raise ParseError {
       break
     }
     if shift >= 70 {
-      raise ParseError::InvalidFormat("LEB128 i64 too long")
+      raise @core.ParseError::InvalidFormat("LEB128 i64 too long")
     }
   }
 
@@ -131,7 +134,9 @@ fn Parser::read_i64_leb128(self : Parser) -> Int64 raise ParseError {
 /// - bits 0-5: alignment (log2)
 /// - bit 6: if set, memory index follows
 /// If bit 6 is not set, memory index defaults to 0
-fn Parser::read_memarg(self : Parser) -> (UInt, UInt, UInt) raise ParseError {
+fn Parser::read_memarg(
+  self : Parser,
+) -> (UInt, UInt, UInt) raise @core.ParseError {
   let flags_and_align = self.read_u32_leb128()
   let align = flags_and_align & 0x3F // bits 0-5
   let has_memory_index = (flags_and_align & 0x40) != 0 // bit 6
@@ -141,31 +146,31 @@ fn Parser::read_memarg(self : Parser) -> (UInt, UInt, UInt) raise ParseError {
 }
 
 ///|
-fn Parser::read_f32(self : Parser) -> Float raise ParseError {
+fn Parser::read_f32(self : Parser) -> Float raise @core.ParseError {
   match self.bytes[self.pos:] {
     [u32le(bits), ..] => {
       self.pos = self.pos + 4
       Float::reinterpret_from_uint(bits)
     }
-    _ => raise ParseError::UnexpectedEof
+    _ => raise @core.ParseError::UnexpectedEof
   }
 }
 
 ///|
-fn Parser::read_f64(self : Parser) -> Double raise ParseError {
+fn Parser::read_f64(self : Parser) -> Double raise @core.ParseError {
   match self.bytes[self.pos:] {
     [u64le(bits), ..] => {
       self.pos = self.pos + 8
       UInt64::reinterpret_as_double(bits)
     }
-    _ => raise ParseError::UnexpectedEof
+    _ => raise @core.ParseError::UnexpectedEof
   }
 }
 
 // Read name (length-prefixed UTF-8 string)
 
 ///|
-fn Parser::read_name(self : Parser) -> Bytes raise ParseError {
+fn Parser::read_name(self : Parser) -> Bytes raise @core.ParseError {
   let len = self.read_u32_leb128()
   let bytes = self.read_bytes(len)
   // For now, assume UTF-8 is valid
@@ -175,22 +180,22 @@ fn Parser::read_name(self : Parser) -> Bytes raise ParseError {
 // Parse value type
 
 ///|
-/// Helper function to map heap type opcodes to RefType
-/// Returns Some(RefType) for known opcodes, None otherwise
-fn opcode_to_heap_type(byte : Byte) -> RefType? {
+/// Helper function to map heap type opcodes to @core.RefType
+/// Returns Some(@core.RefType) for known opcodes, None otherwise
+fn opcode_to_heap_type(byte : Byte) -> @core.RefType? {
   match byte {
-    0x70 => Some(RefType::Func)
-    0x6F => Some(RefType::Extern)
-    0x6E => Some(RefType::Any)
-    0x6D => Some(RefType::Eq)
-    0x6C => Some(RefType::I31)
-    0x6B => Some(RefType::Struct)
-    0x6A => Some(RefType::Array)
-    0x69 => Some(RefType::Exn)
-    0x71 => Some(RefType::None)
-    0x72 => Some(RefType::NoExtern)
-    0x73 => Some(RefType::NoFunc)
-    0x74 => Some(RefType::NoExn)
+    0x70 => Some(@core.RefType::Func)
+    0x6F => Some(@core.RefType::Extern)
+    0x6E => Some(@core.RefType::Any)
+    0x6D => Some(@core.RefType::Eq)
+    0x6C => Some(@core.RefType::I31)
+    0x6B => Some(@core.RefType::Struct)
+    0x6A => Some(@core.RefType::Array)
+    0x69 => Some(@core.RefType::Exn)
+    0x71 => Some(@core.RefType::None)
+    0x72 => Some(@core.RefType::NoExtern)
+    0x73 => Some(@core.RefType::NoFunc)
+    0x74 => Some(@core.RefType::NoExn)
     _ => Option::None
   }
 }
@@ -198,7 +203,9 @@ fn opcode_to_heap_type(byte : Byte) -> RefType? {
 ///|
 /// Read a heap type (used after 0x63/0x64 prefix)
 /// Heap types can be abstract heap types (0x70, 0x6F, etc.) or type indices
-fn Parser::read_heap_type(self : Parser) -> RefType raise ParseError {
+fn Parser::read_heap_type(
+  self : Parser,
+) -> @core.RefType raise @core.ParseError {
   let byte = self.read_byte()
   match opcode_to_heap_type(byte) {
     Some(ref_type) => ref_type
@@ -206,46 +213,46 @@ fn Parser::read_heap_type(self : Parser) -> RefType raise ParseError {
       // It's a type index encoded as LEB128
       self.pos = self.pos - 1
       let type_idx = self.read_i32_leb128()
-      RefType::TypeIndex(type_idx)
+      @core.RefType::TypeIndex(type_idx)
     }
   }
 }
 
 ///|
-fn Parser::read_valtype(self : Parser) -> ValType raise {
+fn Parser::read_valtype(self : Parser) -> @core.ValType raise {
   let byte = self.read_byte()
   match byte {
-    0x7F => I32
-    0x7E => I64
-    0x7D => F32
-    0x7C => F64
-    0x7B => V128
+    0x7F => @core.ValType::I32
+    0x7E => @core.ValType::I64
+    0x7D => @core.ValType::F32
+    0x7C => @core.ValType::F64
+    0x7B => @core.ValType::V128
     // GC proposal: (ref null $t) - nullable typed reference
     0x63 => {
       let heap_type = self.read_heap_type()
-      Ref(heap_type, true) // nullable = true
+      @core.ValType::Ref(heap_type, true) // nullable = true
     }
     // GC proposal: (ref $t) - non-null typed reference
     0x64 => {
       let heap_type = self.read_heap_type()
-      Ref(heap_type, false) // nullable = false
+      @core.ValType::Ref(heap_type, false) // nullable = false
     }
     _ =>
       match opcode_to_heap_type(byte) {
-        Some(RefType::Func) => FuncRef
-        Some(RefType::Extern) => ExternRef
-        Some(RefType::Any) => AnyRef
-        Some(RefType::Eq) => EqRef
-        Some(RefType::I31) => I31Ref
-        Some(RefType::Struct) => StructRef
-        Some(RefType::Array) => ArrayRef
-        Some(RefType::Exn) => ExnRef
-        Some(RefType::None) => NullRef
-        Some(RefType::NoExtern) => NullExternRef
-        Some(RefType::NoFunc) => NullFuncRef
-        Some(RefType::NoExn) => NullExnRef
-        Some(RefType::TypeIndex(_)) | None =>
-          raise ValidationError::TypeMismatch(
+        Some(@core.RefType::Func) => @core.ValType::FuncRef
+        Some(@core.RefType::Extern) => @core.ValType::ExternRef
+        Some(@core.RefType::Any) => @core.ValType::AnyRef
+        Some(@core.RefType::Eq) => @core.ValType::EqRef
+        Some(@core.RefType::I31) => @core.ValType::I31Ref
+        Some(@core.RefType::Struct) => @core.ValType::StructRef
+        Some(@core.RefType::Array) => @core.ValType::ArrayRef
+        Some(@core.RefType::Exn) => @core.ValType::ExnRef
+        Some(@core.RefType::None) => @core.ValType::NullRef
+        Some(@core.RefType::NoExtern) => @core.ValType::NullExternRef
+        Some(@core.RefType::NoFunc) => @core.ValType::NullFuncRef
+        Some(@core.RefType::NoExn) => @core.ValType::NullExnRef
+        Some(@core.RefType::TypeIndex(_)) | None =>
+          raise @core.ValidationError::TypeMismatch(
             "invalid value type: 0x\{byte.to_string()}",
           )
       }
@@ -256,10 +263,10 @@ fn Parser::read_valtype(self : Parser) -> ValType raise {
 
 ///|
 /// Read a reftype and return both the type and whether it's nullable
-/// Returns (RefType, nullable: Bool)
+/// Returns (@core.RefType, nullable: Bool)
 fn Parser::read_reftype_with_nullability(
   self : Parser,
-) -> (RefType, Bool) raise {
+) -> (@core.RefType, Bool) raise {
   let byte = self.read_byte()
   match byte {
     // GC proposal: (ref null <heaptype>) - nullable typed reference
@@ -274,7 +281,7 @@ fn Parser::read_reftype_with_nullability(
         None => {
           self.pos = self.pos - 1
           let type_idx = self.read_i32_leb128()
-          (RefType::TypeIndex(type_idx), true) // 0x63 means nullable
+          (@core.RefType::TypeIndex(type_idx), true) // 0x63 means nullable
         }
       }
     }
@@ -290,7 +297,7 @@ fn Parser::read_reftype_with_nullability(
         None => {
           self.pos = self.pos - 1
           let type_idx = self.read_i32_leb128()
-          (RefType::TypeIndex(type_idx), false) // 0x64 means non-nullable
+          (@core.RefType::TypeIndex(type_idx), false) // 0x64 means non-nullable
         }
       }
     }
@@ -303,9 +310,9 @@ fn Parser::read_reftype_with_nullability(
           if byte < 0x40 {
             self.pos = self.pos - 1
             let type_idx = self.read_i32_leb128()
-            (RefType::TypeIndex(type_idx), true) // Default to nullable
+            (@core.RefType::TypeIndex(type_idx), true) // Default to nullable
           } else {
-            raise ValidationError::TypeMismatch(
+            raise @core.ValidationError::TypeMismatch(
               "invalid reftype: 0x\{byte.to_string()}",
             )
           }
@@ -314,7 +321,7 @@ fn Parser::read_reftype_with_nullability(
 }
 
 ///|
-fn Parser::read_reftype(self : Parser) -> RefType raise {
+fn Parser::read_reftype(self : Parser) -> @core.RefType raise {
   let byte = self.read_byte()
   match byte {
     // GC proposal: (ref null <heaptype>) - nullable typed reference
@@ -331,7 +338,7 @@ fn Parser::read_reftype(self : Parser) -> RefType raise {
           // It's a type index - put byte back and read as signed LEB128
           self.pos = self.pos - 1
           let type_idx = self.read_i32_leb128()
-          RefType::TypeIndex(type_idx)
+          @core.RefType::TypeIndex(type_idx)
         }
       }
     }
@@ -349,7 +356,7 @@ fn Parser::read_reftype(self : Parser) -> RefType raise {
           // It's a type index - put byte back and read as signed LEB128
           self.pos = self.pos - 1
           let type_idx = self.read_i32_leb128()
-          RefType::TypeIndex(type_idx)
+          @core.RefType::TypeIndex(type_idx)
         }
       }
     }
@@ -363,13 +370,13 @@ fn Parser::read_reftype(self : Parser) -> RefType raise {
             // Looks like a small type index - put it back and read as signed LEB128
             self.pos = self.pos - 1
             let type_idx = self.read_i32_leb128()
-            RefType::TypeIndex(type_idx)
+            @core.RefType::TypeIndex(type_idx)
           } else if byte == 0x40 {
             // 0x40 is empty/void - treat as funcref for compatibility
             // This might appear in some edge cases
-            RefType::Func
+            @core.RefType::Func
           } else {
-            raise ValidationError::TypeMismatch(
+            raise @core.ValidationError::TypeMismatch(
               "invalid reference type: 0x\{byte.to_string()}",
             )
           }
@@ -380,7 +387,7 @@ fn Parser::read_reftype(self : Parser) -> RefType raise {
 // Parse limits
 
 ///|
-fn Parser::read_limits(self : Parser) -> Limits raise ParseError {
+fn Parser::read_limits(self : Parser) -> @core.Limits raise @core.ParseError {
   let flags = self.read_byte()
   let min = self.read_u32_leb128()
   let max = if flags == 0x01 { Some(self.read_u32_leb128()) } else { None }

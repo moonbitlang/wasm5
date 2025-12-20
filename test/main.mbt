@@ -60,7 +60,7 @@ async fn parse_and_compile(
   let file = @fs.open(dir + file_name, mode=ReadOnly)
   defer file.close()
   let content = file.read_all().binary()
-  let module_ = @wasm5.parse(content)
+  let module_ = @wasm5_parse.parse(content)
   let runtime = @wasm5.Runtime::load_with_resolver(module_, resolver)
   runtime.compile()
   runtime

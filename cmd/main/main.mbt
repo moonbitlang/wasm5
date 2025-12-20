@@ -10,7 +10,7 @@ async fn main {
 ///|
 async fn run_wasm(wasm_path : String) -> Unit {
   let wasm_bytes = @fs.read_file(wasm_path).binary()
-  let module_ = @wasm5.parse(wasm_bytes)
+  let module_ = @wasm5_parse.parse(wasm_bytes)
   let runtime = @wasm5.Runtime::load(module_)
   runtime.compile()
   let results = runtime.call_compiled("_start", [])

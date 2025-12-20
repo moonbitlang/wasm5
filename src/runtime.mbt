@@ -15,7 +15,7 @@ pub suberror RuntimeError {
 
 ///|
 /// Parse error types
-pub suberror ParseError {
+pub(all) suberror ParseError {
   UnexpectedEof // Unexpected end of file
   InvalidMagic // Invalid magic number
   UnsupportedVersion // Unsupported version
@@ -24,7 +24,7 @@ pub suberror ParseError {
 
 ///|
 /// Validation error types
-pub suberror ValidationError {
+pub(all) suberror ValidationError {
   TypeMismatch(String)
   InvalidFunctionIndex(Int)
   InvalidTypeIndex(Int)

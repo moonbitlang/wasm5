@@ -1,0 +1,12 @@
+{
+  "import": [
+    {
+      "path": "moonbitlang/wasm5/src",
+      "alias": "core"
+    },
+    {
+      "path": "moonbitlang/wasm5/src/validate",
+      "alias": "validate"
+    }
+  ]
+}

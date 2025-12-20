@@ -1,7 +1,7 @@
 // Value types
 
 ///|
-enum ValType {
+pub(all) enum ValType {
   I32
   I64
   F32
@@ -27,7 +27,7 @@ enum ValType {
 // Reference types (heap types)
 
 ///|
-enum RefType {
+pub(all) enum RefType {
   Func // 0x70
   Extern // 0x6F
   Any // 0x6E
@@ -48,7 +48,7 @@ enum RefType {
 /// - Numeric types (i32, i64, f32, f64, v128): defaultable (default: 0)
 /// - Nullable reference types: defaultable (default: null)
 /// - Non-nullable reference types: NOT defaultable (must be initialized)
-fn ValType::is_defaultable(self : ValType) -> Bool {
+pub fn ValType::is_defaultable(self : ValType) -> Bool {
   match self {
     // Numeric types are always defaultable
     I32 | I64 | F32 | F64 | V128 => true
@@ -71,7 +71,7 @@ fn ValType::is_defaultable(self : ValType) -> Bool {
 // Function type (signature)
 
 ///|
-pub struct FuncType {
+pub(all) struct FuncType {
   params : Array[ValType]
   results : Array[ValType]
 }
@@ -79,7 +79,7 @@ pub struct FuncType {
 // Block type (can be empty, single value, or type index to function type)
 
 ///|
-enum BlockType {
+pub(all) enum BlockType {
   Empty // no params, no results
   Value(ValType) // no params, single result
   TypeIndex(Int) // index into types section (can have params and/or multiple results)
@@ -88,7 +88,7 @@ enum BlockType {
 // Limits for tables and memories
 
 ///|
-priv struct Limits {
+pub(all) struct Limits {
   min : UInt
   max : UInt?
 }
@@ -96,14 +96,14 @@ priv struct Limits {
 // Memory type
 
 ///|
-struct MemType {
+pub(all) struct MemType {
   limits : Limits
 }
 
 // Table type
 
 ///|
-struct TableType {
+pub(all) struct TableType {
   elem_type : RefType
   limits : Limits
   init : Expr? // Optional initializer expression (GC proposal)
@@ -113,7 +113,7 @@ struct TableType {
 // Global type
 
 ///|
-struct GlobalType {
+pub(all) struct GlobalType {
   val_type : ValType
   mutable : Bool // mutable or not
 }
@@ -121,7 +121,7 @@ struct GlobalType {
 // Import descriptor
 
 ///|
-pub enum ImportDesc {
+pub(all) enum ImportDesc {
   Func(UInt) // type index
   Table(TableType)
   Mem(MemType)
@@ -132,7 +132,7 @@ pub enum ImportDesc {
 // Import
 
 ///|
-pub struct Import {
+pub(all) struct Import {
   module_ : Bytes
   name : Bytes
   desc : ImportDesc
@@ -141,7 +141,7 @@ pub struct Import {
 // Export descriptor
 
 ///|
-pub enum ExportDesc {
+pub(all) enum ExportDesc {
   Func(UInt) // function index
   Table(UInt) // table index
   Mem(UInt) // memory index
@@ -152,7 +152,7 @@ pub enum ExportDesc {
 // Export
 
 ///|
-pub struct Export {
+pub(all) struct Export {
   name : Bytes
   desc : ExportDesc
 }
@@ -160,7 +160,7 @@ pub struct Export {
 // Global definition
 
 ///|
-struct Global {
+pub(all) struct Global {
   type_ : GlobalType
   init : Expr
 }
@@ -168,7 +168,7 @@ struct Global {
 // Element segment (for table initialization)
 
 ///|
-struct Elem {
+pub(all) struct Elem {
   table_idx : UInt
   offset : Expr
   init : Array[UInt] // function indices
@@ -179,7 +179,7 @@ struct Elem {
 // Data segment (for memory initialization)
 
 ///|
-struct Data {
+pub(all) struct Data {
   mem_idx : UInt
   offset : Expr
   init : BytesView
@@ -189,7 +189,7 @@ struct Data {
 // Instructions
 
 ///|
-pub enum Instr {
+pub(all) enum Instr {
   // Control instructions
   Unreachable
   Nop
@@ -428,14 +428,14 @@ pub enum Instr {
 // Expression (sequence of instructions)
 
 ///|
-pub struct Expr {
+pub(all) struct Expr {
   instrs : Array[Instr]
 }
 
 // Function code
 
 ///|
-struct Code {
+pub(all) struct Code {
   locals : Array[ValType]
   body : Expr
   mut compiled : Int?
@@ -445,7 +445,7 @@ struct Code {
 
 ///|
 /// Module structure according to WASM specification
-pub struct Module {
+pub(all) struct Module {
   types : Array[FuncType] // type section
   funcs : Array[UInt] // function section (type indices)
   tables : Array[TableType] // table section
