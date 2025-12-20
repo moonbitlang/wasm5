@@ -8,10 +8,10 @@
 #define MUSTTAIL
 #endif
 
-struct MinstrsArray {
-  int32_t $1;
-  void** minstrs_fixed_array;
-
+// Array[UInt64] representation
+struct U64Array {
+  int32_t length;
+  uint64_t* data;
 };
 
 struct Runtime {
@@ -19,7 +19,7 @@ struct Runtime {
   int32_t $5;
   int64_t $8;
   void* $0;
-  struct MinstrsArray* minstrs_array;
+  struct U64Array* ops;  // Heterogeneous code stream (function pointers + immediates)
   void* $2;
   void* $3;
   void* $6;
@@ -29,20 +29,27 @@ struct Runtime {
   void* $11;
   void* $12;
   void* $13;
-
-};
-
-struct WasmInstr {
-  int32_t(* func_ref)(void*);
 };
 
 int32_t next_op(void* rt) {
   struct Runtime* r = (struct Runtime*)rt;
-  struct MinstrsArray* i = r->minstrs_array;
+  struct U64Array* ops_array = r->ops;
   int32_t pc = r->pc;
-  void** instr_arr = i->minstrs_fixed_array;
-  void* op = (void*)instr_arr[pc];
-  struct WasmInstr* wasm_instr = (struct WasmInstr*)op;
-  int32_t(*func)(void*) = (int32_t(*)(void*))wasm_instr->func_ref;
+  uint64_t* ops = ops_array->data;
+
+  // Read the function pointer directly as UInt64
+  uint64_t func_bits = ops[pc];
+
+  // Cast to function pointer
+  int32_t(*func)(void*) = (int32_t(*)(void*))func_bits;
+
   MUSTTAIL return func(rt);
+}
+
+uint64_t funcref_to_u64(void* func_ref) {
+  return (uint64_t)func_ref;
+}
+
+void* u64_to_funcref(uint64_t val) {
+  return (void*)val;
 }

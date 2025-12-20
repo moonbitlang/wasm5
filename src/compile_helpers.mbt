@@ -228,25 +228,42 @@ fn Runtime::handle_tail_call_return(self : Runtime) -> RetCode {
 }
 
 ///|
-/// Emit an instruction to the ops array
-fn Runtime::emit(self : Runtime, instr : MInstr) -> Unit {
-  self.ops.push(instr)
+/// Emit a function reference (instruction) to the ops array
+fn Runtime::emit_instr(
+  self : Runtime,
+  f : FuncRef[(Runtime) -> RetCode],
+) -> Unit {
+  self.ops.push(unsafe_funcref_to_u64(f))
+}
+
+///|
+/// Emit an i32 immediate value to the ops array
+fn Runtime::emit_i32(self : Runtime, value : UInt) -> Unit {
+  self.ops.push(value.to_int64().reinterpret_as_uint64())
+}
+
+///|
+/// Emit an index immediate value to the ops array
+fn Runtime::emit_idx(self : Runtime, idx : Int) -> Unit {
+  self.ops.push(idx.to_int64().reinterpret_as_uint64())
 }
 
 ///|
 /// Read immediate i32 value and advance PC
 fn Runtime::read_imm_i32(self : Runtime) -> UInt {
   self.pc += 1
-  guard self.ops.unsafe_get(self.pc) is ImmediateI32(value)
-  value
+  self.ops
+  .unsafe_get(self.pc)
+  .reinterpret_as_int64()
+  .to_int()
+  .reinterpret_as_uint()
 }
 
 ///|
 /// Read immediate index value and advance PC
 fn Runtime::read_imm_idx(self : Runtime) -> Int {
   self.pc += 1
-  guard self.ops.unsafe_get(self.pc) is ImmediateIdx(value)
-  value
+  self.ops.unsafe_get(self.pc).reinterpret_as_int64().to_int()
 }
 
 // ============================================================================
@@ -334,3 +351,14 @@ fn Runtime::pop_two_f64(self : Runtime) -> TwoF64 {
   let a = self.pop_f64()
   TwoF64(a, b)
 }
+
+// ============================================================================
+// Unsafe conversions for heterogeneous code stream
+// ============================================================================
+
+///|
+/// UNSAFE: Cast function reference to UInt64 for storage in code stream.
+/// Assumes 64-bit function pointers. Only valid for the same process.
+extern "C" fn unsafe_funcref_to_u64(
+  f : FuncRef[(Runtime) -> RetCode],
+) -> UInt64 = "funcref_to_u64"

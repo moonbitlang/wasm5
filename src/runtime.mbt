@@ -261,7 +261,7 @@ pub fn ImportResolver::get_memory(
 /// Runtime structure that holds a loaded WebAssembly module
 pub struct Runtime {
   module_ : Module
-  ops : Array[MInstr]
+  ops : Array[UInt64] // Heterogeneous code stream (function pointers + immediates)
   stack : Array[Value]
   mut locals : Array[Value]
   mut pc : Int
