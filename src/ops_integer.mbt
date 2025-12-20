@@ -14,7 +14,7 @@ fn op_i32_const(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i32_add(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i32()
+  let TwoI32(a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(a + b))
   rt.pc += 1
   return next_op(rt)
@@ -23,7 +23,7 @@ fn op_i32_add(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i32_sub(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i32()
+  let TwoI32(a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(a - b))
   rt.pc += 1
   return next_op(rt)
@@ -32,7 +32,7 @@ fn op_i32_sub(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i32_mul(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i32()
+  let TwoI32(a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(a * b))
   rt.pc += 1
   return next_op(rt)
@@ -41,7 +41,7 @@ fn op_i32_mul(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i32_div_s(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i32()
+  let TwoI32(a, b) = rt.pop_two_i32()
   if b == 0U {
     return DivisionByZero
   }
@@ -57,7 +57,7 @@ fn op_i32_div_s(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i32_div_u(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i32()
+  let TwoI32(a, b) = rt.pop_two_i32()
   if b == 0U {
     return DivisionByZero
   }
@@ -69,7 +69,7 @@ fn op_i32_div_u(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i32_rem_s(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i32()
+  let TwoI32(a, b) = rt.pop_two_i32()
   if b == 0U {
     return DivisionByZero
   }
@@ -82,7 +82,7 @@ fn op_i32_rem_s(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i32_rem_u(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i32()
+  let TwoI32(a, b) = rt.pop_two_i32()
   if b == 0U {
     return DivisionByZero
   }
@@ -94,7 +94,7 @@ fn op_i32_rem_u(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i32_and(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i32()
+  let TwoI32(a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(a & b))
   rt.pc += 1
   return next_op(rt)
@@ -103,7 +103,7 @@ fn op_i32_and(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i32_or(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i32()
+  let TwoI32(a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(a | b))
   rt.pc += 1
   return next_op(rt)
@@ -112,7 +112,7 @@ fn op_i32_or(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i32_xor(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i32()
+  let TwoI32(a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(a ^ b))
   rt.pc += 1
   return next_op(rt)
@@ -121,7 +121,7 @@ fn op_i32_xor(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i32_shl(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i32()
+  let TwoI32(a, b) = rt.pop_two_i32()
   let shift = (b & 0x1FU).reinterpret_as_int()
   rt.stack.push(Value::I32(a << shift))
   rt.pc += 1
@@ -131,7 +131,7 @@ fn op_i32_shl(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i32_shr_s(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i32()
+  let TwoI32(a, b) = rt.pop_two_i32()
   let shift = (b & 0x1FU).reinterpret_as_int()
   let result = (a.reinterpret_as_int() >> shift).reinterpret_as_uint()
   rt.stack.push(Value::I32(result))
@@ -142,7 +142,7 @@ fn op_i32_shr_s(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i32_shr_u(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i32()
+  let TwoI32(a, b) = rt.pop_two_i32()
   let shift = (b & 0x1FU).reinterpret_as_int()
   rt.stack.push(Value::I32(a >> shift))
   rt.pc += 1
@@ -152,7 +152,7 @@ fn op_i32_shr_u(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i32_rotl(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i32()
+  let TwoI32(a, b) = rt.pop_two_i32()
   let rotation = (b & 0x1FU).reinterpret_as_int()
   let result = (a << rotation) | (a >> (32 - rotation))
   rt.stack.push(Value::I32(result))
@@ -163,7 +163,7 @@ fn op_i32_rotl(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i32_rotr(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i32()
+  let TwoI32(a, b) = rt.pop_two_i32()
   let rotation = (b & 0x1FU).reinterpret_as_int()
   let result = (a >> rotation) | (a << (32 - rotation))
   rt.stack.push(Value::I32(result))
@@ -176,7 +176,7 @@ fn op_i32_rotr(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i32_eq(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i32()
+  let TwoI32(a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(if a == b { 1U } else { 0U }))
   rt.pc += 1
   return next_op(rt)
@@ -185,7 +185,7 @@ fn op_i32_eq(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i32_ne(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i32()
+  let TwoI32(a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(if a != b { 1U } else { 0U }))
   rt.pc += 1
   return next_op(rt)
@@ -194,7 +194,7 @@ fn op_i32_ne(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i32_lt_s(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i32()
+  let TwoI32(a, b) = rt.pop_two_i32()
   let result = if a.reinterpret_as_int() < b.reinterpret_as_int() {
     1U
   } else {
@@ -208,7 +208,7 @@ fn op_i32_lt_s(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i32_lt_u(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i32()
+  let TwoI32(a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(if a < b { 1U } else { 0U }))
   rt.pc += 1
   return next_op(rt)
@@ -217,7 +217,7 @@ fn op_i32_lt_u(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i32_gt_s(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i32()
+  let TwoI32(a, b) = rt.pop_two_i32()
   let result = if a.reinterpret_as_int() > b.reinterpret_as_int() {
     1U
   } else {
@@ -231,7 +231,7 @@ fn op_i32_gt_s(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i32_gt_u(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i32()
+  let TwoI32(a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(if a > b { 1U } else { 0U }))
   rt.pc += 1
   return next_op(rt)
@@ -240,7 +240,7 @@ fn op_i32_gt_u(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i32_le_s(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i32()
+  let TwoI32(a, b) = rt.pop_two_i32()
   let result = if a.reinterpret_as_int() <= b.reinterpret_as_int() {
     1U
   } else {
@@ -254,7 +254,7 @@ fn op_i32_le_s(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i32_le_u(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i32()
+  let TwoI32(a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(if a <= b { 1U } else { 0U }))
   rt.pc += 1
   return next_op(rt)
@@ -263,7 +263,7 @@ fn op_i32_le_u(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i32_ge_s(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i32()
+  let TwoI32(a, b) = rt.pop_two_i32()
   let result = if a.reinterpret_as_int() >= b.reinterpret_as_int() {
     1U
   } else {
@@ -277,7 +277,7 @@ fn op_i32_ge_s(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i32_ge_u(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i32()
+  let TwoI32(a, b) = rt.pop_two_i32()
   rt.stack.push(Value::I32(if a >= b { 1U } else { 0U }))
   rt.pc += 1
   return next_op(rt)

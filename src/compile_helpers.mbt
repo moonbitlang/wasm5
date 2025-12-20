@@ -254,11 +254,15 @@ fn Runtime::read_imm_idx(self : Runtime) -> Int {
 // ============================================================================
 
 ///|
-fn Runtime::pop_two_i32(self : Runtime) -> (UInt, UInt) {
+#valtype
+priv struct TwoI32(UInt, UInt)
+
+///|
+fn Runtime::pop_two_i32(self : Runtime) -> TwoI32 {
   let b = self.stack.unsafe_pop()
   let a = self.stack.unsafe_pop()
   match (a, b) {
-    (Value::I32(a_val), Value::I32(b_val)) => (a_val, b_val)
+    (Value::I32(a_val), Value::I32(b_val)) => TwoI32(a_val, b_val)
     _ => abort("Type error: expected two i32 values")
   }
 }
