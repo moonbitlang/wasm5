@@ -1,7 +1,7 @@
 ///|
 #tailcall
 fn op_f32_eq(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f32()
+  let TwoF32(a, b) = rt.pop_two_f32()
   rt.stack.push(Value::I32(if a == b { 1U } else { 0U }))
   rt.pc += 1
   return next_op(rt)
@@ -10,7 +10,7 @@ fn op_f32_eq(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_f32_ne(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f32()
+  let TwoF32(a, b) = rt.pop_two_f32()
   rt.stack.push(Value::I32(if a != b { 1U } else { 0U }))
   rt.pc += 1
   return next_op(rt)
@@ -19,7 +19,7 @@ fn op_f32_ne(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_f32_lt(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f32()
+  let TwoF32(a, b) = rt.pop_two_f32()
   rt.stack.push(Value::I32(if a < b { 1U } else { 0U }))
   rt.pc += 1
   return next_op(rt)
@@ -28,7 +28,7 @@ fn op_f32_lt(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_f32_gt(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f32()
+  let TwoF32(a, b) = rt.pop_two_f32()
   rt.stack.push(Value::I32(if a > b { 1U } else { 0U }))
   rt.pc += 1
   return next_op(rt)
@@ -37,7 +37,7 @@ fn op_f32_gt(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_f32_le(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f32()
+  let TwoF32(a, b) = rt.pop_two_f32()
   rt.stack.push(Value::I32(if a <= b { 1U } else { 0U }))
   rt.pc += 1
   return next_op(rt)
@@ -46,7 +46,7 @@ fn op_f32_le(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_f32_ge(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f32()
+  let TwoF32(a, b) = rt.pop_two_f32()
   rt.stack.push(Value::I32(if a >= b { 1U } else { 0U }))
   rt.pc += 1
   return next_op(rt)
@@ -55,7 +55,7 @@ fn op_f32_ge(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_f64_eq(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f64()
+  let TwoF64(a, b) = rt.pop_two_f64()
   rt.stack.push(Value::I32(if a == b { 1U } else { 0U }))
   rt.pc += 1
   return next_op(rt)
@@ -64,7 +64,7 @@ fn op_f64_eq(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_f64_ne(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f64()
+  let TwoF64(a, b) = rt.pop_two_f64()
   rt.stack.push(Value::I32(if a != b { 1U } else { 0U }))
   rt.pc += 1
   return next_op(rt)
@@ -73,7 +73,7 @@ fn op_f64_ne(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_f64_lt(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f64()
+  let TwoF64(a, b) = rt.pop_two_f64()
   rt.stack.push(Value::I32(if a < b { 1U } else { 0U }))
   rt.pc += 1
   return next_op(rt)
@@ -82,7 +82,7 @@ fn op_f64_lt(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_f64_gt(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f64()
+  let TwoF64(a, b) = rt.pop_two_f64()
   rt.stack.push(Value::I32(if a > b { 1U } else { 0U }))
   rt.pc += 1
   return next_op(rt)
@@ -91,7 +91,7 @@ fn op_f64_gt(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_f64_le(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f64()
+  let TwoF64(a, b) = rt.pop_two_f64()
   rt.stack.push(Value::I32(if a <= b { 1U } else { 0U }))
   rt.pc += 1
   return next_op(rt)
@@ -100,7 +100,7 @@ fn op_f64_le(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_f64_ge(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f64()
+  let TwoF64(a, b) = rt.pop_two_f64()
   rt.stack.push(Value::I32(if a >= b { 1U } else { 0U }))
   rt.pc += 1
   return next_op(rt)
@@ -185,7 +185,7 @@ fn op_f64_neg(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_f32_add(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f32()
+  let TwoF32(a, b) = rt.pop_two_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a + b)))
   rt.pc += 1
   return next_op(rt)
@@ -194,7 +194,7 @@ fn op_f32_add(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_f32_sub(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f32()
+  let TwoF32(a, b) = rt.pop_two_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a - b)))
   rt.pc += 1
   return next_op(rt)
@@ -203,7 +203,7 @@ fn op_f32_sub(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_f32_mul(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f32()
+  let TwoF32(a, b) = rt.pop_two_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a * b)))
   rt.pc += 1
   return next_op(rt)
@@ -212,7 +212,7 @@ fn op_f32_mul(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_f32_div(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f32()
+  let TwoF32(a, b) = rt.pop_two_f32()
   rt.stack.push(Value::F32(canonicalize_f32(a / b)))
   rt.pc += 1
   return next_op(rt)
@@ -221,7 +221,7 @@ fn op_f32_div(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_f32_min(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f32()
+  let TwoF32(a, b) = rt.pop_two_f32()
   let result = if a.is_nan() || b.is_nan() {
     canonical_nan_f32
   } else if a < b {
@@ -254,7 +254,7 @@ fn op_f32_min(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_f32_max(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f32()
+  let TwoF32(a, b) = rt.pop_two_f32()
   let result = if a.is_nan() || b.is_nan() {
     canonical_nan_f32
   } else if a > b {
@@ -287,7 +287,7 @@ fn op_f32_max(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_f32_copysign(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f32()
+  let TwoF32(a, b) = rt.pop_two_f32()
   let a_bits = a.reinterpret_as_uint()
   let b_bits = b.reinterpret_as_uint()
   let sign_mask = 0x8000_0000U
@@ -300,7 +300,7 @@ fn op_f32_copysign(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_f64_add(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f64()
+  let TwoF64(a, b) = rt.pop_two_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a + b)))
   rt.pc += 1
   return next_op(rt)
@@ -309,7 +309,7 @@ fn op_f64_add(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_f64_sub(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f64()
+  let TwoF64(a, b) = rt.pop_two_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a - b)))
   rt.pc += 1
   return next_op(rt)
@@ -318,7 +318,7 @@ fn op_f64_sub(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_f64_mul(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f64()
+  let TwoF64(a, b) = rt.pop_two_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a * b)))
   rt.pc += 1
   return next_op(rt)
@@ -327,7 +327,7 @@ fn op_f64_mul(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_f64_div(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f64()
+  let TwoF64(a, b) = rt.pop_two_f64()
   rt.stack.push(Value::F64(canonicalize_f64(a / b)))
   rt.pc += 1
   return next_op(rt)
@@ -336,7 +336,7 @@ fn op_f64_div(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_f64_min(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f64()
+  let TwoF64(a, b) = rt.pop_two_f64()
   // WebAssembly min semantics: if either is NaN, return canonical NaN
   let result = if a.is_nan() || b.is_nan() {
     canonical_nan_f64
@@ -369,7 +369,7 @@ fn op_f64_min(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_f64_max(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f64()
+  let TwoF64(a, b) = rt.pop_two_f64()
   // WebAssembly max semantics: if either is NaN, return canonical NaN
   let result = if a.is_nan() || b.is_nan() {
     canonical_nan_f64
@@ -402,7 +402,7 @@ fn op_f64_max(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_f64_copysign(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_f64()
+  let TwoF64(a, b) = rt.pop_two_f64()
   let a_bits = a.reinterpret_as_uint64()
   let b_bits = b.reinterpret_as_uint64()
   let sign_mask = 0x8000_0000_0000_0000UL

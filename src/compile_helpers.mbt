@@ -258,6 +258,18 @@ fn Runtime::read_imm_idx(self : Runtime) -> Int {
 priv struct TwoI32(UInt, UInt)
 
 ///|
+#valtype
+priv struct TwoI64(UInt64, UInt64)
+
+///|
+#valtype
+priv struct TwoF32(Float, Float)
+
+///|
+#valtype
+priv struct TwoF64(Double, Double)
+
+///|
 fn Runtime::pop_two_i32(self : Runtime) -> TwoI32 {
   let b = self.stack.unsafe_pop()
   let a = self.stack.unsafe_pop()
@@ -276,11 +288,11 @@ fn Runtime::pop_i32(self : Runtime) -> UInt {
 }
 
 ///|
-fn Runtime::pop_two_i64(self : Runtime) -> (UInt64, UInt64) {
+fn Runtime::pop_two_i64(self : Runtime) -> TwoI64 {
   let b = self.stack.unsafe_pop()
   let a = self.stack.unsafe_pop()
   match (a, b) {
-    (Value::I64(a_val), Value::I64(b_val)) => (a_val, b_val)
+    (Value::I64(a_val), Value::I64(b_val)) => TwoI64(a_val, b_val)
     _ => abort("Type error: expected two i64 values")
   }
 }
@@ -302,10 +314,10 @@ fn Runtime::pop_f32(self : Runtime) -> Float {
 }
 
 ///|
-fn Runtime::pop_two_f32(self : Runtime) -> (Float, Float) {
+fn Runtime::pop_two_f32(self : Runtime) -> TwoF32 {
   let b = self.pop_f32()
   let a = self.pop_f32()
-  (a, b)
+  TwoF32(a, b)
 }
 
 ///|
@@ -317,8 +329,8 @@ fn Runtime::pop_f64(self : Runtime) -> Double {
 }
 
 ///|
-fn Runtime::pop_two_f64(self : Runtime) -> (Double, Double) {
+fn Runtime::pop_two_f64(self : Runtime) -> TwoF64 {
   let b = self.pop_f64()
   let a = self.pop_f64()
-  (a, b)
+  TwoF64(a, b)
 }

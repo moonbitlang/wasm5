@@ -393,7 +393,7 @@ fn op_f64_const(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i64_add(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i64()
+  let TwoI64(a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I64(a + b))
   rt.pc += 1
   return next_op(rt)
@@ -402,7 +402,7 @@ fn op_i64_add(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i64_sub(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i64()
+  let TwoI64(a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I64(a - b))
   rt.pc += 1
   return next_op(rt)
@@ -411,7 +411,7 @@ fn op_i64_sub(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i64_mul(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i64()
+  let TwoI64(a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I64(a * b))
   rt.pc += 1
   return next_op(rt)
@@ -420,7 +420,7 @@ fn op_i64_mul(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i64_div_s(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i64()
+  let TwoI64(a, b) = rt.pop_two_i64()
   if b == 0UL {
     return DivisionByZero
   }
@@ -436,7 +436,7 @@ fn op_i64_div_s(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i64_div_u(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i64()
+  let TwoI64(a, b) = rt.pop_two_i64()
   if b == 0UL {
     return DivisionByZero
   }
@@ -448,7 +448,7 @@ fn op_i64_div_u(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i64_rem_s(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i64()
+  let TwoI64(a, b) = rt.pop_two_i64()
   if b == 0UL {
     return DivisionByZero
   }
@@ -461,7 +461,7 @@ fn op_i64_rem_s(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i64_rem_u(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i64()
+  let TwoI64(a, b) = rt.pop_two_i64()
   if b == 0UL {
     return DivisionByZero
   }
@@ -473,7 +473,7 @@ fn op_i64_rem_u(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i64_and(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i64()
+  let TwoI64(a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I64(a & b))
   rt.pc += 1
   return next_op(rt)
@@ -482,7 +482,7 @@ fn op_i64_and(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i64_or(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i64()
+  let TwoI64(a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I64(a | b))
   rt.pc += 1
   return next_op(rt)
@@ -491,7 +491,7 @@ fn op_i64_or(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i64_xor(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i64()
+  let TwoI64(a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I64(a ^ b))
   rt.pc += 1
   return next_op(rt)
@@ -500,7 +500,7 @@ fn op_i64_xor(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i64_shl(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i64()
+  let TwoI64(a, b) = rt.pop_two_i64()
   let shift = (b & 0x3FUL).to_int()
   rt.stack.push(Value::I64(a << shift))
   rt.pc += 1
@@ -510,7 +510,7 @@ fn op_i64_shl(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i64_shr_s(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i64()
+  let TwoI64(a, b) = rt.pop_two_i64()
   let shift = (b & 0x3FUL).to_int()
   let result = (a.reinterpret_as_int64() >> shift).reinterpret_as_uint64()
   rt.stack.push(Value::I64(result))
@@ -521,7 +521,7 @@ fn op_i64_shr_s(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i64_shr_u(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i64()
+  let TwoI64(a, b) = rt.pop_two_i64()
   let shift = (b & 0x3FUL).to_int()
   rt.stack.push(Value::I64(a >> shift))
   rt.pc += 1
@@ -531,7 +531,7 @@ fn op_i64_shr_u(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i64_rotl(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i64()
+  let TwoI64(a, b) = rt.pop_two_i64()
   let rotation = (b & 0x3FUL).to_int()
   let result = (a << rotation) | (a >> (64 - rotation))
   rt.stack.push(Value::I64(result))
@@ -542,7 +542,7 @@ fn op_i64_rotl(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i64_rotr(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i64()
+  let TwoI64(a, b) = rt.pop_two_i64()
   let rotation = (b & 0x3FUL).to_int()
   let result = (a >> rotation) | (a << (64 - rotation))
   rt.stack.push(Value::I64(result))
@@ -555,7 +555,7 @@ fn op_i64_rotr(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i64_eq(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i64()
+  let TwoI64(a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I32(if a == b { 1U } else { 0U }))
   rt.pc += 1
   return next_op(rt)
@@ -564,7 +564,7 @@ fn op_i64_eq(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i64_ne(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i64()
+  let TwoI64(a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I32(if a != b { 1U } else { 0U }))
   rt.pc += 1
   return next_op(rt)
@@ -573,7 +573,7 @@ fn op_i64_ne(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i64_lt_s(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i64()
+  let TwoI64(a, b) = rt.pop_two_i64()
   let result = if a.reinterpret_as_int64() < b.reinterpret_as_int64() {
     1U
   } else {
@@ -587,7 +587,7 @@ fn op_i64_lt_s(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i64_lt_u(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i64()
+  let TwoI64(a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I32(if a < b { 1U } else { 0U }))
   rt.pc += 1
   return next_op(rt)
@@ -596,7 +596,7 @@ fn op_i64_lt_u(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i64_gt_s(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i64()
+  let TwoI64(a, b) = rt.pop_two_i64()
   let result = if a.reinterpret_as_int64() > b.reinterpret_as_int64() {
     1U
   } else {
@@ -610,7 +610,7 @@ fn op_i64_gt_s(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i64_gt_u(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i64()
+  let TwoI64(a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I32(if a > b { 1U } else { 0U }))
   rt.pc += 1
   return next_op(rt)
@@ -619,7 +619,7 @@ fn op_i64_gt_u(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i64_le_s(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i64()
+  let TwoI64(a, b) = rt.pop_two_i64()
   let result = if a.reinterpret_as_int64() <= b.reinterpret_as_int64() {
     1U
   } else {
@@ -633,7 +633,7 @@ fn op_i64_le_s(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i64_le_u(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i64()
+  let TwoI64(a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I32(if a <= b { 1U } else { 0U }))
   rt.pc += 1
   return next_op(rt)
@@ -642,7 +642,7 @@ fn op_i64_le_u(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i64_ge_s(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i64()
+  let TwoI64(a, b) = rt.pop_two_i64()
   let result = if a.reinterpret_as_int64() >= b.reinterpret_as_int64() {
     1U
   } else {
@@ -656,7 +656,7 @@ fn op_i64_ge_s(rt : Runtime) -> RetCode {
 ///|
 #tailcall
 fn op_i64_ge_u(rt : Runtime) -> RetCode {
-  let (a, b) = rt.pop_two_i64()
+  let TwoI64(a, b) = rt.pop_two_i64()
   rt.stack.push(Value::I32(if a >= b { 1U } else { 0U }))
   rt.pc += 1
   return next_op(rt)
