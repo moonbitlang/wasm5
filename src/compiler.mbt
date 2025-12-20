@@ -1183,8 +1183,8 @@ pub fn Runtime::compile(self : Runtime) -> Unit raise RuntimeError {
             ValType::I64 => self.locals.push(Value::I64(0UL))
             ValType::F32 => self.locals.push(Value::F32(0.0))
             ValType::F64 => self.locals.push(Value::F64(0.0))
-            ValType::FuncRef => self.locals.push(Value::Ref(None))
-            ValType::ExternRef => self.locals.push(Value::Ref(None))
+            ValType::FuncRef => self.locals.push(Value::Ref(-1))
+            ValType::ExternRef => self.locals.push(Value::Ref(-1))
             _ => self.locals.push(Value::I32(0U))
           }
         }

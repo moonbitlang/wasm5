@@ -53,12 +53,14 @@ pub suberror ValidationError {
 
 ///|
 /// Runtime value type
+/// Uses -1 as sentinel for null references
+#valtype
 pub(all) enum Value {
   I32(UInt)
   I64(UInt64)
   F32(Float)
   F64(Double)
-  Ref(Int?) // For FuncRef and ExternRef (using index or null)
+  Ref(Int) // For FuncRef and ExternRef (index, or -1 for null)
 } derive(Eq, Show)
 
 ///|
@@ -397,8 +399,8 @@ pub fn Runtime::load_with_resolver(
               ValType::I64 => Value::I64(666UL) // spectest global_i64 = 666
               ValType::F32 => Value::F32(666.6)
               ValType::F64 => Value::F64(666.6)
-              ValType::FuncRef => Value::Ref(None)
-              ValType::ExternRef => Value::Ref(None)
+              ValType::FuncRef => Value::Ref(-1)
+              ValType::ExternRef => Value::Ref(-1)
               _ => Value::I32(0U)
             }
         }
@@ -547,8 +549,8 @@ fn eval_const_expr(
       I64Const(v) => stack.push(I64(v))
       F32Const(v) => stack.push(F32(v))
       F64Const(v) => stack.push(F64(v))
-      RefNull(_) => stack.push(Ref(None))
-      RefFunc(idx) => stack.push(Ref(Some(idx.reinterpret_as_int())))
+      RefNull(_) => stack.push(Ref(-1))
+      RefFunc(idx) => stack.push(Ref(idx.reinterpret_as_int()))
       GlobalGet(idx) => {
         let idx_int = idx.reinterpret_as_int()
         guard idx_int >= 0 && idx_int < globals.length() else {

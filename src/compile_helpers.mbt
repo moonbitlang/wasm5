@@ -143,8 +143,8 @@ fn Runtime::initialize_locals(
       ValType::I64 => self.locals.push(Value::I64(0UL))
       ValType::F32 => self.locals.push(Value::F32(0.0))
       ValType::F64 => self.locals.push(Value::F64(0.0))
-      ValType::FuncRef => self.locals.push(Value::Ref(None))
-      ValType::ExternRef => self.locals.push(Value::Ref(None))
+      ValType::FuncRef => self.locals.push(Value::Ref(-1))
+      ValType::ExternRef => self.locals.push(Value::Ref(-1))
       ValType::AnyRef
       | ValType::ExnRef
       | ValType::NullRef
@@ -155,7 +155,7 @@ fn Runtime::initialize_locals(
       | ValType::I31Ref
       | ValType::StructRef
       | ValType::ArrayRef
-      | ValType::Ref(_, _) => self.locals.push(Value::Ref(None))
+      | ValType::Ref(_, _) => self.locals.push(Value::Ref(-1))
       _ => {
         self.error_detail = "Unsupported local type: \{local_type}"
         return UnsupportedLocalType

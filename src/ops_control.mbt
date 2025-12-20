@@ -183,7 +183,7 @@ fn op_br_on_null(rt : Runtime) -> RetCode {
   let ref_val = rt.stack.unsafe_pop()
   // Check if it's null
   let is_null = match ref_val {
-    Ref(None) => true
+    Ref(-1) => true
     _ => false
   }
   if is_null {
@@ -223,7 +223,7 @@ fn op_br_on_non_null(rt : Runtime) -> RetCode {
   let ref_val = rt.stack.unsafe_pop()
   // Check if it's not null
   let is_non_null = match ref_val {
-    Ref(None) => false
+    Ref(-1) => false
     _ => true
   }
   if is_non_null {
@@ -565,8 +565,8 @@ fn op_call_ref(rt : Runtime) -> RetCode {
 
   // Pop the function reference from the stack
   let func_ref_value = rt.stack.unsafe_pop()
-  guard func_ref_value is Ref(Some(func_idx)) else {
-    rt.error_detail = "call_ref: null or invalid function reference"
+  guard func_ref_value is Ref(func_idx) && func_idx != -1 else {
+    rt.error_detail = "call_ref: null function reference"
     return InvalidType
   }
   let num_imported_funcs = count_imported_funcs(rt.module_)
@@ -643,8 +643,8 @@ fn op_return_call_ref(rt : Runtime) -> RetCode {
 
   // Pop the function reference from the stack
   let func_ref_value = rt.stack.unsafe_pop()
-  guard func_ref_value is Ref(Some(func_idx)) else {
-    rt.error_detail = "return_call_ref: null or invalid function reference"
+  guard func_ref_value is Ref(func_idx) && func_idx != -1 else {
+    rt.error_detail = "return_call_ref: null function reference"
     return InvalidType
   }
   let num_imported_funcs = count_imported_funcs(rt.module_)
@@ -794,7 +794,12 @@ fn op_table_get(rt : Runtime) -> RetCode {
     return InvalidType
   }
   // Return the function reference (or null)
-  rt.stack.push(Value::Ref(table[elem_idx]))
+  // Convert Int? from table to Int for Value::Ref (-1 = null)
+  let ref_as_int = match table[elem_idx] {
+    Some(idx) => idx
+    None => -1
+  }
+  rt.stack.push(Value::Ref(ref_as_int))
   rt.pc += 1
   return next_op(rt)
 }
@@ -820,7 +825,9 @@ fn op_table_set(rt : Runtime) -> RetCode {
     rt.error_detail = "table element index out of bounds"
     return InvalidType
   }
-  table[elem_idx] = ref_value
+  // Convert Int from Value::Ref to Int? for table (-1 = None)
+  let table_value : Int? = if ref_value == -1 { None } else { Some(ref_value) }
+  table[elem_idx] = table_value
   rt.pc += 1
   return next_op(rt)
 }
@@ -868,8 +875,14 @@ fn op_table_grow(rt : Runtime) -> RetCode {
   }
 
   // Grow the table
+  // Convert Int from Value::Ref to Int? for table (-1 = None)
+  let table_value : Int? = if init_value == -1 {
+    None
+  } else {
+    Some(init_value)
+  }
   for i = 0; i < delta; i = i + 1 {
-    table.push(init_value)
+    table.push(table_value)
   }
   rt.stack.push(Value::I32(old_size.reinterpret_as_uint()))
   rt.pc += 1
@@ -886,7 +899,7 @@ fn op_ref_null(rt : Runtime) -> RetCode {
   // ref.null pushes a null reference onto the stack
   // The heap type is encoded in the immediate but we don't need it at runtime
   let _ = rt.read_imm_idx() // Skip the heap type encoding
-  rt.stack.push(Value::Ref(None))
+  rt.stack.push(Value::Ref(-1))
   rt.pc += 1
   return next_op(rt)
 }
@@ -896,7 +909,7 @@ fn op_ref_null(rt : Runtime) -> RetCode {
 fn op_ref_func(rt : Runtime) -> RetCode {
   // ref.func pushes a reference to the given function onto the stack
   let func_idx = rt.read_imm_idx()
-  rt.stack.push(Value::Ref(Some(func_idx)))
+  rt.stack.push(Value::Ref(func_idx))
   rt.pc += 1
   return next_op(rt)
 }
@@ -907,8 +920,8 @@ fn op_ref_is_null(rt : Runtime) -> RetCode {
   // ref.is_null tests whether a reference is null
   let ref_val = rt.stack.unsafe_pop()
   let is_null = match ref_val {
-    Value::Ref(None) => 1U
-    Value::Ref(Some(_)) => 0U
+    Value::Ref(-1) => 1U
+    Value::Ref(_) => 0U
     _ => 0U // Non-ref values are considered not null
   }
   rt.stack.push(Value::I32(is_null))

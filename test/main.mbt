@@ -210,7 +210,7 @@ enum ExpectedValue {
   AnyExternRef // any externref value (including null)
   // AnyRefNull matches any null reference, regardless of its static type.
   // At runtime, all null references (nullref, nullfuncref, nullexnref,
-  // nullexternref) are represented identically as Ref(None). The type
+  // nullexternref) are represented identically as Ref(-1). The type
   // distinction only exists during validation, not at runtime.
   AnyRefNull // any null reference
 } derive(Show)
@@ -303,19 +303,19 @@ fn parse_args(args : Array[Json]) -> Array[@wasm5.Value] raise {
       // externref: "null" for null, otherwise an integer index
       { "type": "externref", "value": String(v), .. } =>
         if v == "null" {
-          runtime_args.push(@wasm5.Value::Ref(None))
+          runtime_args.push(@wasm5.Value::Ref(-1))
         } else {
           runtime_args.push(
-            @wasm5.Value::Ref(Some(parse_i32_value(v).reinterpret_as_int())),
+            @wasm5.Value::Ref(parse_i32_value(v).reinterpret_as_int()),
           )
         }
       // funcref: "null" for null, otherwise an integer function index
       { "type": "funcref", "value": String(v), .. } =>
         if v == "null" {
-          runtime_args.push(@wasm5.Value::Ref(None))
+          runtime_args.push(@wasm5.Value::Ref(-1))
         } else {
           runtime_args.push(
-            @wasm5.Value::Ref(Some(parse_i32_value(v).reinterpret_as_int())),
+            @wasm5.Value::Ref(parse_i32_value(v).reinterpret_as_int()),
           )
         }
       _ => raise TestUnsupported::UnsupportedArgType("\{arg}")
@@ -349,39 +349,39 @@ fn parse_expected_value(expected : Json) -> ExpectedValue raise {
     // externref: "null" for null, otherwise an integer index, or no value (any externref)
     { "type": "externref", "value": String(v), .. } =>
       if v == "null" {
-        Exact(@wasm5.Value::Ref(None))
+        Exact(@wasm5.Value::Ref(-1))
       } else {
-        Exact(@wasm5.Value::Ref(Some(parse_i32_value(v).reinterpret_as_int())))
+        Exact(@wasm5.Value::Ref(parse_i32_value(v).reinterpret_as_int()))
       }
     { "type": "externref", .. } => AnyExternRef // type-only check, any externref
     // funcref: "null" for null, otherwise an integer function index, or no value (any funcref)
     { "type": "funcref", "value": String(v), .. } =>
       if v == "null" {
-        Exact(@wasm5.Value::Ref(None))
+        Exact(@wasm5.Value::Ref(-1))
       } else {
-        Exact(@wasm5.Value::Ref(Some(parse_i32_value(v).reinterpret_as_int())))
+        Exact(@wasm5.Value::Ref(parse_i32_value(v).reinterpret_as_int()))
       }
     { "type": "funcref", .. } => AnyFuncRef // type-only check, any funcref
     // anyref: any reference (including null)
     { "type": "anyref", "value": String(v), .. } =>
       if v == "null" {
-        Exact(@wasm5.Value::Ref(None))
+        Exact(@wasm5.Value::Ref(-1))
       } else {
-        Exact(@wasm5.Value::Ref(Some(parse_i32_value(v).reinterpret_as_int())))
+        Exact(@wasm5.Value::Ref(parse_i32_value(v).reinterpret_as_int()))
       }
     { "type": "anyref", .. } => AnyFuncRef // Treat as any reference
     // exnref: exception reference (including null)
     { "type": "exnref", "value": String(v), .. } =>
       if v == "null" {
-        Exact(@wasm5.Value::Ref(None))
+        Exact(@wasm5.Value::Ref(-1))
       } else {
-        Exact(@wasm5.Value::Ref(Some(parse_i32_value(v).reinterpret_as_int())))
+        Exact(@wasm5.Value::Ref(parse_i32_value(v).reinterpret_as_int()))
       }
     { "type": "exnref", .. } => AnyFuncRef // Treat as any reference
     // refnull: any null reference
     { "type": "refnull", .. } => AnyRefNull
     // All null reference types map to AnyRefNull because at runtime, WebAssembly
-    // represents all null references identically as Ref(None). The type system
+    // represents all null references identically as Ref(-1). The type system
     // distinguishes nullref/nullfuncref/nullexnref/nullexternref during validation,
     // but at execution time they're indistinguishable.
     { "type": "nullref", .. } => AnyRefNull
@@ -461,7 +461,7 @@ fn values_match(actual : @wasm5.Value, expected : ExpectedValue) -> Bool {
     AnyRefNull =>
       // Accept only null references
       match actual {
-        @wasm5.Value::Ref(None) => true
+        @wasm5.Value::Ref(-1) => true
         _ => false
       }
   }
