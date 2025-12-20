@@ -48,13 +48,17 @@
 //
 // When returning from a function:
 //   1. Return values are temps at: stack[sp+num_locals .. stack.len)
-//   2. Extract return values into temporary array
-//   3. Trim stack to rt.sp (removes entire callee frame)
-//   4. Push return values back (they become caller's temps)
-//   5. Restore caller's sp, num_locals, pc from CallFrame
+//   2. Copy return values in-place to stack[sp .. sp+num_return_values)
+//   3. Trim stack to sp + num_return_values
+//   4. Restore caller's sp, num_locals, pc from CallFrame
 //
-// Critical: Trim to rt.sp (callee's sp), NOT to prev_sp + prev_num_locals!
-// This preserves all caller temps that existed before the call.
+// Key optimization: Return values are copied in-place within the callee's
+// frame slot, avoiding array allocation. The copy moves return values from
+// the temp area to the start of the frame, then we trim to the exact size.
+//
+// Critical: After trimming, the return values end up at the position where
+// the callee's frame was, which becomes temps in the caller's frame. This
+// preserves all caller temps that existed before the call.
 //
 // TAIL CALLS
 // ==========
@@ -428,44 +432,26 @@ fn op_return(rt : Runtime) -> RetCode {
   // Return values are at top of stack (above current frame's locals)
   // We need to keep them but discard the entire frame
 
-  // Collect return values (they're above sp + num_locals)
   let frame = rt.call_stack.unsafe_pop()
 
   // Return values start after locals: stack[sp + num_locals .. length-1]
   let num_return_values = rt.stack.length() - (rt.sp + rt.num_locals)
 
-  // Save return values temporarily
-  let return_values : Array[Value] = []
+  // Copy return values in-place to start of callee's frame
+  // From: stack[sp+num_locals .. sp+num_locals+num_return_values)
+  // To:   stack[sp .. sp+num_return_values)
   for i = 0; i < num_return_values; i = i + 1 {
-    return_values.push(rt.stack.unsafe_pop())
-  }
-  // Reverse since we popped backwards
-  for i = 0; i < return_values.length() / 2; i = i + 1 {
-    let j = return_values.length() - 1 - i
-    let temp = return_values[i]
-    return_values[i] = return_values[j]
-    return_values[j] = temp
+    rt.stack[rt.sp + i] = rt.stack[rt.sp + rt.num_locals + i]
   }
 
-  // Restore caller's sp and num_locals first
-  let caller_sp = frame.prev_sp
-  let caller_num_locals = frame.prev_num_locals
-
-  // Trim stack to remove ONLY the callee's frame
-  // The callee's frame starts at rt.sp (current sp before restoration)
-  // Everything before rt.sp should be preserved (caller's locals AND temps)
-  while rt.stack.length() > rt.sp {
+  // Trim stack to keep only the return values at the callee's frame position
+  while rt.stack.length() > rt.sp + num_return_values {
     ignore(rt.stack.unsafe_pop())
   }
 
-  // Push return values back (now they're temps in the caller's frame)
-  for val in return_values {
-    rt.stack.push(val)
-  }
-
   // Update runtime state
-  rt.sp = caller_sp
-  rt.num_locals = caller_num_locals
+  rt.sp = frame.prev_sp
+  rt.num_locals = frame.prev_num_locals
   rt.pc = frame.return_pc + 1
   return next_op(rt)
 }
