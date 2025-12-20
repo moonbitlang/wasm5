@@ -33,7 +33,8 @@ fn RetCode::to_error(self : RetCode, detail : String) -> RuntimeError {
 /// Call frame for function calls
 pub struct CallFrame {
   return_pc : Int
-  locals : Array[Value]
+  prev_sp : Int // Previous stack pointer (caller's base pointer)
+  prev_num_locals : Int // Previous frame's number of locals
 }
 
 ///|

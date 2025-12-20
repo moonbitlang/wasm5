@@ -262,9 +262,10 @@ pub fn ImportResolver::get_memory(
 pub struct Runtime {
   module_ : Module
   ops : Array[UInt64] // Heterogeneous code stream (function pointers + immediates)
-  stack : Array[Value]
-  mut locals : Array[Value]
+  stack : Array[Value] // Unified stack: locals + temporaries (wasm3 style)
+  mut sp : Int // Stack pointer (base pointer for current frame's locals)
   mut pc : Int
+  mut num_locals : Int // Number of locals in current frame
   mut running : Bool // Execution loop control flag
   call_stack : Array[CallFrame]
   memory : Array[Byte] // Linear memory
@@ -517,7 +518,8 @@ pub fn Runtime::load_with_resolver(
     module_: m,
     ops: [],
     stack: [],
-    locals: [],
+    sp: 0,
+    num_locals: 0,
     pc: 0,
     running: false,
     call_stack: [],

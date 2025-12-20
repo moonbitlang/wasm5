@@ -1190,20 +1190,23 @@ pub fn Runtime::compile(self : Runtime) -> Unit raise RuntimeError {
         }
 
         // Set up execution context for start function
-        self.locals = []
-        for local_type in code.locals {
-          match local_type {
-            ValType::I32 => self.locals.push(Value::I32(0U))
-            ValType::I64 => self.locals.push(Value::I64(0UL))
-            ValType::F32 => self.locals.push(Value::F32(0.0))
-            ValType::F64 => self.locals.push(Value::F64(0.0))
-            ValType::FuncRef => self.locals.push(Value::Ref(-1))
-            ValType::ExternRef => self.locals.push(Value::Ref(-1))
-            _ => self.locals.push(Value::I32(0U))
-          }
-        }
         self.stack.clear()
         self.call_stack.clear()
+        self.sp = 0
+
+        // Initialize locals for start function (no params)
+        for local_type in code.locals {
+          match local_type {
+            ValType::I32 => self.stack.push(Value::I32(0U))
+            ValType::I64 => self.stack.push(Value::I64(0UL))
+            ValType::F32 => self.stack.push(Value::F32(0.0))
+            ValType::F64 => self.stack.push(Value::F64(0.0))
+            ValType::FuncRef => self.stack.push(Value::Ref(-1))
+            ValType::ExternRef => self.stack.push(Value::Ref(-1))
+            _ => self.stack.push(Value::I32(0U))
+          }
+        }
+        self.num_locals = code.locals.length()
         self.pc = start_pc
 
         // Execute start function, ignoring runtime errors
@@ -1273,12 +1276,45 @@ pub fn Runtime::call_compiled(
       "Function not compiled: \{func_name}",
     )
   }
-  let init_result = self.initialize_locals(args, code)
-  if init_result != OK {
-    raise init_result.to_error(self.error_detail)
-  }
+
+  // Set up initial frame on unified stack
   self.stack.clear()
   self.call_stack.clear()
+  self.sp = 0
+
+  // Push arguments as the first locals
+  for arg in args {
+    self.stack.push(arg)
+  }
+  let num_args = args.length()
+
+  // Initialize remaining locals with default values
+  for local_type in code.locals {
+    match local_type {
+      ValType::I32 => self.stack.push(Value::I32(0U))
+      ValType::I64 => self.stack.push(Value::I64(0UL))
+      ValType::F32 => self.stack.push(Value::F32(0.0))
+      ValType::F64 => self.stack.push(Value::F64(0.0))
+      ValType::FuncRef => self.stack.push(Value::Ref(-1))
+      ValType::ExternRef => self.stack.push(Value::Ref(-1))
+      ValType::AnyRef
+      | ValType::ExnRef
+      | ValType::NullRef
+      | ValType::NullFuncRef
+      | ValType::NullExnRef
+      | ValType::NullExternRef
+      | ValType::EqRef
+      | ValType::I31Ref
+      | ValType::StructRef
+      | ValType::ArrayRef
+      | ValType::Ref(_, _) => self.stack.push(Value::Ref(-1))
+      _ =>
+        raise RuntimeError::UnsupportedLocalType(
+          "Unsupported local type: \{local_type}",
+        )
+    }
+  }
+  self.num_locals = num_args + code.locals.length()
   self.pc = start_pc
   self.execute()
   let results : Array[Value] = []

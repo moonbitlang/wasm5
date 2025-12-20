@@ -127,45 +127,6 @@ fn Runtime::pop_arguments(self : Runtime, num_params : Int) -> Array[Value] {
 }
 
 ///|
-/// Initialize local variables for a function call
-fn Runtime::initialize_locals(
-  self : Runtime,
-  args : Array[Value],
-  code : Code,
-) -> RetCode {
-  self.locals = []
-  for arg in args {
-    self.locals.push(arg)
-  }
-  for local_type in code.locals {
-    match local_type {
-      ValType::I32 => self.locals.push(Value::I32(0U))
-      ValType::I64 => self.locals.push(Value::I64(0UL))
-      ValType::F32 => self.locals.push(Value::F32(0.0))
-      ValType::F64 => self.locals.push(Value::F64(0.0))
-      ValType::FuncRef => self.locals.push(Value::Ref(-1))
-      ValType::ExternRef => self.locals.push(Value::Ref(-1))
-      ValType::AnyRef
-      | ValType::ExnRef
-      | ValType::NullRef
-      | ValType::NullFuncRef
-      | ValType::NullExnRef
-      | ValType::NullExternRef
-      | ValType::EqRef
-      | ValType::I31Ref
-      | ValType::StructRef
-      | ValType::ArrayRef
-      | ValType::Ref(_, _) => self.locals.push(Value::Ref(-1))
-      _ => {
-        self.error_detail = "Unsupported local type: \{local_type}"
-        return UnsupportedLocalType
-      }
-    }
-  }
-  OK
-}
-
-///|
 /// Check if two function type signatures match
 fn check_type_signature_match(
   expected : FuncType,
@@ -218,9 +179,14 @@ fn Runtime::call_imported_function(
 fn Runtime::handle_tail_call_return(self : Runtime) -> RetCode {
   if self.call_stack.length() > 0 {
     let frame = self.call_stack.unsafe_pop()
-    self.pc = frame.return_pc
-    self.locals = frame.locals
-    self.pc += 1
+
+    // Trim stack back to caller's frame
+    while self.stack.length() > frame.prev_sp {
+      ignore(self.stack.unsafe_pop())
+    }
+    self.sp = frame.prev_sp
+    self.num_locals = frame.prev_num_locals
+    self.pc = frame.return_pc + 1
   } else {
     self.running = false
   }

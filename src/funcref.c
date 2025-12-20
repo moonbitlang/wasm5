@@ -15,20 +15,24 @@ struct U64Array {
 };
 
 struct Runtime {
-  int32_t pc;
-  int32_t $5;
-  int64_t $8;
-  void* $0;
-  struct U64Array* ops;  // Heterogeneous code stream (function pointers + immediates)
-  void* $2;
-  void* $3;
-  void* $6;
-  void* $7;
-  void* $9;
-  void* $10;
-  void* $11;
-  void* $12;
-  void* $13;
+  // Scalars first (in source order)
+  int32_t sp;           // mut sp : Int
+  int32_t pc;           // mut pc : Int
+  int32_t num_locals;   // mut num_locals : Int
+  int32_t running;      // mut running : Bool
+  int64_t memory_max;   // memory_max : UInt? (scalar, not reference!)
+
+  // References after (in source order)
+  void* module_;        // module_ : Module
+  struct U64Array* ops; // ops : Array[UInt64]
+  void* stack;          // stack : Array[Value]
+  void* call_stack;     // call_stack : Array[CallFrame]
+  void* memory;         // memory : Array[Byte]
+  void* globals;        // globals : Array[Value]
+  void* tables;         // tables : Array[RuntimeTable]
+  void* imported_funcs; // imported_funcs : Array[ImportedFunc]
+  void* data_segments;  // data_segments : Array[Array[Byte]]
+  void* error_detail;   // error_detail : String
 };
 
 int32_t next_op(void* rt) {

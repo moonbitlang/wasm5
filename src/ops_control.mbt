@@ -1,8 +1,90 @@
+// =============================================================================
+// Unified Stack Architecture
+// =============================================================================
+//
+// This implementation uses a SINGLE unified stack for both locals and
+// temporary values (operand stack), inspired by wasm3's design. This
+// eliminates the overhead of separate stacks and reduces allocations
+// during function calls.
+//
+// STACK LAYOUT
+// ============
+//
+// The stack is organized into frames, where each frame contains:
+//   1. Locals (function parameters + local variables)
+//   2. Temps (operand stack for intermediate values)
+//
+// Frame Structure:
+//   stack[sp .. sp+num_locals)     ← Frame's locals (params + local vars)
+//   stack[sp+num_locals .. ]       ← Frame's temps (operand stack)
+//
+// Example with nested calls:
+//   stack[0..3)         ← Frame 0 locals (sp=0, num_locals=3)
+//   stack[3..5)         ← Frame 0 temps
+//   stack[5..7)         ← Frame 1 locals (sp=5, num_locals=2)
+//   stack[7..9)         ← Frame 1 temps
+//   stack[9..10)        ← Frame 2 locals (sp=9, num_locals=1)
+//   stack[10..]         ← Frame 2 temps
+//
+// FUNCTION CALLS
+// ==============
+//
+// When calling a function:
+//   1. Arguments are already on stack as caller's temps
+//   2. Pop arguments into temporary array
+//   3. Set new_sp = stack.length() (start of new frame)
+//   4. Push arguments as first locals of new frame
+//   5. Initialize remaining locals with default values
+//   6. Update rt.sp, rt.num_locals, rt.pc
+//
+// Important: We do NOT trim caller's temps! Some temps are operands
+// needed after the call returns (e.g., first operand to i64.mul in
+// nested expressions like: (i64.mul (local.get 0) (call $f ...))).
+//
+// FUNCTION RETURNS
+// ================
+//
+// When returning from a function:
+//   1. Return values are temps at: stack[sp+num_locals .. stack.len)
+//   2. Extract return values into temporary array
+//   3. Trim stack to rt.sp (removes entire callee frame)
+//   4. Push return values back (they become caller's temps)
+//   5. Restore caller's sp, num_locals, pc from CallFrame
+//
+// Critical: Trim to rt.sp (callee's sp), NOT to prev_sp + prev_num_locals!
+// This preserves all caller temps that existed before the call.
+//
+// TAIL CALLS
+// ==========
+//
+// Tail calls reuse the current stack frame:
+//   1. Pop arguments into temporary array
+//   2. Trim stack back to rt.sp (remove all locals and temps)
+//   3. Push arguments as new locals (reusing same sp)
+//   4. Initialize remaining locals
+//   5. Update num_locals and pc (sp stays the same)
+//   6. Do NOT push CallFrame (reuse existing frame)
+//
+// This prevents stack growth for tail-recursive functions.
+//
+// LOCAL ACCESS
+// ============
+//
+// Locals are accessed via: stack[sp + local_idx]
+// Where:
+//   - sp points to the start of current frame's locals
+//   - local_idx is the local variable index (0-based)
+//   - First num_params locals are function parameters
+//   - Remaining locals are local variables
+//
+// =============================================================================
+
 ///|
 #tailcall
 fn op_local_get(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
-  rt.stack.push(rt.locals[idx])
+  let value = rt.stack[rt.sp + idx]
+  rt.stack.push(value)
   rt.pc += 1
   return next_op(rt)
 }
@@ -12,7 +94,7 @@ fn op_local_get(rt : Runtime) -> RetCode {
 fn op_local_set(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
   let value = rt.stack.unsafe_pop()
-  rt.locals[idx] = value
+  rt.stack[rt.sp + idx] = value
   rt.pc += 1
   return next_op(rt)
 }
@@ -22,7 +104,7 @@ fn op_local_set(rt : Runtime) -> RetCode {
 fn op_local_tee(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
   let value = rt.stack[rt.stack.length() - 1]
-  rt.locals[idx] = value
+  rt.stack[rt.sp + idx] = value
   rt.pc += 1
   return next_op(rt)
 }
@@ -283,16 +365,61 @@ fn op_call(rt : Runtime) -> RetCode {
     rt.error_detail = "Function not compiled: \{func_idx}"
     return FunctionNotCompiled
   }
-  let args = rt.pop_arguments(func_type.params.length())
+  let num_params = func_type.params.length()
+  let num_locals = code.locals.length()
 
-  // Save frame
-  rt.call_stack.push(CallFrame::{ return_pc: rt.pc, locals: rt.locals })
+  // Save frame with current sp
+  rt.call_stack.push(CallFrame::{
+    return_pc: rt.pc,
+    prev_sp: rt.sp,
+    prev_num_locals: rt.num_locals,
+  })
 
-  // Set up new locals
-  let init_result = rt.initialize_locals(args, code)
-  if init_result != OK {
-    return init_result
+  // Pop arguments from stack (they're currently temps at top of stack)
+  let args : Array[Value] = Array::make(num_params, Value::I32(0U))
+  for i = num_params - 1; i >= 0; i = i - 1 {
+    args[i] = rt.stack.unsafe_pop()
   }
+
+  // New frame starts at current stack top (DON'T trim caller's temps!)
+  // Caller's temps below the arguments need to stay for use after return
+  let new_sp = rt.stack.length()
+
+  // Push arguments as the first locals of the new frame
+  for arg in args {
+    rt.stack.push(arg)
+  }
+
+  // Initialize remaining locals with default values
+  for local_type in code.locals {
+    match local_type {
+      ValType::I32 => rt.stack.push(Value::I32(0U))
+      ValType::I64 => rt.stack.push(Value::I64(0UL))
+      ValType::F32 => rt.stack.push(Value::F32(0.0))
+      ValType::F64 => rt.stack.push(Value::F64(0.0))
+      ValType::FuncRef => rt.stack.push(Value::Ref(-1))
+      ValType::ExternRef => rt.stack.push(Value::Ref(-1))
+      ValType::AnyRef
+      | ValType::ExnRef
+      | ValType::NullRef
+      | ValType::NullFuncRef
+      | ValType::NullExnRef
+      | ValType::NullExternRef
+      | ValType::EqRef
+      | ValType::I31Ref
+      | ValType::StructRef
+      | ValType::ArrayRef
+      | ValType::Ref(_, _) => rt.stack.push(Value::Ref(-1))
+      _ => {
+        rt.error_detail = "Unsupported local type: \{local_type}"
+        return UnsupportedLocalType
+      }
+    }
+  }
+
+  // Update sp and num_locals for new frame
+  rt.sp = new_sp
+  rt.num_locals = num_params + num_locals
   rt.pc = callee_pc
   return next_op(rt)
 }
@@ -301,19 +428,51 @@ fn op_call(rt : Runtime) -> RetCode {
 #tailcall
 fn op_return(rt : Runtime) -> RetCode {
   if rt.call_stack.length() == 0 {
+    rt.running = false
     return OK
   }
-  let return_value : Value? = if rt.stack.length() > 0 {
-    Some(rt.stack.unsafe_pop())
-  } else {
-    None
-  }
+
+  // Return values are at top of stack (above current frame's locals)
+  // We need to keep them but discard the entire frame
+
+  // Collect return values (they're above sp + num_locals)
   let frame = rt.call_stack.unsafe_pop()
-  rt.locals = frame.locals
-  match return_value {
-    Some(v) => rt.stack.push(v)
-    None => ()
+
+  // Return values start after locals: stack[sp + num_locals .. length-1]
+  let num_return_values = rt.stack.length() - (rt.sp + rt.num_locals)
+
+  // Save return values temporarily
+  let return_values : Array[Value] = []
+  for i = 0; i < num_return_values; i = i + 1 {
+    return_values.push(rt.stack.unsafe_pop())
   }
+  // Reverse since we popped backwards
+  for i = 0; i < return_values.length() / 2; i = i + 1 {
+    let j = return_values.length() - 1 - i
+    let temp = return_values[i]
+    return_values[i] = return_values[j]
+    return_values[j] = temp
+  }
+
+  // Restore caller's sp and num_locals first
+  let caller_sp = frame.prev_sp
+  let caller_num_locals = frame.prev_num_locals
+
+  // Trim stack to remove ONLY the callee's frame
+  // The callee's frame starts at rt.sp (current sp before restoration)
+  // Everything before rt.sp should be preserved (caller's locals AND temps)
+  while rt.stack.length() > rt.sp {
+    ignore(rt.stack.unsafe_pop())
+  }
+
+  // Push return values back (now they're temps in the caller's frame)
+  for val in return_values {
+    rt.stack.push(val)
+  }
+
+  // Update runtime state
+  rt.sp = caller_sp
+  rt.num_locals = caller_num_locals
   rt.pc = frame.return_pc + 1
   return next_op(rt)
 }
@@ -401,16 +560,61 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
     rt.error_detail = "Function not compiled: \{func_idx}"
     return FunctionNotCompiled
   }
-  let args = rt.pop_arguments(actual_type.params.length())
+  let num_params = actual_type.params.length()
+  let num_locals = code.locals.length()
 
-  // Save frame
-  rt.call_stack.push(CallFrame::{ return_pc: rt.pc, locals: rt.locals })
+  // Save frame with current sp
+  rt.call_stack.push(CallFrame::{
+    return_pc: rt.pc,
+    prev_sp: rt.sp,
+    prev_num_locals: rt.num_locals,
+  })
 
-  // Set up new locals
-  let init_result = rt.initialize_locals(args, code)
-  if init_result != OK {
-    return init_result
+  // Pop arguments from stack (they're currently temps at top of stack)
+  let args : Array[Value] = Array::make(num_params, Value::I32(0U))
+  for i = num_params - 1; i >= 0; i = i - 1 {
+    args[i] = rt.stack.unsafe_pop()
   }
+
+  // New frame starts at current stack top (DON'T trim caller's temps!)
+  // Caller's temps below the arguments need to stay for use after return
+  let new_sp = rt.stack.length()
+
+  // Push arguments as the first locals of the new frame
+  for arg in args {
+    rt.stack.push(arg)
+  }
+
+  // Initialize remaining locals with default values
+  for local_type in code.locals {
+    match local_type {
+      ValType::I32 => rt.stack.push(Value::I32(0U))
+      ValType::I64 => rt.stack.push(Value::I64(0UL))
+      ValType::F32 => rt.stack.push(Value::F32(0.0))
+      ValType::F64 => rt.stack.push(Value::F64(0.0))
+      ValType::FuncRef => rt.stack.push(Value::Ref(-1))
+      ValType::ExternRef => rt.stack.push(Value::Ref(-1))
+      ValType::AnyRef
+      | ValType::ExnRef
+      | ValType::NullRef
+      | ValType::NullFuncRef
+      | ValType::NullExnRef
+      | ValType::NullExternRef
+      | ValType::EqRef
+      | ValType::I31Ref
+      | ValType::StructRef
+      | ValType::ArrayRef
+      | ValType::Ref(_, _) => rt.stack.push(Value::Ref(-1))
+      _ => {
+        rt.error_detail = "Unsupported local type: \{local_type}"
+        return UnsupportedLocalType
+      }
+    }
+  }
+
+  // Update sp and num_locals for new frame
+  rt.sp = new_sp
+  rt.num_locals = num_params + num_locals
   rt.pc = callee_pc
   return next_op(rt)
 }
@@ -454,13 +658,55 @@ fn op_return_call(rt : Runtime) -> RetCode {
     rt.error_detail = "Function not compiled: \{func_idx}"
     return FunctionNotCompiled
   }
-  let args = rt.pop_arguments(func_type.params.length())
+  let num_params = func_type.params.length()
+  let num_locals = code.locals.length()
 
-  // For tail call: replace current locals instead of pushing new frame
-  let init_result = rt.initialize_locals(args, code)
-  if init_result != OK {
-    return init_result
+  // Pop arguments from stack
+  let args : Array[Value] = Array::make(num_params, Value::I32(0U))
+  for i = num_params - 1; i >= 0; i = i - 1 {
+    args[i] = rt.stack.unsafe_pop()
   }
+
+  // For tail call: trim stack back to current frame's base, reuse same sp
+  while rt.stack.length() > rt.sp {
+    let _ = rt.stack.unsafe_pop()
+
+  }
+
+  // Push new locals at current sp (replacing old frame)
+  for arg in args {
+    rt.stack.push(arg)
+  }
+
+  // Initialize remaining locals with default values
+  for local_type in code.locals {
+    match local_type {
+      ValType::I32 => rt.stack.push(Value::I32(0U))
+      ValType::I64 => rt.stack.push(Value::I64(0UL))
+      ValType::F32 => rt.stack.push(Value::F32(0.0))
+      ValType::F64 => rt.stack.push(Value::F64(0.0))
+      ValType::FuncRef => rt.stack.push(Value::Ref(-1))
+      ValType::ExternRef => rt.stack.push(Value::Ref(-1))
+      ValType::AnyRef
+      | ValType::ExnRef
+      | ValType::NullRef
+      | ValType::NullFuncRef
+      | ValType::NullExnRef
+      | ValType::NullExternRef
+      | ValType::EqRef
+      | ValType::I31Ref
+      | ValType::StructRef
+      | ValType::ArrayRef
+      | ValType::Ref(_, _) => rt.stack.push(Value::Ref(-1))
+      _ => {
+        rt.error_detail = "Unsupported local type: \{local_type}"
+        return UnsupportedLocalType
+      }
+    }
+  }
+
+  // sp stays the same (tail call reuses current frame's base)
+  rt.num_locals = num_params + num_locals
   rt.pc = callee_pc
   return next_op(rt)
 }
@@ -547,13 +793,55 @@ fn op_return_call_indirect(rt : Runtime) -> RetCode {
     rt.error_detail = "Function not compiled: \{func_idx}"
     return FunctionNotCompiled
   }
-  let args = rt.pop_arguments(actual_type.params.length())
+  let num_params = actual_type.params.length()
+  let num_locals = code.locals.length()
 
-  // For tail call: replace current locals instead of pushing new frame
-  let init_result = rt.initialize_locals(args, code)
-  if init_result != OK {
-    return init_result
+  // Pop arguments from stack
+  let args : Array[Value] = Array::make(num_params, Value::I32(0U))
+  for i = num_params - 1; i >= 0; i = i - 1 {
+    args[i] = rt.stack.unsafe_pop()
   }
+
+  // For tail call: trim stack back to current frame's base, reuse same sp
+  while rt.stack.length() > rt.sp {
+    let _ = rt.stack.unsafe_pop()
+
+  }
+
+  // Push new locals at current sp (replacing old frame)
+  for arg in args {
+    rt.stack.push(arg)
+  }
+
+  // Initialize remaining locals with default values
+  for local_type in code.locals {
+    match local_type {
+      ValType::I32 => rt.stack.push(Value::I32(0U))
+      ValType::I64 => rt.stack.push(Value::I64(0UL))
+      ValType::F32 => rt.stack.push(Value::F32(0.0))
+      ValType::F64 => rt.stack.push(Value::F64(0.0))
+      ValType::FuncRef => rt.stack.push(Value::Ref(-1))
+      ValType::ExternRef => rt.stack.push(Value::Ref(-1))
+      ValType::AnyRef
+      | ValType::ExnRef
+      | ValType::NullRef
+      | ValType::NullFuncRef
+      | ValType::NullExnRef
+      | ValType::NullExternRef
+      | ValType::EqRef
+      | ValType::I31Ref
+      | ValType::StructRef
+      | ValType::ArrayRef
+      | ValType::Ref(_, _) => rt.stack.push(Value::Ref(-1))
+      _ => {
+        rt.error_detail = "Unsupported local type: \{local_type}"
+        return UnsupportedLocalType
+      }
+    }
+  }
+
+  // sp stays the same (tail call reuses current frame's base)
+  rt.num_locals = num_params + num_locals
   rt.pc = callee_pc
   return next_op(rt)
 }
@@ -622,16 +910,61 @@ fn op_call_ref(rt : Runtime) -> RetCode {
     rt.error_detail = "Function not compiled: \{func_idx}"
     return FunctionNotCompiled
   }
-  let args = rt.pop_arguments(func_type.params.length())
+  let num_params = func_type.params.length()
+  let num_locals = code.locals.length()
 
-  // Save frame
-  rt.call_stack.push(CallFrame::{ return_pc: rt.pc, locals: rt.locals })
+  // Save frame with current sp
+  rt.call_stack.push(CallFrame::{
+    return_pc: rt.pc,
+    prev_sp: rt.sp,
+    prev_num_locals: rt.num_locals,
+  })
 
-  // Set up new locals
-  let init_result = rt.initialize_locals(args, code)
-  if init_result != OK {
-    return init_result
+  // Pop arguments from stack (they're currently temps at top of stack)
+  let args : Array[Value] = Array::make(num_params, Value::I32(0U))
+  for i = num_params - 1; i >= 0; i = i - 1 {
+    args[i] = rt.stack.unsafe_pop()
   }
+
+  // New frame starts at current stack top (DON'T trim caller's temps!)
+  // Caller's temps below the arguments need to stay for use after return
+  let new_sp = rt.stack.length()
+
+  // Push arguments as the first locals of the new frame
+  for arg in args {
+    rt.stack.push(arg)
+  }
+
+  // Initialize remaining locals with default values
+  for local_type in code.locals {
+    match local_type {
+      ValType::I32 => rt.stack.push(Value::I32(0U))
+      ValType::I64 => rt.stack.push(Value::I64(0UL))
+      ValType::F32 => rt.stack.push(Value::F32(0.0))
+      ValType::F64 => rt.stack.push(Value::F64(0.0))
+      ValType::FuncRef => rt.stack.push(Value::Ref(-1))
+      ValType::ExternRef => rt.stack.push(Value::Ref(-1))
+      ValType::AnyRef
+      | ValType::ExnRef
+      | ValType::NullRef
+      | ValType::NullFuncRef
+      | ValType::NullExnRef
+      | ValType::NullExternRef
+      | ValType::EqRef
+      | ValType::I31Ref
+      | ValType::StructRef
+      | ValType::ArrayRef
+      | ValType::Ref(_, _) => rt.stack.push(Value::Ref(-1))
+      _ => {
+        rt.error_detail = "Unsupported local type: \{local_type}"
+        return UnsupportedLocalType
+      }
+    }
+  }
+
+  // Update sp and num_locals for new frame
+  rt.sp = new_sp
+  rt.num_locals = num_params + num_locals
   rt.pc = callee_pc
   return next_op(rt)
 }
@@ -699,13 +1032,55 @@ fn op_return_call_ref(rt : Runtime) -> RetCode {
     rt.error_detail = "Function not compiled: \{func_idx}"
     return FunctionNotCompiled
   }
-  let args = rt.pop_arguments(func_type.params.length())
+  let num_params = func_type.params.length()
+  let num_locals = code.locals.length()
 
-  // For tail call: replace current locals instead of pushing new frame
-  let init_result = rt.initialize_locals(args, code)
-  if init_result != OK {
-    return init_result
+  // Pop arguments from stack
+  let args : Array[Value] = Array::make(num_params, Value::I32(0U))
+  for i = num_params - 1; i >= 0; i = i - 1 {
+    args[i] = rt.stack.unsafe_pop()
   }
+
+  // For tail call: trim stack back to current frame's base, reuse same sp
+  while rt.stack.length() > rt.sp {
+    let _ = rt.stack.unsafe_pop()
+
+  }
+
+  // Push new locals at current sp (replacing old frame)
+  for arg in args {
+    rt.stack.push(arg)
+  }
+
+  // Initialize remaining locals with default values
+  for local_type in code.locals {
+    match local_type {
+      ValType::I32 => rt.stack.push(Value::I32(0U))
+      ValType::I64 => rt.stack.push(Value::I64(0UL))
+      ValType::F32 => rt.stack.push(Value::F32(0.0))
+      ValType::F64 => rt.stack.push(Value::F64(0.0))
+      ValType::FuncRef => rt.stack.push(Value::Ref(-1))
+      ValType::ExternRef => rt.stack.push(Value::Ref(-1))
+      ValType::AnyRef
+      | ValType::ExnRef
+      | ValType::NullRef
+      | ValType::NullFuncRef
+      | ValType::NullExnRef
+      | ValType::NullExternRef
+      | ValType::EqRef
+      | ValType::I31Ref
+      | ValType::StructRef
+      | ValType::ArrayRef
+      | ValType::Ref(_, _) => rt.stack.push(Value::Ref(-1))
+      _ => {
+        rt.error_detail = "Unsupported local type: \{local_type}"
+        return UnsupportedLocalType
+      }
+    }
+  }
+
+  // sp stays the same (tail call reuses current frame's base)
+  rt.num_locals = num_params + num_locals
   rt.pc = callee_pc
   return next_op(rt)
 }
