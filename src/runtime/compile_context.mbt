@@ -54,8 +54,8 @@ pub enum CompileBlockKind {
 /// Compile-time control frame for tracking block types and stack heights
 pub struct CompileBlock {
   kind : CompileBlockKind
-  params : Array[ValType]
-  results : Array[ValType]
+  params : Array[@core.ValType]
+  results : Array[@core.ValType]
   stack_height_at_entry : Int // type_stack.length() when block started (after params popped)
   // For loops: the PC to jump to (known at block start)
   // For blocks/if: 0 (unused, patches go to pending_br_patches)
@@ -67,7 +67,7 @@ pub struct CompileBlock {
 ///|
 /// Compile-time context for tracking types during compilation
 pub struct CompileCtx {
-  type_stack : Array[ValType]
+  type_stack : Array[@core.ValType]
   control_stack : Array[CompileBlock]
 }
 
@@ -77,7 +77,7 @@ fn CompileCtx::new() -> CompileCtx {
 }
 
 ///|
-fn CompileCtx::push_type(self : CompileCtx, t : ValType) -> Unit {
+fn CompileCtx::push_type(self : CompileCtx, t : @core.ValType) -> Unit {
   self.type_stack.push(t)
 }
 
@@ -97,7 +97,10 @@ fn CompileCtx::pop_types(self : CompileCtx, n : Int) -> Unit {
 }
 
 ///|
-fn CompileCtx::push_types(self : CompileCtx, types : Array[ValType]) -> Unit {
+fn CompileCtx::push_types(
+  self : CompileCtx,
+  types : Array[@core.ValType],
+) -> Unit {
   for t in types {
     self.push_type(t)
   }
@@ -107,8 +110,8 @@ fn CompileCtx::push_types(self : CompileCtx, types : Array[ValType]) -> Unit {
 fn CompileCtx::push_control(
   self : CompileCtx,
   kind : CompileBlockKind,
-  params : Array[ValType],
-  results : Array[ValType],
+  params : Array[@core.ValType],
+  results : Array[@core.ValType],
   target_pc : Int, // For loops: start PC; for blocks/if: placeholder (0), will be patched
 ) -> Unit {
   // Pop params from type stack (they're consumed by the block)
@@ -198,13 +201,13 @@ fn CompileCtx::add_br_patch(self : CompileCtx, label : Int, slot : Int) -> Unit 
 ///|
 /// Get block type from BlockType enum (similar to validation's get_block_type)
 fn get_compile_block_type(
-  module_ : Module,
-  block_type : BlockType,
-) -> (Array[ValType], Array[ValType]) {
+  module_ : @core.Module,
+  block_type : @core.BlockType,
+) -> (Array[@core.ValType], Array[@core.ValType]) {
   match block_type {
-    Empty => ([], [])
-    Value(t) => ([], [t])
-    TypeIndex(idx) => {
+    @core.BlockType::Empty => ([], [])
+    @core.BlockType::Value(t) => ([], [t])
+    @core.BlockType::TypeIndex(idx) => {
       let func_type = module_.types[idx]
       (func_type.params, func_type.results)
     }

@@ -69,11 +69,11 @@ pub extern "C" fn rintf(x : Float) -> Float = "rintf"
 
 ///|
 /// Count the number of imported functions in a module
-fn count_imported_funcs(module_ : Module) -> Int {
+fn count_imported_funcs(module_ : @core.Module) -> Int {
   let mut count = 0
   for imp in module_.imports {
     match imp.desc {
-      ImportDesc::Func(_) => count += 1
+      @core.ImportDesc::Func(_) => count += 1
       _ => ()
     }
   }
@@ -84,7 +84,7 @@ fn count_imported_funcs(module_ : Module) -> Int {
 /// Get the type index for a function (imported or local)
 /// Returns -1 if the function index is invalid
 fn get_func_type_idx(
-  module_ : Module,
+  module_ : @core.Module,
   func_idx : Int,
   num_imported : Int,
 ) -> Int {
@@ -94,7 +94,7 @@ fn get_func_type_idx(
     let mut type_idx = -1
     for imp in module_.imports {
       match imp.desc {
-        ImportDesc::Func(tidx) => {
+        @core.ImportDesc::Func(tidx) => {
           if import_idx == func_idx {
             type_idx = tidx.reinterpret_as_int()
             break
@@ -131,7 +131,7 @@ fn Runtime::pop_arguments(self : Runtime, num_params : Int) -> Array[Value] {
 fn Runtime::initialize_locals(
   self : Runtime,
   args : Array[Value],
-  code : Code,
+  code : @core.Code,
 ) -> RetCode {
   self.locals = []
   for arg in args {
@@ -139,23 +139,23 @@ fn Runtime::initialize_locals(
   }
   for local_type in code.locals {
     match local_type {
-      ValType::I32 => self.locals.push(Value::I32(0U))
-      ValType::I64 => self.locals.push(Value::I64(0UL))
-      ValType::F32 => self.locals.push(Value::F32(0.0))
-      ValType::F64 => self.locals.push(Value::F64(0.0))
-      ValType::FuncRef => self.locals.push(Value::Ref(None))
-      ValType::ExternRef => self.locals.push(Value::Ref(None))
-      ValType::AnyRef
-      | ValType::ExnRef
-      | ValType::NullRef
-      | ValType::NullFuncRef
-      | ValType::NullExnRef
-      | ValType::NullExternRef
-      | ValType::EqRef
-      | ValType::I31Ref
-      | ValType::StructRef
-      | ValType::ArrayRef
-      | ValType::Ref(_, _) => self.locals.push(Value::Ref(None))
+      @core.ValType::I32 => self.locals.push(Value::I32(0U))
+      @core.ValType::I64 => self.locals.push(Value::I64(0UL))
+      @core.ValType::F32 => self.locals.push(Value::F32(0.0))
+      @core.ValType::F64 => self.locals.push(Value::F64(0.0))
+      @core.ValType::FuncRef => self.locals.push(Value::Ref(None))
+      @core.ValType::ExternRef => self.locals.push(Value::Ref(None))
+      @core.ValType::AnyRef
+      | @core.ValType::ExnRef
+      | @core.ValType::NullRef
+      | @core.ValType::NullFuncRef
+      | @core.ValType::NullExnRef
+      | @core.ValType::NullExternRef
+      | @core.ValType::EqRef
+      | @core.ValType::I31Ref
+      | @core.ValType::StructRef
+      | @core.ValType::ArrayRef
+      | @core.ValType::Ref(_, _) => self.locals.push(Value::Ref(None))
       _ => {
         self.error_detail = "Unsupported local type: \{local_type}"
         return UnsupportedLocalType
@@ -168,8 +168,8 @@ fn Runtime::initialize_locals(
 ///|
 /// Check if two function type signatures match
 fn check_type_signature_match(
-  expected : FuncType,
-  actual : FuncType,
+  expected : @core.FuncType,
+  actual : @core.FuncType,
   error_msg : String,
   rt : Runtime,
 ) -> RetCode {

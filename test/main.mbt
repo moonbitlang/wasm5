@@ -10,7 +10,7 @@ struct TestFailure {
 ///|
 /// Registered module entry for cross-module imports
 struct RegisteredModule {
-  runtime : @wasm5.Runtime
+  runtime : @wasm5_runtime.Runtime
 }
 
 ///|
@@ -28,9 +28,9 @@ struct TestContext {
   dir : String
   source_file : String
   failures : Array[TestFailure]
-  mut runtime : @wasm5.Runtime?
+  mut runtime : @wasm5_runtime.Runtime?
   registry : ModuleRegistry
-  resolver : @wasm5.ImportResolver
+  resolver : @wasm5_runtime.ImportResolver
   mut skipped_count : Int
 }
 
@@ -55,13 +55,13 @@ fn TestContext::fail(
 async fn parse_and_compile(
   dir : String,
   file_name : String,
-  resolver : @wasm5.ImportResolver,
-) -> @wasm5.Runtime {
+  resolver : @wasm5_runtime.ImportResolver,
+) -> @wasm5_runtime.Runtime {
   let file = @fs.open(dir + file_name, mode=ReadOnly)
   defer file.close()
   let content = file.read_all().binary()
   let module_ = @wasm5_parse.parse(content)
-  let runtime = @wasm5.Runtime::load_with_resolver(module_, resolver)
+  let runtime = @wasm5_runtime.Runtime::load_with_resolver(module_, resolver)
   runtime.compile()
   runtime
 }
@@ -72,16 +72,18 @@ fn make_import_wrapper(
   registered : RegisteredModule,
   export_name : String,
   arity : UInt,
-) -> @wasm5.ImportedFunc {
+) -> @wasm5_runtime.ImportedFunc {
   // Create a wrapper that calls the registered module's function
-  let func : (Array[@wasm5.Value]) -> Array[@wasm5.Value] = fn(args) {
+  let func : (Array[@wasm5_runtime.Value]) -> Array[@wasm5_runtime.Value] = fn(
+    args,
+  ) {
     // Call the registered module's exported function
     let rt = registered.runtime
     rt.call_compiled(@encoding/utf8.encode(export_name), args) catch {
       _ => []
     }
   }
-  @wasm5.ImportedFunc::new(arity, func)
+  @wasm5_runtime.ImportedFunc::new(arity, func)
 }
 
 ///|
@@ -89,8 +91,8 @@ fn make_import_wrapper(
 fn register_module(
   ctx : TestContext,
   name : String,
-  runtime : @wasm5.Runtime,
-  module_ : @wasm5.Module,
+  runtime : @wasm5_runtime.Runtime,
+  module_ : @wasm5_core.Module,
 ) -> Unit {
   // Store in registry
   let entry : RegisteredModule = { runtime, }
@@ -102,7 +104,7 @@ fn register_module(
   // Add all exported functions to the resolver
   for exp in module_.exports {
     match exp.desc {
-      @wasm5.ExportDesc::Func(func_idx) => {
+      @wasm5_core.ExportDesc::Func(func_idx) => {
         let export_name = exp.name // Already Bytes
 
         // Get function arity from type
@@ -112,7 +114,7 @@ fn register_module(
         let mut num_imported_funcs = 0
         for imp in module_.imports {
           match imp.desc {
-            @wasm5.ImportDesc::Func(_) => num_imported_funcs += 1
+            @wasm5_core.ImportDesc::Func(_) => num_imported_funcs += 1
             _ => ()
           }
         }
@@ -124,7 +126,7 @@ fn register_module(
           let mut found_arity : UInt = 0
           for imp in module_.imports {
             match imp.desc {
-              @wasm5.ImportDesc::Func(type_idx) => {
+              @wasm5_core.ImportDesc::Func(type_idx) => {
                 if import_idx == func_idx_int {
                   let func_type = module_.types[type_idx.reinterpret_as_int()]
                   found_arity = func_type.params.length().reinterpret_as_uint()
@@ -151,7 +153,7 @@ fn register_module(
         let wrapper = make_import_wrapper(entry, export_name_str, arity)
         ctx.resolver.add_func(name_bytes, export_name, wrapper)
       }
-      @wasm5.ExportDesc::Global(global_idx) => {
+      @wasm5_core.ExportDesc::Global(global_idx) => {
         // Export a global value
         let global_idx_int = global_idx.reinterpret_as_int()
         // Get the global value from the runtime
@@ -203,7 +205,7 @@ suberror TestUnsupported {
 ///|
 /// Special expected value that represents "any NaN" or type-only checks
 enum ExpectedValue {
-  Exact(@wasm5.Value)
+  Exact(@wasm5_runtime.Value)
   AnyF32Nan // nan:arithmetic for f32 - any NaN value is acceptable
   AnyF64Nan // nan:arithmetic for f64 - any NaN value is acceptable
   AnyFuncRef // any funcref value (including null)
@@ -286,36 +288,40 @@ fn parse_f32_value(v : String) -> Float {
 
 ///|
 /// Parse JSON arguments array into runtime values
-fn parse_args(args : Array[Json]) -> Array[@wasm5.Value] raise {
-  let runtime_args : Array[@wasm5.Value] = []
+fn parse_args(args : Array[Json]) -> Array[@wasm5_runtime.Value] raise {
+  let runtime_args : Array[@wasm5_runtime.Value] = []
   for arg in args {
     match arg {
       { "type": "i32", "value": String(v), .. } =>
-        runtime_args.push(@wasm5.Value::I32(parse_i32_value(v)))
+        runtime_args.push(@wasm5_runtime.Value::I32(parse_i32_value(v)))
       { "type": "i64", "value": String(v), .. } =>
-        runtime_args.push(@wasm5.Value::I64(parse_i64_value(v)))
+        runtime_args.push(@wasm5_runtime.Value::I64(parse_i64_value(v)))
       // wast2json outputs floats as their bit representation (integer string)
       // or special nan values like "nan:canonical", "nan:arithmetic"
       { "type": "f32", "value": String(v), .. } =>
-        runtime_args.push(@wasm5.Value::F32(parse_f32_value(v)))
+        runtime_args.push(@wasm5_runtime.Value::F32(parse_f32_value(v)))
       { "type": "f64", "value": String(v), .. } =>
-        runtime_args.push(@wasm5.Value::F64(parse_f64_value(v)))
+        runtime_args.push(@wasm5_runtime.Value::F64(parse_f64_value(v)))
       // externref: "null" for null, otherwise an integer index
       { "type": "externref", "value": String(v), .. } =>
         if v == "null" {
-          runtime_args.push(@wasm5.Value::Ref(None))
+          runtime_args.push(@wasm5_runtime.Value::Ref(None))
         } else {
           runtime_args.push(
-            @wasm5.Value::Ref(Some(parse_i32_value(v).reinterpret_as_int())),
+            @wasm5_runtime.Value::Ref(
+              Some(parse_i32_value(v).reinterpret_as_int()),
+            ),
           )
         }
       // funcref: "null" for null, otherwise an integer function index
       { "type": "funcref", "value": String(v), .. } =>
         if v == "null" {
-          runtime_args.push(@wasm5.Value::Ref(None))
+          runtime_args.push(@wasm5_runtime.Value::Ref(None))
         } else {
           runtime_args.push(
-            @wasm5.Value::Ref(Some(parse_i32_value(v).reinterpret_as_int())),
+            @wasm5_runtime.Value::Ref(
+              Some(parse_i32_value(v).reinterpret_as_int()),
+            ),
           )
         }
       _ => raise TestUnsupported::UnsupportedArgType("\{arg}")
@@ -329,53 +335,69 @@ fn parse_args(args : Array[Json]) -> Array[@wasm5.Value] raise {
 fn parse_expected_value(expected : Json) -> ExpectedValue raise {
   match expected {
     { "type": "i32", "value": String(v), .. } =>
-      Exact(@wasm5.Value::I32(parse_i32_value(v)))
+      Exact(@wasm5_runtime.Value::I32(parse_i32_value(v)))
     { "type": "i64", "value": String(v), .. } =>
-      Exact(@wasm5.Value::I64(parse_i64_value(v)))
+      Exact(@wasm5_runtime.Value::I64(parse_i64_value(v)))
     // wast2json outputs floats as their bit representation (integer string)
     // or special nan values like "nan:canonical", "nan:arithmetic"
     { "type": "f32", "value": String(v), .. } =>
       if v.has_prefix("nan:arithmetic") {
         AnyF32Nan
       } else {
-        Exact(@wasm5.Value::F32(parse_f32_value(v)))
+        Exact(@wasm5_runtime.Value::F32(parse_f32_value(v)))
       }
     { "type": "f64", "value": String(v), .. } =>
       if v.has_prefix("nan:arithmetic") {
         AnyF64Nan
       } else {
-        Exact(@wasm5.Value::F64(parse_f64_value(v)))
+        Exact(@wasm5_runtime.Value::F64(parse_f64_value(v)))
       }
     // externref: "null" for null, otherwise an integer index, or no value (any externref)
     { "type": "externref", "value": String(v), .. } =>
       if v == "null" {
-        Exact(@wasm5.Value::Ref(None))
+        Exact(@wasm5_runtime.Value::Ref(None))
       } else {
-        Exact(@wasm5.Value::Ref(Some(parse_i32_value(v).reinterpret_as_int())))
+        Exact(
+          @wasm5_runtime.Value::Ref(
+            Some(parse_i32_value(v).reinterpret_as_int()),
+          ),
+        )
       }
     { "type": "externref", .. } => AnyExternRef // type-only check, any externref
     // funcref: "null" for null, otherwise an integer function index, or no value (any funcref)
     { "type": "funcref", "value": String(v), .. } =>
       if v == "null" {
-        Exact(@wasm5.Value::Ref(None))
+        Exact(@wasm5_runtime.Value::Ref(None))
       } else {
-        Exact(@wasm5.Value::Ref(Some(parse_i32_value(v).reinterpret_as_int())))
+        Exact(
+          @wasm5_runtime.Value::Ref(
+            Some(parse_i32_value(v).reinterpret_as_int()),
+          ),
+        )
       }
     { "type": "funcref", .. } => AnyFuncRef // type-only check, any funcref
     // anyref: any reference (including null)
     { "type": "anyref", "value": String(v), .. } =>
       if v == "null" {
-        Exact(@wasm5.Value::Ref(None))
+        Exact(@wasm5_runtime.Value::Ref(None))
       } else {
-        Exact(@wasm5.Value::Ref(Some(parse_i32_value(v).reinterpret_as_int())))
+        Exact(
+          @wasm5_runtime.Value::Ref(
+            Some(parse_i32_value(v).reinterpret_as_int()),
+          ),
+        )
       }
     { "type": "anyref", .. } => AnyFuncRef // Treat as any reference
     // exnref: exception reference (including null)
     { "type": "exnref", "value": String(v), .. } =>
       if v == "null" {
-        Exact(@wasm5.Value::Ref(None))
+        Exact(@wasm5_runtime.Value::Ref(None))
       } else {
-        Exact(@wasm5.Value::Ref(Some(parse_i32_value(v).reinterpret_as_int())))
+        Exact(
+          @wasm5_runtime.Value::Ref(
+            Some(parse_i32_value(v).reinterpret_as_int()),
+          ),
+        )
       }
     { "type": "exnref", .. } => AnyFuncRef // Treat as any reference
     // refnull: any null reference
@@ -394,13 +416,13 @@ fn parse_expected_value(expected : Json) -> ExpectedValue raise {
 
 ///|
 /// Format a value with bit pattern for debugging NaN issues
-fn format_value_with_bits(v : @wasm5.Value) -> String {
+fn format_value_with_bits(v : @wasm5_runtime.Value) -> String {
   match v {
-    @wasm5.Value::F64(f) => {
+    @wasm5_runtime.Value::F64(f) => {
       let bits = f.reinterpret_as_uint64()
       "F64(\{f}) [bits: \{bits}]"
     }
-    @wasm5.Value::F32(f) => {
+    @wasm5_runtime.Value::F32(f) => {
       let bits = f.reinterpret_as_uint()
       "F32(\{f}) [bits: \{bits}]"
     }
@@ -423,45 +445,48 @@ fn format_expected_with_bits(e : ExpectedValue) -> String {
 
 ///|
 /// Check if actual value matches expected value (handling NaN cases)
-fn values_match(actual : @wasm5.Value, expected : ExpectedValue) -> Bool {
+fn values_match(
+  actual : @wasm5_runtime.Value,
+  expected : ExpectedValue,
+) -> Bool {
   match expected {
     Exact(exp) =>
       // Need special handling for floats to compare NaN bit patterns
       match (actual, exp) {
-        (@wasm5.Value::F64(a), @wasm5.Value::F64(e)) =>
+        (@wasm5_runtime.Value::F64(a), @wasm5_runtime.Value::F64(e)) =>
           // Compare bit patterns for exact match (including NaN patterns)
           a.reinterpret_as_uint64() == e.reinterpret_as_uint64()
-        (@wasm5.Value::F32(a), @wasm5.Value::F32(e)) =>
+        (@wasm5_runtime.Value::F32(a), @wasm5_runtime.Value::F32(e)) =>
           // Compare bit patterns for exact match (including NaN patterns)
           a.reinterpret_as_uint() == e.reinterpret_as_uint()
         _ => actual == exp
       }
     AnyF32Nan =>
       match actual {
-        @wasm5.Value::F32(v) => v.is_nan()
+        @wasm5_runtime.Value::F32(v) => v.is_nan()
         _ => false
       }
     AnyF64Nan =>
       match actual {
-        @wasm5.Value::F64(v) => v.is_nan()
+        @wasm5_runtime.Value::F64(v) => v.is_nan()
         _ => false
       }
     AnyFuncRef =>
       // Accept any reference value (funcref can be null or non-null)
       match actual {
-        @wasm5.Value::Ref(_) => true
+        @wasm5_runtime.Value::Ref(_) => true
         _ => false
       }
     AnyExternRef =>
       // Accept any reference value (externref can be null or non-null)
       match actual {
-        @wasm5.Value::Ref(_) => true
+        @wasm5_runtime.Value::Ref(_) => true
         _ => false
       }
     AnyRefNull =>
       // Accept only null references
       match actual {
-        @wasm5.Value::Ref(None) => true
+        @wasm5_runtime.Value::Ref(None) => true
         _ => false
       }
   }
@@ -565,7 +590,7 @@ fn handle_assert_trap(
       "expected trap '\{expected_error}' but no error occurred",
     )
   } catch {
-    @wasm5.RuntimeError::DivisionByZero =>
+    @wasm5_runtime.RuntimeError::DivisionByZero =>
       if not(expected_error.contains("divide by zero")) {
         ctx.fail(
           line,
@@ -573,7 +598,7 @@ fn handle_assert_trap(
           "expected trap '\{expected_error}' but got DivisionByZero",
         )
       }
-    @wasm5.RuntimeError::IntegerOverflow =>
+    @wasm5_runtime.RuntimeError::IntegerOverflow =>
       // IntegerOverflow is used for both "integer overflow" and "invalid conversion to integer"
       if not(
           expected_error.contains("overflow") ||
@@ -585,7 +610,7 @@ fn handle_assert_trap(
           "expected trap '\{expected_error}' but got IntegerOverflow",
         )
       }
-    @wasm5.RuntimeError::MemoryOutOfBounds =>
+    @wasm5_runtime.RuntimeError::MemoryOutOfBounds =>
       if not(expected_error.contains("out of bounds memory access")) {
         ctx.fail(
           line,
@@ -593,7 +618,7 @@ fn handle_assert_trap(
           "expected trap '\{expected_error}' but got MemoryOutOfBounds",
         )
       }
-    @wasm5.RuntimeError::Unreachable =>
+    @wasm5_runtime.RuntimeError::Unreachable =>
       if not(expected_error.contains("unreachable")) {
         ctx.fail(
           line,
@@ -601,7 +626,7 @@ fn handle_assert_trap(
           "expected trap '\{expected_error}' but got Unreachable",
         )
       }
-    @wasm5.RuntimeError::InvalidType(msg) =>
+    @wasm5_runtime.RuntimeError::InvalidType(msg) =>
       // Handle table out of bounds errors
       if msg.contains("table") && msg.contains("out of bounds") {
         if not(expected_error.contains("out of bounds table access")) {
@@ -678,7 +703,7 @@ async fn handle_assert_invalid(
     // The WebAssembly spec uses "type mismatch" for various validation errors.
     // Our validator distinguishes TypeMismatch and StackSizeMismatch, but both
     // correspond to the spec's "type mismatch" error message.
-    @wasm5.ValidationError::TypeMismatch(_) =>
+    @wasm5_core.ValidationError::TypeMismatch(_) =>
       if not(expected_error.contains("type mismatch")) {
         ctx.fail(
           line,
@@ -686,7 +711,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got TypeMismatch",
         )
       }
-    @wasm5.ValidationError::StackSizeMismatch(_) =>
+    @wasm5_core.ValidationError::StackSizeMismatch(_) =>
       if not(expected_error.contains("type mismatch")) {
         ctx.fail(
           line,
@@ -694,7 +719,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got StackSizeMismatch",
         )
       }
-    @wasm5.ValidationError::InvalidResultArity(_) =>
+    @wasm5_core.ValidationError::InvalidResultArity(_) =>
       if not(expected_error.contains("invalid result arity")) {
         ctx.fail(
           line,
@@ -702,7 +727,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got InvalidResultArity",
         )
       }
-    @wasm5.ValidationError::UnknownType(_) =>
+    @wasm5_core.ValidationError::UnknownType(_) =>
       if not(expected_error.contains("unknown type")) {
         ctx.fail(
           line,
@@ -710,7 +735,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got UnknownType",
         )
       }
-    @wasm5.ValidationError::InvalidAlignment(_) =>
+    @wasm5_core.ValidationError::InvalidAlignment(_) =>
       if not(expected_error.contains("alignment")) {
         ctx.fail(
           line,
@@ -718,7 +743,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got InvalidAlignment",
         )
       }
-    @wasm5.ValidationError::UnknownLabel(_) =>
+    @wasm5_core.ValidationError::UnknownLabel(_) =>
       if not(expected_error.contains("unknown label")) {
         ctx.fail(
           line,
@@ -726,7 +751,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got UnknownLabel",
         )
       }
-    @wasm5.ValidationError::InvalidStartFunction(_) =>
+    @wasm5_core.ValidationError::InvalidStartFunction(_) =>
       if not(expected_error.contains("start function")) {
         ctx.fail(
           line,
@@ -734,7 +759,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got InvalidStartFunction",
         )
       }
-    @wasm5.ValidationError::DuplicateExport(name) =>
+    @wasm5_core.ValidationError::DuplicateExport(name) =>
       if not(expected_error.contains("duplicate export name")) {
         ctx.fail(
           line,
@@ -742,7 +767,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got DuplicateExport(\{name})",
         )
       }
-    @wasm5.ValidationError::UnknownExportedFunction(_) =>
+    @wasm5_core.ValidationError::UnknownExportedFunction(_) =>
       if not(expected_error.contains("unknown function")) {
         ctx.fail(
           line,
@@ -750,7 +775,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got UnknownExportedFunction",
         )
       }
-    @wasm5.ValidationError::UnknownExportedMemory(_) =>
+    @wasm5_core.ValidationError::UnknownExportedMemory(_) =>
       if not(expected_error.contains("unknown memory")) {
         ctx.fail(
           line,
@@ -758,7 +783,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got UnknownExportedMemory",
         )
       }
-    @wasm5.ValidationError::UnknownExportedTable(_) =>
+    @wasm5_core.ValidationError::UnknownExportedTable(_) =>
       if not(expected_error.contains("unknown table")) {
         ctx.fail(
           line,
@@ -766,7 +791,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got UnknownExportedTable",
         )
       }
-    @wasm5.ValidationError::UnknownGlobal(_) =>
+    @wasm5_core.ValidationError::UnknownGlobal(_) =>
       if not(expected_error.contains("unknown global")) {
         ctx.fail(
           line,
@@ -774,7 +799,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got UnknownGlobal",
         )
       }
-    @wasm5.ValidationError::UnknownExportedGlobal(_) =>
+    @wasm5_core.ValidationError::UnknownExportedGlobal(_) =>
       if not(expected_error.contains("unknown global")) {
         ctx.fail(
           line,
@@ -782,7 +807,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got UnknownExportedGlobal",
         )
       }
-    @wasm5.ValidationError::UninitializedLocal(_) =>
+    @wasm5_core.ValidationError::UninitializedLocal(_) =>
       if not(expected_error.contains("uninitialized local")) {
         ctx.fail(
           line,
@@ -904,7 +929,7 @@ async fn process_meta(
   match meta {
     { "commands": Array(commands), .. } => {
       let registry = ModuleRegistry::new()
-      let resolver = @wasm5.default_import_resolver()
+      let resolver = @wasm5_runtime.default_import_resolver()
       let ctx = TestContext::{
         dir,
         source_file,

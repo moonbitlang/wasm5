@@ -2,11 +2,11 @@
 package "moonbitlang/wasm5/src/validate"
 
 import(
-  "moonbitlang/wasm5/src"
+  "moonbitlang/wasm5/src/core"
 )
 
 // Values
-pub fn validate_module(@src.Module) -> Unit raise @src.ValidationError
+pub fn validate_module(@core.Module) -> Unit raise @core.ValidationError
 
 // Errors
 

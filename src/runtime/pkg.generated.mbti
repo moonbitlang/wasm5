@@ -1,0 +1,143 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/wasm5/src/runtime"
+
+import(
+  "moonbitlang/wasm5/src/core"
+)
+
+// Values
+pub let canonical_nan_f32 : Float
+
+pub let canonical_nan_f64 : Double
+
+pub fn default_import_resolver() -> ImportResolver
+
+pub fn rint(Double) -> Double
+
+pub fn rintf(Float) -> Float
+
+// Errors
+pub suberror RuntimeError {
+  DivisionByZero
+  IntegerOverflow
+  MemoryOutOfBounds
+  InvalidType(String)
+  FunctionNotFound(String)
+  UnimplementedInstruction(String)
+  Unreachable
+  FunctionNotCompiled(String)
+  UnsupportedLocalType(String)
+  UnsupportedInitExpression(String)
+}
+pub impl Show for RuntimeError
+
+// Types and methods
+pub struct CallFrame {
+  return_pc : Int
+  locals : Array[Value]
+}
+
+pub struct CompileBlock {
+  kind : CompileBlockKind
+  params : Array[@core.ValType]
+  results : Array[@core.ValType]
+  stack_height_at_entry : Int
+  target_pc : Int
+  pending_br_patches : Array[Int]
+}
+
+pub enum CompileBlockKind {
+  BlockKind
+  LoopKind
+  IfKind
+}
+pub impl Eq for CompileBlockKind
+
+pub struct CompileCtx {
+  type_stack : Array[@core.ValType]
+  control_stack : Array[CompileBlock]
+}
+
+pub struct ImportResolver {
+  modules : Map[Bytes, ImportResolverEntry]
+}
+pub fn ImportResolver::add_func(Self, Bytes, Bytes, ImportedFunc) -> Unit
+pub fn ImportResolver::add_global(Self, Bytes, Bytes, Value) -> Unit
+pub fn ImportResolver::add_memory(Self, Bytes, Bytes, ImportedMemory) -> Unit
+pub fn ImportResolver::add_table(Self, Bytes, Bytes, RuntimeTable) -> Unit
+pub fn ImportResolver::get_func(Self, Bytes, Bytes) -> ImportedFunc?
+pub fn ImportResolver::get_global(Self, Bytes, Bytes) -> Value?
+pub fn ImportResolver::get_memory(Self, Bytes, Bytes) -> ImportedMemory?
+pub fn ImportResolver::get_table(Self, Bytes, Bytes) -> RuntimeTable?
+pub fn ImportResolver::new() -> Self
+
+type ImportResolverEntry
+
+pub struct ImportedFunc {
+  arity : UInt
+  func : (Array[Value]) -> Array[Value]
+}
+pub fn ImportedFunc::new(UInt, (Array[Value]) -> Array[Value]) -> Self
+
+pub struct ImportedMemory {
+  data : Array[Byte]
+  max : UInt?
+}
+
+pub enum MInstr {
+  WasmInstr((Runtime) -> RetCode)
+  ImmediateI32(UInt)
+  ImmediateIdx(Int)
+}
+
+pub enum RetCode {
+  OK
+  DivisionByZero
+  IntegerOverflow
+  MemoryOutOfBounds
+  Unreachable
+  InvalidType
+  FunctionNotCompiled
+  UnsupportedLocalType
+}
+pub impl Eq for RetCode
+
+pub struct Runtime {
+  module_ : @core.Module
+  ops : Array[MInstr]
+  stack : Array[Value]
+  mut locals : Array[Value]
+  mut pc : Int
+  mut running : Bool
+  call_stack : Array[CallFrame]
+  memory : Array[Byte]
+  memory_max : UInt?
+  globals : Array[Value]
+  tables : Array[RuntimeTable]
+  imported_funcs : Array[ImportedFunc]
+  data_segments : Array[Array[Byte]]
+  mut error_detail : String
+}
+pub fn Runtime::call_compiled(Self, Bytes, Array[Value]) -> Array[Value] raise RuntimeError
+pub fn Runtime::compile(Self) -> Unit raise RuntimeError
+pub fn Runtime::get_globals(Self) -> Array[Value]
+pub fn Runtime::get_module(Self) -> @core.Module
+pub fn Runtime::load(@core.Module) -> Self raise RuntimeError
+pub fn Runtime::load_with_resolver(@core.Module, ImportResolver) -> Self raise RuntimeError
+
+type RuntimeTable
+
+pub(all) enum Value {
+  I32(UInt)
+  I64(UInt64)
+  F32(Float)
+  F64(Double)
+  Ref(Int?)
+}
+pub impl Eq for Value
+pub impl Show for Value
+
+// Type aliases
+
+// Traits
+

@@ -14,44 +14,6 @@ pub suberror RuntimeError {
 } derive(Show)
 
 ///|
-/// Parse error types
-pub(all) suberror ParseError {
-  UnexpectedEof // Unexpected end of file
-  InvalidMagic // Invalid magic number
-  UnsupportedVersion // Unsupported version
-  InvalidFormat(String) // Invalid format
-} derive(Show)
-
-///|
-/// Validation error types
-pub(all) suberror ValidationError {
-  TypeMismatch(String)
-  InvalidFunctionIndex(Int)
-  InvalidTypeIndex(Int)
-  InvalidLocalIndex(Int)
-  InvalidGlobalIndex(Int)
-  UnknownGlobal(Int) // Global not available in current context (e.g., local global in table init)
-  StackSizeMismatch(String)
-  InvalidResultArity(String)
-  InvalidAlignment(String)
-  UnknownLabel(Int)
-  InvalidStartFunction(String)
-  UnknownMemory(Int)
-  InvalidMemorySize(String)
-  ImmutableGlobal(Int)
-  DuplicateExport(String)
-  UnknownExportedFunction(Int)
-  UnknownExportedMemory(Int)
-  UnknownExportedTable(Int)
-  UnknownExportedGlobal(Int)
-  InvalidTableSize(String)
-  UnknownTable(Int)
-  ConstantExpressionRequired(String)
-  UninitializedLocal(Int) // Local with non-defaultable type used before initialization
-  UnknownType(Int) // Type index in ref type doesn't exist
-} derive(Show)
-
-///|
 /// Runtime value type
 pub(all) enum Value {
   I32(UInt)
@@ -259,7 +221,7 @@ pub fn ImportResolver::get_memory(
 ///|
 /// Runtime structure that holds a loaded WebAssembly module
 pub struct Runtime {
-  module_ : Module
+  module_ : @core.Module
   ops : Array[MInstr]
   stack : Array[Value]
   mut locals : Array[Value]
@@ -277,7 +239,7 @@ pub struct Runtime {
 
 ///|
 /// Get the module from the runtime
-pub fn Runtime::get_module(self : Runtime) -> Module {
+pub fn Runtime::get_module(self : Runtime) -> @core.Module {
   self.module_
 }
 
@@ -335,14 +297,14 @@ pub fn default_import_resolver() -> ImportResolver {
 
 ///|
 /// Load a WebAssembly module into the runtime (using default import resolver)
-pub fn Runtime::load(m : Module) -> Runtime raise RuntimeError {
+pub fn Runtime::load(m : @core.Module) -> Runtime raise RuntimeError {
   Runtime::load_with_resolver(m, default_import_resolver())
 }
 
 ///|
 /// Load a WebAssembly module into the runtime with a custom import resolver
 pub fn Runtime::load_with_resolver(
-  m : Module,
+  m : @core.Module,
   resolver : ImportResolver,
 ) -> Runtime raise RuntimeError {
   // Initialize memory
@@ -353,7 +315,7 @@ pub fn Runtime::load_with_resolver(
   let mut has_imported_memory = false
   for imp in m.imports {
     match imp.desc {
-      ImportDesc::Mem(mem_type) => {
+      @core.ImportDesc::Mem(mem_type) => {
         has_imported_memory = true
         // Try to get the memory from the resolver
         match resolver.get_memory(imp.module_, imp.name) {
@@ -386,19 +348,19 @@ pub fn Runtime::load_with_resolver(
   let globals : Array[Value] = []
   for imp in m.imports {
     match imp.desc {
-      ImportDesc::Global(gt) => {
+      @core.ImportDesc::Global(gt) => {
         // Try to get the global value from the resolver
         let value = match resolver.get_global(imp.module_, imp.name) {
           Some(v) => v
           None =>
             // Fall back to default values (for spectest)
             match gt.val_type {
-              ValType::I32 => Value::I32(666U) // spectest global_i32 = 666
-              ValType::I64 => Value::I64(666UL) // spectest global_i64 = 666
-              ValType::F32 => Value::F32(666.6)
-              ValType::F64 => Value::F64(666.6)
-              ValType::FuncRef => Value::Ref(None)
-              ValType::ExternRef => Value::Ref(None)
+              @core.ValType::I32 => Value::I32(666U) // spectest global_i32 = 666
+              @core.ValType::I64 => Value::I64(666UL) // spectest global_i64 = 666
+              @core.ValType::F32 => Value::F32(666.6)
+              @core.ValType::F64 => Value::F64(666.6)
+              @core.ValType::FuncRef => Value::Ref(None)
+              @core.ValType::ExternRef => Value::Ref(None)
               _ => Value::I32(0U)
             }
         }
@@ -437,7 +399,7 @@ pub fn Runtime::load_with_resolver(
   // First, add imported tables
   for imp in m.imports {
     match imp.desc {
-      ImportDesc::Table(_) =>
+      @core.ImportDesc::Table(_) =>
         // Try to get the table from the resolver
         match resolver.get_table(imp.module_, imp.name) {
           Some(imported_table) => tables.push(imported_table)
@@ -491,7 +453,7 @@ pub fn Runtime::load_with_resolver(
     let module_name = imp.module_
     let field_name = imp.name
     match imp.desc {
-      Func(_type_idx) =>
+      @core.ImportDesc::Func(_type_idx) =>
         match resolver.get_func(module_name, field_name) {
           Some(func) => imported_funcs.push(func)
           None =>
@@ -499,7 +461,10 @@ pub fn Runtime::load_with_resolver(
               "imported function not found: \{module_name}.\{field_name}",
             )
         }
-      Table(_) | Mem(_) | Global(_) | Tag(_) => ()
+      @core.ImportDesc::Table(_)
+      | @core.ImportDesc::Mem(_)
+      | @core.ImportDesc::Global(_)
+      | @core.ImportDesc::Tag(_) => ()
     }
   }
 
@@ -532,7 +497,7 @@ pub fn Runtime::load_with_resolver(
 
 ///|
 fn eval_const_expr(
-  expr : Expr,
+  expr : @core.Expr,
   globals : Array[Value],
 ) -> Value raise RuntimeError {
   // Constant expression evaluator for init expressions
@@ -543,13 +508,14 @@ fn eval_const_expr(
   let stack : Array[Value] = []
   for instr in expr.instrs {
     match instr {
-      I32Const(v) => stack.push(I32(v))
-      I64Const(v) => stack.push(I64(v))
-      F32Const(v) => stack.push(F32(v))
-      F64Const(v) => stack.push(F64(v))
-      RefNull(_) => stack.push(Ref(None))
-      RefFunc(idx) => stack.push(Ref(Some(idx.reinterpret_as_int())))
-      GlobalGet(idx) => {
+      @core.Instr::I32Const(v) => stack.push(I32(v))
+      @core.Instr::I64Const(v) => stack.push(I64(v))
+      @core.Instr::F32Const(v) => stack.push(F32(v))
+      @core.Instr::F64Const(v) => stack.push(F64(v))
+      @core.Instr::RefNull(_) => stack.push(Ref(None))
+      @core.Instr::RefFunc(idx) =>
+        stack.push(Ref(Some(idx.reinterpret_as_int())))
+      @core.Instr::GlobalGet(idx) => {
         let idx_int = idx.reinterpret_as_int()
         guard idx_int >= 0 && idx_int < globals.length() else {
           raise RuntimeError::UnsupportedInitExpression(
@@ -559,7 +525,7 @@ fn eval_const_expr(
         stack.push(globals[idx_int])
       }
       // i32 arithmetic operations
-      I32Add => {
+      @core.Instr::I32Add => {
         let b = stack.unsafe_pop()
         let a = stack.unsafe_pop()
         match (a, b) {
@@ -570,7 +536,7 @@ fn eval_const_expr(
             )
         }
       }
-      I32Sub => {
+      @core.Instr::I32Sub => {
         let b = stack.unsafe_pop()
         let a = stack.unsafe_pop()
         match (a, b) {
@@ -581,7 +547,7 @@ fn eval_const_expr(
             )
         }
       }
-      I32Mul => {
+      @core.Instr::I32Mul => {
         let b = stack.unsafe_pop()
         let a = stack.unsafe_pop()
         match (a, b) {
@@ -593,7 +559,7 @@ fn eval_const_expr(
         }
       }
       // i64 arithmetic operations
-      I64Add => {
+      @core.Instr::I64Add => {
         let b = stack.unsafe_pop()
         let a = stack.unsafe_pop()
         match (a, b) {
@@ -604,7 +570,7 @@ fn eval_const_expr(
             )
         }
       }
-      I64Sub => {
+      @core.Instr::I64Sub => {
         let b = stack.unsafe_pop()
         let a = stack.unsafe_pop()
         match (a, b) {
@@ -615,7 +581,7 @@ fn eval_const_expr(
             )
         }
       }
-      I64Mul => {
+      @core.Instr::I64Mul => {
         let b = stack.unsafe_pop()
         let a = stack.unsafe_pop()
         match (a, b) {
