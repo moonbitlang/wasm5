@@ -31,11 +31,13 @@
 //
 // When calling a function:
 //   1. Arguments are already on stack as caller's temps
-//   2. Pop arguments into temporary array
-//   3. Set new_sp = stack.length() (start of new frame)
-//   4. Push arguments as first locals of new frame
-//   5. Initialize remaining locals with default values
-//   6. Update rt.sp, rt.num_locals, rt.pc
+//   2. Set new_sp = stack.length() - num_params (arguments stay in place!)
+//   3. Arguments are now at stack[new_sp..new_sp+num_params)
+//   4. Initialize remaining locals with default values
+//   5. Update rt.sp, rt.num_locals, rt.pc
+//
+// Key optimization: Arguments stay on the stack and become the new frame's
+// first locals directly - no popping/re-pushing, no array allocation!
 //
 // Important: We do NOT trim caller's temps! Some temps are operands
 // needed after the call returns (e.g., first operand to i64.mul in
@@ -375,20 +377,11 @@ fn op_call(rt : Runtime) -> RetCode {
     prev_num_locals: rt.num_locals,
   })
 
-  // Pop arguments from stack (they're currently temps at top of stack)
-  let args : Array[Value] = Array::make(num_params, Value::I32(0U))
-  for i = num_params - 1; i >= 0; i = i - 1 {
-    args[i] = rt.stack.unsafe_pop()
-  }
+  // Arguments are already on stack as temps: stack[..., arg0, arg1, ..., argN]
+  // New frame starts where the arguments begin (they become the new frame's first locals)
+  let new_sp = rt.stack.length() - num_params
 
-  // New frame starts at current stack top (DON'T trim caller's temps!)
-  // Caller's temps below the arguments need to stay for use after return
-  let new_sp = rt.stack.length()
-
-  // Push arguments as the first locals of the new frame
-  for arg in args {
-    rt.stack.push(arg)
-  }
+  // Arguments are now at stack[new_sp..new_sp+num_params) - no need to move them!
 
   // Initialize remaining locals with default values
   for local_type in code.locals {
@@ -570,20 +563,11 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
     prev_num_locals: rt.num_locals,
   })
 
-  // Pop arguments from stack (they're currently temps at top of stack)
-  let args : Array[Value] = Array::make(num_params, Value::I32(0U))
-  for i = num_params - 1; i >= 0; i = i - 1 {
-    args[i] = rt.stack.unsafe_pop()
-  }
+  // Arguments are already on stack as temps: stack[..., arg0, arg1, ..., argN]
+  // New frame starts where the arguments begin (they become the new frame's first locals)
+  let new_sp = rt.stack.length() - num_params
 
-  // New frame starts at current stack top (DON'T trim caller's temps!)
-  // Caller's temps below the arguments need to stay for use after return
-  let new_sp = rt.stack.length()
-
-  // Push arguments as the first locals of the new frame
-  for arg in args {
-    rt.stack.push(arg)
-  }
+  // Arguments are now at stack[new_sp..new_sp+num_params) - no need to move them!
 
   // Initialize remaining locals with default values
   for local_type in code.locals {
@@ -920,20 +904,11 @@ fn op_call_ref(rt : Runtime) -> RetCode {
     prev_num_locals: rt.num_locals,
   })
 
-  // Pop arguments from stack (they're currently temps at top of stack)
-  let args : Array[Value] = Array::make(num_params, Value::I32(0U))
-  for i = num_params - 1; i >= 0; i = i - 1 {
-    args[i] = rt.stack.unsafe_pop()
-  }
+  // Arguments are already on stack as temps: stack[..., arg0, arg1, ..., argN]
+  // New frame starts where the arguments begin (they become the new frame's first locals)
+  let new_sp = rt.stack.length() - num_params
 
-  // New frame starts at current stack top (DON'T trim caller's temps!)
-  // Caller's temps below the arguments need to stay for use after return
-  let new_sp = rt.stack.length()
-
-  // Push arguments as the first locals of the new frame
-  for arg in args {
-    rt.stack.push(arg)
-  }
+  // Arguments are now at stack[new_sp..new_sp+num_params) - no need to move them!
 
   // Initialize remaining locals with default values
   for local_type in code.locals {
