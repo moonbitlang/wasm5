@@ -719,7 +719,7 @@ fn op_nop(rt : Runtime) -> RetCode {
 
 ///|
 #tailcall
-fn op_unreachable(rt : Runtime) -> RetCode {
+fn op_unreachable(_rt : Runtime) -> RetCode {
   return Unreachable
 }
 // =============================================================================
@@ -848,7 +848,6 @@ fn op_table_grow(rt : Runtime) -> RetCode {
       rt.stack.push(Value::I32(0xFFFFFFFFU))
       rt.pc += 1
       return next_op(rt)
-      return OK
     }
   }
   let runtime_table = rt.tables[table_idx]
@@ -869,7 +868,6 @@ fn op_table_grow(rt : Runtime) -> RetCode {
         rt.stack.push(Value::I32(0xFFFFFFFFU))
         rt.pc += 1
         return next_op(rt)
-        return OK
       }
     None => () // No max limit
   }

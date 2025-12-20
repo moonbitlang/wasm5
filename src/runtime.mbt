@@ -6,7 +6,6 @@ pub suberror RuntimeError {
   MemoryOutOfBounds
   InvalidType(String)
   FunctionNotFound(String)
-  UnimplementedInstruction(String) // Instruction not yet implemented
   Unreachable // Unreachable instruction executed
   FunctionNotCompiled(String) // Function not compiled
   UnsupportedLocalType(String) // Unsupported local type
