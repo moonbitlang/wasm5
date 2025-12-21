@@ -54,7 +54,7 @@ test "parse expr invalid end marker" {
   let _ = parse_expr(parser) catch {
     _ => {
       saw_error = true
-      @core.Expr::{ instrs: [] }
+      { instrs: [] }
     }
   }
   assert_eq(saw_error, true)
@@ -67,7 +67,7 @@ test "parse instr unknown opcode" {
   let _ = parse_instr(parser, b'\xff') catch {
     _ => {
       saw_error = true
-      @core.Instr::Nop
+      Nop
     }
   }
   assert_eq(saw_error, true)
@@ -83,7 +83,7 @@ test "parse prefix fc errors" {
   let _ = parse_instr_prefix_fc(make_parser(bytes_init)) catch {
     _ => {
       saw_error = true
-      @core.Instr::Nop
+      Nop
     }
   }
   assert_eq(saw_error, true)
@@ -95,7 +95,7 @@ test "parse prefix fc errors" {
   let _ = parse_instr_prefix_fc(make_parser(bytes_copy)) catch {
     _ => {
       saw_error = true
-      @core.Instr::Nop
+      Nop
     }
   }
   assert_eq(saw_error, true)
@@ -106,7 +106,7 @@ test "parse prefix fc errors" {
   let _ = parse_instr_prefix_fc(make_parser(bytes_fill)) catch {
     _ => {
       saw_error = true
-      @core.Instr::Nop
+      Nop
     }
   }
   assert_eq(saw_error, true)
@@ -116,7 +116,7 @@ test "parse prefix fc errors" {
   let _ = parse_instr_prefix_fc(make_parser(bytes_unknown)) catch {
     _ => {
       saw_error = true
-      @core.Instr::Nop
+      Nop
     }
   }
   assert_eq(saw_error, true)
@@ -159,106 +159,82 @@ test "parse instr control variants" {
 test "parse blocktype variants" {
   let instr = parse_instr_control(make_parser([b'\x7e', b'\x0b']), b'\x02')
   match instr {
-    Some(@core.Instr::Block(@core.BlockType::Value(@core.ValType::I64), _)) =>
-      assert_eq(true, true)
+    Some(Block(Value(I64), _)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_control(make_parser([b'\x7d', b'\x0b']), b'\x02')
   match instr {
-    Some(@core.Instr::Block(@core.BlockType::Value(@core.ValType::F32), _)) =>
-      assert_eq(true, true)
+    Some(Block(Value(F32), _)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_control(make_parser([b'\x7c', b'\x0b']), b'\x02')
   match instr {
-    Some(@core.Instr::Block(@core.BlockType::Value(@core.ValType::F64), _)) =>
-      assert_eq(true, true)
+    Some(Block(Value(F64), _)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_control(make_parser([b'\x7b', b'\x0b']), b'\x02')
   match instr {
-    Some(@core.Instr::Block(@core.BlockType::Value(@core.ValType::V128), _)) =>
-      assert_eq(true, true)
+    Some(Block(Value(V128), _)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_control(make_parser([b'\x70', b'\x0b']), b'\x02')
   match instr {
-    Some(@core.Instr::Block(@core.BlockType::Value(@core.ValType::FuncRef), _)) =>
-      assert_eq(true, true)
+    Some(Block(Value(FuncRef), _)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_control(make_parser([b'\x6f', b'\x0b']), b'\x02')
   match instr {
-    Some(
-      @core.Instr::Block(@core.BlockType::Value(@core.ValType::ExternRef), _)
-    ) => assert_eq(true, true)
+    Some(Block(Value(ExternRef), _)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_control(make_parser([b'\x6e', b'\x0b']), b'\x02')
   match instr {
-    Some(@core.Instr::Block(@core.BlockType::Value(@core.ValType::AnyRef), _)) =>
-      assert_eq(true, true)
+    Some(Block(Value(AnyRef), _)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_control(make_parser([b'\x6d', b'\x0b']), b'\x02')
   match instr {
-    Some(@core.Instr::Block(@core.BlockType::Value(@core.ValType::EqRef), _)) =>
-      assert_eq(true, true)
+    Some(Block(Value(EqRef), _)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_control(make_parser([b'\x6c', b'\x0b']), b'\x02')
   match instr {
-    Some(@core.Instr::Block(@core.BlockType::Value(@core.ValType::I31Ref), _)) =>
-      assert_eq(true, true)
+    Some(Block(Value(I31Ref), _)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_control(make_parser([b'\x6b', b'\x0b']), b'\x02')
   match instr {
-    Some(
-      @core.Instr::Block(@core.BlockType::Value(@core.ValType::StructRef), _)
-    ) => assert_eq(true, true)
+    Some(Block(Value(StructRef), _)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_control(make_parser([b'\x6a', b'\x0b']), b'\x02')
   match instr {
-    Some(@core.Instr::Block(@core.BlockType::Value(@core.ValType::ArrayRef), _)) =>
-      assert_eq(true, true)
+    Some(Block(Value(ArrayRef), _)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_control(make_parser([b'\x69', b'\x0b']), b'\x02')
   match instr {
-    Some(@core.Instr::Block(@core.BlockType::Value(@core.ValType::ExnRef), _)) =>
-      assert_eq(true, true)
+    Some(Block(Value(ExnRef), _)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_control(make_parser([b'\x71', b'\x0b']), b'\x02')
   match instr {
-    Some(@core.Instr::Block(@core.BlockType::Value(@core.ValType::NullRef), _)) =>
-      assert_eq(true, true)
+    Some(Block(Value(NullRef), _)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_control(make_parser([b'\x72', b'\x0b']), b'\x02')
   match instr {
-    Some(
-      @core.Instr::Block(
-        @core.BlockType::Value(@core.ValType::NullExternRef),
-        _
-      )
-    ) => assert_eq(true, true)
+    Some(Block(Value(NullExternRef), _)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_control(make_parser([b'\x73', b'\x0b']), b'\x02')
   match instr {
-    Some(
-      @core.Instr::Block(@core.BlockType::Value(@core.ValType::NullFuncRef), _)
-    ) => assert_eq(true, true)
+    Some(Block(Value(NullFuncRef), _)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_control(make_parser([b'\x74', b'\x0b']), b'\x02')
   match instr {
-    Some(
-      @core.Instr::Block(@core.BlockType::Value(@core.ValType::NullExnRef), _)
-    ) => assert_eq(true, true)
+    Some(Block(Value(NullExnRef), _)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_control(
@@ -266,12 +242,7 @@ test "parse blocktype variants" {
     b'\x02',
   )
   match instr {
-    Some(
-      @core.Instr::Block(
-        @core.BlockType::Value(@core.ValType::Ref(@core.RefType::Func, true)),
-        _
-      )
-    ) => assert_eq(true, true)
+    Some(Block(Value(Ref(Func, true)), _)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_control(
@@ -279,18 +250,12 @@ test "parse blocktype variants" {
     b'\x02',
   )
   match instr {
-    Some(
-      @core.Instr::Block(
-        @core.BlockType::Value(@core.ValType::Ref(@core.RefType::Func, false)),
-        _
-      )
-    ) => assert_eq(true, true)
+    Some(Block(Value(Ref(Func, false)), _)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_control(make_parser([b'\x01', b'\x0b']), b'\x02')
   match instr {
-    Some(@core.Instr::Block(@core.BlockType::TypeIndex(1), _)) =>
-      assert_eq(true, true)
+    Some(Block(TypeIndex(1), _)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
 }
@@ -303,8 +268,7 @@ test "parse instr if without else" {
   bytes.push(b'\x0b')
   let instr = parse_instr_control(make_parser(bytes), b'\x04')
   match instr {
-    Some(@core.Instr::If(_, _, else_instrs)) =>
-      assert_eq(else_instrs.length(), 0)
+    Some(If(_, _, else_instrs)) => assert_eq(else_instrs.length(), 0)
     _ => assert_eq(true, false)
   }
 }
@@ -313,7 +277,7 @@ test "parse instr if without else" {
 test "parse instr numeric i64 const" {
   let instr = parse_instr_numeric(make_parser([b'\x00']), b'\x42')
   match instr {
-    Some(@core.Instr::I64Const(value)) => assert_eq(value, 0UL)
+    Some(I64Const(value)) => assert_eq(value, 0UL)
     _ => assert_eq(true, false)
   }
 }
@@ -322,63 +286,62 @@ test "parse instr numeric i64 const" {
 test "parse instr reference variants" {
   let instr = parse_instr_reference(make_parser([b'\x6f']), b'\xd0')
   match instr {
-    Some(@core.Instr::RefNull(@core.RefType::Extern)) => assert_eq(true, true)
+    Some(RefNull(Extern)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_reference(make_parser([b'\x6e']), b'\xd0')
   match instr {
-    Some(@core.Instr::RefNull(@core.RefType::Any)) => assert_eq(true, true)
+    Some(RefNull(Any)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_reference(make_parser([b'\x6d']), b'\xd0')
   match instr {
-    Some(@core.Instr::RefNull(@core.RefType::Eq)) => assert_eq(true, true)
+    Some(RefNull(Eq)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_reference(make_parser([b'\x6c']), b'\xd0')
   match instr {
-    Some(@core.Instr::RefNull(@core.RefType::I31)) => assert_eq(true, true)
+    Some(RefNull(I31)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_reference(make_parser([b'\x6b']), b'\xd0')
   match instr {
-    Some(@core.Instr::RefNull(@core.RefType::Struct)) => assert_eq(true, true)
+    Some(RefNull(Struct)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_reference(make_parser([b'\x6a']), b'\xd0')
   match instr {
-    Some(@core.Instr::RefNull(@core.RefType::Array)) => assert_eq(true, true)
+    Some(RefNull(Array)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_reference(make_parser([b'\x69']), b'\xd0')
   match instr {
-    Some(@core.Instr::RefNull(@core.RefType::Exn)) => assert_eq(true, true)
+    Some(RefNull(Exn)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_reference(make_parser([b'\x71']), b'\xd0')
   match instr {
-    Some(@core.Instr::RefNull(@core.RefType::None)) => assert_eq(true, true)
+    Some(RefNull(None)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_reference(make_parser([b'\x72']), b'\xd0')
   match instr {
-    Some(@core.Instr::RefNull(@core.RefType::NoExtern)) => assert_eq(true, true)
+    Some(RefNull(NoExtern)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_reference(make_parser([b'\x73']), b'\xd0')
   match instr {
-    Some(@core.Instr::RefNull(@core.RefType::NoFunc)) => assert_eq(true, true)
+    Some(RefNull(NoFunc)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_reference(make_parser([b'\x74']), b'\xd0')
   match instr {
-    Some(@core.Instr::RefNull(@core.RefType::NoExn)) => assert_eq(true, true)
+    Some(RefNull(NoExn)) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
   let instr = parse_instr_reference(make_parser([b'\x01']), b'\xd0')
   match instr {
-    Some(@core.Instr::RefNull(@core.RefType::TypeIndex(1))) =>
-      assert_eq(true, true)
+    Some(RefNull(TypeIndex(1))) => assert_eq(true, true)
     _ => assert_eq(true, false)
   }
 }
@@ -494,44 +457,44 @@ test "parse memarg with memory index" {
 test "parse reftype variants" {
   let (ref_type, nullable) = Parser::new(Bytes::from_array([b'\x63', b'\x00'])).read_reftype_with_nullability()
   assert_eq(nullable, true)
-  assert_eq(ref_type, @core.RefType::TypeIndex(0))
+  assert_eq(ref_type, TypeIndex(0))
   let (ref_type, nullable) = Parser::new(Bytes::from_array([b'\x64', b'\x70'])).read_reftype_with_nullability()
   assert_eq(nullable, false)
-  assert_eq(ref_type, @core.RefType::Func)
+  assert_eq(ref_type, Func)
   let (ref_type, nullable) = Parser::new(Bytes::from_array([b'\x63', b'\x70'])).read_reftype_with_nullability()
   assert_eq(nullable, true)
-  assert_eq(ref_type, @core.RefType::Func)
+  assert_eq(ref_type, Func)
   let (ref_type, nullable) = Parser::new(Bytes::from_array([b'\x64', b'\x01'])).read_reftype_with_nullability()
   assert_eq(nullable, false)
-  assert_eq(ref_type, @core.RefType::TypeIndex(1))
+  assert_eq(ref_type, TypeIndex(1))
   let (ref_type, nullable) = Parser::new(Bytes::from_array([b'\x01'])).read_reftype_with_nullability()
   assert_eq(nullable, true)
-  assert_eq(ref_type, @core.RefType::TypeIndex(1))
+  assert_eq(ref_type, TypeIndex(1))
   let mut saw_error = false
   let _ = Parser::new(Bytes::from_array([b'\x62'])).read_reftype_with_nullability() catch {
     _ => {
       saw_error = true
-      (@core.RefType::Func, true)
+      (Func, true)
     }
   }
   assert_eq(saw_error, true)
   let ref_type = Parser::new(Bytes::from_array([b'\x63', b'\x70'])).read_reftype()
-  assert_eq(ref_type, @core.RefType::Func)
+  assert_eq(ref_type, Func)
   let ref_type = Parser::new(Bytes::from_array([b'\x63', b'\x01'])).read_reftype()
-  assert_eq(ref_type, @core.RefType::TypeIndex(1))
+  assert_eq(ref_type, TypeIndex(1))
   let ref_type = Parser::new(Bytes::from_array([b'\x64', b'\x70'])).read_reftype()
-  assert_eq(ref_type, @core.RefType::Func)
+  assert_eq(ref_type, Func)
   let ref_type = Parser::new(Bytes::from_array([b'\x64', b'\x01'])).read_reftype()
-  assert_eq(ref_type, @core.RefType::TypeIndex(1))
+  assert_eq(ref_type, TypeIndex(1))
   let ref_type = Parser::new(Bytes::from_array([b'\x01'])).read_reftype()
-  assert_eq(ref_type, @core.RefType::TypeIndex(1))
+  assert_eq(ref_type, TypeIndex(1))
   let ref_type = Parser::new(Bytes::from_array([b'\x40'])).read_reftype()
-  assert_eq(ref_type, @core.RefType::Func)
+  assert_eq(ref_type, Func)
   saw_error = false
   let _ = Parser::new(Bytes::from_array([b'\x62'])).read_reftype() catch {
     _ => {
       saw_error = true
-      @core.RefType::Func
+      Func
     }
   }
   assert_eq(saw_error, true)
@@ -543,7 +506,7 @@ test "parse invalid valtype" {
   let _ = Parser::new(Bytes::from_array([b'\x62'])).read_valtype() catch {
     _ => {
       saw_error = true
-      @core.ValType::I32
+      I32
     }
   }
   assert_eq(saw_error, true)
@@ -559,7 +522,7 @@ test "parse main header errors" {
   ) catch {
     _ => {
       saw_error = true
-      @core.Module::{
+      {
         types: [],
         funcs: [],
         tables: [],
@@ -583,7 +546,7 @@ test "parse main header errors" {
   ) catch {
     _ => {
       saw_error = true
-      @core.Module::{
+      {
         types: [],
         funcs: [],
         tables: [],
@@ -617,7 +580,7 @@ test "parse main section skips" {
   let _ = parse(Bytes::from_array(bytes)) catch {
     _ => {
       saw_error = true
-      @core.Module::{
+      {
         types: [],
         funcs: [],
         tables: [],

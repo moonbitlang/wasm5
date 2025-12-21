@@ -25,115 +25,47 @@ fn expect_numeric(
 
 ///|
 test "validate numeric instruction groups" {
-  expect_numeric(@core.Instr::I32Const(0U), [], [@core.ValType::I32])
-  expect_numeric(
-    @core.Instr::I32Add,
-    [@core.ValType::I32, @core.ValType::I32],
-    [@core.ValType::I32],
-  )
-  expect_numeric(@core.Instr::I32Eq, [@core.ValType::I32, @core.ValType::I32], [
-    @core.ValType::I32,
-  ])
-  expect_numeric(@core.Instr::I32Eqz, [@core.ValType::I32], [@core.ValType::I32])
-  expect_numeric(
-    @core.Instr::I64Add,
-    [@core.ValType::I64, @core.ValType::I64],
-    [@core.ValType::I64],
-  )
-  expect_numeric(@core.Instr::I64Eq, [@core.ValType::I64, @core.ValType::I64], [
-    @core.ValType::I32,
-  ])
-  expect_numeric(@core.Instr::I64Eqz, [@core.ValType::I64], [@core.ValType::I32])
-  expect_numeric(@core.Instr::I64Clz, [@core.ValType::I64], [@core.ValType::I64])
-  expect_numeric(@core.Instr::I64ExtendI32S, [@core.ValType::I32], [
-    @core.ValType::I64,
-  ])
-  expect_numeric(@core.Instr::I32WrapI64, [@core.ValType::I64], [
-    @core.ValType::I32,
-  ])
-  expect_numeric(@core.Instr::F32Eq, [@core.ValType::F32, @core.ValType::F32], [
-    @core.ValType::I32,
-  ])
-  expect_numeric(@core.Instr::F64Eq, [@core.ValType::F64, @core.ValType::F64], [
-    @core.ValType::I32,
-  ])
-  expect_numeric(@core.Instr::F32Abs, [@core.ValType::F32], [@core.ValType::F32])
-  expect_numeric(@core.Instr::F64Abs, [@core.ValType::F64], [@core.ValType::F64])
-  expect_numeric(
-    @core.Instr::F32Add,
-    [@core.ValType::F32, @core.ValType::F32],
-    [@core.ValType::F32],
-  )
-  expect_numeric(
-    @core.Instr::F64Add,
-    [@core.ValType::F64, @core.ValType::F64],
-    [@core.ValType::F64],
-  )
-  expect_numeric(@core.Instr::F32ConvertI32S, [@core.ValType::I32], [
-    @core.ValType::F32,
-  ])
-  expect_numeric(@core.Instr::F64ConvertI32U, [@core.ValType::I32], [
-    @core.ValType::F64,
-  ])
-  expect_numeric(@core.Instr::F32ConvertI64S, [@core.ValType::I64], [
-    @core.ValType::F32,
-  ])
-  expect_numeric(@core.Instr::F64ConvertI64U, [@core.ValType::I64], [
-    @core.ValType::F64,
-  ])
-  expect_numeric(@core.Instr::F64PromoteF32, [@core.ValType::F32], [
-    @core.ValType::F64,
-  ])
-  expect_numeric(@core.Instr::F32DemoteF64, [@core.ValType::F64], [
-    @core.ValType::F32,
-  ])
-  expect_numeric(@core.Instr::I32TruncF32S, [@core.ValType::F32], [
-    @core.ValType::I32,
-  ])
-  expect_numeric(@core.Instr::I32TruncF64U, [@core.ValType::F64], [
-    @core.ValType::I32,
-  ])
-  expect_numeric(@core.Instr::I64TruncF32S, [@core.ValType::F32], [
-    @core.ValType::I64,
-  ])
-  expect_numeric(@core.Instr::I64TruncF64U, [@core.ValType::F64], [
-    @core.ValType::I64,
-  ])
-  expect_numeric(@core.Instr::I32TruncSatF32S, [@core.ValType::F32], [
-    @core.ValType::I32,
-  ])
-  expect_numeric(@core.Instr::I32TruncSatF64U, [@core.ValType::F64], [
-    @core.ValType::I32,
-  ])
-  expect_numeric(@core.Instr::I64TruncSatF32U, [@core.ValType::F32], [
-    @core.ValType::I64,
-  ])
-  expect_numeric(@core.Instr::I64TruncSatF64S, [@core.ValType::F64], [
-    @core.ValType::I64,
-  ])
-  expect_numeric(@core.Instr::F32ReinterpretI32, [@core.ValType::I32], [
-    @core.ValType::F32,
-  ])
-  expect_numeric(@core.Instr::F64ReinterpretI64, [@core.ValType::I64], [
-    @core.ValType::F64,
-  ])
-  expect_numeric(@core.Instr::I32ReinterpretF32, [@core.ValType::F32], [
-    @core.ValType::I32,
-  ])
-  expect_numeric(@core.Instr::I64ReinterpretF64, [@core.ValType::F64], [
-    @core.ValType::I64,
-  ])
+  expect_numeric(I32Const(0U), [], [I32])
+  expect_numeric(I32Add, [I32, I32], [I32])
+  expect_numeric(I32Eq, [I32, I32], [I32])
+  expect_numeric(I32Eqz, [I32], [I32])
+  expect_numeric(I64Add, [I64, I64], [I64])
+  expect_numeric(I64Eq, [I64, I64], [I32])
+  expect_numeric(I64Eqz, [I64], [I32])
+  expect_numeric(I64Clz, [I64], [I64])
+  expect_numeric(I64ExtendI32S, [I32], [I64])
+  expect_numeric(I32WrapI64, [I64], [I32])
+  expect_numeric(F32Eq, [F32, F32], [I32])
+  expect_numeric(F64Eq, [F64, F64], [I32])
+  expect_numeric(F32Abs, [F32], [F32])
+  expect_numeric(F64Abs, [F64], [F64])
+  expect_numeric(F32Add, [F32, F32], [F32])
+  expect_numeric(F64Add, [F64, F64], [F64])
+  expect_numeric(F32ConvertI32S, [I32], [F32])
+  expect_numeric(F64ConvertI32U, [I32], [F64])
+  expect_numeric(F32ConvertI64S, [I64], [F32])
+  expect_numeric(F64ConvertI64U, [I64], [F64])
+  expect_numeric(F64PromoteF32, [F32], [F64])
+  expect_numeric(F32DemoteF64, [F64], [F32])
+  expect_numeric(I32TruncF32S, [F32], [I32])
+  expect_numeric(I32TruncF64U, [F64], [I32])
+  expect_numeric(I64TruncF32S, [F32], [I64])
+  expect_numeric(I64TruncF64U, [F64], [I64])
+  expect_numeric(I32TruncSatF32S, [F32], [I32])
+  expect_numeric(I32TruncSatF64U, [F64], [I32])
+  expect_numeric(I64TruncSatF32U, [F32], [I64])
+  expect_numeric(I64TruncSatF64S, [F64], [I64])
+  expect_numeric(F32ReinterpretI32, [I32], [F32])
+  expect_numeric(F64ReinterpretI64, [I64], [F64])
+  expect_numeric(I32ReinterpretF32, [F32], [I32])
+  expect_numeric(I64ReinterpretF64, [F64], [I64])
 }
 
 ///|
 test "validate numeric instruction dispatch misses" {
   let ctx = ValidationCtx::new()
   let mut saw_error = false
-  let ok = validate_instruction_numeric(
-    test_empty_module(),
-    ctx,
-    @core.Instr::Nop,
-  ) catch {
+  let ok = validate_instruction_numeric(test_empty_module(), ctx, Nop) catch {
     _ => {
       saw_error = true
       false
