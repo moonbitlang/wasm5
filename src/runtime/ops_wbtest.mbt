@@ -814,11 +814,11 @@ test "compile helpers canonicalize and counts" {
     datas: [],
     start: None,
     imports: [
-      { module_: b"m", name: b"f", desc: @core.ImportDesc::Func(0U) },
+      { module_: b"m", name: b"f", desc: Func(0U) },
       {
         module_: b"m",
         name: b"mem",
-        desc: @core.ImportDesc::Mem({ limits: { min: 1U, max: None } }),
+        desc: Mem({ limits: { min: 1U, max: None } }),
       },
     ],
     exports: [],
@@ -855,9 +855,9 @@ test "compile helpers pop arguments" {
 ///|
 test "compile context stack ops and errors" {
   let ctx = CompileCtx::new()
-  ctx.push_type(@core.ValType::I32)
+  ctx.push_type(I32)
   ctx.pop_type()
-  ctx.push_types([@core.ValType::I32, @core.ValType::I64])
+  ctx.push_types([I32, I64])
   ctx.pop_types(2)
   let cases : Array[(RetCode, RuntimeError)] = [
     (DivisionByZero, RuntimeError::DivisionByZero),

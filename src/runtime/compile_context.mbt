@@ -205,9 +205,9 @@ fn get_compile_block_type(
   block_type : @core.BlockType,
 ) -> (Array[@core.ValType], Array[@core.ValType]) {
   match block_type {
-    @core.BlockType::Empty => ([], [])
-    @core.BlockType::Value(t) => ([], [t])
-    @core.BlockType::TypeIndex(idx) => {
+    Empty => ([], [])
+    Value(t) => ([], [t])
+    TypeIndex(idx) => {
       let func_type = module_.types[idx]
       (func_type.params, func_type.results)
     }

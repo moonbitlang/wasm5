@@ -6,10 +6,7 @@ fn make_code(locals : Array[@core.ValType]) -> @core.Code {
 ///|
 test "compile helpers initialize locals" {
   let rt = make_runtime([], [], 0)
-  let code = make_code([
-    @core.ValType::I32,
-    @core.ValType::Ref(@core.RefType::Func, true),
-  ])
+  let code = make_code([I32, Ref(Func, true)])
   assert_ok(rt.initialize_locals([Value::I32(9U)], code))
   assert_eq(rt.locals.length(), 3)
   assert_eq(rt.locals[0], Value::I32(9U))
@@ -20,13 +17,13 @@ test "compile helpers initialize locals" {
 ///|
 test "compile helpers initialize locals unsupported" {
   let rt = make_runtime([], [], 0)
-  let code = make_code([@core.ValType::V128])
+  let code = make_code([V128])
   assert_ret(rt.initialize_locals([], code), UnsupportedLocalType)
 }
 
 ///|
 test "compile helpers type signature mismatch" {
-  let expected : @core.FuncType = { params: [@core.ValType::I32], results: [] }
+  let expected : @core.FuncType = { params: [I32], results: [] }
   let actual : @core.FuncType = { params: [], results: [] }
   let rt = make_runtime([], [], 0)
   assert_ret(
@@ -50,9 +47,9 @@ test "compile helpers func type lookup with non func imports" {
       {
         module_: b"m",
         name: b"mem",
-        desc: @core.ImportDesc::Mem({ limits: { min: 1U, max: None } }),
+        desc: Mem({ limits: { min: 1U, max: None } }),
       },
-      { module_: b"m", name: b"f", desc: @core.ImportDesc::Func(0U) },
+      { module_: b"m", name: b"f", desc: Func(0U) },
     ],
     exports: [],
     codes: [],
