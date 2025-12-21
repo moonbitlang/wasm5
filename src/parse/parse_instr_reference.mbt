@@ -9,62 +9,61 @@ fn parse_instr_reference(parser : Parser, opcode : Byte) -> @core.Instr? raise {
     // Reference instructions
     0xD0 => {
       // ref.null heaptype
-      let view = parser.view()
-      let ref_type : @core.RefType = match view {
-        [0x70, .. rest] => {
-          parser.update_view(rest)
+      let ref_type : @core.RefType = match parser.peek_byte() {
+        Some(0x70) => {
+          let _ = parser.next_byte()
           Func
         }
-        [0x6F, .. rest] => {
-          parser.update_view(rest)
+        Some(0x6F) => {
+          let _ = parser.next_byte()
           Extern
         }
-        [0x6E, .. rest] => {
-          parser.update_view(rest)
+        Some(0x6E) => {
+          let _ = parser.next_byte()
           Any
         }
-        [0x6D, .. rest] => {
-          parser.update_view(rest)
+        Some(0x6D) => {
+          let _ = parser.next_byte()
           Eq
         }
-        [0x6C, .. rest] => {
-          parser.update_view(rest)
+        Some(0x6C) => {
+          let _ = parser.next_byte()
           I31
         }
-        [0x6B, .. rest] => {
-          parser.update_view(rest)
+        Some(0x6B) => {
+          let _ = parser.next_byte()
           Struct
         }
-        [0x6A, .. rest] => {
-          parser.update_view(rest)
+        Some(0x6A) => {
+          let _ = parser.next_byte()
           Array
         }
-        [0x69, .. rest] => {
-          parser.update_view(rest)
+        Some(0x69) => {
+          let _ = parser.next_byte()
           Exn
         }
-        [0x71, .. rest] => {
-          parser.update_view(rest)
+        Some(0x71) => {
+          let _ = parser.next_byte()
           None
         }
-        [0x72, .. rest] => {
-          parser.update_view(rest)
+        Some(0x72) => {
+          let _ = parser.next_byte()
           NoExtern
         }
-        [0x73, .. rest] => {
-          parser.update_view(rest)
+        Some(0x73) => {
+          let _ = parser.next_byte()
           NoFunc
         }
-        [0x74, .. rest] => {
-          parser.update_view(rest)
+        Some(0x74) => {
+          let _ = parser.next_byte()
           NoExn
         }
-        [_, ..] => {
+        Some(_) => {
           // Assume it's a type index (negative or positive)
           let type_idx = parser.read_i32_leb128()
           TypeIndex(type_idx)
         }
-        _ => raise ParseError::UnexpectedEof
+        None => raise ParseError::UnexpectedEof
       }
       Some(RefNull(ref_type))
     }

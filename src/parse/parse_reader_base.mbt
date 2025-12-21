@@ -16,6 +16,47 @@ fn Parser::update_view(self : Parser, view : BytesView) -> Unit {
 }
 
 ///|
+fn Parser::peek_byte(self : Parser) -> Byte? {
+  match self.view() {
+    [byte, ..] => Some(byte)
+    _ => None
+  }
+}
+
+///|
+fn Parser::next_byte(self : Parser) -> Byte raise ParseError {
+  match self.view() {
+    [byte, .. rest] => {
+      self.update_view(rest)
+      byte
+    }
+    _ => raise ParseError::UnexpectedEof
+  }
+}
+
+///|
+fn Parser::take_u32le(self : Parser) -> UInt raise ParseError {
+  match self.view() {
+    [u32le(bits), .. rest] => {
+      self.update_view(rest)
+      bits
+    }
+    _ => raise ParseError::UnexpectedEof
+  }
+}
+
+///|
+fn Parser::take_u64le(self : Parser) -> UInt64 raise ParseError {
+  match self.view() {
+    [u64le(bits), .. rest] => {
+      self.update_view(rest)
+      bits
+    }
+    _ => raise ParseError::UnexpectedEof
+  }
+}
+
+///|
 fn Parser::new(bytes : Bytes) -> Parser {
   { bytes, pos: 0 }
 }

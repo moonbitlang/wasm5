@@ -4,13 +4,11 @@
 fn parse_expr(parser : Parser) -> @core.Expr raise {
   let instrs = parse_instrs(parser)
   // parse_instrs puts back the 0x0B, we need to consume it
-  match parser.view() {
-    [0x0B, .. rest] => parser.update_view(rest)
-    [byte, ..] =>
-      raise ParseError::InvalidFormat(
-        "expected end marker 0x0B, got 0x\{byte.to_int().to_string()}",
-      )
-    _ => raise ParseError::UnexpectedEof
+  let end_marker = parser.next_byte()
+  guard end_marker == 0x0B else {
+    raise ParseError::InvalidFormat(
+      "expected end marker 0x0B, got 0x\{end_marker.to_int().to_string()}",
+    )
   }
   @core.Expr::{ instrs, }
 }
@@ -20,17 +18,17 @@ fn parse_expr(parser : Parser) -> @core.Expr raise {
 ///|
 fn parse_instrs(parser : Parser) -> Array[@core.Instr] raise {
   fn read_loop(instrs : Array[@core.Instr]) -> Array[@core.Instr] raise {
-    match parser.view() {
+    match parser.peek_byte() {
       // End marker (0x0B) - leave it for the caller to handle
-      [0x0B, ..] => instrs
+      Some(0x0B) => instrs
       // Else marker (0x05) - leave it for the if parser to handle
-      [0x05, ..] => instrs
-      [opcode, .. rest] => {
-        parser.update_view(rest)
+      Some(0x05) => instrs
+      Some(opcode) => {
+        let _ = parser.next_byte()
         instrs.push(parse_instr(parser, opcode))
         read_loop(instrs)
       }
-      _ => raise ParseError::UnexpectedEof
+      None => raise ParseError::UnexpectedEof
     }
   }
 
@@ -88,96 +86,96 @@ fn parse_instr(parser : Parser, opcode : Byte) -> @core.Instr raise {
 
 ///|
 fn parse_blocktype(parser : Parser) -> @core.BlockType raise ParseError {
-  match parser.view() {
-    [0x40, .. rest] => {
-      parser.update_view(rest)
+  match parser.peek_byte() {
+    Some(0x40) => {
+      let _ = parser.next_byte()
       Empty // empty block type
     }
-    [0x7F, .. rest] => {
-      parser.update_view(rest)
+    Some(0x7F) => {
+      let _ = parser.next_byte()
       Value(I32)
     }
-    [0x7E, .. rest] => {
-      parser.update_view(rest)
+    Some(0x7E) => {
+      let _ = parser.next_byte()
       Value(I64)
     }
-    [0x7D, .. rest] => {
-      parser.update_view(rest)
+    Some(0x7D) => {
+      let _ = parser.next_byte()
       Value(F32)
     }
-    [0x7C, .. rest] => {
-      parser.update_view(rest)
+    Some(0x7C) => {
+      let _ = parser.next_byte()
       Value(F64)
     }
-    [0x7B, .. rest] => {
-      parser.update_view(rest)
+    Some(0x7B) => {
+      let _ = parser.next_byte()
       Value(V128)
     }
-    [0x70, .. rest] => {
-      parser.update_view(rest)
+    Some(0x70) => {
+      let _ = parser.next_byte()
       Value(FuncRef)
     }
-    [0x6F, .. rest] => {
-      parser.update_view(rest)
+    Some(0x6F) => {
+      let _ = parser.next_byte()
       Value(ExternRef)
     }
-    [0x6E, .. rest] => {
-      parser.update_view(rest)
+    Some(0x6E) => {
+      let _ = parser.next_byte()
       Value(AnyRef)
     }
-    [0x6D, .. rest] => {
-      parser.update_view(rest)
+    Some(0x6D) => {
+      let _ = parser.next_byte()
       Value(EqRef)
     }
-    [0x6C, .. rest] => {
-      parser.update_view(rest)
+    Some(0x6C) => {
+      let _ = parser.next_byte()
       Value(I31Ref)
     }
-    [0x6B, .. rest] => {
-      parser.update_view(rest)
+    Some(0x6B) => {
+      let _ = parser.next_byte()
       Value(StructRef)
     }
-    [0x6A, .. rest] => {
-      parser.update_view(rest)
+    Some(0x6A) => {
+      let _ = parser.next_byte()
       Value(ArrayRef)
     }
-    [0x69, .. rest] => {
-      parser.update_view(rest)
+    Some(0x69) => {
+      let _ = parser.next_byte()
       Value(ExnRef)
     }
-    [0x71, .. rest] => {
-      parser.update_view(rest)
+    Some(0x71) => {
+      let _ = parser.next_byte()
       Value(NullRef)
     }
-    [0x72, .. rest] => {
-      parser.update_view(rest)
+    Some(0x72) => {
+      let _ = parser.next_byte()
       Value(NullExternRef)
     }
-    [0x73, .. rest] => {
-      parser.update_view(rest)
+    Some(0x73) => {
+      let _ = parser.next_byte()
       Value(NullFuncRef)
     }
-    [0x74, .. rest] => {
-      parser.update_view(rest)
+    Some(0x74) => {
+      let _ = parser.next_byte()
       Value(NullExnRef)
     }
     // GC proposal: (ref null $t) - nullable typed reference
-    [0x63, .. rest] => {
-      parser.update_view(rest)
+    Some(0x63) => {
+      let _ = parser.next_byte()
       let heap_type = parser.read_heap_type()
       Value(Ref(heap_type, true))
     }
     // GC proposal: (ref $t) - non-null typed reference
-    [0x64, .. rest] => {
-      parser.update_view(rest)
+    Some(0x64) => {
+      let _ = parser.next_byte()
       let heap_type = parser.read_heap_type()
       Value(Ref(heap_type, false))
     }
-    [_byte, ..] => {
+    Some(_) => {
       // Type index encoded as signed LEB128
       let type_idx = parser.read_i32_leb128()
       TypeIndex(type_idx)
     }
-    _ => raise ParseError::UnexpectedEof
+    None => raise ParseError::UnexpectedEof
   }
 }

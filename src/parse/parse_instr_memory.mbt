@@ -94,23 +94,11 @@ fn parse_instr_memory(parser : Parser, opcode : Byte) -> @core.Instr? raise {
       Some(I64Store32(align, offset))
     }
     0x3F => {
-      let mem_idx = match parser.view() {
-        [byte, .. rest] => {
-          parser.update_view(rest)
-          byte
-        }
-        _ => raise ParseError::UnexpectedEof
-      } // memory index (usually 0x00)
+      let mem_idx = parser.next_byte() // memory index (usually 0x00)
       Some(MemorySize(mem_idx.to_uint()))
     }
     0x40 => {
-      let mem_idx = match parser.view() {
-        [byte, .. rest] => {
-          parser.update_view(rest)
-          byte
-        }
-        _ => raise ParseError::UnexpectedEof
-      } // memory index (usually 0x00)
+      let mem_idx = parser.next_byte() // memory index (usually 0x00)
       Some(MemoryGrow(mem_idx.to_uint()))
     }
     _ => None

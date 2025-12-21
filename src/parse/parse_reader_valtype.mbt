@@ -25,11 +25,11 @@ fn opcode_to_heap_type(byte : Byte) -> @core.RefType? {
 /// Read a heap type (used after 0x63/0x64 prefix)
 /// Heap types can be abstract heap types (0x70, 0x6F, etc.) or type indices
 fn Parser::read_heap_type(self : Parser) -> @core.RefType raise ParseError {
-  match self.view() {
-    [byte, .. rest] =>
+  match self.peek_byte() {
+    Some(byte) =>
       match opcode_to_heap_type(byte) {
         Some(ref_type) => {
-          self.update_view(rest)
+          let _ = self.next_byte()
           ref_type
         }
         None => {
@@ -38,103 +38,47 @@ fn Parser::read_heap_type(self : Parser) -> @core.RefType raise ParseError {
           TypeIndex(type_idx)
         }
       }
-    _ => raise ParseError::UnexpectedEof
+    None => raise ParseError::UnexpectedEof
   }
 }
 
 ///|
 fn Parser::read_valtype(self : Parser) -> @core.ValType raise {
-  match self.view() {
-    [byte, .. rest] =>
-      match byte {
-        0x7F => {
-          self.update_view(rest)
-          I32
-        }
-        0x7E => {
-          self.update_view(rest)
-          I64
-        }
-        0x7D => {
-          self.update_view(rest)
-          F32
-        }
-        0x7C => {
-          self.update_view(rest)
-          F64
-        }
-        0x7B => {
-          self.update_view(rest)
-          V128
-        }
-        // GC proposal: (ref null $t) - nullable typed reference
-        0x63 => {
-          self.update_view(rest)
-          let heap_type = self.read_heap_type()
-          Ref(heap_type, true) // nullable = true
-        }
-        // GC proposal: (ref $t) - non-null typed reference
-        0x64 => {
-          self.update_view(rest)
-          let heap_type = self.read_heap_type()
-          Ref(heap_type, false) // nullable = false
-        }
-        _ =>
-          match opcode_to_heap_type(byte) {
-            Some(Func) => {
-              self.update_view(rest)
-              FuncRef
-            }
-            Some(Extern) => {
-              self.update_view(rest)
-              ExternRef
-            }
-            Some(Any) => {
-              self.update_view(rest)
-              AnyRef
-            }
-            Some(Eq) => {
-              self.update_view(rest)
-              EqRef
-            }
-            Some(I31) => {
-              self.update_view(rest)
-              I31Ref
-            }
-            Some(Struct) => {
-              self.update_view(rest)
-              StructRef
-            }
-            Some(Array) => {
-              self.update_view(rest)
-              ArrayRef
-            }
-            Some(Exn) => {
-              self.update_view(rest)
-              ExnRef
-            }
-            Some(None) => {
-              self.update_view(rest)
-              NullRef
-            }
-            Some(NoExtern) => {
-              self.update_view(rest)
-              NullExternRef
-            }
-            Some(NoFunc) => {
-              self.update_view(rest)
-              NullFuncRef
-            }
-            Some(NoExn) => {
-              self.update_view(rest)
-              NullExnRef
-            }
-            Some(TypeIndex(_)) | None =>
-              raise @validate.ValidationError::TypeMismatch(
-                "invalid value type: 0x\{byte.to_string()}",
-              )
-          }
+  let byte = self.next_byte()
+  match byte {
+    0x7F => I32
+    0x7E => I64
+    0x7D => F32
+    0x7C => F64
+    0x7B => V128
+    // GC proposal: (ref null $t) - nullable typed reference
+    0x63 => {
+      let heap_type = self.read_heap_type()
+      Ref(heap_type, true) // nullable = true
+    }
+    // GC proposal: (ref $t) - non-null typed reference
+    0x64 => {
+      let heap_type = self.read_heap_type()
+      Ref(heap_type, false) // nullable = false
+    }
+    _ =>
+      match opcode_to_heap_type(byte) {
+        Some(Func) => FuncRef
+        Some(Extern) => ExternRef
+        Some(Any) => AnyRef
+        Some(Eq) => EqRef
+        Some(I31) => I31Ref
+        Some(Struct) => StructRef
+        Some(Array) => ArrayRef
+        Some(Exn) => ExnRef
+        Some(None) => NullRef
+        Some(NoExtern) => NullExternRef
+        Some(NoFunc) => NullFuncRef
+        Some(NoExn) => NullExnRef
+        Some(TypeIndex(_)) | None =>
+          raise @validate.ValidationError::TypeMismatch(
+            "invalid value type: 0x\{byte.to_string()}",
+          )
       }
-    _ => raise ParseError::UnexpectedEof
   }
 }

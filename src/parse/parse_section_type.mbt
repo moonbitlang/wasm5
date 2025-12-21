@@ -2,13 +2,7 @@
 
 ///|
 fn parse_single_type(parser : Parser) -> @core.FuncType raise {
-  let tag = match parser.view() {
-    [byte, .. rest] => {
-      parser.update_view(rest)
-      byte
-    }
-    _ => raise ParseError::UnexpectedEof
-  }
+  let tag = parser.next_byte()
   // Handle composite types from GC proposal
   match tag {
     // func type
@@ -30,13 +24,7 @@ fn parse_single_type(parser : Parser) -> @core.FuncType raise {
       let field_count = parser.read_u32_leb128()
       for _ in 0U..<field_count {
         let _ = parser.read_valtype() // field type
-        let _ = match parser.view() {
-          [byte, .. rest] => {
-            parser.update_view(rest)
-            byte
-          }
-          _ => raise ParseError::UnexpectedEof
-        }
+        let _ = parser.next_byte()
         // mutability
       }
       { params: [], results: [] }
@@ -44,13 +32,7 @@ fn parse_single_type(parser : Parser) -> @core.FuncType raise {
     // array type (GC proposal) - skip element, return empty func type
     0x5E => {
       let _ = parser.read_valtype() // element type
-      let _ = match parser.view() {
-        [byte, .. rest] => {
-          parser.update_view(rest)
-          byte
-        }
-        _ => raise ParseError::UnexpectedEof
-      } // mutability
+      let _ = parser.next_byte() // mutability
       { params: [], results: [] }
     }
     _ =>
@@ -66,10 +48,10 @@ fn parse_type_section(parser : Parser) -> Array[@core.FuncType] raise {
   let types = []
   for i in 0U..<count {
     // GC proposal: handle recursive type groups and subtypes
-    match parser.view() {
+    match parser.peek_byte() {
       // rec - recursive type group
-      [0x4E, .. rest] => {
-        parser.update_view(rest)
+      Some(0x4E) => {
+        let _ = parser.next_byte()
         let rec_count = parser.read_u32_leb128()
         for _ in 0U..<rec_count {
           let func_type = parse_single_type(parser)
@@ -78,8 +60,8 @@ fn parse_type_section(parser : Parser) -> Array[@core.FuncType] raise {
         continue
       }
       // sub - subtype (with supertypes)
-      [0x4F, .. rest] => {
-        parser.update_view(rest)
+      Some(0x4F) => {
+        let _ = parser.next_byte()
         let supertype_count = parser.read_u32_leb128()
         for _ in 0U..<supertype_count {
           let _ = parser.read_u32_leb128()
@@ -90,8 +72,8 @@ fn parse_type_section(parser : Parser) -> Array[@core.FuncType] raise {
         continue
       }
       // sub final - final subtype (with supertypes)
-      [0x50, .. rest] => {
-        parser.update_view(rest)
+      Some(0x50) => {
+        let _ = parser.next_byte()
         let supertype_count = parser.read_u32_leb128()
         for _ in 0U..<supertype_count {
           let _ = parser.read_u32_leb128()
@@ -102,15 +84,15 @@ fn parse_type_section(parser : Parser) -> Array[@core.FuncType] raise {
         continue
       }
       // Standard function type
-      [0x60, ..] => {
+      Some(0x60) => {
         let func_type = parse_single_type(parser)
         types.push(func_type)
       }
-      [tag, ..] =>
+      Some(tag) =>
         raise @validate.ValidationError::TypeMismatch(
           "expected type tag, got 0x\{tag.to_string()}",
         )
-      _ => raise ParseError::UnexpectedEof
+      None => raise ParseError::UnexpectedEof
     }
   }
   types

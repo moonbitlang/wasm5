@@ -350,6 +350,14 @@ test "parse instr reference variants" {
 test "parse reader errors" {
   let empty_view = Bytes::from_array([]).sub()
   let mut saw_error = false
+  let _ = Parser::new(Bytes::from_array([])).next_byte() catch {
+    _ => {
+      saw_error = true
+      b'\x00'
+    }
+  }
+  assert_eq(saw_error, true)
+  saw_error = false
   let _ = Parser::new(Bytes::from_array([b'\x00'])).read_bytes(2U) catch {
     _ => {
       saw_error = true

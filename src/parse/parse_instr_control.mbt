@@ -6,48 +6,24 @@ fn parse_instr_control(parser : Parser, opcode : Byte) -> @core.Instr? raise {
     0x02 => {
       let blocktype = parse_blocktype(parser)
       let instrs = parse_instrs(parser)
-      let _ = match parser.view() {
-        [byte, .. rest] => {
-          parser.update_view(rest)
-          byte
-        }
-        _ => raise ParseError::UnexpectedEof
-      } // consume 0x0B end marker
+      let _ = parser.next_byte() // consume 0x0B end marker
       Some(Block(blocktype, instrs))
     }
     0x03 => {
       let blocktype = parse_blocktype(parser)
       let instrs = parse_instrs(parser)
-      let _ = match parser.view() {
-        [byte, .. rest] => {
-          parser.update_view(rest)
-          byte
-        }
-        _ => raise ParseError::UnexpectedEof
-      } // consume 0x0B end marker
+      let _ = parser.next_byte() // consume 0x0B end marker
       Some(Loop(blocktype, instrs))
     }
     0x04 => {
       let blocktype = parse_blocktype(parser)
       let then_instrs = parse_instrs(parser)
       // Check if there's an else (0x05) or end (0x0B)
-      let marker = match parser.view() {
-        [byte, .. rest] => {
-          parser.update_view(rest)
-          byte
-        }
-        _ => raise ParseError::UnexpectedEof
-      }
+      let marker = parser.next_byte()
       if marker == 0x05 {
         // There's an else block
         let else_instrs = parse_instrs(parser)
-        let _ = match parser.view() {
-          [byte, .. rest] => {
-            parser.update_view(rest)
-            byte
-          }
-          _ => raise ParseError::UnexpectedEof
-        } // consume final 0x0B end marker
+        let _ = parser.next_byte() // consume final 0x0B end marker
         Some(If(blocktype, then_instrs, else_instrs))
       } else {
         // No else block, marker is 0x0B which ends the if
@@ -59,13 +35,7 @@ fn parse_instr_control(parser : Parser, opcode : Byte) -> @core.Instr? raise {
       // try blocktype - treat as block
       let blocktype = parse_blocktype(parser)
       let instrs = parse_instrs(parser)
-      let _ = match parser.view() {
-        [byte, .. rest] => {
-          parser.update_view(rest)
-          byte
-        }
-        _ => raise ParseError::UnexpectedEof
-      } // consume 0x0B end marker
+      let _ = parser.next_byte() // consume 0x0B end marker
       Some(Block(blocktype, instrs))
     }
     0x07 => {
@@ -120,13 +90,7 @@ fn parse_instr_control(parser : Parser, opcode : Byte) -> @core.Instr? raise {
       // Read catch clauses
       let catch_count = parser.read_u32_leb128()
       for _ in 0U..<catch_count {
-        let catch_kind = match parser.view() {
-          [byte, .. rest] => {
-            parser.update_view(rest)
-            byte
-          }
-          _ => raise ParseError::UnexpectedEof
-        }
+        let catch_kind = parser.next_byte()
         match catch_kind {
           0x00 => {
             // catch tagidx labelidx
@@ -154,13 +118,7 @@ fn parse_instr_control(parser : Parser, opcode : Byte) -> @core.Instr? raise {
         }
       }
       let instrs = parse_instrs(parser)
-      let _ = match parser.view() {
-        [byte, .. rest] => {
-          parser.update_view(rest)
-          byte
-        }
-        _ => raise ParseError::UnexpectedEof
-      } // consume 0x0B end marker
+      let _ = parser.next_byte() // consume 0x0B end marker
       Some(Block(blocktype, instrs))
     }
     _ => None
