@@ -5,20 +5,20 @@
 /// Convert @core.RefType to @core.ValType
 fn reftype_to_valtype(ref_type : @core.RefType) -> @core.ValType {
   match ref_type {
-    @core.RefType::Func => @core.ValType::FuncRef
-    @core.RefType::Extern => @core.ValType::ExternRef
-    @core.RefType::Any => @core.ValType::AnyRef
-    @core.RefType::Eq => @core.ValType::EqRef
-    @core.RefType::I31 => @core.ValType::I31Ref
-    @core.RefType::Struct => @core.ValType::StructRef
-    @core.RefType::Array => @core.ValType::ArrayRef
-    @core.RefType::Exn => @core.ValType::ExnRef
-    @core.RefType::None => @core.ValType::NullRef
-    @core.RefType::NoFunc => @core.ValType::NullFuncRef
-    @core.RefType::NoExtern => @core.ValType::NullExternRef
-    @core.RefType::NoExn => @core.ValType::NullExnRef
-    // @core.RefType::TypeIndex: return nullable typed reference (ref null $t)
-    @core.RefType::TypeIndex(_) => @core.ValType::Ref(ref_type, true)
+    Func => FuncRef
+    Extern => ExternRef
+    Any => AnyRef
+    Eq => EqRef
+    I31 => I31Ref
+    Struct => StructRef
+    Array => ArrayRef
+    Exn => ExnRef
+    None => NullRef
+    NoFunc => NullFuncRef
+    NoExtern => NullExternRef
+    NoExn => NullExnRef
+    // TypeIndex: return nullable typed reference (ref null $t)
+    TypeIndex(_) => Ref(ref_type, true)
   }
 }
 
@@ -41,10 +41,10 @@ fn get_import_counts(module_ : @core.Module) -> ImportCounts {
   let mut globals = 0
   for imp in module_.imports {
     match imp.desc {
-      @core.ImportDesc::Func(_) => funcs += 1
-      @core.ImportDesc::Table(_) => tables += 1
-      @core.ImportDesc::Mem(_) => mems += 1
-      @core.ImportDesc::Global(_) => globals += 1
+      Func(_) => funcs += 1
+      Table(_) => tables += 1
+      Mem(_) => mems += 1
+      Global(_) => globals += 1
       _ => ()
     }
   }
@@ -64,7 +64,7 @@ fn get_func_type_index(
     let mut found_type_idx = 0
     for imp in module_.imports {
       match imp.desc {
-        @core.ImportDesc::Func(tidx) => {
+        Func(tidx) => {
           if current_import == func_idx {
             found_type_idx = tidx.reinterpret_as_int()
             break
@@ -112,7 +112,7 @@ fn validate_load(
 ) -> Unit raise @core.ValidationError {
   validate_memory_exists(module_, import_counts)
   validate_alignment(align, natural_align)
-  ctx.poly_pop_expect(module_, @core.ValType::I32, "\{op_name} address")
+  ctx.poly_pop_expect(module_, I32, "\{op_name} address")
   ctx.stack.push(result_type)
 }
 
@@ -130,7 +130,7 @@ fn validate_store(
   validate_memory_exists(module_, import_counts)
   validate_alignment(align, natural_align)
   ctx.poly_pop_expect(module_, value_type, "\{op_name} value")
-  ctx.poly_pop_expect(module_, @core.ValType::I32, "\{op_name} address")
+  ctx.poly_pop_expect(module_, I32, "\{op_name} address")
 }
 
 ///|
@@ -190,19 +190,19 @@ fn validate_const_expr_instructions(
 ) -> Unit raise @core.ValidationError {
   for instr in expr.instrs {
     match instr {
-      @core.Instr::I32Const(_)
-      | @core.Instr::I64Const(_)
-      | @core.Instr::F32Const(_)
-      | @core.Instr::F64Const(_)
-      | @core.Instr::RefNull(_)
-      | @core.Instr::RefFunc(_)
-      | @core.Instr::GlobalGet(_)
-      | @core.Instr::I32Add
-      | @core.Instr::I32Sub
-      | @core.Instr::I32Mul
-      | @core.Instr::I64Add
-      | @core.Instr::I64Sub
-      | @core.Instr::I64Mul => () // Valid constant expression instructions
+      I32Const(_)
+      | I64Const(_)
+      | F32Const(_)
+      | F64Const(_)
+      | RefNull(_)
+      | RefFunc(_)
+      | GlobalGet(_)
+      | I32Add
+      | I32Sub
+      | I32Mul
+      | I64Add
+      | I64Sub
+      | I64Mul => () // Valid constant expression instructions
       _ =>
         raise @core.ValidationError::ConstantExpressionRequired(
           "invalid instruction in constant expression: \{instr}",
@@ -226,7 +226,7 @@ fn validate_table_init_expr(
   // Then check that global.get only references imported globals
   for instr in expr.instrs {
     match instr {
-      @core.Instr::GlobalGet(idx) => {
+      GlobalGet(idx) => {
         let global_idx = idx.reinterpret_as_int()
         // Must be an imported global (index < import_counts.globals)
         if global_idx >= import_counts.globals {
@@ -236,7 +236,7 @@ fn validate_table_init_expr(
         let mut import_global_idx = 0
         for imp in m.imports {
           match imp.desc {
-            @core.ImportDesc::Global(gt) => {
+            Global(gt) => {
               if import_global_idx == global_idx {
                 if gt.mutable {
                   raise @core.ValidationError::ConstantExpressionRequired(
@@ -266,7 +266,7 @@ fn validate_const_expr_globals(
 ) -> Unit raise @core.ValidationError {
   for instr in expr.instrs {
     match instr {
-      @core.Instr::GlobalGet(idx) => {
+      GlobalGet(idx) => {
         let global_idx = idx.reinterpret_as_int()
         // Check if global is mutable
         let is_mutable = if global_idx < import_counts.globals {
@@ -275,7 +275,7 @@ fn validate_const_expr_globals(
           let mut found_mutable = false
           for imp in m.imports {
             match imp.desc {
-              @core.ImportDesc::Global(gt) => {
+              Global(gt) => {
                 if import_global_idx == global_idx {
                   found_mutable = gt.mutable
                   break
@@ -321,7 +321,7 @@ fn validate_valtype(
   val_type : @core.ValType,
 ) -> Unit raise @core.ValidationError {
   match val_type {
-    @core.ValType::Ref(@core.RefType::TypeIndex(idx), _) =>
+    Ref(TypeIndex(idx), _) =>
       if idx < 0 || idx >= module_.types.length() {
         raise @core.ValidationError::UnknownType(idx)
       }
@@ -332,12 +332,12 @@ fn validate_valtype(
 ///|
 /// Check if t1 is a subtype of t2 (t1 <: t2) with module context for type lookups
 /// WebAssembly GC type hierarchy:
-/// - @core.ValType::NullRef (none) <: all nullable reference types
-/// - @core.ValType::NullFuncRef (nofunc) <: @core.ValType::FuncRef
-/// - @core.ValType::NullExternRef (noextern) <: @core.ValType::ExternRef
-/// - @core.ValType::NullExnRef (noexn) <: @core.ValType::ExnRef
-/// - @core.ValType::I31Ref, @core.ValType::StructRef, @core.ValType::ArrayRef <: @core.ValType::EqRef <: @core.ValType::AnyRef
-/// - @core.ValType::FuncRef <: @core.ValType::AnyRef (in some proposals)
+/// - NullRef (none) <: all nullable reference types
+/// - NullFuncRef (nofunc) <: FuncRef
+/// - NullExternRef (noextern) <: ExternRef
+/// - NullExnRef (noexn) <: ExnRef
+/// - I31Ref, StructRef, ArrayRef <: EqRef <: AnyRef
+/// - FuncRef <: AnyRef (in some proposals)
 fn is_subtype(
   module_ : @core.Module,
   t1 : @core.ValType,
@@ -349,69 +349,53 @@ fn is_subtype(
   }
   match (t1, t2) {
     // Bottom types (null) are subtypes of their corresponding reference types
-    (@core.ValType::NullRef, @core.ValType::AnyRef)
-    | (@core.ValType::NullRef, @core.ValType::EqRef)
-    | (@core.ValType::NullRef, @core.ValType::I31Ref)
-    | (@core.ValType::NullRef, @core.ValType::StructRef)
-    | (@core.ValType::NullRef, @core.ValType::ArrayRef) => true
-    (@core.ValType::NullFuncRef, @core.ValType::FuncRef) => true
-    // @core.ValType::NullFuncRef is the bottom type for all function references,
+    (NullRef, AnyRef)
+    | (NullRef, EqRef)
+    | (NullRef, I31Ref)
+    | (NullRef, StructRef)
+    | (NullRef, ArrayRef) => true
+    (NullFuncRef, FuncRef) => true
+    // NullFuncRef is the bottom type for all function references,
     // so it's a subtype of any nullable typed function reference
-    (
-      @core.ValType::NullFuncRef,
-      @core.ValType::Ref(@core.RefType::TypeIndex(n), true),
-    ) => is_func_type_index(module_, n)
-    (@core.ValType::NullFuncRef, @core.ValType::Ref(@core.RefType::Func, true)) =>
-      true
-    (@core.ValType::NullExternRef, @core.ValType::ExternRef) => true
-    (@core.ValType::NullExnRef, @core.ValType::ExnRef) => true
+    (NullFuncRef, Ref(TypeIndex(n), true)) => is_func_type_index(module_, n)
+    (NullFuncRef, Ref(Func, true)) => true
+    (NullExternRef, ExternRef) => true
+    (NullExnRef, ExnRef) => true
 
     // Reference type hierarchy
-    (@core.ValType::I31Ref, @core.ValType::EqRef)
-    | (@core.ValType::I31Ref, @core.ValType::AnyRef) => true
-    (@core.ValType::StructRef, @core.ValType::EqRef)
-    | (@core.ValType::StructRef, @core.ValType::AnyRef) => true
-    (@core.ValType::ArrayRef, @core.ValType::EqRef)
-    | (@core.ValType::ArrayRef, @core.ValType::AnyRef) => true
-    (@core.ValType::EqRef, @core.ValType::AnyRef) => true
+    (I31Ref, EqRef) | (I31Ref, AnyRef) => true
+    (StructRef, EqRef) | (StructRef, AnyRef) => true
+    (ArrayRef, EqRef) | (ArrayRef, AnyRef) => true
+    (EqRef, AnyRef) => true
 
     // Some proposals allow funcref <: anyref
-    (@core.ValType::FuncRef, @core.ValType::AnyRef) => true
-    (@core.ValType::ExnRef, @core.ValType::AnyRef) => true
+    (FuncRef, AnyRef) => true
+    (ExnRef, AnyRef) => true
 
-    // Typed references: @core.ValType::Ref(T, nullable)
+    // Typed references: Ref(T, nullable)
     // Non-nullable is subtype of nullable for same heap type
-    (@core.ValType::Ref(ht1, false), @core.ValType::Ref(ht2, true)) =>
-      ht1 == ht2
-    // @core.ValType::Ref(Extern, _) is compatible with @core.ValType::ExternRef (nullable externref)
-    (@core.ValType::Ref(@core.RefType::Extern, _), @core.ValType::ExternRef) =>
-      true
-    // @core.ValType::Ref(Func, _) is compatible with @core.ValType::FuncRef (nullable funcref)
-    (@core.ValType::Ref(@core.RefType::Func, _), @core.ValType::FuncRef) => true
-    // @core.ValType::Ref(@core.RefType::TypeIndex(n), _) is a typed function reference, compatible with @core.ValType::FuncRef
+    (Ref(ht1, false), Ref(ht2, true)) => ht1 == ht2
+    // Ref(Extern, _) is compatible with ExternRef (nullable externref)
+    (Ref(Extern, _), ExternRef) => true
+    // Ref(Func, _) is compatible with FuncRef (nullable funcref)
+    (Ref(Func, _), FuncRef) => true
+    // Ref(TypeIndex(n), _) is a typed function reference, compatible with FuncRef
     // only if type n is actually a function type
-    (@core.ValType::Ref(@core.RefType::TypeIndex(n), _), @core.ValType::FuncRef) =>
-      is_func_type_index(module_, n)
+    (Ref(TypeIndex(n), _), FuncRef) => is_func_type_index(module_, n)
     // Typed function reference is also compatible with non-nullable (ref func)
-    (
-      @core.ValType::Ref(@core.RefType::TypeIndex(n), false),
-      @core.ValType::Ref(@core.RefType::Func, false),
-    ) => is_func_type_index(module_, n)
-    (
-      @core.ValType::Ref(@core.RefType::TypeIndex(n), _),
-      @core.ValType::Ref(@core.RefType::Func, true),
-    ) => is_func_type_index(module_, n)
-    // NOTE: @core.ValType::FuncRef is NOT a subtype of typed function references
+    (Ref(TypeIndex(n), false), Ref(Func, false)) =>
+      is_func_type_index(module_, n)
+    (Ref(TypeIndex(n), _), Ref(Func, true)) => is_func_type_index(module_, n)
+    // NOTE: FuncRef is NOT a subtype of typed function references
     // General funcref cannot be used where specific typed reference is required
-    // (@core.ValType::FuncRef, @core.ValType::Ref(@core.RefType::TypeIndex(n), true)) => false
-    (@core.ValType::FuncRef, @core.ValType::Ref(@core.RefType::Func, true)) =>
-      true
-    // @core.ValType::Ref(Any, _) is compatible with @core.ValType::AnyRef
-    (@core.ValType::Ref(@core.RefType::Any, _), @core.ValType::AnyRef) => true
-    // @core.ValType::Ref(Exn, _) is compatible with @core.ValType::ExnRef
-    (@core.ValType::Ref(@core.RefType::Exn, _), @core.ValType::ExnRef) => true
-    // Any reference is subtype of @core.ValType::AnyRef
-    (@core.ValType::Ref(_, _), @core.ValType::AnyRef) => true
+    // (FuncRef, Ref(TypeIndex(n), true)) => false
+    (FuncRef, Ref(Func, true)) => true
+    // Ref(Any, _) is compatible with AnyRef
+    (Ref(Any, _), AnyRef) => true
+    // Ref(Exn, _) is compatible with ExnRef
+    (Ref(Exn, _), ExnRef) => true
+    // Any reference is subtype of AnyRef
+    (Ref(_, _), AnyRef) => true
 
     // Non-reference types are not related by subtyping
     _ => false

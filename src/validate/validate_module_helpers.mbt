@@ -20,7 +20,7 @@ fn validate_module_type_indices(
   // Validate type indices in table element types
   for table in m.tables {
     match table.elem_type {
-      @core.RefType::TypeIndex(idx) =>
+      TypeIndex(idx) =>
         if idx < 0 || idx >= m.types.length() {
           raise @core.ValidationError::UnknownType(idx)
         }
@@ -31,7 +31,7 @@ fn validate_module_type_indices(
   // Validate type indices in element segments
   for elem in m.elems {
     match elem.elem_type {
-      @core.RefType::TypeIndex(idx) =>
+      TypeIndex(idx) =>
         if idx < 0 || idx >= m.types.length() {
           raise @core.ValidationError::UnknownType(idx)
         }
@@ -42,7 +42,7 @@ fn validate_module_type_indices(
   // Validate type indices in imported functions
   for imp in m.imports {
     match imp.desc {
-      @core.ImportDesc::Func(tidx) => {
+      Func(tidx) => {
         let type_idx = tidx.reinterpret_as_int()
         if type_idx < 0 || type_idx >= m.types.length() {
           raise @core.ValidationError::InvalidTypeIndex(type_idx)
@@ -182,7 +182,7 @@ fn validate_module_imported_memory_limits(
   // Validate memory limits for imported memories
   for imp in m.imports {
     match imp.desc {
-      @core.ImportDesc::Mem(mem_type) =>
+      Mem(mem_type) =>
         match mem_type.limits.max {
           Some(max_val) => {
             let min = mem_type.limits.min.reinterpret_as_int()
@@ -228,7 +228,7 @@ fn validate_module_tables(
       None => ()
     }
     // Validate table initializer
-    // @core.Instr::If the table element type is non-nullable, it must have an initializer
+    // If the table element type is non-nullable, it must have an initializer
     if not(table.nullable) {
       match table.init {
         None =>
@@ -242,7 +242,7 @@ fn validate_module_tables(
           // For non-nullable tables, ref.null is not allowed
           for instr in init_expr.instrs {
             match instr {
-              @core.Instr::RefNull(_) =>
+              RefNull(_) =>
                 raise @core.ValidationError::TypeMismatch(
                   "table with non-nullable element type cannot be initialized with null",
                 )
@@ -273,13 +273,13 @@ fn validate_module_tables(
           // Check that the init expression type is a reference type
           let init_type = init_ctx.stack[0]
           match init_type {
-            @core.ValType::FuncRef
-            | @core.ValType::ExternRef
-            | @core.ValType::AnyRef
-            | @core.ValType::NullRef
-            | @core.ValType::NullFuncRef
-            | @core.ValType::NullExternRef
-            | @core.ValType::Ref(_, _) => ()
+            FuncRef
+            | ExternRef
+            | AnyRef
+            | NullRef
+            | NullFuncRef
+            | NullExternRef
+            | Ref(_, _) => ()
             _ =>
               raise @core.ValidationError::TypeMismatch(
                 "table initializer must produce a reference type",
@@ -319,16 +319,13 @@ fn validate_module_tables(
           // Funcref table can accept funcref or null
           // Type must be a reference type
           match init_type {
-            @core.ValType::FuncRef
-            | @core.ValType::ExternRef
-            | @core.ValType::AnyRef
-            | @core.ValType::NullRef
-            | @core.ValType::NullFuncRef
-            | @core.ValType::NullExternRef => ()
-            @core.ValType::I32
-            | @core.ValType::I64
-            | @core.ValType::F32
-            | @core.ValType::F64 =>
+            FuncRef
+            | ExternRef
+            | AnyRef
+            | NullRef
+            | NullFuncRef
+            | NullExternRef => ()
+            I32 | I64 | F32 | F64 =>
               raise @core.ValidationError::TypeMismatch(
                 "table initializer must produce a reference type, got \{init_type}",
               )
@@ -336,19 +333,15 @@ fn validate_module_tables(
           }
           // Check element type compatibility
           match (table.elem_type, init_type) {
-            (@core.RefType::Func, @core.ValType::FuncRef)
-            | (@core.RefType::Func, @core.ValType::NullFuncRef)
-            | (@core.RefType::Extern, @core.ValType::ExternRef)
-            | (@core.RefType::Extern, @core.ValType::NullExternRef) => ()
-            (@core.RefType::Func, @core.ValType::ExternRef)
-            | (@core.RefType::Func, @core.ValType::NullExternRef)
-            | (@core.RefType::Func, @core.ValType::NullRef) =>
+            (Func, FuncRef)
+            | (Func, NullFuncRef)
+            | (Extern, ExternRef)
+            | (Extern, NullExternRef) => ()
+            (Func, ExternRef) | (Func, NullExternRef) | (Func, NullRef) =>
               raise @core.ValidationError::TypeMismatch(
                 "table initializer type mismatch: table expects funcref, got \{init_type}",
               )
-            (@core.RefType::Extern, @core.ValType::FuncRef)
-            | (@core.RefType::Extern, @core.ValType::NullFuncRef)
-            | (@core.RefType::Extern, @core.ValType::NullRef) =>
+            (Extern, FuncRef) | (Extern, NullFuncRef) | (Extern, NullRef) =>
               raise @core.ValidationError::TypeMismatch(
                 "table initializer type mismatch: table expects externref, got \{init_type}",
               )
@@ -363,7 +356,7 @@ fn validate_module_tables(
   // Validate table limits for imported tables
   for imp in m.imports {
     match imp.desc {
-      @core.ImportDesc::Table(table_type) =>
+      Table(table_type) =>
         match table_type.limits.max {
           Some(max_val) =>
             // Use unsigned comparison - compare UInt values directly

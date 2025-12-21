@@ -14,7 +14,7 @@ fn parse_data_section(parser : Parser) -> Array[@core.Data] raise {
         (0U, parse_expr(parser))
       1 =>
         // Passive segment - no memory index or offset
-        (0U, @core.Expr::{ instrs: [@core.Instr::I32Const(0U)] }) // Dummy offset
+        (0U, @core.Expr::{ instrs: [I32Const(0U)] }) // Dummy offset
       2 =>
         // Active segment with explicit memory index
         (parser.read_u32_leb128(), parse_expr(parser))

@@ -20,7 +20,7 @@ fn Parser::read_reftype_with_nullability(
         None => {
           self.pos = self.pos - 1
           let type_idx = self.read_i32_leb128()
-          (@core.RefType::TypeIndex(type_idx), true) // 0x63 means nullable
+          (TypeIndex(type_idx), true) // 0x63 means nullable
         }
       }
     }
@@ -36,7 +36,7 @@ fn Parser::read_reftype_with_nullability(
         None => {
           self.pos = self.pos - 1
           let type_idx = self.read_i32_leb128()
-          (@core.RefType::TypeIndex(type_idx), false) // 0x64 means non-nullable
+          (TypeIndex(type_idx), false) // 0x64 means non-nullable
         }
       }
     }
@@ -49,7 +49,7 @@ fn Parser::read_reftype_with_nullability(
           if byte < 0x40 {
             self.pos = self.pos - 1
             let type_idx = self.read_i32_leb128()
-            (@core.RefType::TypeIndex(type_idx), true) // Default to nullable
+            (TypeIndex(type_idx), true) // Default to nullable
           } else {
             raise @core.ValidationError::TypeMismatch(
               "invalid reftype: 0x\{byte.to_string()}",
@@ -77,7 +77,7 @@ fn Parser::read_reftype(self : Parser) -> @core.RefType raise {
           // It's a type index - put byte back and read as signed LEB128
           self.pos = self.pos - 1
           let type_idx = self.read_i32_leb128()
-          @core.RefType::TypeIndex(type_idx)
+          TypeIndex(type_idx)
         }
       }
     }
@@ -95,7 +95,7 @@ fn Parser::read_reftype(self : Parser) -> @core.RefType raise {
           // It's a type index - put byte back and read as signed LEB128
           self.pos = self.pos - 1
           let type_idx = self.read_i32_leb128()
-          @core.RefType::TypeIndex(type_idx)
+          TypeIndex(type_idx)
         }
       }
     }
@@ -109,11 +109,11 @@ fn Parser::read_reftype(self : Parser) -> @core.RefType raise {
             // Looks like a small type index - put it back and read as signed LEB128
             self.pos = self.pos - 1
             let type_idx = self.read_i32_leb128()
-            @core.RefType::TypeIndex(type_idx)
+            TypeIndex(type_idx)
           } else if byte == 0x40 {
             // 0x40 is empty/void - treat as funcref for compatibility
             // This might appear in some edge cases
-            @core.RefType::Func
+            Func
           } else {
             raise @core.ValidationError::TypeMismatch(
               "invalid reference type: 0x\{byte.to_string()}",

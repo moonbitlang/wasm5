@@ -81,7 +81,7 @@ fn ValidationCtx::get_label_types(
 }
 
 // =============================================================================
-// Polymorphic Stack Operations for @core.Instr::Unreachable @core.Code
+// Polymorphic Stack Operations for Unreachable @core.Code
 // =============================================================================
 //
 // In WebAssembly, after an unconditional control flow instruction (br, return,
