@@ -3,13 +3,39 @@ package "moonbitlang/wasm5/src/validate"
 
 import(
   "moonbitlang/wasm5/src/core"
-  "moonbitlang/wasm5/src/errors"
 )
 
 // Values
-pub fn validate_module(@core.Module) -> Unit raise @errors.ValidationError
+pub fn validate_module(@core.Module) -> Unit raise ValidationError
 
 // Errors
+pub(all) suberror ValidationError {
+  TypeMismatch(String)
+  InvalidFunctionIndex(Int)
+  InvalidTypeIndex(Int)
+  InvalidLocalIndex(Int)
+  InvalidGlobalIndex(Int)
+  UnknownGlobal(Int)
+  StackSizeMismatch(String)
+  InvalidResultArity(String)
+  InvalidAlignment(String)
+  UnknownLabel(Int)
+  InvalidStartFunction(String)
+  UnknownMemory(Int)
+  InvalidMemorySize(String)
+  ImmutableGlobal(Int)
+  DuplicateExport(String)
+  UnknownExportedFunction(Int)
+  UnknownExportedMemory(Int)
+  UnknownExportedTable(Int)
+  UnknownExportedGlobal(Int)
+  InvalidTableSize(String)
+  UnknownTable(Int)
+  ConstantExpressionRequired(String)
+  UninitializedLocal(Int)
+  UnknownType(Int)
+}
+pub impl Show for ValidationError
 
 // Types and methods
 

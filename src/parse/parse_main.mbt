@@ -8,7 +8,7 @@ pub fn parse(b : Bytes) -> @core.Module raise {
     magic[1].to_int() != 0x61 ||
     magic[2].to_int() != 0x73 ||
     magic[3].to_int() != 0x6D {
-    raise @errors.ParseError::InvalidMagic
+    raise ParseError::InvalidMagic
   }
 
   // Parse version
@@ -17,7 +17,7 @@ pub fn parse(b : Bytes) -> @core.Module raise {
     version[1].to_int() != 0x00 ||
     version[2].to_int() != 0x00 ||
     version[3].to_int() != 0x00 {
-    raise @errors.ParseError::UnsupportedVersion
+    raise ParseError::UnsupportedVersion
   }
 
   // Parse sections

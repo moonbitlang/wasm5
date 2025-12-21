@@ -6,7 +6,7 @@ fn parse_expr(parser : Parser) -> @core.Expr raise {
   // parse_instrs puts back the 0x0B, we need to consume it
   let end_marker = parser.read_byte()
   guard end_marker == 0x0B else {
-    raise @errors.ParseError::InvalidFormat(
+    raise ParseError::InvalidFormat(
       "expected end marker 0x0B, got 0x\{end_marker.to_int().to_string()}",
     )
   }
@@ -78,7 +78,7 @@ fn parse_instr(parser : Parser, opcode : Byte) -> @core.Instr raise {
     Some(value) => return value
     None => ()
   }
-  raise @errors.ValidationError::TypeMismatch(
+  raise @validate.ValidationError::TypeMismatch(
     "unknown opcode: 0x\{opcode.to_string().to_upper()}",
   )
 }
@@ -86,7 +86,7 @@ fn parse_instr(parser : Parser, opcode : Byte) -> @core.Instr raise {
 // Parse block type (can be empty, a value type, or a type index)
 
 ///|
-fn parse_blocktype(parser : Parser) -> @core.BlockType raise @errors.ParseError {
+fn parse_blocktype(parser : Parser) -> @core.BlockType raise ParseError {
   let byte = parser.read_byte()
   match byte {
     0x40 => Empty // empty block type

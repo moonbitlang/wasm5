@@ -9,6 +9,13 @@ import(
 pub fn parse(Bytes) -> @core.Module raise
 
 // Errors
+pub(all) suberror ParseError {
+  UnexpectedEof
+  InvalidMagic
+  UnsupportedVersion
+  InvalidFormat(String)
+}
+pub impl Show for ParseError
 
 // Types and methods
 
