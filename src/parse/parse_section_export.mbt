@@ -15,7 +15,7 @@ fn parse_export_section(parser : Parser) -> Array[@core.Export] raise {
       // Exception handling: tag export
       0x04 => Tag(parser.read_u32_leb128())
       _ =>
-        raise @errors.ValidationError::TypeMismatch(
+        raise @validate.ValidationError::TypeMismatch(
           "invalid export descriptor tag: 0x\{desc_tag.to_string()}",
         )
     }

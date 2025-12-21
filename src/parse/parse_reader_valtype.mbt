@@ -24,9 +24,7 @@ fn opcode_to_heap_type(byte : Byte) -> @core.RefType? {
 ///|
 /// Read a heap type (used after 0x63/0x64 prefix)
 /// Heap types can be abstract heap types (0x70, 0x6F, etc.) or type indices
-fn Parser::read_heap_type(
-  self : Parser,
-) -> @core.RefType raise @errors.ParseError {
+fn Parser::read_heap_type(self : Parser) -> @core.RefType raise ParseError {
   let byte = self.read_byte()
   match opcode_to_heap_type(byte) {
     Some(ref_type) => ref_type
@@ -73,7 +71,7 @@ fn Parser::read_valtype(self : Parser) -> @core.ValType raise {
         Some(NoFunc) => NullFuncRef
         Some(NoExn) => NullExnRef
         Some(TypeIndex(_)) | None =>
-          raise @errors.ValidationError::TypeMismatch(
+          raise @validate.ValidationError::TypeMismatch(
             "invalid value type: 0x\{byte.to_string()}",
           )
       }

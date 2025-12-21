@@ -6,7 +6,7 @@ fn validate_instruction_variable(
   ctx : ValidationCtx,
   import_counts : ImportCounts,
   instr : @core.Instr,
-) -> Bool raise @errors.ValidationError {
+) -> Bool raise ValidationError {
   let stack = ctx.stack
   match instr {
     // Local operations
@@ -14,7 +14,7 @@ fn validate_instruction_variable(
       let local_idx = idx.reinterpret_as_int()
       let total_locals = func_type.params.length() + code.locals.length()
       if local_idx < 0 || local_idx >= total_locals {
-        raise @errors.ValidationError::InvalidLocalIndex(local_idx)
+        raise ValidationError::InvalidLocalIndex(local_idx)
       }
       let local_type = if local_idx < func_type.params.length() {
         func_type.params[local_idx]
@@ -25,7 +25,7 @@ fn validate_instruction_variable(
       if not(local_type.is_defaultable()) &&
         ctx.initialized_locals.length() > local_idx &&
         not(ctx.initialized_locals[local_idx]) {
-        raise @errors.ValidationError::UninitializedLocal(local_idx)
+        raise ValidationError::UninitializedLocal(local_idx)
       }
       stack.push(local_type)
     }
@@ -33,7 +33,7 @@ fn validate_instruction_variable(
       let local_idx = idx.reinterpret_as_int()
       let total_locals = func_type.params.length() + code.locals.length()
       if local_idx < 0 || local_idx >= total_locals {
-        raise @errors.ValidationError::InvalidLocalIndex(local_idx)
+        raise ValidationError::InvalidLocalIndex(local_idx)
       }
       let local_type = if local_idx < func_type.params.length() {
         func_type.params[local_idx]
@@ -51,7 +51,7 @@ fn validate_instruction_variable(
       let local_idx = idx.reinterpret_as_int()
       let total_locals = func_type.params.length() + code.locals.length()
       if local_idx < 0 || local_idx >= total_locals {
-        raise @errors.ValidationError::InvalidLocalIndex(local_idx)
+        raise ValidationError::InvalidLocalIndex(local_idx)
       }
       let local_type = if local_idx < func_type.params.length() {
         func_type.params[local_idx]
@@ -74,7 +74,7 @@ fn validate_instruction_variable(
       let global_idx = idx.reinterpret_as_int()
       let total_globals = import_counts.globals + module_.globals.length()
       if global_idx < 0 || global_idx >= total_globals {
-        raise @errors.ValidationError::InvalidGlobalIndex(global_idx)
+        raise ValidationError::InvalidGlobalIndex(global_idx)
       }
       let global_type = if global_idx < import_counts.globals {
         // It's an imported global - find it in imports
@@ -104,7 +104,7 @@ fn validate_instruction_variable(
       let global_idx = idx.reinterpret_as_int()
       let total_globals = import_counts.globals + module_.globals.length()
       if global_idx < 0 || global_idx >= total_globals {
-        raise @errors.ValidationError::InvalidGlobalIndex(global_idx)
+        raise ValidationError::InvalidGlobalIndex(global_idx)
       }
       let (global_type, is_mutable) = if global_idx < import_counts.globals {
         // It's an imported global - find it in imports
@@ -135,7 +135,7 @@ fn validate_instruction_variable(
       }
       // Check if global is mutable
       if not(is_mutable) {
-        raise @errors.ValidationError::ImmutableGlobal(global_idx)
+        raise ValidationError::ImmutableGlobal(global_idx)
       }
       ctx.poly_pop_expect(module_, global_type, "global.set")
     }

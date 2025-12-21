@@ -3,7 +3,7 @@
 fn get_block_type(
   module_ : @core.Module,
   block_type : @core.BlockType,
-) -> (Array[@core.ValType], Array[@core.ValType]) raise @errors.ValidationError {
+) -> (Array[@core.ValType], Array[@core.ValType]) raise ValidationError {
   match block_type {
     Empty => ([], [])
     Value(t) => {
@@ -12,7 +12,7 @@ fn get_block_type(
     }
     TypeIndex(idx) => {
       if idx < 0 || idx >= module_.types.length() {
-        raise @errors.ValidationError::InvalidTypeIndex(idx)
+        raise ValidationError::InvalidTypeIndex(idx)
       }
       let func_type = module_.types[idx]
       (func_type.params, func_type.results)
@@ -29,9 +29,9 @@ fn validate_tail_call_return_type(
   func_type_called : @core.FuncType,
   func_type : @core.FuncType,
   instr_name : String,
-) -> Unit raise @errors.ValidationError {
+) -> Unit raise ValidationError {
   if func_type_called.results.length() != func_type.results.length() {
-    raise @errors.ValidationError::TypeMismatch(
+    raise ValidationError::TypeMismatch(
       "\{instr_name}: return type mismatch: expected \{func_type.results.length()} results, got \{func_type_called.results.length()}",
     )
   }
@@ -39,7 +39,7 @@ fn validate_tail_call_return_type(
     let called_result = func_type_called.results[i]
     let expected_result = func_type.results[i]
     if not(is_subtype(module_, called_result, expected_result)) {
-      raise @errors.ValidationError::TypeMismatch(
+      raise ValidationError::TypeMismatch(
         "\{instr_name}: return type mismatch at position \{i}: expected \{expected_result}, got \{called_result}",
       )
     }
@@ -54,7 +54,7 @@ fn validate_instruction_control(
   ctx : ValidationCtx,
   instr : @core.Instr,
   import_counts : ImportCounts,
-) -> Bool raise @errors.ValidationError {
+) -> Bool raise ValidationError {
   let stack = ctx.stack
   match instr {
     // Block instructions
@@ -97,14 +97,14 @@ fn validate_instruction_control(
         }
       } else if block_ctx.stack.length() != results.length() {
         // Not unreachable and not exact match - this is a type mismatch
-        raise @errors.ValidationError::TypeMismatch(
+        raise ValidationError::TypeMismatch(
           "block: expected \{results.length()} values, got \{block_ctx.stack.length()}",
         )
       } else {
         // Exact match - validate result types (with subtyping)
         for i in 0..<results.length() {
           if not(is_subtype(module_, block_ctx.stack[i], results[i])) {
-            raise @errors.ValidationError::TypeMismatch(
+            raise ValidationError::TypeMismatch(
               "block result type mismatch: expected \{results[i]}, got \{block_ctx.stack[i]}",
             )
           }
@@ -154,14 +154,14 @@ fn validate_instruction_control(
         }
       } else if loop_ctx.stack.length() != results.length() {
         // Not unreachable and not exact match - type mismatch
-        raise @errors.ValidationError::TypeMismatch(
+        raise ValidationError::TypeMismatch(
           "loop: expected \{results.length()} values, got \{loop_ctx.stack.length()}",
         )
       } else {
         // Exact match - validate result types (with subtyping)
         for i in 0..<results.length() {
           if not(is_subtype(module_, loop_ctx.stack[i], results[i])) {
-            raise @errors.ValidationError::TypeMismatch(
+            raise ValidationError::TypeMismatch(
               "loop result type mismatch: expected \{results[i]}, got \{loop_ctx.stack[i]}",
             )
           }
@@ -204,14 +204,14 @@ fn validate_instruction_control(
       if then_ctx.is_unreachable && then_ctx.stack.length() == 0 {
         // Unreachable with empty stack - all polymorphic, valid
       } else if then_ctx.stack.length() != results.length() {
-        raise @errors.ValidationError::TypeMismatch(
+        raise ValidationError::TypeMismatch(
           "if then branch: expected \{results.length()} values, got \{then_ctx.stack.length()}",
         )
       } else {
         // Exact match - validate result types (with subtyping)
         for i in 0..<results.length() {
           if not(is_subtype(module_, then_ctx.stack[i], results[i])) {
-            raise @errors.ValidationError::TypeMismatch(
+            raise ValidationError::TypeMismatch(
               "if then branch result type mismatch: expected \{results[i]}, got \{then_ctx.stack[i]}",
             )
           }
@@ -241,14 +241,14 @@ fn validate_instruction_control(
       if else_ctx.is_unreachable && else_ctx.stack.length() == 0 {
         // Unreachable with empty stack - all polymorphic, valid
       } else if else_ctx.stack.length() != results.length() {
-        raise @errors.ValidationError::TypeMismatch(
+        raise ValidationError::TypeMismatch(
           "if else branch: expected \{results.length()} values, got \{else_ctx.stack.length()}",
         )
       } else {
         // Exact match - validate result types (with subtyping)
         for i in 0..<results.length() {
           if not(is_subtype(module_, else_ctx.stack[i], results[i])) {
-            raise @errors.ValidationError::TypeMismatch(
+            raise ValidationError::TypeMismatch(
               "if else branch result type mismatch: expected \{results[i]}, got \{else_ctx.stack[i]}",
             )
           }
@@ -272,7 +272,7 @@ fn validate_instruction_control(
           if ctx.is_unreachable {
             // In unreachable code, missing values are polymorphic - OK
           } else {
-            raise @errors.ValidationError::TypeMismatch(
+            raise ValidationError::TypeMismatch(
               "return: expected \{func_type.results.length()} values on stack",
             )
           }
@@ -281,7 +281,7 @@ fn validate_instruction_control(
           for i in 0..<func_type.results.length() {
             let stack_idx = stack.length() - func_type.results.length() + i
             if not(is_subtype(module_, stack[stack_idx], func_type.results[i])) {
-              raise @errors.ValidationError::TypeMismatch(
+              raise ValidationError::TypeMismatch(
                 "return: result type mismatch: expected \{func_type.results[i]}, got \{stack[stack_idx]}",
               )
             }
@@ -302,7 +302,7 @@ fn validate_instruction_control(
           if ctx.is_unreachable {
             // In unreachable code, missing values are polymorphic - OK
           } else {
-            raise @errors.ValidationError::TypeMismatch(
+            raise ValidationError::TypeMismatch(
               "br: expected \{target_types.length()} values on stack for branch target",
             )
           }
@@ -311,7 +311,7 @@ fn validate_instruction_control(
           for i in 0..<target_types.length() {
             let stack_idx = stack.length() - target_types.length() + i
             if not(is_subtype(module_, stack[stack_idx], target_types[i])) {
-              raise @errors.ValidationError::TypeMismatch(
+              raise ValidationError::TypeMismatch(
                 "br: branch target type mismatch: expected \{target_types[i]}, got \{stack[stack_idx]}",
               )
             }
@@ -363,7 +363,7 @@ fn validate_instruction_control(
 
         // Check arity matches
         if label_types.length() != default_types.length() {
-          raise @errors.ValidationError::TypeMismatch(
+          raise ValidationError::TypeMismatch(
             "br_table: all labels must have same arity (expected \{default_types.length()}, got \{label_types.length()})",
           )
         }
@@ -372,7 +372,7 @@ fn validate_instruction_control(
         // Check types match exactly (WebAssembly spec requires exact match)
         // for i in 0..<label_types.length() {
         //   if label_types[i] != default_types[i] {
-        //     raise @errors.ValidationError::TypeMismatch(
+        //     raise ValidationError::TypeMismatch(
         //       "br_table: all labels must have same types (label \{label} has \{label_types[i]}, default has \{default_types[i]} at position \{i})",
         //     )
         //   }
@@ -387,7 +387,7 @@ fn validate_instruction_control(
           if ctx.is_unreachable {
             // In unreachable code, missing values are polymorphic - OK
           } else {
-            raise @errors.ValidationError::TypeMismatch(
+            raise ValidationError::TypeMismatch(
               "br_table: expected \{target_types.length()} values on stack for branch target",
             )
           }
@@ -396,7 +396,7 @@ fn validate_instruction_control(
           for i in 0..<target_types.length() {
             let stack_idx = stack.length() - target_types.length() + i
             if not(is_subtype(module_, stack[stack_idx], target_types[i])) {
-              raise @errors.ValidationError::TypeMismatch(
+              raise ValidationError::TypeMismatch(
                 "br_table: branch target type mismatch: expected \{target_types[i]}, got \{stack[stack_idx]}",
               )
             }
@@ -410,7 +410,7 @@ fn validate_instruction_control(
       // br_on_null: pop nullable ref, branch if null, else push non-null ref
       // The fallthrough path pushes the reference with nullable=false
       if not(ctx.is_unreachable) && stack.length() < 1 {
-        raise @errors.ValidationError::TypeMismatch(
+        raise ValidationError::TypeMismatch(
           "br_on_null expects reference on stack",
         )
       } else if stack.length() >= 1 {
@@ -438,7 +438,7 @@ fn validate_instruction_control(
       // br_on_non_null: pop nullable ref, branch if non-null (with the value), else continue
       // Pop the nullable reference
       if not(ctx.is_unreachable) && stack.length() < 1 {
-        raise @errors.ValidationError::TypeMismatch(
+        raise ValidationError::TypeMismatch(
           "br_on_non_null expects reference on stack",
         )
       } else if stack.length() >= 1 {
@@ -455,7 +455,7 @@ fn validate_instruction_control(
       let idx = func_idx.reinterpret_as_int()
       let total_funcs = import_counts.funcs + module_.funcs.length()
       if idx < 0 || idx >= total_funcs {
-        raise @errors.ValidationError::InvalidFunctionIndex(idx)
+        raise ValidationError::InvalidFunctionIndex(idx)
       }
       // Get the function type
       let type_idx = get_func_type_index(module_, idx, import_counts)
@@ -478,7 +478,7 @@ fn validate_instruction_control(
       let total_tables = import_counts.tables + module_.tables.length()
       let tidx = table_idx.reinterpret_as_int()
       if tidx < 0 || tidx >= total_tables {
-        raise @errors.ValidationError::UnknownTable(tidx)
+        raise ValidationError::UnknownTable(tidx)
       }
 
       // Validate that the table has funcref element type (call_indirect requires funcref tables)
@@ -509,13 +509,13 @@ fn validate_instruction_control(
       match table_elem_type {
         Func | TypeIndex(_) => () // OK - function references
         _ =>
-          raise @errors.ValidationError::TypeMismatch(
+          raise ValidationError::TypeMismatch(
             "call_indirect requires funcref table, got \{table_elem_type}",
           )
       }
       let idx = type_idx.reinterpret_as_int()
       if idx < 0 || idx >= module_.types.length() {
-        raise @errors.ValidationError::InvalidTypeIndex(idx)
+        raise ValidationError::InvalidTypeIndex(idx)
       }
       let func_type_called = module_.types[idx]
       // Pop table index
@@ -541,7 +541,7 @@ fn validate_instruction_control(
       // Find the type index for this function
       let type_idx = get_func_type_index(module_, idx, import_counts)
       if type_idx < 0 || type_idx >= module_.types.length() {
-        raise @errors.ValidationError::InvalidTypeIndex(type_idx)
+        raise ValidationError::InvalidTypeIndex(type_idx)
       }
       let func_type_called = module_.types[type_idx]
       validate_tail_call_return_type(
@@ -566,7 +566,7 @@ fn validate_instruction_control(
       let total_tables = import_counts.tables + module_.tables.length()
       let tidx = table_idx.reinterpret_as_int()
       if tidx < 0 || tidx >= total_tables {
-        raise @errors.ValidationError::UnknownTable(tidx)
+        raise ValidationError::UnknownTable(tidx)
       }
 
       // Validate that the table has funcref element type (return_call_indirect requires funcref tables)
@@ -597,13 +597,13 @@ fn validate_instruction_control(
       match table_elem_type {
         Func | TypeIndex(_) => () // OK - function references
         _ =>
-          raise @errors.ValidationError::TypeMismatch(
+          raise ValidationError::TypeMismatch(
             "return_call_indirect requires funcref table, got \{table_elem_type}",
           )
       }
       let idx = type_idx.reinterpret_as_int()
       if idx < 0 || idx >= module_.types.length() {
-        raise @errors.ValidationError::InvalidTypeIndex(idx)
+        raise ValidationError::InvalidTypeIndex(idx)
       }
       let func_type_called = module_.types[idx]
       validate_tail_call_return_type(
@@ -627,7 +627,7 @@ fn validate_instruction_control(
       // Stack: [args...] [(ref null $type_idx)] -> [results...]
       let idx = type_idx.reinterpret_as_int()
       if idx < 0 || idx >= module_.types.length() {
-        raise @errors.ValidationError::InvalidTypeIndex(idx)
+        raise ValidationError::InvalidTypeIndex(idx)
       }
       let func_type_called = module_.types[idx]
 
@@ -656,7 +656,7 @@ fn validate_instruction_control(
       // Stack: [args...] [(ref null $type_idx)] -> (unreachable)
       let idx = type_idx.reinterpret_as_int()
       if idx < 0 || idx >= module_.types.length() {
-        raise @errors.ValidationError::InvalidTypeIndex(idx)
+        raise ValidationError::InvalidTypeIndex(idx)
       }
       let func_type_called = module_.types[idx]
       validate_tail_call_return_type(

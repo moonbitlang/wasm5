@@ -28,7 +28,7 @@ fn parse_import_section(parser : Parser) -> Array[@core.Import] raise {
         Tag(type_idx)
       }
       _ =>
-        raise @errors.ValidationError::TypeMismatch(
+        raise @validate.ValidationError::TypeMismatch(
           "invalid import descriptor tag: 0x\{desc_tag.to_string()}",
         )
     }

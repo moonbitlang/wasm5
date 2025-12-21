@@ -3,7 +3,7 @@ fn validate_instruction_numeric(
   module_ : @core.Module,
   ctx : ValidationCtx,
   instr : @core.Instr,
-) -> Bool raise @errors.ValidationError {
+) -> Bool raise ValidationError {
   let stack = ctx.stack
   match instr {
     // Constants

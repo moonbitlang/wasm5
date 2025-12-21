@@ -1,7 +1,5 @@
 ///|
-fn validate_module_type_indices(
-  m : @core.Module,
-) -> Unit raise @errors.ValidationError {
+fn validate_module_type_indices(m : @core.Module) -> Unit raise ValidationError {
   // Validate that all type indices in type definitions are valid
   for func_type in m.types {
     for param in func_type.params {
@@ -22,7 +20,7 @@ fn validate_module_type_indices(
     match table.elem_type {
       TypeIndex(idx) =>
         if idx < 0 || idx >= m.types.length() {
-          raise @errors.ValidationError::UnknownType(idx)
+          raise ValidationError::UnknownType(idx)
         }
       _ => ()
     }
@@ -33,7 +31,7 @@ fn validate_module_type_indices(
     match elem.elem_type {
       TypeIndex(idx) =>
         if idx < 0 || idx >= m.types.length() {
-          raise @errors.ValidationError::UnknownType(idx)
+          raise ValidationError::UnknownType(idx)
         }
       _ => ()
     }
@@ -45,7 +43,7 @@ fn validate_module_type_indices(
       Func(tidx) => {
         let type_idx = tidx.reinterpret_as_int()
         if type_idx < 0 || type_idx >= m.types.length() {
-          raise @errors.ValidationError::InvalidTypeIndex(type_idx)
+          raise ValidationError::InvalidTypeIndex(type_idx)
         }
       }
       _ => ()
@@ -56,7 +54,7 @@ fn validate_module_type_indices(
   for i in 0..<m.funcs.length() {
     let type_idx = m.funcs[i].reinterpret_as_int()
     if type_idx < 0 || type_idx >= m.types.length() {
-      raise @errors.ValidationError::InvalidTypeIndex(type_idx)
+      raise ValidationError::InvalidTypeIndex(type_idx)
     }
   }
 }
@@ -65,7 +63,7 @@ fn validate_module_type_indices(
 fn validate_module_start_function(
   m : @core.Module,
   import_counts : ImportCounts,
-) -> Unit raise @errors.ValidationError {
+) -> Unit raise ValidationError {
   // Validate start function if present
   match m.start {
     Some(start_idx) => {
@@ -76,7 +74,7 @@ fn validate_module_start_function(
 
       // Check if function index is valid
       if func_idx < 0 || func_idx >= total_funcs {
-        raise @errors.ValidationError::InvalidFunctionIndex(func_idx)
+        raise ValidationError::InvalidFunctionIndex(func_idx)
       }
 
       // Get the function type
@@ -85,12 +83,12 @@ fn validate_module_start_function(
 
       // Start function must have type [] -> []
       if func_type.params.length() > 0 {
-        raise @errors.ValidationError::InvalidStartFunction(
+        raise ValidationError::InvalidStartFunction(
           "start function must have no parameters",
         )
       }
       if func_type.results.length() > 0 {
-        raise @errors.ValidationError::InvalidStartFunction(
+        raise ValidationError::InvalidStartFunction(
           "start function must have no results",
         )
       }
@@ -103,7 +101,7 @@ fn validate_module_start_function(
 fn validate_module_global_initializers(
   m : @core.Module,
   import_counts : ImportCounts,
-) -> Unit raise @errors.ValidationError {
+) -> Unit raise ValidationError {
   // Validate global initializers
   for global in m.globals {
     // Validate that only constant expression instructions are used
@@ -130,14 +128,14 @@ fn validate_module_global_initializers(
     }
     // Check that init expression produces exactly one value of the correct type
     if init_ctx.stack.length() != 1 {
-      raise @errors.ValidationError::TypeMismatch(
+      raise ValidationError::TypeMismatch(
         "global initializer must produce exactly one value, got \{init_ctx.stack.length()}",
       )
     }
     let produced_type = init_ctx.stack[0]
     // Use subtyping: init type must be a subtype of the declared global type
     if not(is_subtype(m, produced_type, global.type_.val_type)) {
-      raise @errors.ValidationError::TypeMismatch(
+      raise ValidationError::TypeMismatch(
         "global initializer type mismatch: expected \{global.type_.val_type}, got \{produced_type}",
       )
     }
@@ -147,7 +145,7 @@ fn validate_module_global_initializers(
 ///|
 fn validate_module_memory_limits(
   m : @core.Module,
-) -> Unit raise @errors.ValidationError {
+) -> Unit raise ValidationError {
   // Validate memory limits
   for mem in m.mems {
     match mem.limits.max {
@@ -155,19 +153,19 @@ fn validate_module_memory_limits(
         let min = mem.limits.min.reinterpret_as_int()
         let max = max_val.reinterpret_as_int()
         if min > max {
-          raise @errors.ValidationError::InvalidMemorySize(
+          raise ValidationError::InvalidMemorySize(
             "size minimum must not be greater than maximum",
           )
         }
         if max_val > 65536 {
-          raise @errors.ValidationError::InvalidMemorySize(
+          raise ValidationError::InvalidMemorySize(
             "memory size must be at most 65536 pages (4GiB)",
           )
         }
       }
       None =>
         if mem.limits.min > 65536 {
-          raise @errors.ValidationError::InvalidMemorySize(
+          raise ValidationError::InvalidMemorySize(
             "memory size must be at most 65536 pages (4GiB)",
           )
         }
@@ -178,7 +176,7 @@ fn validate_module_memory_limits(
 ///|
 fn validate_module_imported_memory_limits(
   m : @core.Module,
-) -> Unit raise @errors.ValidationError {
+) -> Unit raise ValidationError {
   // Validate memory limits for imported memories
   for imp in m.imports {
     match imp.desc {
@@ -188,19 +186,19 @@ fn validate_module_imported_memory_limits(
             let min = mem_type.limits.min.reinterpret_as_int()
             let max = max_val.reinterpret_as_int()
             if min > max {
-              raise @errors.ValidationError::InvalidMemorySize(
+              raise ValidationError::InvalidMemorySize(
                 "size minimum must not be greater than maximum",
               )
             }
             if max_val > 65536 {
-              raise @errors.ValidationError::InvalidMemorySize(
+              raise ValidationError::InvalidMemorySize(
                 "memory size must be at most 65536 pages (4GiB)",
               )
             }
           }
           None =>
             if mem_type.limits.min > 65536 {
-              raise @errors.ValidationError::InvalidMemorySize(
+              raise ValidationError::InvalidMemorySize(
                 "memory size must be at most 65536 pages (4GiB)",
               )
             }
@@ -214,14 +212,14 @@ fn validate_module_imported_memory_limits(
 fn validate_module_tables(
   m : @core.Module,
   import_counts : ImportCounts,
-) -> Unit raise @errors.ValidationError {
+) -> Unit raise ValidationError {
   // Validate table limits and initializers
   for table in m.tables {
     match table.limits.max {
       Some(max_val) =>
         // Use unsigned comparison - compare UInt values directly
         if table.limits.min > max_val {
-          raise @errors.ValidationError::InvalidTableSize(
+          raise ValidationError::InvalidTableSize(
             "size minimum must not be greater than maximum",
           )
         }
@@ -232,7 +230,7 @@ fn validate_module_tables(
     if not(table.nullable) {
       match table.init {
         None =>
-          raise @errors.ValidationError::TypeMismatch(
+          raise ValidationError::TypeMismatch(
             "table with non-nullable element type must have initializer",
           )
         Some(init_expr) => {
@@ -243,7 +241,7 @@ fn validate_module_tables(
           for instr in init_expr.instrs {
             match instr {
               RefNull(_) =>
-                raise @errors.ValidationError::TypeMismatch(
+                raise ValidationError::TypeMismatch(
                   "table with non-nullable element type cannot be initialized with null",
                 )
               _ => ()
@@ -266,7 +264,7 @@ fn validate_module_tables(
             )
           }
           if init_ctx.stack.length() != 1 {
-            raise @errors.ValidationError::TypeMismatch(
+            raise ValidationError::TypeMismatch(
               "table initializer must produce exactly one value",
             )
           }
@@ -281,7 +279,7 @@ fn validate_module_tables(
             | NullExternRef
             | Ref(_, _) => ()
             _ =>
-              raise @errors.ValidationError::TypeMismatch(
+              raise ValidationError::TypeMismatch(
                 "table initializer must produce a reference type",
               )
           }
@@ -309,7 +307,7 @@ fn validate_module_tables(
             )
           }
           if init_ctx.stack.length() != 1 {
-            raise @errors.ValidationError::TypeMismatch(
+            raise ValidationError::TypeMismatch(
               "table initializer must produce exactly one value",
             )
           }
@@ -326,7 +324,7 @@ fn validate_module_tables(
             | NullFuncRef
             | NullExternRef => ()
             I32 | I64 | F32 | F64 =>
-              raise @errors.ValidationError::TypeMismatch(
+              raise ValidationError::TypeMismatch(
                 "table initializer must produce a reference type, got \{init_type}",
               )
             _ => ()
@@ -338,11 +336,11 @@ fn validate_module_tables(
             | (Extern, ExternRef)
             | (Extern, NullExternRef) => ()
             (Func, ExternRef) | (Func, NullExternRef) | (Func, NullRef) =>
-              raise @errors.ValidationError::TypeMismatch(
+              raise ValidationError::TypeMismatch(
                 "table initializer type mismatch: table expects funcref, got \{init_type}",
               )
             (Extern, FuncRef) | (Extern, NullFuncRef) | (Extern, NullRef) =>
-              raise @errors.ValidationError::TypeMismatch(
+              raise ValidationError::TypeMismatch(
                 "table initializer type mismatch: table expects externref, got \{init_type}",
               )
             _ => ()
@@ -361,7 +359,7 @@ fn validate_module_tables(
           Some(max_val) =>
             // Use unsigned comparison - compare UInt values directly
             if table_type.limits.min > max_val {
-              raise @errors.ValidationError::InvalidTableSize(
+              raise ValidationError::InvalidTableSize(
                 "size minimum must not be greater than maximum",
               )
             }
@@ -376,7 +374,7 @@ fn validate_module_tables(
 fn validate_module_element_segments(
   m : @core.Module,
   import_counts : ImportCounts,
-) -> Unit raise @errors.ValidationError {
+) -> Unit raise ValidationError {
   // Validate element segments
   // Only active segments reference tables; passive/declarative segments don't
   // Count total tables (imported + local)
@@ -387,7 +385,7 @@ fn validate_module_element_segments(
     if elem.is_active {
       let table_idx = elem.table_idx.reinterpret_as_int()
       if table_idx < 0 || table_idx >= total_tables {
-        raise @errors.ValidationError::UnknownTable(table_idx)
+        raise ValidationError::UnknownTable(table_idx)
       }
     }
 
@@ -395,7 +393,7 @@ fn validate_module_element_segments(
     for func_idx in elem.init {
       let func_idx_int = func_idx.reinterpret_as_int()
       if func_idx_int < 0 || func_idx_int >= total_funcs {
-        raise @errors.ValidationError::InvalidFunctionIndex(func_idx_int)
+        raise ValidationError::InvalidFunctionIndex(func_idx_int)
       }
     }
   }
@@ -405,7 +403,7 @@ fn validate_module_element_segments(
 fn validate_module_data_segments(
   m : @core.Module,
   import_counts : ImportCounts,
-) -> Unit raise @errors.ValidationError {
+) -> Unit raise ValidationError {
   // Validate data segments reference valid memories
   // Only active segments reference memories; passive/declarative segments don't
   // Count total memories (imported + local)
@@ -415,7 +413,7 @@ fn validate_module_data_segments(
     if data.is_active {
       let mem_idx = data.mem_idx.reinterpret_as_int()
       if mem_idx < 0 || mem_idx >= total_mems {
-        raise @errors.ValidationError::UnknownMemory(mem_idx)
+        raise ValidationError::UnknownMemory(mem_idx)
       }
       // Validate offset expression uses only immutable globals
       validate_const_expr_globals(m, data.offset, import_counts)
@@ -427,7 +425,7 @@ fn validate_module_data_segments(
 fn validate_module_function_bodies(
   m : @core.Module,
   import_counts : ImportCounts,
-) -> Unit raise @errors.ValidationError {
+) -> Unit raise ValidationError {
   // Validate function bodies against their types
   for i in 0..<m.codes.length() {
     let type_idx = m.funcs[i].reinterpret_as_int()
@@ -443,13 +441,13 @@ fn validate_module_function_bodies(
 fn validate_module_exports(
   m : @core.Module,
   import_counts : ImportCounts,
-) -> Unit raise @errors.ValidationError {
+) -> Unit raise ValidationError {
   // Validate exports
   let export_names : Set[Bytes] = Set::new()
   for exp in m.exports {
     // Check for duplicate export names
     if export_names.contains(exp.name) {
-      raise @errors.ValidationError::DuplicateExport(
+      raise ValidationError::DuplicateExport(
         "duplicate export name: '\{exp.name}'",
       )
     }
@@ -460,28 +458,28 @@ fn validate_module_exports(
         let mem_idx = idx.reinterpret_as_int()
         let total_mems = import_counts.mems + m.mems.length()
         if mem_idx < 0 || mem_idx >= total_mems {
-          raise @errors.ValidationError::UnknownExportedMemory(mem_idx)
+          raise ValidationError::UnknownExportedMemory(mem_idx)
         }
       }
       Table(idx) => {
         let table_idx = idx.reinterpret_as_int()
         let total_tables = import_counts.tables + m.tables.length()
         if table_idx < 0 || table_idx >= total_tables {
-          raise @errors.ValidationError::UnknownExportedTable(table_idx)
+          raise ValidationError::UnknownExportedTable(table_idx)
         }
       }
       Func(idx) => {
         let func_idx = idx.reinterpret_as_int()
         let total_funcs = import_counts.funcs + m.funcs.length()
         if func_idx < 0 || func_idx >= total_funcs {
-          raise @errors.ValidationError::UnknownExportedFunction(func_idx)
+          raise ValidationError::UnknownExportedFunction(func_idx)
         }
       }
       @core.Global(idx) => {
         let global_idx = idx.reinterpret_as_int()
         let total_globals = import_counts.globals + m.globals.length()
         if global_idx < 0 || global_idx >= total_globals {
-          raise @errors.ValidationError::UnknownExportedGlobal(global_idx)
+          raise ValidationError::UnknownExportedGlobal(global_idx)
         }
       }
       Tag(_) => () // Skip tag export validation for now

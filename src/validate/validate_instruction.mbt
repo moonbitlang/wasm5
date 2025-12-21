@@ -7,7 +7,7 @@ fn validate_instruction(
   ctx : ValidationCtx,
   instr : @core.Instr,
   import_counts : ImportCounts,
-) -> Unit raise @errors.ValidationError {
+) -> Unit raise ValidationError {
   if validate_instruction_numeric(module_, ctx, instr) {
     return
   }

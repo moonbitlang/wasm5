@@ -1,6 +1,6 @@
 ///|
 /// Validate a WebAssembly module
-pub fn validate_module(m : @core.Module) -> Unit raise @errors.ValidationError {
+pub fn validate_module(m : @core.Module) -> Unit raise ValidationError {
   // Compute import counts once for efficiency
   let import_counts = get_import_counts(m)
   validate_module_type_indices(m)

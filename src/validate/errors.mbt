@@ -1,13 +1,4 @@
 ///|
-/// Parse error types
-pub(all) suberror ParseError {
-  UnexpectedEof // Unexpected end of file
-  InvalidMagic // Invalid magic number
-  UnsupportedVersion // Unsupported version
-  InvalidFormat(String) // Invalid format
-} derive(Show)
-
-///|
 /// Validation error types
 pub(all) suberror ValidationError {
   TypeMismatch(String)
