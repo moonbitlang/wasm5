@@ -16,7 +16,11 @@ priv enum WatInstr {
   GlobalGet(IndexRef)
   GlobalSet(IndexRef)
   Call(FuncRef)
+  ReturnCall(FuncRef)
   CallIndirect(WatCallIndirect)
+  ReturnCallIndirect(WatCallIndirect)
+  CallRef(WatTypeUse)
+  ReturnCallRef(WatTypeUse)
   RefFunc(FuncRef)
   TableGet(IndexRef)
   TableSet(IndexRef)
@@ -47,6 +51,13 @@ priv enum WatBlockType {
 priv enum WatTypeRef {
   Index(UInt)
   Name(Bytes)
+}
+
+///|
+priv struct WatTypeUse {
+  type_ref : WatTypeRef?
+  params : Array[@core.ValType]
+  results : Array[@core.ValType]
 }
 
 ///|
@@ -271,44 +282,7 @@ fn parse_if_instr(
 
 ///|
 fn parse_call_indirect(list_items : Array[SExpr]) -> WatInstr raise WatError {
-  guard list_items.length() >= 2 else {
-    raise WatError::InvalidSyntax("call_indirect expects typeuse")
-  }
-  let mut type_ref : WatTypeRef? = None
-  let params : Array[@core.ValType] = []
-  let results : Array[@core.ValType] = []
-  let mut table_ref = IndexRef::Index(0U)
-  for i in 1..<list_items.length() {
-    match list_items[i] {
-      List(items) => {
-        guard items.length() > 0 && items[0] is Atom(tag) else {
-          raise WatError::InvalidSyntax("call_indirect expects lists")
-        }
-        match tag {
-          b"type" => {
-            guard type_ref is None else {
-              raise WatError::InvalidSyntax("duplicate type in call_indirect")
-            }
-            type_ref = Some(parse_type_ref(items))
-          }
-          b"param" => append_types(params, items, allow_names=true)
-          b"result" => append_types(results, items, allow_names=true)
-          b"table" => {
-            guard items.length() == 2 else {
-              raise WatError::InvalidSyntax("table expects one index")
-            }
-            table_ref = parse_index_ref(expect_atom(items[1]))
-          }
-          _ => raise WatError::InvalidSyntax("call_indirect expects typeuse")
-        }
-      }
-      _ => raise WatError::InvalidSyntax("call_indirect expects lists")
-    }
-  }
-  guard type_ref is Some(_) || params.length() > 0 || results.length() > 0 else {
-    raise WatError::InvalidSyntax("call_indirect missing typeuse")
-  }
-  WatInstr::CallIndirect({ type_ref, params, results, table_ref })
+  WatInstr::CallIndirect(parse_call_indirect_items(list_items, "call_indirect"))
 }
 
 ///|
@@ -316,9 +290,31 @@ fn parse_call_indirect_from_items(
   items : Array[SExpr],
   start : Int,
 ) -> (WatInstr, Int) raise WatError {
+  let (call_indirect, idx) = parse_call_indirect_items_from_items(
+    items, start, b"call_indirect", "call_indirect",
+  )
+  (WatInstr::CallIndirect(call_indirect), idx)
+}
+
+///|
+fn parse_call_indirect_items_from_items(
+  items : Array[SExpr],
+  start : Int,
+  op_tag : Bytes,
+  context : String,
+) -> (WatCallIndirect, Int) raise WatError {
   let list_items : Array[SExpr] = []
-  list_items.push(Atom(b"call_indirect"))
+  list_items.push(Atom(op_tag))
   let mut idx = start
+  if idx < items.length() {
+    match items[idx] {
+      Atom(atom) if is_name(atom) || is_uint_atom(atom) => {
+        list_items.push(items[idx])
+        idx = idx + 1
+      }
+      _ => ()
+    }
+  }
   while idx < items.length() {
     match items[idx] {
       List(inner) =>
@@ -338,10 +334,153 @@ fn parse_call_indirect_from_items(
       _ => break
     }
   }
-  guard list_items.length() > 1 else {
-    raise WatError::InvalidSyntax("call_indirect expects typeuse")
+  (parse_call_indirect_items(list_items, context), idx)
+}
+
+///|
+fn parse_call_indirect_items(
+  list_items : Array[SExpr],
+  context : String,
+) -> WatCallIndirect raise WatError {
+  guard list_items.length() >= 2 else {
+    raise WatError::InvalidSyntax("\{context} expects typeuse")
   }
-  (parse_call_indirect(list_items), idx)
+  let mut idx = 1
+  let mut type_ref : WatTypeRef? = None
+  let params : Array[@core.ValType] = []
+  let results : Array[@core.ValType] = []
+  let mut table_ref = IndexRef::Index(0U)
+  let mut seen_table = false
+  if idx < list_items.length() {
+    match list_items[idx] {
+      Atom(atom) if is_name(atom) || is_uint_atom(atom) => {
+        table_ref = parse_index_ref(atom)
+        seen_table = true
+        idx = idx + 1
+      }
+      _ => ()
+    }
+  }
+  for i in idx..<list_items.length() {
+    match list_items[i] {
+      List(items) => {
+        guard items.length() > 0 && items[0] is Atom(tag) else {
+          raise WatError::InvalidSyntax("\{context} expects lists")
+        }
+        match tag {
+          b"type" => {
+            guard type_ref is None else {
+              raise WatError::InvalidSyntax("duplicate type in \{context}")
+            }
+            type_ref = Some(parse_type_ref(items))
+          }
+          b"param" => append_types(params, items, allow_names=true)
+          b"result" => append_types(results, items, allow_names=true)
+          b"table" => {
+            guard not(seen_table) else {
+              raise WatError::InvalidSyntax("duplicate table in \{context}")
+            }
+            guard items.length() == 2 else {
+              raise WatError::InvalidSyntax("table expects one index")
+            }
+            table_ref = parse_index_ref(expect_atom(items[1]))
+            seen_table = true
+          }
+          _ => raise WatError::InvalidSyntax("\{context} expects typeuse")
+        }
+      }
+      _ => raise WatError::InvalidSyntax("\{context} expects lists")
+    }
+  }
+  guard type_ref is Some(_) || params.length() > 0 || results.length() > 0 else {
+    raise WatError::InvalidSyntax("\{context} missing typeuse")
+  }
+  { type_ref, params, results, table_ref }
+}
+
+///|
+fn parse_call_ref_typeuse_from_items(
+  items : Array[SExpr],
+  start : Int,
+  op_tag : Bytes,
+  context : String,
+) -> (WatTypeUse, Int) raise WatError {
+  let list_items : Array[SExpr] = []
+  list_items.push(Atom(op_tag))
+  let mut idx = start
+  if idx < items.length() {
+    match items[idx] {
+      Atom(atom) if is_name(atom) || is_uint_atom(atom) => {
+        list_items.push(items[idx])
+        idx = idx + 1
+      }
+      _ => ()
+    }
+  }
+  while idx < items.length() {
+    match items[idx] {
+      List(inner) =>
+        if inner.length() > 0 &&
+          inner[0] is Atom(tag) &&
+          (tag == b"type" || tag == b"param" || tag == b"result") {
+          list_items.push(items[idx])
+          idx = idx + 1
+        } else {
+          break
+        }
+      _ => break
+    }
+  }
+  (parse_typeuse(list_items, 1, context), idx)
+}
+
+///|
+fn parse_typeuse(
+  list_items : Array[SExpr],
+  start : Int,
+  context : String,
+) -> WatTypeUse raise WatError {
+  guard list_items.length() > start else {
+    raise WatError::InvalidSyntax("\{context} expects typeuse")
+  }
+  let mut idx = start
+  let mut type_ref : WatTypeRef? = None
+  let params : Array[@core.ValType] = []
+  let results : Array[@core.ValType] = []
+  if idx < list_items.length() {
+    match list_items[idx] {
+      Atom(atom) if is_name(atom) || is_uint_atom(atom) => {
+        type_ref = Some(parse_type_ref_atom(atom))
+        idx = idx + 1
+      }
+      _ => ()
+    }
+  }
+  for i in idx..<list_items.length() {
+    match list_items[i] {
+      List(items) => {
+        guard items.length() > 0 && items[0] is Atom(tag) else {
+          raise WatError::InvalidSyntax("\{context} expects lists")
+        }
+        match tag {
+          b"type" => {
+            guard type_ref is None else {
+              raise WatError::InvalidSyntax("duplicate type in \{context}")
+            }
+            type_ref = Some(parse_type_ref(items))
+          }
+          b"param" => append_types(params, items, allow_names=true)
+          b"result" => append_types(results, items, allow_names=true)
+          _ => raise WatError::InvalidSyntax("\{context} expects typeuse")
+        }
+      }
+      _ => raise WatError::InvalidSyntax("\{context} expects lists")
+    }
+  }
+  guard type_ref is Some(_) || params.length() > 0 || results.length() > 0 else {
+    raise WatError::InvalidSyntax("\{context} missing typeuse")
+  }
+  { type_ref, params, results }
 }
 
 ///|
@@ -1241,6 +1380,11 @@ fn parse_type_ref(items : Array[SExpr]) -> WatTypeRef raise WatError {
     raise WatError::InvalidSyntax("type expects one index")
   }
   let atom = expect_atom(items[1])
+  parse_type_ref_atom(atom)
+}
+
+///|
+fn parse_type_ref_atom(atom : Bytes) -> WatTypeRef raise WatError {
   if is_name(atom) {
     WatTypeRef::Name(atom)
   } else {
@@ -1549,7 +1693,38 @@ fn parse_instr_from_atom(
       let imm = expect_atom_at(items, idx + 1)
       (WatInstr::Call(parse_func_ref(imm)), idx + 2)
     }
+    b"return_call" => {
+      let imm = expect_atom_at(items, idx + 1)
+      (WatInstr::ReturnCall(parse_func_ref(imm)), idx + 2)
+    }
     b"call_indirect" => parse_call_indirect_from_items(items, idx + 1)
+    b"return_call_indirect" => {
+      let (call_indirect, next_idx) = parse_call_indirect_items_from_items(
+        items,
+        idx + 1,
+        b"return_call_indirect",
+        "return_call_indirect",
+      )
+      (WatInstr::ReturnCallIndirect(call_indirect), next_idx)
+    }
+    b"call_ref" => {
+      let (typeuse, next_idx) = parse_call_ref_typeuse_from_items(
+        items,
+        idx + 1,
+        b"call_ref",
+        "call_ref",
+      )
+      (WatInstr::CallRef(typeuse), next_idx)
+    }
+    b"return_call_ref" => {
+      let (typeuse, next_idx) = parse_call_ref_typeuse_from_items(
+        items,
+        idx + 1,
+        b"return_call_ref",
+        "return_call_ref",
+      )
+      (WatInstr::ReturnCallRef(typeuse), next_idx)
+    }
     b"ref.null" => {
       let imm = expect_atom_at(items, idx + 1)
       (WatInstr::Core(@core.Instr::RefNull(parse_heaptype(imm))), idx + 2)
@@ -1670,6 +1845,10 @@ fn parse_instr_from_list(
     b"loop" => parse_loop_instr(list_items, local_map, labels)
     b"if" => parse_if_instr(list_items, local_map, labels)
     b"call_indirect" => parse_call_indirect(list_items)
+    b"return_call_indirect" =>
+      WatInstr::ReturnCallIndirect(
+        parse_call_indirect_items(list_items, "return_call_indirect"),
+      )
     b"ref.null" => {
       guard list_items.length() == 2 else {
         raise WatError::InvalidSyntax("ref.null expects one operand")
@@ -1822,6 +2001,15 @@ fn parse_instr_from_list(
       }
       WatInstr::Call(parse_func_ref(expect_atom(list_items[1])))
     }
+    b"return_call" => {
+      guard list_items.length() == 2 else {
+        raise WatError::InvalidSyntax("return_call expects one operand")
+      }
+      WatInstr::ReturnCall(parse_func_ref(expect_atom(list_items[1])))
+    }
+    b"call_ref" => WatInstr::CallRef(parse_typeuse(list_items, 1, "call_ref"))
+    b"return_call_ref" =>
+      WatInstr::ReturnCallRef(parse_typeuse(list_items, 1, "return_call_ref"))
     b"br" => {
       guard list_items.length() == 2 else {
         raise WatError::InvalidSyntax("br expects one operand")
@@ -2843,6 +3031,8 @@ fn resolve_instr(
       @core.Instr::GlobalSet(resolve_global_ref(global_ref, global_map))
     WatInstr::Call(func_ref) =>
       @core.Instr::Call(resolve_func_ref(func_ref, func_map))
+    WatInstr::ReturnCall(func_ref) =>
+      @core.Instr::ReturnCall(resolve_func_ref(func_ref, func_map))
     WatInstr::CallIndirect(call_indirect) => {
       let table_idx = resolve_index_ref(
         call_indirect.table_ref,
@@ -2858,6 +3048,44 @@ fn resolve_instr(
         types,
       )
       @core.Instr::CallIndirect(type_idx, table_idx)
+    }
+    WatInstr::ReturnCallIndirect(call_indirect) => {
+      let table_idx = resolve_index_ref(
+        call_indirect.table_ref,
+        table_map,
+        "table",
+      )
+      let type_idx = resolve_type_use_index(
+        call_indirect.type_ref,
+        call_indirect.params,
+        call_indirect.results,
+        type_defs,
+        type_map,
+        types,
+      )
+      @core.Instr::ReturnCallIndirect(type_idx, table_idx)
+    }
+    WatInstr::CallRef(typeuse) => {
+      let type_idx = resolve_type_use_index(
+        typeuse.type_ref,
+        typeuse.params,
+        typeuse.results,
+        type_defs,
+        type_map,
+        types,
+      )
+      @core.Instr::CallRef(type_idx)
+    }
+    WatInstr::ReturnCallRef(typeuse) => {
+      let type_idx = resolve_type_use_index(
+        typeuse.type_ref,
+        typeuse.params,
+        typeuse.results,
+        type_defs,
+        type_map,
+        types,
+      )
+      @core.Instr::ReturnCallRef(type_idx)
     }
     WatInstr::RefFunc(func_ref) =>
       @core.Instr::RefFunc(resolve_func_ref(func_ref, func_map))

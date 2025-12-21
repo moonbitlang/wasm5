@@ -592,6 +592,23 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
       append_bytes(payload, encode_u32_leb128(type_idx))
       append_bytes(payload, encode_u32_leb128(table_idx))
     }
+    ReturnCall(idx) => {
+      payload.push(0x12U.to_byte())
+      append_bytes(payload, encode_u32_leb128(idx))
+    }
+    ReturnCallIndirect(type_idx, table_idx) => {
+      payload.push(0x13U.to_byte())
+      append_bytes(payload, encode_u32_leb128(type_idx))
+      append_bytes(payload, encode_u32_leb128(table_idx))
+    }
+    CallRef(type_idx) => {
+      payload.push(0x14U.to_byte())
+      append_bytes(payload, encode_u32_leb128(type_idx))
+    }
+    ReturnCallRef(type_idx) => {
+      payload.push(0x15U.to_byte())
+      append_bytes(payload, encode_u32_leb128(type_idx))
+    }
     RefNull(ref_type) => {
       payload.push(0xD0U.to_byte())
       payload.push(encode_reftype(ref_type))

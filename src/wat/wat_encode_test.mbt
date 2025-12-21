@@ -100,6 +100,18 @@ async test "wat encoder matches wasm-tools for call_indirect" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for return_call" {
+  let wat = "(module (func $f (result i32) i32.const 7) (func (export \"call\") (result i32) return_call $f))"
+  assert_wat_matches("return_call", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for return_call_indirect" {
+  let wat = "(module (type $t (func (param i32) (result i32))) (table $tab 1 funcref) (func $f (type $t) (param i32) (result i32) local.get 0) (elem (i32.const 0) $f) (func (export \"call\") (param i32) (result i32) local.get 0 i32.const 0 return_call_indirect $tab (type $t)))"
+  assert_wat_matches("return_call_indirect", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for typeuse names" {
   let wat = "(module (type $t (func (param i32) (result i32))) (table 1 funcref) (func (type $t) (param $x i32) (result i32) local.get $x) (func (export \"call\") (param i32 i32) (result i32) local.get 0 local.get 1 call_indirect (type $t)))"
   assert_wat_matches("typeuse_names", wat)
@@ -115,4 +127,10 @@ async test "wat encoder matches wasm-tools for table and ref ops" {
 async test "wat encoder matches wasm-tools for data segments and memory.init" {
   let wat = "(module (memory 1) (data $p \"hi\") (data (i32.const 0) \"ok\") (func (export \"init\") (param i32 i32 i32) local.get 0 local.get 1 local.get 2 memory.init $p data.drop $p))"
   assert_wat_matches("data_memory_init", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for call_ref and return_call_ref" {
+  let wat = "(module (type $t (func (param i32) (result i32))) (table 1 funcref) (func $f (type $t) (param i32) (result i32) local.get 0) (elem (i32.const 0) $f) (func (export \"call\") (param i32) (result i32) local.get 0 ref.func $f call_ref $t) (func (export \"tail\") (param i32) (result i32) local.get 0 ref.func $f return_call_ref $t))"
+  assert_wat_matches("call_ref", wat)
 }
