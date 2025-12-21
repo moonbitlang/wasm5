@@ -347,6 +347,15 @@ test "parse instr reference variants" {
 }
 
 ///|
+test "parse instr reference typed as_non_null" {
+  let instr = parse_instr_reference(make_parser([b'\x00']), b'\x16')
+  match instr {
+    Some(Nop) => assert_eq(true, true)
+    _ => assert_eq(true, false)
+  }
+}
+
+///|
 test "parse reader errors" {
   let empty_view = Bytes::from_array([]).sub()
   let mut saw_error = false
@@ -377,6 +386,17 @@ test "parse reader errors" {
   saw_error = false
   let bytes_u32 : Array[Byte] = [b'\x80', b'\x80', b'\x80', b'\x80', b'\x10']
   let _ = Parser::new(Bytes::from_array(bytes_u32)).read_u32_leb128() catch {
+    _ => {
+      saw_error = true
+      0U
+    }
+  }
+  assert_eq(saw_error, true)
+  saw_error = false
+  let bytes_u32_cont : Array[Byte] = [
+    b'\x80', b'\x80', b'\x80', b'\x80', b'\x80',
+  ]
+  let _ = Parser::new(Bytes::from_array(bytes_u32_cont)).read_u32_leb128() catch {
     _ => {
       saw_error = true
       0U

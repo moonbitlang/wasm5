@@ -7,6 +7,12 @@ fn Parser::read_u32_leb128(self : Parser) -> UInt raise ParseError {
     // Check for overflow: shift >= 28 means we're on the 5th byte (bits 28-34)
     // For a valid u32, the 5th byte must have value <= 0x0F (only 4 bits used)
     // and no continuation bit (high bit must be 0)
+    if shift >= 28 && (byte & 0x80) != 0 {
+      // Continuation bit set on 5th byte - invalid
+      raise ParseError::InvalidFormat(
+        "LEB128 u32 overflow: too many continuation bytes",
+      )
+    }
     if shift >= 28 && byte > 0x0F {
       raise ParseError::InvalidFormat(
         "LEB128 u32 overflow: value exceeds 32 bits",
@@ -17,12 +23,6 @@ fn Parser::read_u32_leb128(self : Parser) -> UInt raise ParseError {
     if (byte & 0x80) == 0 {
       new_result
     } else {
-      if shift >= 28 {
-        // Continuation bit set on 5th byte - invalid
-        raise ParseError::InvalidFormat(
-          "LEB128 u32 overflow: too many continuation bytes",
-        )
-      }
       read_loop(shift + 7, new_result)
     }
   }

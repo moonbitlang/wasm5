@@ -619,6 +619,30 @@ test "validate module table errors" {
     module_nullable_typed,
     get_import_counts(module_nullable_typed),
   )
+  let module_typed_init : @core.Module = {
+    types: [{ params: [], results: [] }],
+    funcs: [0U],
+    tables: [
+      {
+        elem_type: TypeIndex(0),
+        limits: { min: 0U, max: None },
+        init: Some({ instrs: [RefFunc(0U)] }),
+        nullable: false,
+      },
+    ],
+    mems: [],
+    globals: [],
+    elems: [],
+    datas: [],
+    start: None,
+    imports: [],
+    exports: [],
+    codes: [{ locals: [], body: test_empty_expr(), compiled: None }],
+  }
+  validate_module_tables(
+    module_typed_init,
+    get_import_counts(module_typed_init),
+  )
   let module_nullable_extern_ok : @core.Module = {
     types: [],
     funcs: [],
@@ -978,6 +1002,34 @@ test "validate module exports errors" {
   ) catch {
     _ => {
       saw_error = true
+      ()
+    }
+  }
+  assert_eq(saw_error, true)
+  let module_func_export : @core.Module = {
+    types: [],
+    funcs: [],
+    tables: [],
+    mems: [],
+    globals: [],
+    elems: [],
+    datas: [],
+    start: None,
+    imports: [],
+    exports: [{ name: Bytes::from_array([b'f']), desc: Func(1U) }],
+    codes: [],
+  }
+  saw_error = false
+  let _ = validate_module_exports(
+    module_func_export,
+    get_import_counts(module_func_export),
+  ) catch {
+    UnknownExportedFunction(_) => {
+      saw_error = true
+      ()
+    }
+    _ => {
+      saw_error = false
       ()
     }
   }
