@@ -211,12 +211,13 @@ fn parse_block_instr(
   list_items : Array[SExpr],
   local_map : Map[Bytes, UInt],
   labels : Array[Bytes?],
+  type_map : Map[Bytes, UInt],
 ) -> WatInstr raise WatError {
   let (label, idx) = parse_optional_label(list_items, 1)
-  let (block_type, next_idx) = parse_block_type(list_items, idx)
+  let (block_type, next_idx) = parse_block_type(list_items, idx, type_map)
   let body_items = slice_sexprs(list_items, next_idx)
   let nested_labels = push_label(labels, label)
-  let body = parse_instrs(body_items, local_map, nested_labels)
+  let body = parse_instrs(body_items, local_map, nested_labels, type_map)
   WatInstr::Block(block_type, body)
 }
 
@@ -225,12 +226,13 @@ fn parse_loop_instr(
   list_items : Array[SExpr],
   local_map : Map[Bytes, UInt],
   labels : Array[Bytes?],
+  type_map : Map[Bytes, UInt],
 ) -> WatInstr raise WatError {
   let (label, idx) = parse_optional_label(list_items, 1)
-  let (block_type, next_idx) = parse_block_type(list_items, idx)
+  let (block_type, next_idx) = parse_block_type(list_items, idx, type_map)
   let body_items = slice_sexprs(list_items, next_idx)
   let nested_labels = push_label(labels, label)
-  let body = parse_instrs(body_items, local_map, nested_labels)
+  let body = parse_instrs(body_items, local_map, nested_labels, type_map)
   WatInstr::Loop(block_type, body)
 }
 
@@ -239,9 +241,10 @@ fn parse_if_instr(
   list_items : Array[SExpr],
   local_map : Map[Bytes, UInt],
   labels : Array[Bytes?],
+  type_map : Map[Bytes, UInt],
 ) -> WatInstr raise WatError {
   let (label, idx) = parse_optional_label(list_items, 1)
-  let (block_type, next_idx) = parse_block_type(list_items, idx)
+  let (block_type, next_idx) = parse_block_type(list_items, idx, type_map)
   let mut then_items : Array[SExpr] = []
   let mut else_items : Array[SExpr] = []
   let mut seen_then = false
@@ -275,23 +278,29 @@ fn parse_if_instr(
   }
   guard seen_then else { raise WatError::InvalidSyntax("if missing then") }
   let nested_labels = push_label(labels, label)
-  let then_body = parse_instrs(then_items, local_map, nested_labels)
-  let else_body = parse_instrs(else_items, local_map, nested_labels)
+  let then_body = parse_instrs(then_items, local_map, nested_labels, type_map)
+  let else_body = parse_instrs(else_items, local_map, nested_labels, type_map)
   WatInstr::If(block_type, then_body, else_body)
 }
 
 ///|
-fn parse_call_indirect(list_items : Array[SExpr]) -> WatInstr raise WatError {
-  WatInstr::CallIndirect(parse_call_indirect_items(list_items, "call_indirect"))
+fn parse_call_indirect(
+  list_items : Array[SExpr],
+  type_map : Map[Bytes, UInt],
+) -> WatInstr raise WatError {
+  WatInstr::CallIndirect(
+    parse_call_indirect_items(list_items, type_map, "call_indirect"),
+  )
 }
 
 ///|
 fn parse_call_indirect_from_items(
   items : Array[SExpr],
   start : Int,
+  type_map : Map[Bytes, UInt],
 ) -> (WatInstr, Int) raise WatError {
   let (call_indirect, idx) = parse_call_indirect_items_from_items(
-    items, start, b"call_indirect", "call_indirect",
+    items, start, type_map, b"call_indirect", "call_indirect",
   )
   (WatInstr::CallIndirect(call_indirect), idx)
 }
@@ -300,6 +309,7 @@ fn parse_call_indirect_from_items(
 fn parse_call_indirect_items_from_items(
   items : Array[SExpr],
   start : Int,
+  type_map : Map[Bytes, UInt],
   op_tag : Bytes,
   context : String,
 ) -> (WatCallIndirect, Int) raise WatError {
@@ -334,12 +344,13 @@ fn parse_call_indirect_items_from_items(
       _ => break
     }
   }
-  (parse_call_indirect_items(list_items, context), idx)
+  (parse_call_indirect_items(list_items, type_map, context), idx)
 }
 
 ///|
 fn parse_call_indirect_items(
   list_items : Array[SExpr],
+  type_map : Map[Bytes, UInt],
   context : String,
 ) -> WatCallIndirect raise WatError {
   guard list_items.length() >= 2 else {
@@ -374,8 +385,8 @@ fn parse_call_indirect_items(
             }
             type_ref = Some(parse_type_ref(items))
           }
-          b"param" => append_types(params, items, allow_names=true)
-          b"result" => append_types(results, items, allow_names=true)
+          b"param" => append_types(params, items, type_map, allow_names=true)
+          b"result" => append_types(results, items, type_map, allow_names=true)
           b"table" => {
             guard not(seen_table) else {
               raise WatError::InvalidSyntax("duplicate table in \{context}")
@@ -402,6 +413,7 @@ fn parse_call_indirect_items(
 fn parse_call_ref_typeuse_from_items(
   items : Array[SExpr],
   start : Int,
+  type_map : Map[Bytes, UInt],
   op_tag : Bytes,
   context : String,
 ) -> (WatTypeUse, Int) raise WatError {
@@ -431,13 +443,14 @@ fn parse_call_ref_typeuse_from_items(
       _ => break
     }
   }
-  (parse_typeuse(list_items, 1, context), idx)
+  (parse_typeuse(list_items, 1, type_map, context), idx)
 }
 
 ///|
 fn parse_typeuse(
   list_items : Array[SExpr],
   start : Int,
+  type_map : Map[Bytes, UInt],
   context : String,
 ) -> WatTypeUse raise WatError {
   guard list_items.length() > start else {
@@ -469,8 +482,8 @@ fn parse_typeuse(
             }
             type_ref = Some(parse_type_ref(items))
           }
-          b"param" => append_types(params, items, allow_names=true)
-          b"result" => append_types(results, items, allow_names=true)
+          b"param" => append_types(params, items, type_map, allow_names=true)
+          b"result" => append_types(results, items, type_map, allow_names=true)
           _ => raise WatError::InvalidSyntax("\{context} expects typeuse")
         }
       }
@@ -498,6 +511,7 @@ fn parse_optional_label(items : Array[SExpr], start : Int) -> (Bytes?, Int) {
 fn parse_block_type(
   items : Array[SExpr],
   start : Int,
+  type_map : Map[Bytes, UInt],
 ) -> (WatBlockType, Int) raise WatError {
   let mut idx = start
   let results : Array[@core.ValType] = []
@@ -515,7 +529,7 @@ fn parse_block_type(
               raise WatError::InvalidSyntax("duplicate result in block type")
             }
             for i in 1..<list_items.length() {
-              results.push(parse_valtype(expect_atom(list_items[i])))
+              results.push(parse_valtype_expr(list_items[i], type_map))
             }
             seen_result = true
             idx = idx + 1
@@ -528,10 +542,14 @@ fn parse_block_type(
               raise WatError::InvalidSyntax("type expects one index")
             }
             let atom = expect_atom(list_items[1])
-            guard not(is_name(atom)) else {
-              raise WatError::Unsupported("type name not supported")
+            if is_name(atom) {
+              match type_map.get(atom) {
+                Some(idx) => type_index = Some(idx)
+                None => raise WatError::UnknownIdentifier("type \{atom}")
+              }
+            } else {
+              type_index = Some(parse_uint(atom))
             }
-            type_index = Some(parse_uint(atom))
             idx = idx + 1
           }
           _ => break
@@ -692,6 +710,7 @@ fn parse_module(expr : SExpr) -> WatModule raise WatError {
       if idx < items.length() && items[idx] is Atom(name) && is_name(name) {
         idx = idx + 1
       }
+      let type_items : Array[Array[SExpr]] = []
       for i in idx..<items.length() {
         match items[i] {
           List(field_items) => {
@@ -699,7 +718,7 @@ fn parse_module(expr : SExpr) -> WatModule raise WatError {
               raise WatError::InvalidSyntax("field head must be atom")
             }
             if head == b"type" {
-              module_.type_defs.push(parse_type_def(field_items))
+              type_items.push(field_items)
             }
           }
           Atom(_) | StringLit(_) =>
@@ -707,12 +726,15 @@ fn parse_module(expr : SExpr) -> WatModule raise WatError {
         }
       }
       let type_map = Map::new()
-      for i in 0..<module_.type_defs.length() {
-        let type_def = module_.type_defs[i]
-        if type_def.name is Some(name) {
+      for i in 0..<type_items.length() {
+        let type_item = type_items[i]
+        if type_item.length() > 1 && type_item[1] is Atom(name) && is_name(name) {
           ensure_unique_name(type_map, name, "type")
           type_map[name] = i.reinterpret_as_uint()
         }
+      }
+      for type_item in type_items {
+        module_.type_defs.push(parse_type_def(type_item, type_map))
       }
       for i in idx..<items.length() {
         match items[i] {
@@ -778,7 +800,7 @@ fn parse_module_field(
       module_.mems.push({ name: mem.name, limits: mem.limits, exports: [] })
     }
     b"table" => {
-      let table = parse_table(items)
+      let table = parse_table(items, type_map)
       let table_index = (module_.table_imports.length() +
       module_.tables.length()).reinterpret_as_uint()
       for name in table.exports {
@@ -794,7 +816,7 @@ fn parse_module_field(
       })
     }
     b"global" => {
-      let global_ = parse_global(items)
+      let global_ = parse_global(items, type_map)
       let global_index = (module_.global_imports.length() +
       module_.globals.length()).reinterpret_as_uint()
       for name in global_.exports {
@@ -810,8 +832,8 @@ fn parse_module_field(
         exports: [],
       })
     }
-    b"elem" => module_.elems.push(parse_elem(items))
-    b"data" => module_.datas.push(parse_data(items))
+    b"elem" => module_.elems.push(parse_elem(items, type_map))
+    b"data" => module_.datas.push(parse_data(items, type_map))
     b"export" => module_.exports.push(parse_export(items))
     b"start" => module_.start = Some(parse_start(items))
     b"type" => ()
@@ -859,9 +881,12 @@ fn parse_func(
               }
               type_ref = Some(parse_type_ref(list_items))
             }
-            b"param" => append_named_types(params, param_names, list_items)
-            b"result" => append_types(results, list_items, allow_names=false)
-            b"local" => append_named_types(locals, local_names, list_items)
+            b"param" =>
+              append_named_types(params, param_names, list_items, type_map)
+            b"result" =>
+              append_types(results, list_items, type_map, allow_names=false)
+            b"local" =>
+              append_named_types(locals, local_names, list_items, type_map)
             b"export" => exports.push(parse_inline_export(list_items))
             _ => {
               in_body = true
@@ -899,7 +924,7 @@ fn parse_func(
       None => ()
     }
   }
-  let body = parse_instrs(instr_items, local_map, [])
+  let body = parse_instrs(instr_items, local_map, [], type_map)
   WatFunc::{
     name,
     type_idx,
@@ -970,7 +995,7 @@ fn parse_import(
         table_name = Some(atom)
         idx = idx + 1
       }
-      let table_type = parse_table_type(desc_items, idx)
+      let table_type = parse_table_type(desc_items, idx, type_map)
       module_.table_imports.push({
         module_: module_name,
         name: field_name,
@@ -990,7 +1015,7 @@ fn parse_import(
       guard idx < desc_items.length() else {
         raise WatError::InvalidSyntax("global import expects type")
       }
-      let global_type = parse_global_type(desc_items[idx])
+      let global_type = parse_global_type(desc_items[idx], type_map)
       guard idx + 1 == desc_items.length() else {
         raise WatError::InvalidSyntax("global import expects only type")
       }
@@ -1036,7 +1061,10 @@ fn parse_memory(items : Array[SExpr]) -> WatMemory raise WatError {
 }
 
 ///|
-fn parse_table(items : Array[SExpr]) -> WatTable raise WatError {
+fn parse_table(
+  items : Array[SExpr],
+  type_map : Map[Bytes, UInt],
+) -> WatTable raise WatError {
   let mut idx = 1
   let mut name : Bytes? = None
   if idx < items.length() && items[idx] is Atom(atom) && is_name(atom) {
@@ -1046,6 +1074,7 @@ fn parse_table(items : Array[SExpr]) -> WatTable raise WatError {
   let exports : Array[Bytes] = []
   let limit_atoms : Array[Bytes] = []
   let mut elem_type : @core.RefType? = None
+  let mut elem_nullable : Bool? = None
   for i in idx..<items.length() {
     match items[i] {
       List(list_items) => {
@@ -1054,17 +1083,26 @@ fn parse_table(items : Array[SExpr]) -> WatTable raise WatError {
         }
         match tag {
           b"export" => exports.push(parse_inline_export(list_items))
-          _ => raise WatError::Unsupported("table field \{tag}")
+          _ => {
+            let (ref_type, nullable) = parse_reftype_expr(items[i], type_map)
+            guard elem_type is None else {
+              raise WatError::InvalidSyntax("duplicate table elem type")
+            }
+            elem_type = Some(ref_type)
+            elem_nullable = Some(nullable)
+          }
         }
       }
       Atom(atom) =>
-        if is_reftype_atom(atom) {
+        if is_uint_atom(atom) {
+          limit_atoms.push(atom)
+        } else {
+          let (ref_type, nullable) = parse_reftype_expr(items[i], type_map)
           guard elem_type is None else {
             raise WatError::InvalidSyntax("duplicate table elem type")
           }
-          elem_type = Some(parse_reftype(atom))
-        } else {
-          limit_atoms.push(atom)
+          elem_type = Some(ref_type)
+          elem_nullable = Some(nullable)
         }
       StringLit(_) =>
         raise WatError::InvalidSyntax("unexpected string in table")
@@ -1073,13 +1111,12 @@ fn parse_table(items : Array[SExpr]) -> WatTable raise WatError {
   guard elem_type is Some(elem_type) else {
     raise WatError::InvalidSyntax("table element type missing")
   }
-  let limits = parse_limits_from_atoms(limit_atoms)
-  let table_type : @core.TableType = {
-    elem_type,
-    limits,
-    init: None,
-    nullable: true,
+  let nullable = match elem_nullable {
+    Some(value) => value
+    None => true
   }
+  let limits = parse_limits_from_atoms(limit_atoms)
+  let table_type : @core.TableType = { elem_type, limits, init: None, nullable }
   WatTable::{ name, table_type, exports }
 }
 
@@ -1087,20 +1124,32 @@ fn parse_table(items : Array[SExpr]) -> WatTable raise WatError {
 fn parse_table_type(
   items : Array[SExpr],
   start : Int,
+  type_map : Map[Bytes, UInt],
 ) -> @core.TableType raise WatError {
   let limit_atoms : Array[Bytes] = []
   let mut elem_type : @core.RefType? = None
+  let mut elem_nullable : Bool? = None
   for i in start..<items.length() {
     match items[i] {
       Atom(atom) =>
-        if is_reftype_atom(atom) {
+        if is_uint_atom(atom) {
+          limit_atoms.push(atom)
+        } else {
+          let (ref_type, nullable) = parse_reftype_expr(items[i], type_map)
           guard elem_type is None else {
             raise WatError::InvalidSyntax("duplicate table elem type")
           }
-          elem_type = Some(parse_reftype(atom))
-        } else {
-          limit_atoms.push(atom)
+          elem_type = Some(ref_type)
+          elem_nullable = Some(nullable)
         }
+      List(_) => {
+        let (ref_type, nullable) = parse_reftype_expr(items[i], type_map)
+        guard elem_type is None else {
+          raise WatError::InvalidSyntax("duplicate table elem type")
+        }
+        elem_type = Some(ref_type)
+        elem_nullable = Some(nullable)
+      }
       _ => raise WatError::InvalidSyntax("table type expects atoms")
     }
   }
@@ -1108,11 +1157,18 @@ fn parse_table_type(
     raise WatError::InvalidSyntax("table element type missing")
   }
   let limits = parse_limits_from_atoms(limit_atoms)
-  { elem_type, limits, init: None, nullable: true }
+  let nullable = match elem_nullable {
+    Some(value) => value
+    None => true
+  }
+  { elem_type, limits, init: None, nullable }
 }
 
 ///|
-fn parse_global(items : Array[SExpr]) -> WatGlobal raise WatError {
+fn parse_global(
+  items : Array[SExpr],
+  type_map : Map[Bytes, UInt],
+) -> WatGlobal raise WatError {
   let mut idx = 1
   let mut name : Bytes? = None
   if idx < items.length() && items[idx] is Atom(atom) && is_name(atom) {
@@ -1157,16 +1213,19 @@ fn parse_global(items : Array[SExpr]) -> WatGlobal raise WatError {
   guard type_item is Some(type_expr) else {
     raise WatError::InvalidSyntax("global type missing")
   }
-  let global_type = parse_global_type(type_expr)
+  let global_type = parse_global_type(type_expr, type_map)
   guard init_items.length() > 0 else {
     raise WatError::InvalidSyntax("global init missing")
   }
-  let init_instrs = parse_instrs(init_items, Map::new(), [])
+  let init_instrs = parse_instrs(init_items, Map::new(), [], type_map)
   WatGlobal::{ name, type_: global_type, init: init_instrs, exports }
 }
 
 ///|
-fn parse_data(items : Array[SExpr]) -> WatData raise WatError {
+fn parse_data(
+  items : Array[SExpr],
+  type_map : Map[Bytes, UInt],
+) -> WatData raise WatError {
   guard items.length() >= 2 else {
     raise WatError::InvalidSyntax("data expects bytes")
   }
@@ -1197,7 +1256,7 @@ fn parse_data(items : Array[SExpr]) -> WatData raise WatError {
   if idx < items.length() {
     match items[idx] {
       List(_) | Atom(_) => {
-        offset_expr = parse_instrs([items[idx]], Map::new(), [])
+        offset_expr = parse_instrs([items[idx]], Map::new(), [], type_map)
         is_active = true
         idx = idx + 1
       }
@@ -1224,7 +1283,10 @@ fn parse_data(items : Array[SExpr]) -> WatData raise WatError {
 }
 
 ///|
-fn parse_elem(items : Array[SExpr]) -> WatElem raise WatError {
+fn parse_elem(
+  items : Array[SExpr],
+  type_map : Map[Bytes, UInt],
+) -> WatElem raise WatError {
   let mut idx = 1
   let mut name : Bytes? = None
   if idx < items.length() && items[idx] is Atom(atom) && is_name(atom) {
@@ -1257,11 +1319,11 @@ fn parse_elem(items : Array[SExpr]) -> WatElem raise WatError {
           list_items[0] is Atom(tag) &&
           tag == b"offset" {
           let offset_items = slice_sexprs(list_items, 1)
-          offset_instrs = parse_instrs(offset_items, Map::new(), [])
+          offset_instrs = parse_instrs(offset_items, Map::new(), [], type_map)
           is_active = true
           idx = idx + 1
         } else {
-          offset_instrs = parse_instrs([items[idx]], Map::new(), [])
+          offset_instrs = parse_instrs([items[idx]], Map::new(), [], type_map)
           is_active = true
           idx = idx + 1
         }
@@ -1338,7 +1400,10 @@ fn parse_inline_export(items : Array[SExpr]) -> Bytes raise WatError {
 }
 
 ///|
-fn parse_type_def(items : Array[SExpr]) -> WatTypeDef raise WatError {
+fn parse_type_def(
+  items : Array[SExpr],
+  type_map : Map[Bytes, UInt],
+) -> WatTypeDef raise WatError {
   let mut idx = 1
   let mut name : Bytes? = None
   if idx < items.length() && items[idx] is Atom(atom) && is_name(atom) {
@@ -1363,8 +1428,8 @@ fn parse_type_def(items : Array[SExpr]) -> WatTypeDef raise WatError {
           raise WatError::InvalidSyntax("func type item tag must be atom")
         }
         match inner_tag {
-          b"param" => append_types(params, inner, allow_names=true)
-          b"result" => append_types(results, inner, allow_names=false)
+          b"param" => append_types(params, inner, type_map, allow_names=true)
+          b"result" => append_types(results, inner, type_map, allow_names=false)
           _ => raise WatError::Unsupported("func type item \{inner_tag}")
         }
       }
@@ -1493,8 +1558,10 @@ fn parse_func_typeuse(
             }
             type_ref = Some(parse_type_ref(list_items))
           }
-          b"param" => append_types(params, list_items, allow_names=true)
-          b"result" => append_types(results, list_items, allow_names=false)
+          b"param" =>
+            append_types(params, list_items, type_map, allow_names=true)
+          b"result" =>
+            append_types(results, list_items, type_map, allow_names=false)
           _ => raise WatError::Unsupported("func type item \{tag}")
         }
       }
@@ -1508,18 +1575,28 @@ fn parse_func_typeuse(
 }
 
 ///|
-fn parse_global_type(expr : SExpr) -> @core.GlobalType raise WatError {
+fn parse_global_type(
+  expr : SExpr,
+  type_map : Map[Bytes, UInt],
+) -> @core.GlobalType raise WatError {
   match expr {
     List(list_items) => {
-      guard list_items.length() == 2 && list_items[0] is Atom(tag) else {
+      guard list_items.length() > 0 && list_items[0] is Atom(tag) else {
         raise WatError::InvalidSyntax("global type list invalid")
       }
-      guard tag == b"mut" else { raise WatError::InvalidSyntax("expected mut") }
-      let val_type = parse_valtype(expect_atom(list_items[1]))
-      @core.GlobalType::{ val_type, mutable: true }
+      if tag == b"mut" {
+        guard list_items.length() == 2 else {
+          raise WatError::InvalidSyntax("global mut type invalid")
+        }
+        let val_type = parse_valtype_expr(list_items[1], type_map)
+        @core.GlobalType::{ val_type, mutable: true }
+      } else {
+        let val_type = parse_valtype_expr(expr, type_map)
+        @core.GlobalType::{ val_type, mutable: false }
+      }
     }
     Atom(atom) => {
-      let val_type = parse_valtype(atom)
+      let val_type = parse_valtype_atom(atom, type_map)
       @core.GlobalType::{ val_type, mutable: false }
     }
     _ => raise WatError::InvalidSyntax("global type invalid")
@@ -1530,6 +1607,7 @@ fn parse_global_type(expr : SExpr) -> @core.GlobalType raise WatError {
 fn append_types(
   dst : Array[@core.ValType],
   items : Array[SExpr],
+  type_map : Map[Bytes, UInt],
   allow_names~ : Bool,
 ) -> Unit raise WatError {
   for i in 1..<items.length() {
@@ -1538,9 +1616,10 @@ fn append_types(
         if allow_names && is_name(atom) {
           continue
         }
-        dst.push(parse_valtype(atom))
+        dst.push(parse_valtype_atom(atom, type_map))
       }
-      _ => raise WatError::InvalidSyntax("expected type atom")
+      List(_) => dst.push(parse_valtype_expr(items[i], type_map))
+      _ => raise WatError::InvalidSyntax("expected type")
     }
   }
 }
@@ -1550,6 +1629,7 @@ fn append_named_types(
   dst_types : Array[@core.ValType],
   dst_names : Array[Bytes?],
   items : Array[SExpr],
+  type_map : Map[Bytes, UInt],
 ) -> Unit raise WatError {
   let mut pending : Bytes? = None
   for i in 1..<items.length() {
@@ -1559,11 +1639,16 @@ fn append_named_types(
           pending = Some(atom)
           continue
         }
-        dst_types.push(parse_valtype(atom))
+        dst_types.push(parse_valtype_atom(atom, type_map))
         dst_names.push(pending)
         pending = None
       }
-      _ => raise WatError::InvalidSyntax("expected type atom")
+      List(_) => {
+        dst_types.push(parse_valtype_expr(items[i], type_map))
+        dst_names.push(pending)
+        pending = None
+      }
+      _ => raise WatError::InvalidSyntax("expected type")
     }
   }
   match pending {
@@ -1602,6 +1687,7 @@ fn parse_instrs(
   items : Array[SExpr],
   local_map : Map[Bytes, UInt],
   labels : Array[Bytes?],
+  type_map : Map[Bytes, UInt],
 ) -> Array[WatInstr] raise WatError {
   let instrs : Array[WatInstr] = []
   let mut i = 0
@@ -1609,13 +1695,15 @@ fn parse_instrs(
     match items[i] {
       Atom(op) => {
         let (instr, next_idx) = parse_instr_from_atom(
-          items, i, op, local_map, labels,
+          items, i, op, local_map, labels, type_map,
         )
         instrs.push(instr)
         i = next_idx
       }
       List(list_items) => {
-        instrs.push(parse_instr_from_list(list_items, local_map, labels))
+        instrs.push(
+          parse_instr_from_list(list_items, local_map, labels, type_map),
+        )
         i = i + 1
       }
       StringLit(_) =>
@@ -1632,6 +1720,7 @@ fn parse_instr_from_atom(
   op : Bytes,
   local_map : Map[Bytes, UInt],
   labels : Array[Bytes?],
+  type_map : Map[Bytes, UInt],
 ) -> (WatInstr, Int) raise WatError {
   match op {
     b"i32.const" => {
@@ -1697,11 +1786,12 @@ fn parse_instr_from_atom(
       let imm = expect_atom_at(items, idx + 1)
       (WatInstr::ReturnCall(parse_func_ref(imm)), idx + 2)
     }
-    b"call_indirect" => parse_call_indirect_from_items(items, idx + 1)
+    b"call_indirect" => parse_call_indirect_from_items(items, idx + 1, type_map)
     b"return_call_indirect" => {
       let (call_indirect, next_idx) = parse_call_indirect_items_from_items(
         items,
         idx + 1,
+        type_map,
         b"return_call_indirect",
         "return_call_indirect",
       )
@@ -1711,6 +1801,7 @@ fn parse_instr_from_atom(
       let (typeuse, next_idx) = parse_call_ref_typeuse_from_items(
         items,
         idx + 1,
+        type_map,
         b"call_ref",
         "call_ref",
       )
@@ -1720,6 +1811,7 @@ fn parse_instr_from_atom(
       let (typeuse, next_idx) = parse_call_ref_typeuse_from_items(
         items,
         idx + 1,
+        type_map,
         b"return_call_ref",
         "return_call_ref",
       )
@@ -1727,7 +1819,10 @@ fn parse_instr_from_atom(
     }
     b"ref.null" => {
       let imm = expect_atom_at(items, idx + 1)
-      (WatInstr::Core(@core.Instr::RefNull(parse_heaptype(imm))), idx + 2)
+      (
+        WatInstr::Core(@core.Instr::RefNull(parse_heaptype_atom(imm, type_map))),
+        idx + 2,
+      )
     }
     b"ref.func" => {
       let imm = expect_atom_at(items, idx + 1)
@@ -1847,6 +1942,7 @@ fn parse_instr_from_list(
   list_items : Array[SExpr],
   local_map : Map[Bytes, UInt],
   labels : Array[Bytes?],
+  type_map : Map[Bytes, UInt],
 ) -> WatInstr raise WatError {
   guard list_items.length() > 0 else {
     raise WatError::InvalidSyntax("empty instruction list")
@@ -1855,20 +1951,22 @@ fn parse_instr_from_list(
     raise WatError::InvalidSyntax("instruction head must be atom")
   }
   match op {
-    b"block" => parse_block_instr(list_items, local_map, labels)
-    b"loop" => parse_loop_instr(list_items, local_map, labels)
-    b"if" => parse_if_instr(list_items, local_map, labels)
-    b"call_indirect" => parse_call_indirect(list_items)
+    b"block" => parse_block_instr(list_items, local_map, labels, type_map)
+    b"loop" => parse_loop_instr(list_items, local_map, labels, type_map)
+    b"if" => parse_if_instr(list_items, local_map, labels, type_map)
+    b"call_indirect" => parse_call_indirect(list_items, type_map)
     b"return_call_indirect" =>
       WatInstr::ReturnCallIndirect(
-        parse_call_indirect_items(list_items, "return_call_indirect"),
+        parse_call_indirect_items(list_items, type_map, "return_call_indirect"),
       )
     b"ref.null" => {
       guard list_items.length() == 2 else {
         raise WatError::InvalidSyntax("ref.null expects one operand")
       }
       WatInstr::Core(
-        @core.Instr::RefNull(parse_heaptype(expect_atom(list_items[1]))),
+        @core.Instr::RefNull(
+          parse_heaptype_atom(expect_atom(list_items[1]), type_map),
+        ),
       )
     }
     b"ref.func" => {
@@ -1927,7 +2025,7 @@ fn parse_instr_from_list(
         }
         let types : Array[@core.ValType] = []
         for i in 1..<result_items.length() {
-          types.push(parse_valtype(expect_atom(result_items[i])))
+          types.push(parse_valtype_expr(result_items[i], type_map))
         }
         WatInstr::Core(@core.Instr::SelectTyped(types))
       }
@@ -2021,9 +2119,12 @@ fn parse_instr_from_list(
       }
       WatInstr::ReturnCall(parse_func_ref(expect_atom(list_items[1])))
     }
-    b"call_ref" => WatInstr::CallRef(parse_typeuse(list_items, 1, "call_ref"))
+    b"call_ref" =>
+      WatInstr::CallRef(parse_typeuse(list_items, 1, type_map, "call_ref"))
     b"return_call_ref" =>
-      WatInstr::ReturnCallRef(parse_typeuse(list_items, 1, "return_call_ref"))
+      WatInstr::ReturnCallRef(
+        parse_typeuse(list_items, 1, type_map, "return_call_ref"),
+      )
     b"br" => {
       guard list_items.length() == 2 else {
         raise WatError::InvalidSyntax("br expects one operand")
@@ -3403,7 +3504,30 @@ fn parse_local_ref(
 }
 
 ///|
-fn parse_valtype(atom : Bytes) -> @core.ValType raise WatError {
+fn parse_valtype_expr(
+  expr : SExpr,
+  type_map : Map[Bytes, UInt],
+) -> @core.ValType raise WatError {
+  match expr {
+    Atom(atom) => parse_valtype_atom(atom, type_map)
+    List(list_items) => {
+      guard list_items.length() > 0 && list_items[0] is Atom(tag) else {
+        raise WatError::InvalidSyntax("valtype list invalid")
+      }
+      match tag {
+        b"ref" => parse_ref_valtype(list_items, type_map)
+        _ => raise WatError::Unsupported("valtype \{tag}")
+      }
+    }
+    _ => raise WatError::InvalidSyntax("expected type")
+  }
+}
+
+///|
+fn parse_valtype_atom(
+  atom : Bytes,
+  _type_map : Map[Bytes, UInt],
+) -> @core.ValType raise WatError {
   match atom {
     b"i32" => I32
     b"i64" => I64
@@ -3412,31 +3536,123 @@ fn parse_valtype(atom : Bytes) -> @core.ValType raise WatError {
     b"v128" => V128
     b"funcref" => FuncRef
     b"externref" => ExternRef
+    b"anyref" => AnyRef
+    b"eqref" => EqRef
+    b"i31ref" => I31Ref
+    b"structref" => StructRef
+    b"arrayref" => ArrayRef
+    b"exnref" => ExnRef
+    b"nullref" => NullRef
+    b"nullfuncref" => NullFuncRef
+    b"nullexternref" => NullExternRef
+    b"nullexnref" => NullExnRef
     _ => raise WatError::Unsupported("valtype \{atom}")
   }
 }
 
 ///|
-fn parse_reftype(atom : Bytes) -> @core.RefType raise WatError {
-  match atom {
-    b"funcref" => @core.RefType::Func
-    b"externref" => @core.RefType::Extern
-    _ => raise WatError::Unsupported("reftype \{atom}")
+fn parse_ref_valtype(
+  items : Array[SExpr],
+  type_map : Map[Bytes, UInt],
+) -> @core.ValType raise WatError {
+  guard items.length() == 2 || items.length() == 3 else {
+    raise WatError::InvalidSyntax("ref type expects heap type")
+  }
+  let mut nullable = false
+  let mut heap_idx = 1
+  if items.length() == 3 {
+    guard items[1] is Atom(tag) && tag == b"null" else {
+      raise WatError::InvalidSyntax("ref type expects null")
+    }
+    nullable = true
+    heap_idx = 2
+  }
+  let heap_type = parse_heaptype_atom(expect_atom(items[heap_idx]), type_map)
+  valtype_from_ref(heap_type, nullable)
+}
+
+///|
+fn valtype_from_ref(ref_type : @core.RefType, nullable : Bool) -> @core.ValType {
+  if nullable {
+    match ref_type {
+      Func => FuncRef
+      Extern => ExternRef
+      Any => AnyRef
+      Eq => EqRef
+      I31 => I31Ref
+      Struct => StructRef
+      Array => ArrayRef
+      Exn => ExnRef
+      None => NullRef
+      NoFunc => NullFuncRef
+      NoExtern => NullExternRef
+      NoExn => NullExnRef
+      TypeIndex(_) => Ref(ref_type, true)
+    }
+  } else {
+    Ref(ref_type, false)
   }
 }
 
 ///|
-fn parse_heaptype(atom : Bytes) -> @core.RefType raise WatError {
+fn valtype_to_reftype(
+  val_type : @core.ValType,
+) -> (@core.RefType, Bool) raise WatError {
+  match val_type {
+    FuncRef => (Func, true)
+    ExternRef => (Extern, true)
+    AnyRef => (Any, true)
+    EqRef => (Eq, true)
+    I31Ref => (I31, true)
+    StructRef => (Struct, true)
+    ArrayRef => (Array, true)
+    ExnRef => (Exn, true)
+    NullRef => (None, true)
+    NullFuncRef => (NoFunc, true)
+    NullExternRef => (NoExtern, true)
+    NullExnRef => (NoExn, true)
+    Ref(ref_type, nullable) => (ref_type, nullable)
+    _ => raise WatError::InvalidSyntax("expected reference type")
+  }
+}
+
+///|
+fn parse_reftype_expr(
+  expr : SExpr,
+  type_map : Map[Bytes, UInt],
+) -> (@core.RefType, Bool) raise WatError {
+  let val_type = parse_valtype_expr(expr, type_map)
+  valtype_to_reftype(val_type)
+}
+
+///|
+fn parse_heaptype_atom(
+  atom : Bytes,
+  type_map : Map[Bytes, UInt],
+) -> @core.RefType raise WatError {
   match atom {
     b"func" => @core.RefType::Func
     b"extern" => @core.RefType::Extern
-    _ => raise WatError::Unsupported("heaptype \{atom}")
+    b"any" => @core.RefType::Any
+    b"eq" => @core.RefType::Eq
+    b"i31" => @core.RefType::I31
+    b"struct" => @core.RefType::Struct
+    b"array" => @core.RefType::Array
+    b"exn" => @core.RefType::Exn
+    b"none" => @core.RefType::None
+    b"nofunc" => @core.RefType::NoFunc
+    b"noextern" => @core.RefType::NoExtern
+    b"noexn" => @core.RefType::NoExn
+    _ =>
+      if is_name(atom) {
+        match type_map.get(atom) {
+          Some(idx) => @core.RefType::TypeIndex(idx.reinterpret_as_int())
+          None => raise WatError::UnknownIdentifier("type \{atom}")
+        }
+      } else {
+        @core.RefType::TypeIndex(parse_uint(atom).reinterpret_as_int())
+      }
   }
-}
-
-///|
-fn is_reftype_atom(atom : Bytes) -> Bool {
-  atom == b"funcref" || atom == b"externref"
 }
 
 ///|

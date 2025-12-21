@@ -101,14 +101,14 @@ fn encode_type_section(
       encode_u32_leb128(func_type.params.length().reinterpret_as_uint()),
     )
     for param in func_type.params {
-      payload.push(encode_valtype(param))
+      append_bytes(payload, encode_valtype(param))
     }
     append_bytes(
       payload,
       encode_u32_leb128(func_type.results.length().reinterpret_as_uint()),
     )
     for result in func_type.results {
-      payload.push(encode_valtype(result))
+      append_bytes(payload, encode_valtype(result))
     }
   }
   payload
@@ -142,7 +142,7 @@ fn encode_import_section(
       }
       Global(global_type) => {
         payload.push(0x03U.to_byte())
-        payload.push(encode_valtype(global_type.val_type))
+        append_bytes(payload, encode_valtype(global_type.val_type))
         payload.push(
           if global_type.mutable {
             0x01U.to_byte()
@@ -206,7 +206,7 @@ fn encode_global_section(
     encode_u32_leb128(globals.length().reinterpret_as_uint()),
   )
   for global_ in globals {
-    payload.push(encode_valtype(global_.type_.val_type))
+    append_bytes(payload, encode_valtype(global_.type_.val_type))
     payload.push(
       if global_.type_.mutable {
         0x01U.to_byte()
@@ -463,7 +463,7 @@ fn encode_locals(
     let cnt = group.0
     let val_type = group.1
     append_bytes(payload, encode_u32_leb128(cnt))
-    payload.push(encode_valtype(val_type))
+    append_bytes(payload, encode_valtype(val_type))
   }
   payload
 }
@@ -485,7 +485,7 @@ fn encode_block_type(
   let payload : Array[Byte] = []
   match block_type {
     Empty => payload.push(0x40U.to_byte())
-    Value(val_type) => payload.push(encode_valtype(val_type))
+    Value(val_type) => append_bytes(payload, encode_valtype(val_type))
     TypeIndex(type_idx) => append_bytes(payload, encode_i32_leb128(type_idx))
   }
   payload
@@ -506,11 +506,11 @@ fn encode_table_type(
   guard table_type.init is None else {
     raise EncodeError::Unsupported("table init expr")
   }
-  guard table_type.nullable else {
-    raise EncodeError::Unsupported("non-nullable table")
-  }
   let payload : Array[Byte] = []
-  payload.push(encode_reftype(table_type.elem_type))
+  append_bytes(
+    payload,
+    encode_reftype(table_type.elem_type, table_type.nullable),
+  )
   append_bytes(payload, encode_limits(table_type.limits))
   payload
 }
@@ -587,7 +587,7 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
         encode_u32_leb128(types.length().reinterpret_as_uint()),
       )
       for val_type in types {
-        payload.push(encode_valtype(val_type))
+        append_bytes(payload, encode_valtype(val_type))
       }
     }
     Return => payload.push(0x0FU.to_byte())
@@ -619,7 +619,7 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
     }
     RefNull(ref_type) => {
       payload.push(0xD0U.to_byte())
-      payload.push(encode_reftype(ref_type))
+      append_bytes(payload, encode_heap_type(ref_type))
     }
     RefFunc(idx) => {
       payload.push(0xD2U.to_byte())
@@ -985,26 +985,81 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
 }
 
 ///|
-fn encode_valtype(val_type : @core.ValType) -> Byte raise EncodeError {
+fn encode_valtype(val_type : @core.ValType) -> Array[Byte] raise EncodeError {
+  let payload : Array[Byte] = []
   match val_type {
-    I32 => 0x7FU.to_byte()
-    I64 => 0x7EU.to_byte()
-    F32 => 0x7DU.to_byte()
-    F64 => 0x7CU.to_byte()
-    V128 => 0x7BU.to_byte()
-    FuncRef => 0x70U.to_byte()
-    ExternRef => 0x6FU.to_byte()
+    I32 => payload.push(0x7FU.to_byte())
+    I64 => payload.push(0x7EU.to_byte())
+    F32 => payload.push(0x7DU.to_byte())
+    F64 => payload.push(0x7CU.to_byte())
+    V128 => payload.push(0x7BU.to_byte())
+    FuncRef => payload.push(0x70U.to_byte())
+    ExternRef => payload.push(0x6FU.to_byte())
+    AnyRef => payload.push(0x6EU.to_byte())
+    EqRef => payload.push(0x6DU.to_byte())
+    I31Ref => payload.push(0x6CU.to_byte())
+    StructRef => payload.push(0x6BU.to_byte())
+    ArrayRef => payload.push(0x6AU.to_byte())
+    ExnRef => payload.push(0x69U.to_byte())
+    NullRef => payload.push(0x71U.to_byte())
+    NullExternRef => payload.push(0x72U.to_byte())
+    NullFuncRef => payload.push(0x73U.to_byte())
+    NullExnRef => payload.push(0x74U.to_byte())
+    Ref(ref_type, nullable) =>
+      append_bytes(payload, encode_reftype(ref_type, nullable))
     _ => raise EncodeError::Unsupported("valtype \{val_type}")
   }
+  payload
 }
 
 ///|
-fn encode_reftype(ref_type : @core.RefType) -> Byte raise EncodeError {
-  match ref_type {
-    Func => 0x70U.to_byte()
-    Extern => 0x6FU.to_byte()
-    _ => raise EncodeError::Unsupported("reftype \{ref_type}")
+fn encode_reftype(ref_type : @core.RefType, nullable : Bool) -> Array[Byte] {
+  let payload : Array[Byte] = []
+  if nullable {
+    match ref_type {
+      Func => payload.push(0x70U.to_byte())
+      Extern => payload.push(0x6FU.to_byte())
+      Any => payload.push(0x6EU.to_byte())
+      Eq => payload.push(0x6DU.to_byte())
+      I31 => payload.push(0x6CU.to_byte())
+      Struct => payload.push(0x6BU.to_byte())
+      Array => payload.push(0x6AU.to_byte())
+      Exn => payload.push(0x69U.to_byte())
+      None => payload.push(0x71U.to_byte())
+      NoExtern => payload.push(0x72U.to_byte())
+      NoFunc => payload.push(0x73U.to_byte())
+      NoExn => payload.push(0x74U.to_byte())
+      TypeIndex(_) => {
+        payload.push(0x63U.to_byte())
+        append_bytes(payload, encode_heap_type(ref_type))
+      }
+    }
+  } else {
+    payload.push(0x64U.to_byte())
+    append_bytes(payload, encode_heap_type(ref_type))
   }
+  payload
+}
+
+///|
+fn encode_heap_type(ref_type : @core.RefType) -> Array[Byte] {
+  let payload : Array[Byte] = []
+  match ref_type {
+    Func => payload.push(0x70U.to_byte())
+    Extern => payload.push(0x6FU.to_byte())
+    Any => payload.push(0x6EU.to_byte())
+    Eq => payload.push(0x6DU.to_byte())
+    I31 => payload.push(0x6CU.to_byte())
+    Struct => payload.push(0x6BU.to_byte())
+    Array => payload.push(0x6AU.to_byte())
+    Exn => payload.push(0x69U.to_byte())
+    None => payload.push(0x71U.to_byte())
+    NoExtern => payload.push(0x72U.to_byte())
+    NoFunc => payload.push(0x73U.to_byte())
+    NoExn => payload.push(0x74U.to_byte())
+    TypeIndex(idx) => append_bytes(payload, encode_i32_leb128(idx))
+  }
+  payload
 }
 
 ///|
