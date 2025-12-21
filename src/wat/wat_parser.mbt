@@ -16,6 +16,7 @@ priv enum WatInstr {
   GlobalGet(IndexRef)
   GlobalSet(IndexRef)
   Call(FuncRef)
+  CallIndirect(WatCallIndirect)
   Block(WatBlockType, Array[WatInstr])
   Loop(WatBlockType, Array[WatInstr])
   If(WatBlockType, Array[WatInstr], Array[WatInstr])
@@ -26,6 +27,18 @@ priv enum WatBlockType {
   Empty
   Results(Array[@core.ValType])
   TypeIndex(UInt)
+}
+
+///|
+priv enum WatTypeUse {
+  TypeIndex(UInt)
+  Inline(Array[@core.ValType], Array[@core.ValType])
+}
+
+///|
+priv struct WatCallIndirect {
+  type_use : WatTypeUse
+  table_ref : IndexRef
 }
 
 ///|
@@ -62,6 +75,14 @@ priv struct WatImportMem {
 }
 
 ///|
+priv struct WatImportTable {
+  module_ : Bytes
+  name : Bytes
+  table_name : Bytes?
+  table_type : @core.TableType
+}
+
+///|
 priv struct WatImportGlobal {
   module_ : Bytes
   name : Bytes
@@ -73,6 +94,13 @@ priv struct WatImportGlobal {
 priv struct WatMemory {
   name : Bytes?
   limits : @core.Limits
+  exports : Array[Bytes]
+}
+
+///|
+priv struct WatTable {
+  name : Bytes?
+  table_type : @core.TableType
   exports : Array[Bytes]
 }
 
@@ -95,6 +123,7 @@ priv enum WatExportDesc {
   Func(FuncRef)
   Mem(IndexRef)
   Global(IndexRef)
+  Table(IndexRef)
 }
 
 ///|
@@ -107,9 +136,11 @@ priv struct WatExport {
 priv struct WatModule {
   func_imports : Array[WatImportFunc]
   mem_imports : Array[WatImportMem]
+  table_imports : Array[WatImportTable]
   global_imports : Array[WatImportGlobal]
   funcs : Array[WatFunc]
   mems : Array[WatMemory]
+  tables : Array[WatTable]
   globals : Array[WatGlobal]
   datas : Array[WatData]
   exports : Array[WatExport]
@@ -196,6 +227,98 @@ fn parse_if_instr(
   let then_body = parse_instrs(then_items, local_map, nested_labels)
   let else_body = parse_instrs(else_items, local_map, nested_labels)
   WatInstr::If(block_type, then_body, else_body)
+}
+
+///|
+fn parse_call_indirect(list_items : Array[SExpr]) -> WatInstr raise WatError {
+  guard list_items.length() >= 2 else {
+    raise WatError::InvalidSyntax("call_indirect expects typeuse")
+  }
+  let mut type_idx : UInt? = None
+  let params : Array[@core.ValType] = []
+  let results : Array[@core.ValType] = []
+  let mut table_ref = IndexRef::Index(0U)
+  for i in 1..<list_items.length() {
+    match list_items[i] {
+      List(items) => {
+        guard items.length() > 0 && items[0] is Atom(tag) else {
+          raise WatError::InvalidSyntax("call_indirect expects lists")
+        }
+        match tag {
+          b"type" => {
+            guard type_idx is None else {
+              raise WatError::InvalidSyntax("duplicate type in call_indirect")
+            }
+            guard items.length() == 2 else {
+              raise WatError::InvalidSyntax("type expects one index")
+            }
+            let atom = expect_atom(items[1])
+            guard not(is_name(atom)) else {
+              raise WatError::Unsupported("type name not supported")
+            }
+            type_idx = Some(parse_uint(atom))
+          }
+          b"param" => append_types(params, items, allow_names=true)
+          b"result" => append_types(results, items, allow_names=true)
+          b"table" => {
+            guard items.length() == 2 else {
+              raise WatError::InvalidSyntax("table expects one index")
+            }
+            table_ref = parse_index_ref(expect_atom(items[1]))
+          }
+          _ => raise WatError::InvalidSyntax("call_indirect expects typeuse")
+        }
+      }
+      _ => raise WatError::InvalidSyntax("call_indirect expects lists")
+    }
+  }
+  guard not(type_idx is Some(_)) ||
+    (params.length() == 0 && results.length() == 0) else {
+    raise WatError::Unsupported(
+      "call_indirect cannot mix type and param/result",
+    )
+  }
+  guard type_idx is Some(_) || params.length() > 0 || results.length() > 0 else {
+    raise WatError::InvalidSyntax("call_indirect missing typeuse")
+  }
+  let type_use = match type_idx {
+    Some(idx) => WatTypeUse::TypeIndex(idx)
+    None => WatTypeUse::Inline(params, results)
+  }
+  WatInstr::CallIndirect({ type_use, table_ref })
+}
+
+///|
+fn parse_call_indirect_from_items(
+  items : Array[SExpr],
+  start : Int,
+) -> (WatInstr, Int) raise WatError {
+  let list_items : Array[SExpr] = []
+  list_items.push(Atom(b"call_indirect"))
+  let mut idx = start
+  while idx < items.length() {
+    match items[idx] {
+      List(inner) =>
+        if inner.length() > 0 &&
+          inner[0] is Atom(tag) &&
+          (
+            tag == b"type" ||
+            tag == b"param" ||
+            tag == b"result" ||
+            tag == b"table"
+          ) {
+          list_items.push(items[idx])
+          idx = idx + 1
+        } else {
+          break
+        }
+      _ => break
+    }
+  }
+  guard list_items.length() > 1 else {
+    raise WatError::InvalidSyntax("call_indirect expects typeuse")
+  }
+  (parse_call_indirect(list_items), idx)
 }
 
 ///|
@@ -383,9 +506,11 @@ fn parse_module(expr : SExpr) -> WatModule raise WatError {
   let module_ = WatModule::{
     func_imports: [],
     mem_imports: [],
+    table_imports: [],
     global_imports: [],
     funcs: [],
     mems: [],
+    tables: [],
     globals: [],
     datas: [],
     exports: [],
@@ -456,6 +581,22 @@ fn parse_module_field(
       }
       module_.mems.push({ name: mem.name, limits: mem.limits, exports: [] })
     }
+    b"table" => {
+      let table = parse_table(items)
+      let table_index = (module_.table_imports.length() +
+      module_.tables.length()).reinterpret_as_uint()
+      for name in table.exports {
+        module_.exports.push({
+          name,
+          desc: WatExportDesc::Table(IndexRef::Index(table_index)),
+        })
+      }
+      module_.tables.push({
+        name: table.name,
+        table_type: table.table_type,
+        exports: [],
+      })
+    }
     b"global" => {
       let global_ = parse_global(items)
       let global_index = (module_.global_imports.length() +
@@ -495,24 +636,34 @@ fn parse_func(items : Array[SExpr]) -> WatFunc raise WatError {
   let local_names : Array[Bytes?] = []
   let exports : Array[Bytes] = []
   let instr_items : Array[SExpr] = []
+  let mut in_body = false
   for i in idx..<items.length() {
     match items[i] {
-      List(list_items) => {
-        guard list_items.length() > 0 else {
-          raise WatError::InvalidSyntax("empty func item")
+      List(list_items) =>
+        if in_body {
+          instr_items.push(items[i])
+        } else {
+          guard list_items.length() > 0 else {
+            raise WatError::InvalidSyntax("empty func item")
+          }
+          guard list_items[0] is Atom(tag) else {
+            raise WatError::InvalidSyntax("func item tag must be atom")
+          }
+          match tag {
+            b"param" => append_named_types(params, param_names, list_items)
+            b"result" => append_types(results, list_items, allow_names=false)
+            b"local" => append_named_types(locals, local_names, list_items)
+            b"export" => exports.push(parse_inline_export(list_items))
+            _ => {
+              in_body = true
+              instr_items.push(items[i])
+            }
+          }
         }
-        guard list_items[0] is Atom(tag) else {
-          raise WatError::InvalidSyntax("func item tag must be atom")
-        }
-        match tag {
-          b"param" => append_named_types(params, param_names, list_items)
-          b"result" => append_types(results, list_items, allow_names=false)
-          b"local" => append_named_types(locals, local_names, list_items)
-          b"export" => exports.push(parse_inline_export(list_items))
-          _ => instr_items.push(items[i])
-        }
+      Atom(_) => {
+        in_body = true
+        instr_items.push(items[i])
       }
-      Atom(_) => instr_items.push(items[i])
       StringLit(_) => raise WatError::InvalidSyntax("unexpected string in func")
     }
   }
@@ -584,6 +735,23 @@ fn parse_import(
         limits,
       })
     }
+    b"table" => {
+      let mut idx = 1
+      let mut table_name : Bytes? = None
+      if idx < desc_items.length() &&
+        desc_items[idx] is Atom(atom) &&
+        is_name(atom) {
+        table_name = Some(atom)
+        idx = idx + 1
+      }
+      let table_type = parse_table_type(desc_items, idx)
+      module_.table_imports.push({
+        module_: module_name,
+        name: field_name,
+        table_name,
+        table_type,
+      })
+    }
     b"global" => {
       let mut idx = 1
       let mut global_name : Bytes? = None
@@ -639,6 +807,82 @@ fn parse_memory(items : Array[SExpr]) -> WatMemory raise WatError {
   }
   let limits = parse_limits_from_atoms(limit_atoms)
   WatMemory::{ name, limits, exports }
+}
+
+///|
+fn parse_table(items : Array[SExpr]) -> WatTable raise WatError {
+  let mut idx = 1
+  let mut name : Bytes? = None
+  if idx < items.length() && items[idx] is Atom(atom) && is_name(atom) {
+    name = Some(atom)
+    idx = idx + 1
+  }
+  let exports : Array[Bytes] = []
+  let limit_atoms : Array[Bytes] = []
+  let mut elem_type : @core.RefType? = None
+  for i in idx..<items.length() {
+    match items[i] {
+      List(list_items) => {
+        guard list_items.length() > 0 && list_items[0] is Atom(tag) else {
+          raise WatError::InvalidSyntax("table item tag must be atom")
+        }
+        match tag {
+          b"export" => exports.push(parse_inline_export(list_items))
+          _ => raise WatError::Unsupported("table field \{tag}")
+        }
+      }
+      Atom(atom) =>
+        if is_reftype_atom(atom) {
+          guard elem_type is None else {
+            raise WatError::InvalidSyntax("duplicate table elem type")
+          }
+          elem_type = Some(parse_reftype(atom))
+        } else {
+          limit_atoms.push(atom)
+        }
+      StringLit(_) =>
+        raise WatError::InvalidSyntax("unexpected string in table")
+    }
+  }
+  guard elem_type is Some(elem_type) else {
+    raise WatError::InvalidSyntax("table element type missing")
+  }
+  let limits = parse_limits_from_atoms(limit_atoms)
+  let table_type : @core.TableType = {
+    elem_type,
+    limits,
+    init: None,
+    nullable: true,
+  }
+  WatTable::{ name, table_type, exports }
+}
+
+///|
+fn parse_table_type(
+  items : Array[SExpr],
+  start : Int,
+) -> @core.TableType raise WatError {
+  let limit_atoms : Array[Bytes] = []
+  let mut elem_type : @core.RefType? = None
+  for i in start..<items.length() {
+    match items[i] {
+      Atom(atom) =>
+        if is_reftype_atom(atom) {
+          guard elem_type is None else {
+            raise WatError::InvalidSyntax("duplicate table elem type")
+          }
+          elem_type = Some(parse_reftype(atom))
+        } else {
+          limit_atoms.push(atom)
+        }
+      _ => raise WatError::InvalidSyntax("table type expects atoms")
+    }
+  }
+  guard elem_type is Some(elem_type) else {
+    raise WatError::InvalidSyntax("table element type missing")
+  }
+  let limits = parse_limits_from_atoms(limit_atoms)
+  { elem_type, limits, init: None, nullable: true }
 }
 
 ///|
@@ -735,6 +979,7 @@ fn parse_export(items : Array[SExpr]) -> WatExport raise WatError {
     b"func" => WatExportDesc::Func(parse_func_ref(ref_atom))
     b"memory" => WatExportDesc::Mem(parse_index_ref(ref_atom))
     b"global" => WatExportDesc::Global(parse_index_ref(ref_atom))
+    b"table" => WatExportDesc::Table(parse_index_ref(ref_atom))
     _ => raise WatError::Unsupported("export desc \{tag}")
   }
   WatExport::{ name, desc }
@@ -973,6 +1218,7 @@ fn parse_instr_from_atom(
       let imm = expect_atom_at(items, idx + 1)
       (WatInstr::Call(parse_func_ref(imm)), idx + 2)
     }
+    b"call_indirect" => parse_call_indirect_from_items(items, idx + 1)
     b"br" => {
       let imm = expect_atom_at(items, idx + 1)
       (WatInstr::Core(@core.Instr::Br(resolve_label_ref(imm, labels))), idx + 2)
@@ -1028,6 +1274,7 @@ fn parse_instr_from_list(
     b"block" => parse_block_instr(list_items, local_map, labels)
     b"loop" => parse_loop_instr(list_items, local_map, labels)
     b"if" => parse_if_instr(list_items, local_map, labels)
+    b"call_indirect" => parse_call_indirect(list_items)
     b"select" =>
       if list_items.length() == 1 {
         WatInstr::Core(@core.Instr::Select)
@@ -1580,6 +1827,7 @@ fn parse_simple_op(op : Bytes) -> @core.Instr? {
 fn build_module(wat : WatModule) -> @core.Module raise WatError {
   let func_map = Map::new()
   let mem_map = Map::new()
+  let table_map = Map::new()
   let global_map = Map::new()
   let mut func_index = 0U
   for imp in wat.func_imports {
@@ -1604,12 +1852,27 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
     }
     mem_index = mem_index + 1U
   }
+  let mut table_index = 0U
+  for imp in wat.table_imports {
+    if imp.table_name is Some(name) {
+      ensure_unique_name(table_map, name, "table")
+      table_map[name] = table_index
+    }
+    table_index = table_index + 1U
+  }
   for mem in wat.mems {
     if mem.name is Some(name) {
       ensure_unique_name(mem_map, name, "memory")
       mem_map[name] = mem_index
     }
     mem_index = mem_index + 1U
+  }
+  for table in wat.tables {
+    if table.name is Some(name) {
+      ensure_unique_name(table_map, name, "table")
+      table_map[name] = table_index
+    }
+    table_index = table_index + 1U
   }
   let mut global_index = 0U
   for imp in wat.global_imports {
@@ -1636,6 +1899,13 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
       desc: @core.ImportDesc::Func(type_idx),
     })
   }
+  for imp in wat.table_imports {
+    imports.push({
+      module_: imp.module_,
+      name: imp.name,
+      desc: @core.ImportDesc::Table(imp.table_type),
+    })
+  }
   for imp in wat.mem_imports {
     imports.push({
       module_: imp.module_,
@@ -1655,7 +1925,13 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
   for func in wat.funcs {
     let type_idx = type_index(types, func.params, func.results)
     funcs.push(type_idx)
-    let instrs = resolve_instrs(func.body, func_map, global_map, types)
+    let instrs = resolve_instrs(
+      func.body,
+      func_map,
+      table_map,
+      global_map,
+      types,
+    )
     let code : @core.Code = {
       locals: func.locals,
       body: @core.Expr::{ instrs, },
@@ -1679,9 +1955,15 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
   for mem in wat.mems {
     mems.push({ limits: mem.limits })
   }
+  let tables : Array[@core.TableType] = []
+  for table in wat.tables {
+    tables.push(table.table_type)
+  }
   let exports : Array[@core.Export] = []
   for export_ in wat.exports {
-    exports.push(resolve_export(export_, func_map, mem_map, global_map))
+    exports.push(
+      resolve_export(export_, func_map, mem_map, table_map, global_map),
+    )
   }
   let datas : Array[@core.Data] = []
   for data in wat.datas {
@@ -1704,7 +1986,7 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
   @core.Module::{
     types,
     funcs,
-    tables: [],
+    tables,
     mems,
     globals,
     elems: [],
@@ -1720,12 +2002,13 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
 fn resolve_instrs(
   instrs : Array[WatInstr],
   func_map : Map[Bytes, UInt],
+  table_map : Map[Bytes, UInt],
   global_map : Map[Bytes, UInt],
   types : Array[@core.FuncType],
 ) -> Array[@core.Instr] raise WatError {
   let out : Array[@core.Instr] = []
   for instr in instrs {
-    out.push(resolve_instr(instr, func_map, global_map, types))
+    out.push(resolve_instr(instr, func_map, table_map, global_map, types))
   }
   out
 }
@@ -1812,6 +2095,7 @@ fn resolve_offset_instrs(
 fn resolve_instr(
   instr : WatInstr,
   func_map : Map[Bytes, UInt],
+  table_map : Map[Bytes, UInt],
   global_map : Map[Bytes, UInt],
   types : Array[@core.FuncType],
 ) -> @core.Instr raise WatError {
@@ -1823,21 +2107,38 @@ fn resolve_instr(
       @core.Instr::GlobalSet(resolve_global_ref(global_ref, global_map))
     WatInstr::Call(func_ref) =>
       @core.Instr::Call(resolve_func_ref(func_ref, func_map))
+    WatInstr::CallIndirect(call_indirect) => {
+      let table_idx = resolve_index_ref(
+        call_indirect.table_ref,
+        table_map,
+        "table",
+      )
+      let type_idx = match call_indirect.type_use {
+        TypeIndex(idx) => {
+          guard idx < types.length().reinterpret_as_uint() else {
+            raise WatError::UnknownIdentifier("type \{idx}")
+          }
+          idx
+        }
+        Inline(params, results) => type_index(types, params, results)
+      }
+      @core.Instr::CallIndirect(type_idx, table_idx)
+    }
     WatInstr::Block(block_type, body) =>
       @core.Instr::Block(
         resolve_block_type(block_type, types),
-        resolve_instrs(body, func_map, global_map, types),
+        resolve_instrs(body, func_map, table_map, global_map, types),
       )
     WatInstr::Loop(block_type, body) =>
       @core.Instr::Loop(
         resolve_block_type(block_type, types),
-        resolve_instrs(body, func_map, global_map, types),
+        resolve_instrs(body, func_map, table_map, global_map, types),
       )
     WatInstr::If(block_type, then_body, else_body) =>
       @core.Instr::If(
         resolve_block_type(block_type, types),
-        resolve_instrs(then_body, func_map, global_map, types),
-        resolve_instrs(else_body, func_map, global_map, types),
+        resolve_instrs(then_body, func_map, table_map, global_map, types),
+        resolve_instrs(else_body, func_map, table_map, global_map, types),
       )
   }
 }
@@ -1868,6 +2169,7 @@ fn resolve_export(
   export_ : WatExport,
   func_map : Map[Bytes, UInt],
   mem_map : Map[Bytes, UInt],
+  table_map : Map[Bytes, UInt],
   global_map : Map[Bytes, UInt],
 ) -> @core.Export raise WatError {
   match export_.desc {
@@ -1878,6 +2180,10 @@ fn resolve_export(
     Mem(mem_ref) => {
       let idx = resolve_index_ref(mem_ref, mem_map, "memory")
       { name: export_.name, desc: @core.ExportDesc::Mem(idx) }
+    }
+    Table(table_ref) => {
+      let idx = resolve_index_ref(table_ref, table_map, "table")
+      { name: export_.name, desc: @core.ExportDesc::Table(idx) }
     }
     Global(global_ref) => {
       let idx = resolve_index_ref(global_ref, global_map, "global")
@@ -2022,6 +2328,20 @@ fn parse_valtype(atom : Bytes) -> @core.ValType raise WatError {
     b"externref" => ExternRef
     _ => raise WatError::Unsupported("valtype \{atom}")
   }
+}
+
+///|
+fn parse_reftype(atom : Bytes) -> @core.RefType raise WatError {
+  match atom {
+    b"funcref" => @core.RefType::Func
+    b"externref" => @core.RefType::Extern
+    _ => raise WatError::Unsupported("reftype \{atom}")
+  }
+}
+
+///|
+fn is_reftype_atom(atom : Bytes) -> Bool {
+  atom == b"funcref" || atom == b"externref"
 }
 
 ///|

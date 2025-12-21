@@ -130,7 +130,10 @@ fn encode_import_section(
         payload.push(0x00U.to_byte())
         append_bytes(payload, encode_u32_leb128(type_idx))
       }
-      Table(_) => raise EncodeError::Unsupported("table import")
+      Table(table_type) => {
+        payload.push(0x01U.to_byte())
+        append_bytes(payload, encode_table_type(table_type))
+      }
       Mem(mem_type) => {
         payload.push(0x02U.to_byte())
         append_bytes(payload, encode_limits(mem_type.limits))
@@ -168,7 +171,15 @@ fn encode_table_section(
   tables : Array[@core.TableType],
 ) -> Array[Byte] raise EncodeError {
   guard tables.length() > 0 else { return [] }
-  raise EncodeError::Unsupported("table section")
+  let payload : Array[Byte] = []
+  append_bytes(
+    payload,
+    encode_u32_leb128(tables.length().reinterpret_as_uint()),
+  )
+  for table_type in tables {
+    append_bytes(payload, encode_table_type(table_type))
+  }
+  payload
 }
 
 ///|
@@ -223,7 +234,10 @@ fn encode_export_section(
         payload.push(0x00U.to_byte())
         append_bytes(payload, encode_u32_leb128(idx))
       }
-      Table(_) => raise EncodeError::Unsupported("table export")
+      Table(idx) => {
+        payload.push(0x01U.to_byte())
+        append_bytes(payload, encode_u32_leb128(idx))
+      }
       Mem(idx) => {
         payload.push(0x02U.to_byte())
         append_bytes(payload, encode_u32_leb128(idx))
@@ -384,6 +398,22 @@ fn encode_memarg(align : UInt, offset : UInt) -> Array[Byte] {
 }
 
 ///|
+fn encode_table_type(
+  table_type : @core.TableType,
+) -> Array[Byte] raise EncodeError {
+  guard table_type.init is None else {
+    raise EncodeError::Unsupported("table init expr")
+  }
+  guard table_type.nullable else {
+    raise EncodeError::Unsupported("non-nullable table")
+  }
+  let payload : Array[Byte] = []
+  payload.push(encode_reftype(table_type.elem_type))
+  append_bytes(payload, encode_limits(table_type.limits))
+  payload
+}
+
+///|
 fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
   let payload : Array[Byte] = []
   match instr {
@@ -454,6 +484,11 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
     Call(idx) => {
       payload.push(0x10U.to_byte())
       append_bytes(payload, encode_u32_leb128(idx))
+    }
+    CallIndirect(type_idx, table_idx) => {
+      payload.push(0x11U.to_byte())
+      append_bytes(payload, encode_u32_leb128(type_idx))
+      append_bytes(payload, encode_u32_leb128(table_idx))
     }
     LocalGet(idx) => {
       payload.push(0x20U.to_byte())
@@ -779,6 +814,15 @@ fn encode_valtype(val_type : @core.ValType) -> Byte raise EncodeError {
     FuncRef => 0x70U.to_byte()
     ExternRef => 0x6FU.to_byte()
     _ => raise EncodeError::Unsupported("valtype \{val_type}")
+  }
+}
+
+///|
+fn encode_reftype(ref_type : @core.RefType) -> Byte raise EncodeError {
+  match ref_type {
+    Func => 0x70U.to_byte()
+    Extern => 0x6FU.to_byte()
+    _ => raise EncodeError::Unsupported("reftype \{ref_type}")
   }
 }
 
