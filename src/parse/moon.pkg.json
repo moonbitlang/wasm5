@@ -8,5 +8,11 @@
       "path": "moonbitlang/wasm5/src/validate",
       "alias": "validate"
     }
+  ],
+  "test-import" : [
+    "moonbitlang/async",
+    "moonbitlang/async/fs",
+    "moonbitlang/async/stdio",
+    "moonbitlang/x/path"
   ]
 }
