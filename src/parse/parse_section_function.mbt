@@ -3,7 +3,7 @@
 ///|
 fn parse_function_section(
   parser : Parser,
-) -> Array[UInt] raise @core.ParseError {
+) -> Array[UInt] raise @errors.ParseError {
   let count = parser.read_u32_leb128()
   let funcs = []
   for i in 0U..<count {

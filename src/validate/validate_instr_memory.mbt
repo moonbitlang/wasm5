@@ -4,7 +4,7 @@ fn validate_instruction_memory(
   ctx : ValidationCtx,
   import_counts : ImportCounts,
   instr : @core.Instr,
-) -> Bool raise @core.ValidationError {
+) -> Bool raise @errors.ValidationError {
   match instr {
     // Memory operations - loads (all take i32 address and push the loaded value)
     I32Load(align, _) =>
@@ -73,7 +73,7 @@ fn validate_instruction_memory(
       // Validate data segment index
       if data_idx.reinterpret_as_int() < 0 ||
         data_idx.reinterpret_as_int() >= module_.datas.length() {
-        raise @core.ValidationError::TypeMismatch(
+        raise @errors.ValidationError::TypeMismatch(
           "memory.init: data segment index out of range",
         )
       }
@@ -86,7 +86,7 @@ fn validate_instruction_memory(
       // Validate data segment index
       if data_idx.reinterpret_as_int() < 0 ||
         data_idx.reinterpret_as_int() >= module_.datas.length() {
-        raise @core.ValidationError::TypeMismatch(
+        raise @errors.ValidationError::TypeMismatch(
           "data.drop: data segment index out of range",
         )
       }

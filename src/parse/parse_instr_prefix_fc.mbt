@@ -17,7 +17,7 @@ fn parse_instr_prefix_fc(parser : Parser) -> @core.Instr raise {
       let data_idx = parser.read_u32_leb128()
       let mem_idx = parser.read_u32_leb128()
       guard mem_idx == 0 else {
-        raise @core.ValidationError::TypeMismatch(
+        raise @errors.ValidationError::TypeMismatch(
           "memory.init: multi-memory not supported, mem_idx must be 0",
         )
       }
@@ -33,7 +33,7 @@ fn parse_instr_prefix_fc(parser : Parser) -> @core.Instr raise {
       let mem_idx_dst = parser.read_u32_leb128()
       let mem_idx_src = parser.read_u32_leb128()
       guard mem_idx_dst == 0 && mem_idx_src == 0 else {
-        raise @core.ValidationError::TypeMismatch(
+        raise @errors.ValidationError::TypeMismatch(
           "memory.copy: multi-memory not supported, both indices must be 0",
         )
       }
@@ -43,7 +43,7 @@ fn parse_instr_prefix_fc(parser : Parser) -> @core.Instr raise {
       // memory.fill mem_idx
       let mem_idx = parser.read_u32_leb128()
       guard mem_idx == 0 else {
-        raise @core.ValidationError::TypeMismatch(
+        raise @errors.ValidationError::TypeMismatch(
           "memory.fill: multi-memory not supported, mem_idx must be 0",
         )
       }
@@ -77,7 +77,7 @@ fn parse_instr_prefix_fc(parser : Parser) -> @core.Instr raise {
       TableSize(table_idx)
     }
     _ =>
-      raise @core.ValidationError::TypeMismatch(
+      raise @errors.ValidationError::TypeMismatch(
         "unknown 0xFC sub-opcode: \{sub_opcode}",
       )
   }

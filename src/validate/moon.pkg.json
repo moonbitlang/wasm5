@@ -3,6 +3,10 @@
     {
       "path": "moonbitlang/wasm5/src/core",
       "alias": "core"
+    },
+    {
+      "path": "moonbitlang/wasm5/src/errors",
+      "alias": "errors"
     }
   ]
 }
