@@ -12,21 +12,10 @@ priv enum IndexRef {
 
 ///|
 priv enum WatInstr {
-  I32Const(Int)
-  I64Const(Int64)
-  F32Const(Float)
-  F64Const(Double)
-  LocalGet(UInt)
-  LocalSet(UInt)
-  LocalTee(UInt)
+  Core(@core.Instr)
   GlobalGet(IndexRef)
   GlobalSet(IndexRef)
   Call(FuncRef)
-  Drop
-  Return
-  I32Add
-  I32Sub
-  I32Mul
 }
 
 ///|
@@ -664,31 +653,50 @@ fn parse_instr_from_atom(
   match op {
     b"i32.const" => {
       let imm = expect_atom_at(items, idx + 1)
-      (WatInstr::I32Const(parse_int(imm)), idx + 2)
+      (
+        WatInstr::Core(
+          @core.Instr::I32Const(parse_int(imm).reinterpret_as_uint()),
+        ),
+        idx + 2,
+      )
     }
     b"i64.const" => {
       let imm = expect_atom_at(items, idx + 1)
-      (WatInstr::I64Const(parse_int64(imm)), idx + 2)
+      (
+        WatInstr::Core(
+          @core.Instr::I64Const(parse_int64(imm).reinterpret_as_uint64()),
+        ),
+        idx + 2,
+      )
     }
     b"f32.const" => {
       let imm = expect_atom_at(items, idx + 1)
-      (WatInstr::F32Const(parse_float(imm)), idx + 2)
+      (WatInstr::Core(@core.Instr::F32Const(parse_float(imm))), idx + 2)
     }
     b"f64.const" => {
       let imm = expect_atom_at(items, idx + 1)
-      (WatInstr::F64Const(parse_double(imm)), idx + 2)
+      (WatInstr::Core(@core.Instr::F64Const(parse_double(imm))), idx + 2)
     }
     b"local.get" => {
       let imm = expect_atom_at(items, idx + 1)
-      (WatInstr::LocalGet(parse_local_ref(imm, local_map)), idx + 2)
+      (
+        WatInstr::Core(@core.Instr::LocalGet(parse_local_ref(imm, local_map))),
+        idx + 2,
+      )
     }
     b"local.set" => {
       let imm = expect_atom_at(items, idx + 1)
-      (WatInstr::LocalSet(parse_local_ref(imm, local_map)), idx + 2)
+      (
+        WatInstr::Core(@core.Instr::LocalSet(parse_local_ref(imm, local_map))),
+        idx + 2,
+      )
     }
     b"local.tee" => {
       let imm = expect_atom_at(items, idx + 1)
-      (WatInstr::LocalTee(parse_local_ref(imm, local_map)), idx + 2)
+      (
+        WatInstr::Core(@core.Instr::LocalTee(parse_local_ref(imm, local_map))),
+        idx + 2,
+      )
     }
     b"global.get" => {
       let imm = expect_atom_at(items, idx + 1)
@@ -702,11 +710,11 @@ fn parse_instr_from_atom(
       let imm = expect_atom_at(items, idx + 1)
       (WatInstr::Call(parse_func_ref(imm)), idx + 2)
     }
-    b"drop" => (WatInstr::Drop, idx + 1)
-    b"return" => (WatInstr::Return, idx + 1)
-    b"i32.add" => (WatInstr::I32Add, idx + 1)
-    b"i32.sub" => (WatInstr::I32Sub, idx + 1)
-    b"i32.mul" => (WatInstr::I32Mul, idx + 1)
+    b"drop" => (WatInstr::Core(@core.Instr::Drop), idx + 1)
+    b"return" => (WatInstr::Core(@core.Instr::Return), idx + 1)
+    b"i32.add" => (WatInstr::Core(@core.Instr::I32Add), idx + 1)
+    b"i32.sub" => (WatInstr::Core(@core.Instr::I32Sub), idx + 1)
+    b"i32.mul" => (WatInstr::Core(@core.Instr::I32Mul), idx + 1)
     _ => raise WatError::Unsupported("instruction \{op}")
   }
 }
@@ -727,43 +735,67 @@ fn parse_instr_from_list(
       guard list_items.length() == 2 else {
         raise WatError::InvalidSyntax("i32.const expects one operand")
       }
-      WatInstr::I32Const(parse_int(expect_atom(list_items[1])))
+      WatInstr::Core(
+        @core.Instr::I32Const(
+          parse_int(expect_atom(list_items[1])).reinterpret_as_uint(),
+        ),
+      )
     }
     b"i64.const" => {
       guard list_items.length() == 2 else {
         raise WatError::InvalidSyntax("i64.const expects one operand")
       }
-      WatInstr::I64Const(parse_int64(expect_atom(list_items[1])))
+      WatInstr::Core(
+        @core.Instr::I64Const(
+          parse_int64(expect_atom(list_items[1])).reinterpret_as_uint64(),
+        ),
+      )
     }
     b"f32.const" => {
       guard list_items.length() == 2 else {
         raise WatError::InvalidSyntax("f32.const expects one operand")
       }
-      WatInstr::F32Const(parse_float(expect_atom(list_items[1])))
+      WatInstr::Core(
+        @core.Instr::F32Const(parse_float(expect_atom(list_items[1]))),
+      )
     }
     b"f64.const" => {
       guard list_items.length() == 2 else {
         raise WatError::InvalidSyntax("f64.const expects one operand")
       }
-      WatInstr::F64Const(parse_double(expect_atom(list_items[1])))
+      WatInstr::Core(
+        @core.Instr::F64Const(parse_double(expect_atom(list_items[1]))),
+      )
     }
     b"local.get" => {
       guard list_items.length() == 2 else {
         raise WatError::InvalidSyntax("local.get expects one operand")
       }
-      WatInstr::LocalGet(parse_local_ref(expect_atom(list_items[1]), local_map))
+      WatInstr::Core(
+        @core.Instr::LocalGet(
+          parse_local_ref(expect_atom(list_items[1]), local_map),
+        ),
+      )
     }
     b"local.set" => {
       guard list_items.length() == 2 else {
         raise WatError::InvalidSyntax("local.set expects one operand")
       }
-      WatInstr::LocalSet(parse_local_ref(expect_atom(list_items[1]), local_map))
+      WatInstr::Core(
+        @core.Instr::LocalSet(
+          parse_local_ref(expect_atom(list_items[1]), local_map),
+        ),
+      )
     }
     b"local.tee" => {
       guard list_items.length() == 2 else {
         raise WatError::InvalidSyntax("local.tee expects one operand")
       }
-      WatInstr::LocalTee(parse_local_ref(expect_atom(list_items[1]), local_map))
+      WatInstr::Core(
+        @core.Instr::LocalTee(
+          parse_local_ref(expect_atom(list_items[1]), local_map),
+        ),
+      )
     }
     b"global.get" => {
       guard list_items.length() == 2 else {
@@ -783,11 +815,11 @@ fn parse_instr_from_list(
       }
       WatInstr::Call(parse_func_ref(expect_atom(list_items[1])))
     }
-    b"drop" => WatInstr::Drop
-    b"return" => WatInstr::Return
-    b"i32.add" => WatInstr::I32Add
-    b"i32.sub" => WatInstr::I32Sub
-    b"i32.mul" => WatInstr::I32Mul
+    b"drop" => WatInstr::Core(@core.Instr::Drop)
+    b"return" => WatInstr::Core(@core.Instr::Return)
+    b"i32.add" => WatInstr::Core(@core.Instr::I32Add)
+    b"i32.sub" => WatInstr::Core(@core.Instr::I32Sub)
+    b"i32.mul" => WatInstr::Core(@core.Instr::I32Mul)
     _ => raise WatError::Unsupported("instruction \{op}")
   }
 }
@@ -954,11 +986,12 @@ fn resolve_const_instrs(
   let out : Array[@core.Instr] = []
   for instr in instrs {
     match instr {
-      WatInstr::I32Const(_)
-      | WatInstr::I64Const(_)
-      | WatInstr::F32Const(_)
-      | WatInstr::F64Const(_) =>
-        out.push(resolve_instr(instr, Map::new(), global_map))
+      WatInstr::Core(core_instr) =>
+        match core_instr {
+          I32Const(_) | I64Const(_) | F32Const(_) | F64Const(_) =>
+            out.push(core_instr)
+          _ => raise WatError::Unsupported("non-const init expression")
+        }
       WatInstr::GlobalGet(global_ref) => {
         let idx = resolve_global_ref(global_ref, global_map)
         guard idx < imported_globals.length().reinterpret_as_uint() else {
@@ -989,8 +1022,14 @@ fn resolve_offset_instrs(
   let out : Array[@core.Instr] = []
   for instr in instrs {
     match instr {
-      WatInstr::I32Const(_) =>
-        out.push(resolve_instr(instr, Map::new(), global_map))
+      WatInstr::Core(core_instr) =>
+        match core_instr {
+          I32Const(_) => out.push(core_instr)
+          _ =>
+            raise WatError::Unsupported(
+              "data offset expects i32.const/global.get",
+            )
+        }
       WatInstr::GlobalGet(global_ref) => {
         let idx = resolve_global_ref(global_ref, global_map)
         guard idx < imported_globals.length().reinterpret_as_uint() else {
@@ -1023,26 +1062,13 @@ fn resolve_instr(
   global_map : Map[Bytes, UInt],
 ) -> @core.Instr raise WatError {
   match instr {
-    WatInstr::I32Const(value) =>
-      @core.Instr::I32Const(value.reinterpret_as_uint())
-    WatInstr::I64Const(value) =>
-      @core.Instr::I64Const(value.reinterpret_as_uint64())
-    WatInstr::F32Const(value) => @core.Instr::F32Const(value)
-    WatInstr::F64Const(value) => @core.Instr::F64Const(value)
-    WatInstr::LocalGet(idx) => @core.Instr::LocalGet(idx)
-    WatInstr::LocalSet(idx) => @core.Instr::LocalSet(idx)
-    WatInstr::LocalTee(idx) => @core.Instr::LocalTee(idx)
+    WatInstr::Core(core_instr) => core_instr
     WatInstr::GlobalGet(global_ref) =>
       @core.Instr::GlobalGet(resolve_global_ref(global_ref, global_map))
     WatInstr::GlobalSet(global_ref) =>
       @core.Instr::GlobalSet(resolve_global_ref(global_ref, global_map))
     WatInstr::Call(func_ref) =>
       @core.Instr::Call(resolve_func_ref(func_ref, func_map))
-    WatInstr::Drop => @core.Instr::Drop
-    WatInstr::Return => @core.Instr::Return
-    WatInstr::I32Add => @core.Instr::I32Add
-    WatInstr::I32Sub => @core.Instr::I32Sub
-    WatInstr::I32Mul => @core.Instr::I32Mul
   }
 }
 
