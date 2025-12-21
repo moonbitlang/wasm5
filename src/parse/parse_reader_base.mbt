@@ -5,6 +5,17 @@ priv struct Parser {
 }
 
 ///|
+fn Parser::view(self : Parser) -> BytesView {
+  self.bytes[self.pos:]
+}
+
+///|
+fn Parser::update_view(self : Parser, view : BytesView) -> Unit {
+  let offset = view.start_offset()
+  self.pos = offset
+}
+
+///|
 fn Parser::new(bytes : Bytes) -> Parser {
   { bytes, pos: 0 }
 }
@@ -16,12 +27,12 @@ fn Parser::eof(self : Parser) -> Bool {
 
 ///|
 fn Parser::read_byte(self : Parser) -> Byte raise ParseError {
-  if self.pos < self.bytes.length() {
-    let byte = self.bytes.unsafe_get(self.pos)
-    self.pos = self.pos + 1
-    byte
-  } else {
-    raise ParseError::UnexpectedEof
+  match self.view() {
+    [byte, .. rest] => {
+      self.update_view(rest)
+      byte
+    }
+    _ => raise ParseError::UnexpectedEof
   }
 }
 
@@ -31,9 +42,10 @@ fn Parser::read_bytes(self : Parser, n : UInt) -> BytesView raise ParseError {
   guard n_int >= 0 else {
     raise ParseError::InvalidFormat("bytes length beyond Int max value")
   }
-  if self.pos + n_int <= self.bytes.length() {
-    let result = self.bytes[self.pos:self.pos + n_int]
-    self.pos = self.pos + n_int
+  let view = self.view()
+  if n_int <= view.length() {
+    let result = view[:n_int]
+    self.update_view(view[n_int:])
     result
   } else {
     raise ParseError::UnexpectedEof

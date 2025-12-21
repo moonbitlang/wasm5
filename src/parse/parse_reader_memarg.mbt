@@ -18,9 +18,9 @@ fn Parser::read_memarg(self : Parser) -> (UInt, UInt, UInt) raise ParseError {
 
 ///|
 fn Parser::read_f32(self : Parser) -> Float raise ParseError {
-  match self.bytes[self.pos:] {
-    [u32le(bits), ..] => {
-      self.pos = self.pos + 4
+  match self.view() {
+    [u32le(bits), .. rest] => {
+      self.update_view(rest)
       Float::reinterpret_from_uint(bits)
     }
     _ => raise ParseError::UnexpectedEof
@@ -29,9 +29,9 @@ fn Parser::read_f32(self : Parser) -> Float raise ParseError {
 
 ///|
 fn Parser::read_f64(self : Parser) -> Double raise ParseError {
-  match self.bytes[self.pos:] {
-    [u64le(bits), ..] => {
-      self.pos = self.pos + 8
+  match self.view() {
+    [u64le(bits), .. rest] => {
+      self.update_view(rest)
       UInt64::reinterpret_as_double(bits)
     }
     _ => raise ParseError::UnexpectedEof

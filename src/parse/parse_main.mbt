@@ -1,24 +1,14 @@
 ///|
 pub fn parse(b : Bytes) -> @core.Module raise {
   let parser = Parser::new(b)
-
-  // Parse magic number
-  let magic = parser.read_bytes(4)
-  if magic[0].to_int() != 0x00 ||
-    magic[1].to_int() != 0x61 ||
-    magic[2].to_int() != 0x73 ||
-    magic[3].to_int() != 0x6D {
+  guard parser.view() is [0x00, 0x61, 0x73, 0x6D, .. rest] else {
     raise ParseError::InvalidMagic
   }
-
-  // Parse version
-  let version = parser.read_bytes(4)
-  if version[0].to_int() != 0x01 ||
-    version[1].to_int() != 0x00 ||
-    version[2].to_int() != 0x00 ||
-    version[3].to_int() != 0x00 {
+  parser.update_view(rest)
+  guard parser.view() is [0x01, 0x00, 0x00, 0x00, .. rest] else {
     raise ParseError::UnsupportedVersion
   }
+  parser.update_view(rest)
 
   // Parse sections
   let mut types : Array[@core.FuncType] = []
@@ -32,7 +22,7 @@ pub fn parse(b : Bytes) -> @core.Module raise {
   let mut imports : Array[@core.Import] = []
   let mut exports : Array[@core.Export] = []
   let mut codes : Array[@core.Code] = []
-  while not(parser.eof()) {
+  while !parser.eof() {
     let section_id = parser.read_byte()
     let section_size = parser.read_u32_leb128()
     let section_start = parser.pos
