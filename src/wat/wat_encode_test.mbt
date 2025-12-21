@@ -98,3 +98,9 @@ async test "wat encoder matches wasm-tools for call_indirect" {
   let wat = "(module (table 1 funcref) (func (export \"call\") (param i32 i32) (result i32) local.get 0 local.get 1 call_indirect (param i32) (result i32)))"
   assert_wat_matches("call_indirect", wat)
 }
+
+///|
+async test "wat encoder matches wasm-tools for typeuse names" {
+  let wat = "(module (type $t (func (param i32) (result i32))) (table 1 funcref) (func (type $t) (param $x i32) (result i32) local.get $x) (func (export \"call\") (param i32 i32) (result i32) local.get 0 local.get 1 call_indirect (type $t)))"
+  assert_wat_matches("typeuse_names", wat)
+}
