@@ -110,3 +110,9 @@ async test "wat encoder matches wasm-tools for table and ref ops" {
   let wat = "(module (table 1 funcref) (elem (i32.const 0) 0) (func (export \"table_ops\") (param i32 funcref i32 i32 i32) (result i32) local.get 0 table.get drop local.get 0 local.get 1 table.set table.size drop local.get 2 local.get 1 table.grow drop local.get 3 local.get 4 local.get 0 table.init 0 local.get 3 local.get 4 local.get 0 table.copy elem.drop 0 ref.null func drop ref.func 0 drop i32.const 0))"
   assert_wat_matches("table_ref_ops", wat)
 }
+
+///|
+async test "wat encoder matches wasm-tools for data segments and memory.init" {
+  let wat = "(module (memory 1) (data $p \"hi\") (data (i32.const 0) \"ok\") (func (export \"init\") (param i32 i32 i32) local.get 0 local.get 1 local.get 2 memory.init $p data.drop $p))"
+  assert_wat_matches("data_memory_init", wat)
+}

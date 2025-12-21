@@ -36,6 +36,8 @@ pub fn encode(module_ : @core.Module) -> Bytes raise EncodeError {
   push_section(out, 8U, start_payload)
   let elem_payload = encode_element_section(module_.elems)
   push_section(out, 9U, elem_payload)
+  let data_count_payload = encode_data_count_section(module_)
+  push_section(out, 12U, data_count_payload)
   let code_payload = encode_code_section(module_.codes)
   push_section(out, 10U, code_payload)
   let data_payload = encode_data_section(module_.datas)
@@ -338,21 +340,79 @@ fn encode_data_section(
   let payload : Array[Byte] = []
   append_bytes(payload, encode_u32_leb128(datas.length().reinterpret_as_uint()))
   for data in datas {
-    guard data.is_active else {
-      raise EncodeError::Unsupported("passive data segment")
+    if data.is_active {
+      if data.mem_idx == 0U {
+        payload.push(0x00U.to_byte())
+      } else {
+        payload.push(0x02U.to_byte())
+        append_bytes(payload, encode_u32_leb128(data.mem_idx))
+      }
+      append_bytes(payload, encode_expr(data.offset))
+      append_bytes(
+        payload,
+        encode_u32_leb128(data.init.length().reinterpret_as_uint()),
+      )
+      append_bytesview(payload, data.init)
+    } else {
+      payload.push(0x01U.to_byte())
+      append_bytes(
+        payload,
+        encode_u32_leb128(data.init.length().reinterpret_as_uint()),
+      )
+      append_bytesview(payload, data.init)
     }
-    if data.mem_idx != 0U {
-      raise EncodeError::Unsupported("data segment with non-zero memory index")
-    }
-    payload.push(0x00U.to_byte())
-    append_bytes(payload, encode_expr(data.offset))
-    append_bytes(
-      payload,
-      encode_u32_leb128(data.init.length().reinterpret_as_uint()),
-    )
-    append_bytesview(payload, data.init)
   }
   payload
+}
+
+///|
+fn encode_data_count_section(module_ : @core.Module) -> Array[Byte] {
+  if not(needs_data_count(module_)) {
+    return []
+  }
+  let payload : Array[Byte] = []
+  append_bytes(
+    payload,
+    encode_u32_leb128(module_.datas.length().reinterpret_as_uint()),
+  )
+  payload
+}
+
+///|
+fn needs_data_count(module_ : @core.Module) -> Bool {
+  for data in module_.datas {
+    if not(data.is_active) {
+      return true
+    }
+  }
+  for code in module_.codes {
+    if instrs_use_bulk_memory(code.body.instrs) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn instrs_use_bulk_memory(instrs : Array[@core.Instr]) -> Bool {
+  for instr in instrs {
+    if instr_uses_bulk_memory(instr) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn instr_uses_bulk_memory(instr : @core.Instr) -> Bool {
+  match instr {
+    MemoryInit(_) | DataDrop(_) => true
+    Block(_, body) => instrs_use_bulk_memory(body)
+    Loop(_, body) => instrs_use_bulk_memory(body)
+    If(_, then_body, else_body) =>
+      instrs_use_bulk_memory(then_body) || instrs_use_bulk_memory(else_body)
+    _ => false
+  }
 }
 
 ///|
@@ -712,6 +772,17 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
       append_bytes(payload, encode_u32_leb128(idx))
     }
     RefIsNull => payload.push(0xD1U.to_byte())
+    MemoryInit(data_idx) => {
+      payload.push(0xFCU.to_byte())
+      append_bytes(payload, encode_u32_leb128(8U))
+      append_bytes(payload, encode_u32_leb128(data_idx))
+      append_bytes(payload, encode_u32_leb128(0U))
+    }
+    DataDrop(data_idx) => {
+      payload.push(0xFCU.to_byte())
+      append_bytes(payload, encode_u32_leb128(9U))
+      append_bytes(payload, encode_u32_leb128(data_idx))
+    }
     MemoryCopy => {
       payload.push(0xFCU.to_byte())
       append_bytes(payload, encode_u32_leb128(10U))

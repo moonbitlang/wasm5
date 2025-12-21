@@ -25,6 +25,12 @@ priv enum WatInstr {
   TableInit(IndexRef, IndexRef)
   TableCopy(IndexRef, IndexRef)
   ElemDrop(IndexRef)
+  MemorySize(IndexRef)
+  MemoryGrow(IndexRef)
+  MemoryInit(IndexRef, IndexRef)
+  DataDrop(IndexRef)
+  MemoryCopy(IndexRef, IndexRef)
+  MemoryFill(IndexRef)
   Block(WatBlockType, Array[WatInstr])
   Loop(WatBlockType, Array[WatInstr])
   If(WatBlockType, Array[WatInstr], Array[WatInstr])
@@ -133,8 +139,11 @@ priv struct WatGlobal {
 
 ///|
 priv struct WatData {
+  name : Bytes?
+  mem_ref : IndexRef
   offset : Array[WatInstr]
   init : Bytes
+  is_active : Bool
 }
 
 ///|
@@ -1019,16 +1028,45 @@ fn parse_global(items : Array[SExpr]) -> WatGlobal raise WatError {
 
 ///|
 fn parse_data(items : Array[SExpr]) -> WatData raise WatError {
-  guard items.length() >= 3 else {
-    raise WatError::InvalidSyntax("data expects offset and bytes")
+  guard items.length() >= 2 else {
+    raise WatError::InvalidSyntax("data expects bytes")
   }
-  let offset_expr = match items[1] {
-    List(list_items) => parse_instrs([List(list_items)], Map::new(), [])
-    Atom(_) => parse_instrs([items[1]], Map::new(), [])
-    StringLit(_) => raise WatError::InvalidSyntax("invalid data offset")
+  let mut idx = 1
+  let mut name : Bytes? = None
+  if idx < items.length() && items[idx] is Atom(atom) && is_name(atom) {
+    name = Some(atom)
+    idx = idx + 1
+  }
+  let mut mem_ref = IndexRef::Index(0U)
+  let mut offset_expr : Array[WatInstr] = []
+  let mut is_active = false
+  if idx < items.length() {
+    match items[idx] {
+      List(list_items) =>
+        if list_items.length() > 0 &&
+          list_items[0] is Atom(tag) &&
+          tag == b"memory" {
+          guard list_items.length() == 2 else {
+            raise WatError::InvalidSyntax("memory expects one index")
+          }
+          mem_ref = parse_index_ref(expect_atom(list_items[1]))
+          idx = idx + 1
+        }
+      _ => ()
+    }
+  }
+  if idx < items.length() {
+    match items[idx] {
+      List(_) | Atom(_) => {
+        offset_expr = parse_instrs([items[idx]], Map::new(), [])
+        is_active = true
+        idx = idx + 1
+      }
+      StringLit(_) => ()
+    }
   }
   let data_bytes : Array[Byte] = []
-  for i in 2..<items.length() {
+  for i in idx..<items.length() {
     match items[i] {
       StringLit(bytes) =>
         for b in bytes {
@@ -1037,7 +1075,13 @@ fn parse_data(items : Array[SExpr]) -> WatData raise WatError {
       _ => raise WatError::InvalidSyntax("data expects string literals")
     }
   }
-  WatData::{ offset: offset_expr, init: Bytes::from_array(data_bytes) }
+  WatData::{
+    name,
+    mem_ref,
+    offset: offset_expr,
+    init: Bytes::from_array(data_bytes),
+    is_active,
+  }
 }
 
 ///|
@@ -1548,6 +1592,28 @@ fn parse_instr_from_atom(
       let imm = expect_atom_at(items, idx + 1)
       (WatInstr::ElemDrop(parse_index_ref(imm)), idx + 2)
     }
+    b"memory.init" => {
+      let (data_ref, mem_ref, next_idx) = parse_memory_init_from_items(
+        items,
+        idx + 1,
+      )
+      (WatInstr::MemoryInit(data_ref, mem_ref), next_idx)
+    }
+    b"data.drop" => {
+      let imm = expect_atom_at(items, idx + 1)
+      (WatInstr::DataDrop(parse_index_ref(imm)), idx + 2)
+    }
+    b"memory.copy" => {
+      let (dst_ref, src_ref, next_idx) = parse_memory_copy_from_items(
+        items,
+        idx + 1,
+      )
+      (WatInstr::MemoryCopy(dst_ref, src_ref), next_idx)
+    }
+    b"memory.fill" => {
+      let (mem_ref, next_idx) = parse_memory_index_from_items(items, idx + 1)
+      (WatInstr::MemoryFill(mem_ref), next_idx)
+    }
     b"br" => {
       let imm = expect_atom_at(items, idx + 1)
       (WatInstr::Core(@core.Instr::Br(resolve_label_ref(imm, labels))), idx + 2)
@@ -1568,12 +1634,12 @@ fn parse_instr_from_atom(
       (WatInstr::Core(@core.Instr::BrTable(targets, default_target)), next_idx)
     }
     b"memory.size" => {
-      let (mem_idx, next_idx) = parse_mem_index_from_items(items, idx + 1)
-      (WatInstr::Core(@core.Instr::MemorySize(mem_idx)), next_idx)
+      let (mem_ref, next_idx) = parse_memory_index_from_items(items, idx + 1)
+      (WatInstr::MemorySize(mem_ref), next_idx)
     }
     b"memory.grow" => {
-      let (mem_idx, next_idx) = parse_mem_index_from_items(items, idx + 1)
-      (WatInstr::Core(@core.Instr::MemoryGrow(mem_idx)), next_idx)
+      let (mem_ref, next_idx) = parse_memory_index_from_items(items, idx + 1)
+      (WatInstr::MemoryGrow(mem_ref), next_idx)
     }
     _ =>
       match parse_mem_instr_from_atom(items, idx, op) {
@@ -1785,23 +1851,33 @@ fn parse_instr_from_list(
       guard list_items.length() <= 2 else {
         raise WatError::InvalidSyntax("memory.size expects zero or one operand")
       }
-      let mem_idx = if list_items.length() == 2 {
-        parse_uint(expect_atom(list_items[1]))
-      } else {
-        0U
-      }
-      WatInstr::Core(@core.Instr::MemorySize(mem_idx))
+      let mem_ref = parse_memory_index_from_list(list_items, 1)
+      WatInstr::MemorySize(mem_ref)
     }
     b"memory.grow" => {
       guard list_items.length() <= 2 else {
         raise WatError::InvalidSyntax("memory.grow expects zero or one operand")
       }
-      let mem_idx = if list_items.length() == 2 {
-        parse_uint(expect_atom(list_items[1]))
-      } else {
-        0U
+      let mem_ref = parse_memory_index_from_list(list_items, 1)
+      WatInstr::MemoryGrow(mem_ref)
+    }
+    b"memory.init" => {
+      let (data_ref, mem_ref) = parse_memory_init_from_list(list_items)
+      WatInstr::MemoryInit(data_ref, mem_ref)
+    }
+    b"data.drop" => {
+      guard list_items.length() == 2 else {
+        raise WatError::InvalidSyntax("data.drop expects one operand")
       }
-      WatInstr::Core(@core.Instr::MemoryGrow(mem_idx))
+      WatInstr::DataDrop(parse_index_ref(expect_atom(list_items[1])))
+    }
+    b"memory.copy" => {
+      let (dst_ref, src_ref) = parse_memory_copy_from_list(list_items)
+      WatInstr::MemoryCopy(dst_ref, src_ref)
+    }
+    b"memory.fill" => {
+      let mem_ref = parse_memory_index_from_list(list_items, 1)
+      WatInstr::MemoryFill(mem_ref)
     }
     _ =>
       match parse_mem_instr_from_list(list_items, op) {
@@ -2025,25 +2101,6 @@ fn align_bytes_to_log2(align_bytes : UInt) -> UInt raise WatError {
 }
 
 ///|
-fn parse_mem_index_from_items(
-  items : Array[SExpr],
-  start : Int,
-) -> (UInt, Int) raise WatError {
-  guard start < items.length() else { return (0U, start) }
-  match items[start] {
-    Atom(atom) => {
-      if is_name(atom) {
-        raise WatError::Unsupported("memory index names not supported")
-      }
-      if is_uint_atom(atom) {
-        (parse_uint(atom), start + 1)
-      } else {
-        (0U, start)
-      }
-    }
-    _ => (0U, start)
-  }
-}
 
 ///|
 fn parse_table_index_from_items(
@@ -2162,6 +2219,123 @@ fn parse_table_copy_from_list(
 }
 
 ///|
+fn parse_memory_index_from_items(
+  items : Array[SExpr],
+  start : Int,
+) -> (IndexRef, Int) raise WatError {
+  guard start < items.length() else { return (IndexRef::Index(0U), start) }
+  match items[start] {
+    Atom(atom) =>
+      if is_name(atom) || is_uint_atom(atom) {
+        (parse_index_ref(atom), start + 1)
+      } else {
+        (IndexRef::Index(0U), start)
+      }
+    _ => (IndexRef::Index(0U), start)
+  }
+}
+
+///|
+fn parse_memory_index_from_list(
+  list_items : Array[SExpr],
+  start : Int,
+) -> IndexRef raise WatError {
+  if list_items.length() == start {
+    return IndexRef::Index(0U)
+  }
+  guard list_items.length() == start + 1 else {
+    raise WatError::InvalidSyntax("memory index expects one operand")
+  }
+  parse_index_ref(expect_atom(list_items[start]))
+}
+
+///|
+fn parse_memory_init_from_items(
+  items : Array[SExpr],
+  start : Int,
+) -> (IndexRef, IndexRef, Int) raise WatError {
+  guard start < items.length() else {
+    raise WatError::InvalidSyntax("memory.init expects operands")
+  }
+  let data_atom = expect_atom_at(items, start)
+  guard is_name(data_atom) || is_uint_atom(data_atom) else {
+    raise WatError::InvalidSyntax("memory.init expects data index")
+  }
+  let data_ref = parse_index_ref(data_atom)
+  if start + 1 < items.length() {
+    match items[start + 1] {
+      Atom(atom) =>
+        if is_name(atom) || is_uint_atom(atom) {
+          return (data_ref, parse_index_ref(atom), start + 2)
+        }
+      _ => ()
+    }
+  }
+  (data_ref, IndexRef::Index(0U), start + 1)
+}
+
+///|
+fn parse_memory_init_from_list(
+  list_items : Array[SExpr],
+) -> (IndexRef, IndexRef) raise WatError {
+  if list_items.length() == 2 {
+    return (parse_index_ref(expect_atom(list_items[1])), IndexRef::Index(0U))
+  }
+  guard list_items.length() == 3 else {
+    raise WatError::InvalidSyntax("memory.init expects one or two operands")
+  }
+  let data_ref = parse_index_ref(expect_atom(list_items[1]))
+  let mem_ref = parse_index_ref(expect_atom(list_items[2]))
+  (data_ref, mem_ref)
+}
+
+///|
+fn parse_memory_copy_from_items(
+  items : Array[SExpr],
+  start : Int,
+) -> (IndexRef, IndexRef, Int) raise WatError {
+  guard start <= items.length() else {
+    raise WatError::InvalidSyntax("memory.copy expects operands")
+  }
+  if start == items.length() {
+    return (IndexRef::Index(0U), IndexRef::Index(0U), start)
+  }
+  if start + 1 < items.length() {
+    match items[start] {
+      Atom(first) =>
+        if is_name(first) || is_uint_atom(first) {
+          match items[start + 1] {
+            Atom(second) =>
+              if is_name(second) || is_uint_atom(second) {
+                let dst = parse_index_ref(first)
+                let src = parse_index_ref(second)
+                return (dst, src, start + 2)
+              }
+            _ => ()
+          }
+        }
+      _ => ()
+    }
+  }
+  (IndexRef::Index(0U), IndexRef::Index(0U), start)
+}
+
+///|
+fn parse_memory_copy_from_list(
+  list_items : Array[SExpr],
+) -> (IndexRef, IndexRef) raise WatError {
+  if list_items.length() == 1 {
+    return (IndexRef::Index(0U), IndexRef::Index(0U))
+  }
+  guard list_items.length() == 3 else {
+    raise WatError::InvalidSyntax("memory.copy expects zero or two operands")
+  }
+  let dst = parse_index_ref(expect_atom(list_items[1]))
+  let src = parse_index_ref(expect_atom(list_items[2]))
+  (dst, src)
+}
+
+///|
 fn parse_simple_op(op : Bytes) -> @core.Instr? {
   match op {
     b"unreachable" => Some(@core.Instr::Unreachable)
@@ -2169,8 +2343,6 @@ fn parse_simple_op(op : Bytes) -> @core.Instr? {
     b"drop" => Some(@core.Instr::Drop)
     b"select" => Some(@core.Instr::Select)
     b"return" => Some(@core.Instr::Return)
-    b"memory.copy" => Some(@core.Instr::MemoryCopy)
-    b"memory.fill" => Some(@core.Instr::MemoryFill)
     b"ref.is_null" => Some(@core.Instr::RefIsNull)
     b"i32.eqz" => Some(@core.Instr::I32Eqz)
     b"i32.eq" => Some(@core.Instr::I32Eq)
@@ -2387,6 +2559,15 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
     }
     elem_index = elem_index + 1U
   }
+  let data_map = Map::new()
+  let mut data_index = 0U
+  for data in wat.datas {
+    if data.name is Some(name) {
+      ensure_unique_name(data_map, name, "data")
+      data_map[name] = data_index
+    }
+    data_index = data_index + 1U
+  }
   let types : Array[@core.FuncType] = []
   for type_def in wat.type_defs {
     types.push({ params: type_def.params, results: type_def.results })
@@ -2444,6 +2625,8 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
       func_map,
       table_map,
       elem_map,
+      mem_map,
+      data_map,
       global_map,
       wat.type_defs,
       type_map,
@@ -2504,16 +2687,17 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
   }
   let datas : Array[@core.Data] = []
   for data in wat.datas {
-    let offset_instrs = resolve_offset_instrs(
-      data.offset,
-      global_map,
-      wat.global_imports,
-    )
+    let mem_idx = resolve_index_ref(data.mem_ref, mem_map, "memory")
+    let offset_instrs = if data.is_active {
+      resolve_offset_instrs(data.offset, global_map, wat.global_imports)
+    } else {
+      []
+    }
     datas.push({
-      mem_idx: 0U,
+      mem_idx,
       offset: @core.Expr::{ instrs: offset_instrs },
       init: data.init.sub(),
-      is_active: true,
+      is_active: data.is_active,
     })
   }
   let start = match wat.start {
@@ -2541,6 +2725,8 @@ fn resolve_instrs(
   func_map : Map[Bytes, UInt],
   table_map : Map[Bytes, UInt],
   elem_map : Map[Bytes, UInt],
+  mem_map : Map[Bytes, UInt],
+  data_map : Map[Bytes, UInt],
   global_map : Map[Bytes, UInt],
   type_defs : Array[WatTypeDef],
   type_map : Map[Bytes, UInt],
@@ -2550,7 +2736,8 @@ fn resolve_instrs(
   for instr in instrs {
     out.push(
       resolve_instr(
-        instr, func_map, table_map, elem_map, global_map, type_defs, type_map, types,
+        instr, func_map, table_map, elem_map, mem_map, data_map, global_map, type_defs,
+        type_map, types,
       ),
     )
   }
@@ -2641,6 +2828,8 @@ fn resolve_instr(
   func_map : Map[Bytes, UInt],
   table_map : Map[Bytes, UInt],
   elem_map : Map[Bytes, UInt],
+  mem_map : Map[Bytes, UInt],
+  data_map : Map[Bytes, UInt],
   global_map : Map[Bytes, UInt],
   type_defs : Array[WatTypeDef],
   type_map : Map[Bytes, UInt],
@@ -2692,30 +2881,61 @@ fn resolve_instr(
       )
     WatInstr::ElemDrop(elem_ref) =>
       @core.Instr::ElemDrop(resolve_index_ref(elem_ref, elem_map, "elem"))
+    WatInstr::MemorySize(mem_ref) =>
+      @core.Instr::MemorySize(resolve_index_ref(mem_ref, mem_map, "memory"))
+    WatInstr::MemoryGrow(mem_ref) =>
+      @core.Instr::MemoryGrow(resolve_index_ref(mem_ref, mem_map, "memory"))
+    WatInstr::MemoryInit(data_ref, mem_ref) => {
+      let data_idx = resolve_index_ref(data_ref, data_map, "data")
+      let mem_idx = resolve_index_ref(mem_ref, mem_map, "memory")
+      guard mem_idx == 0U else {
+        raise WatError::Unsupported("memory.init only supports memory 0")
+      }
+      @core.Instr::MemoryInit(data_idx)
+    }
+    WatInstr::DataDrop(data_ref) =>
+      @core.Instr::DataDrop(resolve_index_ref(data_ref, data_map, "data"))
+    WatInstr::MemoryCopy(dst_ref, src_ref) => {
+      let dst_idx = resolve_index_ref(dst_ref, mem_map, "memory")
+      let src_idx = resolve_index_ref(src_ref, mem_map, "memory")
+      guard dst_idx == 0U && src_idx == 0U else {
+        raise WatError::Unsupported("memory.copy only supports memory 0")
+      }
+      @core.Instr::MemoryCopy
+    }
+    WatInstr::MemoryFill(mem_ref) => {
+      let mem_idx = resolve_index_ref(mem_ref, mem_map, "memory")
+      guard mem_idx == 0U else {
+        raise WatError::Unsupported("memory.fill only supports memory 0")
+      }
+      @core.Instr::MemoryFill
+    }
     WatInstr::Block(block_type, body) =>
       @core.Instr::Block(
         resolve_block_type(block_type, types),
         resolve_instrs(
-          body, func_map, table_map, elem_map, global_map, type_defs, type_map, types,
+          body, func_map, table_map, elem_map, mem_map, data_map, global_map, type_defs,
+          type_map, types,
         ),
       )
     WatInstr::Loop(block_type, body) =>
       @core.Instr::Loop(
         resolve_block_type(block_type, types),
         resolve_instrs(
-          body, func_map, table_map, elem_map, global_map, type_defs, type_map, types,
+          body, func_map, table_map, elem_map, mem_map, data_map, global_map, type_defs,
+          type_map, types,
         ),
       )
     WatInstr::If(block_type, then_body, else_body) =>
       @core.Instr::If(
         resolve_block_type(block_type, types),
         resolve_instrs(
-          then_body, func_map, table_map, elem_map, global_map, type_defs, type_map,
-          types,
+          then_body, func_map, table_map, elem_map, mem_map, data_map, global_map,
+          type_defs, type_map, types,
         ),
         resolve_instrs(
-          else_body, func_map, table_map, elem_map, global_map, type_defs, type_map,
-          types,
+          else_body, func_map, table_map, elem_map, mem_map, data_map, global_map,
+          type_defs, type_map, types,
         ),
       )
   }
