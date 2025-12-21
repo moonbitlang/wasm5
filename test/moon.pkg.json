@@ -1,5 +1,5 @@
 {
-  "is-main": true,
+  
   "import": [
     "moonbitlang/async/fs",
     "moonbitlang/async/io",

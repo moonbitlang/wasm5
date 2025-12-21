@@ -1126,7 +1126,8 @@ async fn collect_wast_files(dir : String) -> Array[String] {
 }
 
 ///|
-async fn main {
+async test {
+  println("Starting WebAssembly reference tests...")
   let failures : Array[TestFailure] = []
   let mut skipped_tests = 0
   let wast_files = collect_wast_files("test/reference_tests/")
