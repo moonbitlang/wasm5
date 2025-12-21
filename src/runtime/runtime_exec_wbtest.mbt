@@ -1,0 +1,157 @@
+///|
+fn module_with(
+  types : Array[@core.FuncType],
+  funcs : Array[UInt],
+  codes : Array[@core.Code],
+  imports : Array[@core.Import],
+  exports : Array[@core.Export],
+  start : UInt?,
+) -> @core.Module {
+  {
+    types,
+    funcs,
+    tables: [],
+    mems: [],
+    globals: [],
+    elems: [],
+    datas: [],
+    start,
+    imports,
+    exports,
+    codes,
+  }
+}
+
+///|
+test "runtime compile start function" {
+  let func_type : @core.FuncType = { params: [], results: [] }
+  let code : @core.Code = {
+    locals: [@core.ValType::I32],
+    body: @core.Expr::{ instrs: [] },
+    compiled: None,
+  }
+  let module_ = module_with([func_type], [0U], [code], [], [], Some(0U))
+  let rt = Runtime::load_with_resolver(module_, ImportResolver::new())
+  rt.compile()
+  assert_eq(rt.ops.length() > 0, true)
+  assert_eq(rt.stack.length(), 0)
+  assert_eq(rt.locals.length(), 1)
+}
+
+///|
+test "runtime execute error branches" {
+  let rt_unimpl = make_runtime([], [ImmediateI32(0U)], 0)
+  let mut saw_unimpl = false
+  rt_unimpl.execute() catch {
+    _ => saw_unimpl = true
+  }
+  assert_eq(saw_unimpl, true)
+  let rt_err = make_runtime([], [WasmInstr(fn(_rt) { InvalidType })], 0)
+  rt_err.error_detail = "bad"
+  let mut saw_invalid = false
+  rt_err.execute() catch {
+    _ => saw_invalid = true
+  }
+  assert_eq(saw_invalid, true)
+}
+
+///|
+test "runtime call compiled imported func" {
+  let func_type : @core.FuncType = { params: [], results: [@core.ValType::I32] }
+  let module_ = module_with(
+    [func_type],
+    [],
+    [],
+    [{ module_: b"m", name: b"f", desc: @core.ImportDesc::Func(0U) }],
+    [{ name: b"f", desc: @core.ExportDesc::Func(0U) }],
+    None,
+  )
+  let resolver = ImportResolver::new()
+  resolver.add_func(
+    b"m",
+    b"f",
+    ImportedFunc::new(0U, fn(_args) { [Value::I32(7U)] }),
+  )
+  let rt = Runtime::load_with_resolver(module_, resolver)
+  let results = rt.call_compiled(b"f", [])
+  assert_eq(results, [Value::I32(7U)])
+}
+
+///|
+test "runtime call compiled non func export" {
+  let mem_type : @core.MemType = { limits: { min: 1U, max: None } }
+  let module_ : @core.Module = {
+    types: [],
+    funcs: [],
+    tables: [],
+    mems: [mem_type],
+    globals: [],
+    elems: [],
+    datas: [],
+    start: None,
+    imports: [],
+    exports: [{ name: b"mem", desc: @core.ExportDesc::Mem(0U) }],
+    codes: [],
+  }
+  let rt = Runtime::load_with_resolver(module_, ImportResolver::new())
+  let mut saw_error = false
+  let _ = rt.call_compiled(b"mem", []) catch {
+    _ => {
+      saw_error = true
+      []
+    }
+  }
+  assert_eq(saw_error, true)
+}
+
+///|
+test "runtime call compiled local errors" {
+  let func_type : @core.FuncType = { params: [], results: [] }
+  let code : @core.Code = {
+    locals: [],
+    body: @core.Expr::{ instrs: [] },
+    compiled: None,
+  }
+  let module_not_compiled = module_with(
+    [func_type],
+    [0U],
+    [code],
+    [],
+    [{ name: b"local", desc: @core.ExportDesc::Func(0U) }],
+    None,
+  )
+  let rt_not_compiled = Runtime::load_with_resolver(
+    module_not_compiled,
+    ImportResolver::new(),
+  )
+  let mut saw_not_compiled = false
+  let _ = rt_not_compiled.call_compiled(b"local", []) catch {
+    _ => {
+      saw_not_compiled = true
+      []
+    }
+  }
+  assert_eq(saw_not_compiled, true)
+  let code_bad : @core.Code = {
+    locals: [@core.ValType::V128],
+    body: @core.Expr::{ instrs: [] },
+    compiled: Some(0),
+  }
+  let module_bad = module_with(
+    [func_type],
+    [0U],
+    [code_bad],
+    [],
+    [{ name: b"bad", desc: @core.ExportDesc::Func(0U) }],
+    None,
+  )
+  let rt_bad = Runtime::load_with_resolver(module_bad, ImportResolver::new())
+  let mut saw_bad = false
+  let _ = rt_bad.call_compiled(b"bad", []) catch {
+    _ => {
+      saw_bad = true
+      []
+    }
+  }
+  assert_eq(saw_bad, true)
+}

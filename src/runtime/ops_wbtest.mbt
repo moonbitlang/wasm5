@@ -160,6 +160,16 @@ fn popcnt64(value : UInt64) -> UInt {
 }
 
 ///|
+fn f32_bits(value : Float) -> UInt {
+  value.reinterpret_as_uint()
+}
+
+///|
+fn f64_bits(value : Double) -> UInt64 {
+  value.reinterpret_as_uint64()
+}
+
+///|
 test "ops i32 const and arithmetic" {
   let rt_const = make_runtime([], [ImmediateI32(0U), ImmediateI32(123U)], 0)
   let ret_const = op_i32_const(rt_const)
@@ -346,6 +356,22 @@ test "ops i64 compare and unary" {
 }
 
 ///|
+test "ops i32 error paths" {
+  let rt_div_zero = make_runtime([Value::I32(1U), Value::I32(0U)], [], 0)
+  assert_ret(op_i32_div_u(rt_div_zero), DivisionByZero)
+  let rt_rem_s = make_runtime([Value::I32(1U), Value::I32(0U)], [], 0)
+  assert_ret(op_i32_rem_s(rt_rem_s), DivisionByZero)
+  let rt_rem_u = make_runtime([Value::I32(1U), Value::I32(0U)], [], 0)
+  assert_ret(op_i32_rem_u(rt_rem_u), DivisionByZero)
+  let rt_lt_false = make_runtime([Value::I32(5U), Value::I32(1U)], [], 0)
+  assert_ok(op_i32_lt_s(rt_lt_false))
+  assert_eq(rt_lt_false.stack[0], Value::I32(0U))
+  let rt_gt_false = make_runtime([Value::I32(1U), Value::I32(5U)], [], 0)
+  assert_ok(op_i32_gt_s(rt_gt_false))
+  assert_eq(rt_gt_false.stack[0], Value::I32(0U))
+}
+
+///|
 test "ops float const and arithmetic" {
   let rt_f32_const = make_runtime(
     [],
@@ -472,6 +498,104 @@ test "ops float const and arithmetic" {
 }
 
 ///|
+test "ops float min/max edge cases" {
+  let nan_f32 : Float = 0.0 / 0.0
+  let nan_f64 : Double = 0.0 / 0.0
+  let rt_f32_min_nan = make_runtime(
+    [Value::F32(nan_f32), Value::F32(1.0)],
+    [],
+    0,
+  )
+  assert_ok(op_f32_min(rt_f32_min_nan))
+  let rt_f32_min_nan_value = match rt_f32_min_nan.stack[0] {
+    Value::F32(v) => v
+    _ => 0.0
+  }
+  assert_eq(f32_bits(rt_f32_min_nan_value), f32_bits(canonical_nan_f32))
+  let rt_f32_max_nan = make_runtime(
+    [Value::F32(1.0), Value::F32(nan_f32)],
+    [],
+    0,
+  )
+  assert_ok(op_f32_max(rt_f32_max_nan))
+  let rt_f32_max_nan_value = match rt_f32_max_nan.stack[0] {
+    Value::F32(v) => v
+    _ => 0.0
+  }
+  assert_eq(f32_bits(rt_f32_max_nan_value), f32_bits(canonical_nan_f32))
+  let neg_zero_f32 : Float = -0.0
+  let pos_zero_f32 : Float = 0.0
+  let rt_f32_min_zero = make_runtime(
+    [Value::F32(pos_zero_f32), Value::F32(neg_zero_f32)],
+    [],
+    0,
+  )
+  assert_ok(op_f32_min(rt_f32_min_zero))
+  let rt_f32_min_value = match rt_f32_min_zero.stack[0] {
+    Value::F32(v) => v
+    _ => 0.0
+  }
+  assert_eq(f32_bits(rt_f32_min_value), f32_bits(neg_zero_f32))
+  let rt_f32_max_zero = make_runtime(
+    [Value::F32(neg_zero_f32), Value::F32(pos_zero_f32)],
+    [],
+    0,
+  )
+  assert_ok(op_f32_max(rt_f32_max_zero))
+  let rt_f32_max_value = match rt_f32_max_zero.stack[0] {
+    Value::F32(v) => v
+    _ => 0.0
+  }
+  assert_eq(f32_bits(rt_f32_max_value), f32_bits(pos_zero_f32))
+  let rt_f64_min_nan = make_runtime(
+    [Value::F64(nan_f64), Value::F64(1.0)],
+    [],
+    0,
+  )
+  assert_ok(op_f64_min(rt_f64_min_nan))
+  let rt_f64_min_nan_value = match rt_f64_min_nan.stack[0] {
+    Value::F64(v) => v
+    _ => 0.0
+  }
+  assert_eq(f64_bits(rt_f64_min_nan_value), f64_bits(canonical_nan_f64))
+  let rt_f64_max_nan = make_runtime(
+    [Value::F64(1.0), Value::F64(nan_f64)],
+    [],
+    0,
+  )
+  assert_ok(op_f64_max(rt_f64_max_nan))
+  let rt_f64_max_nan_value = match rt_f64_max_nan.stack[0] {
+    Value::F64(v) => v
+    _ => 0.0
+  }
+  assert_eq(f64_bits(rt_f64_max_nan_value), f64_bits(canonical_nan_f64))
+  let neg_zero_f64 : Double = -0.0
+  let pos_zero_f64 : Double = 0.0
+  let rt_f64_min_zero = make_runtime(
+    [Value::F64(pos_zero_f64), Value::F64(neg_zero_f64)],
+    [],
+    0,
+  )
+  assert_ok(op_f64_min(rt_f64_min_zero))
+  let rt_f64_min_value = match rt_f64_min_zero.stack[0] {
+    Value::F64(v) => v
+    _ => 0.0
+  }
+  assert_eq(f64_bits(rt_f64_min_value), f64_bits(neg_zero_f64))
+  let rt_f64_max_zero = make_runtime(
+    [Value::F64(neg_zero_f64), Value::F64(pos_zero_f64)],
+    [],
+    0,
+  )
+  assert_ok(op_f64_max(rt_f64_max_zero))
+  let rt_f64_max_value = match rt_f64_max_zero.stack[0] {
+    Value::F64(v) => v
+    _ => 0.0
+  }
+  assert_eq(f64_bits(rt_f64_max_value), f64_bits(pos_zero_f64))
+}
+
+///|
 test "ops float conversions" {
   let f32_value : Float = 1.0
   let f64_value : Double = 1.0
@@ -518,6 +642,28 @@ test "ops float conversions" {
   }
   let rt_nan = make_runtime([Value::F64(0.0 / 0.0)], [], 0)
   assert_ret(op_i64_trunc_f64_s(rt_nan), IntegerOverflow)
+}
+
+///|
+test "ops trunc sat f64 edge cases" {
+  let rt_nan = make_runtime([Value::F64(0.0 / 0.0)], [], 0)
+  assert_ok(op_i64_trunc_sat_f64_s(rt_nan))
+  assert_eq(rt_nan.stack[0], Value::I64(0UL))
+  let rt_over = make_runtime([Value::F64(9223372036854775808.0)], [], 0)
+  assert_ok(op_i64_trunc_sat_f64_s(rt_over))
+  assert_eq(rt_over.stack[0], Value::I64(0x7FFFFFFFFFFFFFFFUL))
+  let rt_under = make_runtime([Value::F64(-9223372036854775809.0)], [], 0)
+  assert_ok(op_i64_trunc_sat_f64_s(rt_under))
+  assert_eq(rt_under.stack[0], Value::I64(0x8000000000000000UL))
+  let rt_nan_u = make_runtime([Value::F64(0.0 / 0.0)], [], 0)
+  assert_ok(op_i64_trunc_sat_f64_u(rt_nan_u))
+  assert_eq(rt_nan_u.stack[0], Value::I64(0UL))
+  let rt_over_u = make_runtime([Value::F64(18446744073709551616.0)], [], 0)
+  assert_ok(op_i64_trunc_sat_f64_u(rt_over_u))
+  assert_eq(rt_over_u.stack[0], Value::I64(0xFFFFFFFFFFFFFFFFUL))
+  let rt_under_u = make_runtime([Value::F64(-1.0)], [], 0)
+  assert_ok(op_i64_trunc_sat_f64_u(rt_under_u))
+  assert_eq(rt_under_u.stack[0], Value::I64(0UL))
 }
 
 ///|
@@ -576,4 +722,198 @@ test "ops memory load/store and size" {
   }
   assert_ok(op_memory_grow(rt_grow))
   assert_eq(rt_grow.stack[0], Value::I32(1U))
+}
+
+///|
+test "ops memory out of bounds and bulk ops" {
+  let rt_oob = make_runtime([], [ImmediateIdx(0), ImmediateIdx(8)], 8)
+  rt_oob.stack.push(Value::I32(0U))
+  assert_ret(op_i32_load(rt_oob), MemoryOutOfBounds)
+  let rt_oob_store = make_runtime([], [ImmediateIdx(0), ImmediateIdx(8)], 8)
+  rt_oob_store.stack.push(Value::I32(0U))
+  rt_oob_store.stack.push(Value::I32(1U))
+  assert_ret(op_i32_store(rt_oob_store), MemoryOutOfBounds)
+  let rt_i64 = make_runtime([], [ImmediateIdx(0), ImmediateIdx(0)], 16)
+  rt_i64.stack.push(Value::I32(0U))
+  rt_i64.stack.push(Value::I64(0x1122334455667788UL))
+  assert_ok(op_i64_store(rt_i64))
+  rt_i64.stack.clear()
+  rt_i64.pc = 0
+  rt_i64.stack.push(Value::I32(0U))
+  assert_ok(op_i64_load(rt_i64))
+  assert_eq(rt_i64.stack[0], Value::I64(0x1122334455667788UL))
+  let rt_copy = make_runtime([], [], 8)
+  rt_copy.memory[0] = 1U.to_byte()
+  rt_copy.memory[1] = 2U.to_byte()
+  rt_copy.memory[2] = 3U.to_byte()
+  rt_copy.stack.push(Value::I32(0U))
+  rt_copy.stack.push(Value::I32(0U))
+  rt_copy.stack.push(Value::I32(3U))
+  assert_ok(op_memory_copy(rt_copy))
+  assert_eq(rt_copy.memory[0], 1U.to_byte())
+  assert_eq(rt_copy.memory[1], 2U.to_byte())
+  let rt_fill = make_runtime([], [], 8)
+  rt_fill.stack.push(Value::I32(0U))
+  rt_fill.stack.push(Value::I32(0x7FU))
+  rt_fill.stack.push(Value::I32(3U))
+  assert_ok(op_memory_fill(rt_fill))
+  assert_eq(rt_fill.memory[0], 0x7FU.to_byte())
+  assert_eq(rt_fill.memory[2], 0x7FU.to_byte())
+  let rt_init = Runtime::{
+    module_: empty_module(),
+    ops: [ImmediateIdx(0), ImmediateIdx(0)],
+    stack: [Value::I32(0U), Value::I32(0U), Value::I32(2U)],
+    locals: [],
+    pc: 0,
+    running: false,
+    call_stack: [],
+    memory: Array::make(4, b'\x00'),
+    memory_max: None,
+    globals: [],
+    tables: [],
+    imported_funcs: [],
+    data_segments: [[1U.to_byte(), 2U.to_byte(), 3U.to_byte()]],
+    error_detail: "",
+  }
+  assert_ok(op_memory_init(rt_init))
+  assert_eq(rt_init.memory[0], 1U.to_byte())
+  assert_eq(rt_init.memory[1], 2U.to_byte())
+  let rt_drop = Runtime::{
+    module_: empty_module(),
+    ops: [ImmediateIdx(0), ImmediateIdx(0)],
+    stack: [],
+    locals: [],
+    pc: 0,
+    running: false,
+    call_stack: [],
+    memory: Array::make(1, b'\x00'),
+    memory_max: None,
+    globals: [],
+    tables: [],
+    imported_funcs: [],
+    data_segments: [[1U.to_byte()]],
+    error_detail: "",
+  }
+  assert_ok(op_data_drop(rt_drop))
+  assert_eq(rt_drop.data_segments[0].length(), 0)
+}
+
+///|
+test "compile helpers canonicalize and counts" {
+  let nan_f32 : Float = 0.0 / 0.0
+  let nan_f64 : Double = 0.0 / 0.0
+  assert_eq(f32_bits(canonicalize_f32(nan_f32)), f32_bits(canonical_nan_f32))
+  assert_eq(f64_bits(canonicalize_f64(nan_f64)), f64_bits(canonical_nan_f64))
+  let module_ : @core.Module = {
+    types: [],
+    funcs: [],
+    tables: [],
+    mems: [],
+    globals: [],
+    elems: [],
+    datas: [],
+    start: None,
+    imports: [
+      { module_: b"m", name: b"f", desc: @core.ImportDesc::Func(0U) },
+      {
+        module_: b"m",
+        name: b"mem",
+        desc: @core.ImportDesc::Mem({ limits: { min: 1U, max: None } }),
+      },
+    ],
+    exports: [],
+    codes: [],
+  }
+  assert_eq(count_imported_funcs(module_), 1)
+  assert_eq(get_func_type_idx(module_, 0, 1), 0)
+  assert_eq(get_func_type_idx(module_, 2, 1), -1)
+  let module_funcs : @core.Module = {
+    types: [],
+    funcs: [0U, 1U],
+    tables: [],
+    mems: [],
+    globals: [],
+    elems: [],
+    datas: [],
+    start: None,
+    imports: [],
+    exports: [],
+    codes: [],
+  }
+  assert_eq(get_func_type_idx(module_funcs, 1, 0), 1)
+}
+
+///|
+test "compile helpers pop arguments" {
+  let rt = make_runtime([Value::I32(1U), Value::I32(2U), Value::I32(3U)], [], 0)
+  let args = rt.pop_arguments(2)
+  assert_eq(args[0], Value::I32(2U))
+  assert_eq(args[1], Value::I32(3U))
+  assert_eq(rt.stack.length(), 1)
+}
+
+///|
+test "compile context stack ops and errors" {
+  let ctx = CompileCtx::new()
+  ctx.push_type(@core.ValType::I32)
+  ctx.pop_type()
+  ctx.push_types([@core.ValType::I32, @core.ValType::I64])
+  ctx.pop_types(2)
+  let cases : Array[(RetCode, RuntimeError)] = [
+    (DivisionByZero, RuntimeError::DivisionByZero),
+    (IntegerOverflow, RuntimeError::IntegerOverflow),
+    (MemoryOutOfBounds, RuntimeError::MemoryOutOfBounds),
+    (Unreachable, RuntimeError::Unreachable),
+    (InvalidType, RuntimeError::InvalidType("x")),
+    (FunctionNotCompiled, RuntimeError::FunctionNotCompiled("x")),
+    (UnsupportedLocalType, RuntimeError::UnsupportedLocalType("x")),
+  ]
+  for case in cases {
+    let (ret, expected) = case
+    match (ret.to_error("x"), expected) {
+      (RuntimeError::DivisionByZero, RuntimeError::DivisionByZero)
+      | (RuntimeError::IntegerOverflow, RuntimeError::IntegerOverflow)
+      | (RuntimeError::MemoryOutOfBounds, RuntimeError::MemoryOutOfBounds)
+      | (RuntimeError::Unreachable, RuntimeError::Unreachable)
+      | (RuntimeError::InvalidType(_), RuntimeError::InvalidType(_))
+      | (
+        RuntimeError::FunctionNotCompiled(_),
+        RuntimeError::FunctionNotCompiled(_),
+      )
+      | (
+        RuntimeError::UnsupportedLocalType(_),
+        RuntimeError::UnsupportedLocalType(_),
+      ) => ()
+      _ => abort("unexpected error")
+    }
+  }
+}
+
+///|
+test "panic pop helpers wrong types" {
+  let rt_i64 = make_runtime([Value::I32(1U)], [], 0)
+  ignore(rt_i64.pop_i64())
+}
+
+///|
+test "panic pop helpers wrong pair types" {
+  let rt = make_runtime([Value::I32(1U), Value::I64(2UL)], [], 0)
+  ignore(rt.pop_two_i64())
+}
+
+///|
+test "panic retcode ok to_error" {
+  ignore(RetCode::OK.to_error("x"))
+}
+
+///|
+test "panic pop helpers wrong float types" {
+  let rt_f32 = make_runtime([Value::I32(1U)], [], 0)
+  ignore(rt_f32.pop_f32())
+}
+
+///|
+test "panic pop helpers wrong f64 type" {
+  let rt_f64 = make_runtime([Value::I32(1U)], [], 0)
+  ignore(rt_f64.pop_f64())
 }
