@@ -16,6 +16,16 @@ priv enum WatInstr {
   GlobalGet(IndexRef)
   GlobalSet(IndexRef)
   Call(FuncRef)
+  Block(WatBlockType, Array[WatInstr])
+  Loop(WatBlockType, Array[WatInstr])
+  If(WatBlockType, Array[WatInstr], Array[WatInstr])
+}
+
+///|
+priv enum WatBlockType {
+  Empty
+  Results(Array[@core.ValType])
+  TypeIndex(UInt)
 }
 
 ///|
@@ -112,6 +122,249 @@ pub fn wat_to_wasm(text : String) -> Bytes raise WatError {
   @encode.encode(module_) catch {
     e => raise WatError::Encode("\{e}")
   }
+}
+
+///|
+fn parse_block_instr(
+  list_items : Array[SExpr],
+  local_map : Map[Bytes, UInt],
+  labels : Array[Bytes?],
+) -> WatInstr raise WatError {
+  let (label, idx) = parse_optional_label(list_items, 1)
+  let (block_type, next_idx) = parse_block_type(list_items, idx)
+  let body_items = slice_sexprs(list_items, next_idx)
+  let nested_labels = push_label(labels, label)
+  let body = parse_instrs(body_items, local_map, nested_labels)
+  WatInstr::Block(block_type, body)
+}
+
+///|
+fn parse_loop_instr(
+  list_items : Array[SExpr],
+  local_map : Map[Bytes, UInt],
+  labels : Array[Bytes?],
+) -> WatInstr raise WatError {
+  let (label, idx) = parse_optional_label(list_items, 1)
+  let (block_type, next_idx) = parse_block_type(list_items, idx)
+  let body_items = slice_sexprs(list_items, next_idx)
+  let nested_labels = push_label(labels, label)
+  let body = parse_instrs(body_items, local_map, nested_labels)
+  WatInstr::Loop(block_type, body)
+}
+
+///|
+fn parse_if_instr(
+  list_items : Array[SExpr],
+  local_map : Map[Bytes, UInt],
+  labels : Array[Bytes?],
+) -> WatInstr raise WatError {
+  let (label, idx) = parse_optional_label(list_items, 1)
+  let (block_type, next_idx) = parse_block_type(list_items, idx)
+  let mut then_items : Array[SExpr] = []
+  let mut else_items : Array[SExpr] = []
+  let mut seen_then = false
+  let mut seen_else = false
+  for i in next_idx..<list_items.length() {
+    match list_items[i] {
+      List(inner) => {
+        guard inner.length() > 0 && inner[0] is Atom(tag) else {
+          raise WatError::InvalidSyntax("if expects then/else lists")
+        }
+        match tag {
+          b"then" => {
+            guard not(seen_then) else {
+              raise WatError::InvalidSyntax("duplicate then")
+            }
+            then_items = slice_sexprs(inner, 1)
+            seen_then = true
+          }
+          b"else" => {
+            guard not(seen_else) else {
+              raise WatError::InvalidSyntax("duplicate else")
+            }
+            else_items = slice_sexprs(inner, 1)
+            seen_else = true
+          }
+          _ => raise WatError::InvalidSyntax("if expects then/else lists")
+        }
+      }
+      _ => raise WatError::InvalidSyntax("if expects then/else lists")
+    }
+  }
+  guard seen_then else { raise WatError::InvalidSyntax("if missing then") }
+  let nested_labels = push_label(labels, label)
+  let then_body = parse_instrs(then_items, local_map, nested_labels)
+  let else_body = parse_instrs(else_items, local_map, nested_labels)
+  WatInstr::If(block_type, then_body, else_body)
+}
+
+///|
+fn parse_optional_label(items : Array[SExpr], start : Int) -> (Bytes?, Int) {
+  if start < items.length() {
+    match items[start] {
+      Atom(atom) if is_name(atom) => return (Some(atom), start + 1)
+      _ => ()
+    }
+  }
+  (None, start)
+}
+
+///|
+fn parse_block_type(
+  items : Array[SExpr],
+  start : Int,
+) -> (WatBlockType, Int) raise WatError {
+  let mut idx = start
+  let results : Array[@core.ValType] = []
+  let mut seen_result = false
+  let mut type_index : UInt? = None
+  while idx < items.length() {
+    match items[idx] {
+      List(list_items) => {
+        guard list_items.length() > 0 && list_items[0] is Atom(tag) else {
+          break
+        }
+        match tag {
+          b"result" => {
+            guard not(seen_result) else {
+              raise WatError::InvalidSyntax("duplicate result in block type")
+            }
+            for i in 1..<list_items.length() {
+              results.push(parse_valtype(expect_atom(list_items[i])))
+            }
+            seen_result = true
+            idx = idx + 1
+          }
+          b"type" => {
+            guard type_index is None else {
+              raise WatError::InvalidSyntax("duplicate type in block type")
+            }
+            guard list_items.length() == 2 else {
+              raise WatError::InvalidSyntax("type expects one index")
+            }
+            let atom = expect_atom(list_items[1])
+            guard not(is_name(atom)) else {
+              raise WatError::Unsupported("type name not supported")
+            }
+            type_index = Some(parse_uint(atom))
+            idx = idx + 1
+          }
+          _ => break
+        }
+      }
+      _ => break
+    }
+  }
+  guard not(seen_result && type_index is Some(_)) else {
+    raise WatError::Unsupported("block type with both type and result")
+  }
+  let block_type = match type_index {
+    Some(idx) => WatBlockType::TypeIndex(idx)
+    None =>
+      if results.length() == 0 {
+        WatBlockType::Empty
+      } else {
+        WatBlockType::Results(results)
+      }
+  }
+  (block_type, idx)
+}
+
+///|
+fn parse_br_table_from_items(
+  items : Array[SExpr],
+  start : Int,
+  labels : Array[Bytes?],
+) -> (Array[UInt], UInt, Int) raise WatError {
+  let all : Array[UInt] = []
+  let mut idx = start
+  while idx < items.length() {
+    match items[idx] {
+      Atom(atom) =>
+        if is_name(atom) || is_uint_atom(atom) {
+          all.push(resolve_label_ref(atom, labels))
+          idx = idx + 1
+        } else {
+          break
+        }
+      _ => break
+    }
+  }
+  guard all.length() >= 1 else {
+    raise WatError::InvalidSyntax("br_table expects labels")
+  }
+  let default_target = all[all.length() - 1]
+  let targets : Array[UInt] = []
+  for i in 0..<(all.length() - 1) {
+    targets.push(all[i])
+  }
+  (targets, default_target, idx)
+}
+
+///|
+fn parse_br_table_from_list(
+  list_items : Array[SExpr],
+  labels : Array[Bytes?],
+) -> (Array[UInt], UInt) raise WatError {
+  let all : Array[UInt] = []
+  for i in 1..<list_items.length() {
+    all.push(resolve_label_ref(expect_atom(list_items[i]), labels))
+  }
+  guard all.length() >= 1 else {
+    raise WatError::InvalidSyntax("br_table expects labels")
+  }
+  let default_target = all[all.length() - 1]
+  let targets : Array[UInt] = []
+  for i in 0..<(all.length() - 1) {
+    targets.push(all[i])
+  }
+  (targets, default_target)
+}
+
+///|
+fn resolve_label_ref(
+  atom : Bytes,
+  labels : Array[Bytes?],
+) -> UInt raise WatError {
+  if is_name(atom) {
+    let mut idx = labels.length() - 1
+    while idx >= 0 {
+      match labels[idx] {
+        Some(name) =>
+          if name == atom {
+            return (labels.length() - 1 - idx).reinterpret_as_uint()
+          }
+        None => ()
+      }
+      idx = idx - 1
+    }
+    raise WatError::UnknownIdentifier("label \{atom}")
+  } else {
+    let depth = parse_uint(atom)
+    guard depth < labels.length().reinterpret_as_uint() else {
+      raise WatError::InvalidSyntax("label depth out of range")
+    }
+    depth
+  }
+}
+
+///|
+fn push_label(labels : Array[Bytes?], label : Bytes?) -> Array[Bytes?] {
+  let out : Array[Bytes?] = []
+  for item in labels {
+    out.push(item)
+  }
+  out.push(label)
+  out
+}
+
+///|
+fn slice_sexprs(items : Array[SExpr], start : Int) -> Array[SExpr] {
+  let out : Array[SExpr] = []
+  for i in start..<items.length() {
+    out.push(items[i])
+  }
+  out
 }
 
 ///|
@@ -283,7 +536,7 @@ fn parse_func(items : Array[SExpr]) -> WatFunc raise WatError {
       None => ()
     }
   }
-  let body = parse_instrs(instr_items, local_map)
+  let body = parse_instrs(instr_items, local_map, [])
   WatFunc::{ name, params, results, locals, body, exports }
 }
 
@@ -438,7 +691,7 @@ fn parse_global(items : Array[SExpr]) -> WatGlobal raise WatError {
   guard init_items.length() > 0 else {
     raise WatError::InvalidSyntax("global init missing")
   }
-  let init_instrs = parse_instrs(init_items, Map::new())
+  let init_instrs = parse_instrs(init_items, Map::new(), [])
   WatGlobal::{ name, type_: global_type, init: init_instrs, exports }
 }
 
@@ -448,8 +701,8 @@ fn parse_data(items : Array[SExpr]) -> WatData raise WatError {
     raise WatError::InvalidSyntax("data expects offset and bytes")
   }
   let offset_expr = match items[1] {
-    List(list_items) => parse_instrs([List(list_items)], Map::new())
-    Atom(_) => parse_instrs([items[1]], Map::new())
+    List(list_items) => parse_instrs([List(list_items)], Map::new(), [])
+    Atom(_) => parse_instrs([items[1]], Map::new(), [])
     StringLit(_) => raise WatError::InvalidSyntax("invalid data offset")
   }
   let data_bytes : Array[Byte] = []
@@ -628,18 +881,21 @@ fn parse_limits_from_atoms(atoms : Array[Bytes]) -> @core.Limits raise WatError 
 fn parse_instrs(
   items : Array[SExpr],
   local_map : Map[Bytes, UInt],
+  labels : Array[Bytes?],
 ) -> Array[WatInstr] raise WatError {
   let instrs : Array[WatInstr] = []
   let mut i = 0
   while i < items.length() {
     match items[i] {
       Atom(op) => {
-        let (instr, next_idx) = parse_instr_from_atom(items, i, op, local_map)
+        let (instr, next_idx) = parse_instr_from_atom(
+          items, i, op, local_map, labels,
+        )
         instrs.push(instr)
         i = next_idx
       }
       List(list_items) => {
-        instrs.push(parse_instr_from_list(list_items, local_map))
+        instrs.push(parse_instr_from_list(list_items, local_map, labels))
         i = i + 1
       }
       StringLit(_) =>
@@ -655,6 +911,7 @@ fn parse_instr_from_atom(
   idx : Int,
   op : Bytes,
   local_map : Map[Bytes, UInt],
+  labels : Array[Bytes?],
 ) -> (WatInstr, Int) raise WatError {
   match op {
     b"i32.const" => {
@@ -716,6 +973,25 @@ fn parse_instr_from_atom(
       let imm = expect_atom_at(items, idx + 1)
       (WatInstr::Call(parse_func_ref(imm)), idx + 2)
     }
+    b"br" => {
+      let imm = expect_atom_at(items, idx + 1)
+      (WatInstr::Core(@core.Instr::Br(resolve_label_ref(imm, labels))), idx + 2)
+    }
+    b"br_if" => {
+      let imm = expect_atom_at(items, idx + 1)
+      (
+        WatInstr::Core(@core.Instr::BrIf(resolve_label_ref(imm, labels))),
+        idx + 2,
+      )
+    }
+    b"br_table" => {
+      let (targets, default_target, next_idx) = parse_br_table_from_items(
+        items,
+        idx + 1,
+        labels,
+      )
+      (WatInstr::Core(@core.Instr::BrTable(targets, default_target)), next_idx)
+    }
     b"memory.size" => {
       let (mem_idx, next_idx) = parse_mem_index_from_items(items, idx + 1)
       (WatInstr::Core(@core.Instr::MemorySize(mem_idx)), next_idx)
@@ -740,6 +1016,7 @@ fn parse_instr_from_atom(
 fn parse_instr_from_list(
   list_items : Array[SExpr],
   local_map : Map[Bytes, UInt],
+  labels : Array[Bytes?],
 ) -> WatInstr raise WatError {
   guard list_items.length() > 0 else {
     raise WatError::InvalidSyntax("empty instruction list")
@@ -748,6 +1025,9 @@ fn parse_instr_from_list(
     raise WatError::InvalidSyntax("instruction head must be atom")
   }
   match op {
+    b"block" => parse_block_instr(list_items, local_map, labels)
+    b"loop" => parse_loop_instr(list_items, local_map, labels)
+    b"if" => parse_if_instr(list_items, local_map, labels)
     b"select" =>
       if list_items.length() == 1 {
         WatInstr::Core(@core.Instr::Select)
@@ -855,6 +1135,31 @@ fn parse_instr_from_list(
         raise WatError::InvalidSyntax("call expects one operand")
       }
       WatInstr::Call(parse_func_ref(expect_atom(list_items[1])))
+    }
+    b"br" => {
+      guard list_items.length() == 2 else {
+        raise WatError::InvalidSyntax("br expects one operand")
+      }
+      WatInstr::Core(
+        @core.Instr::Br(resolve_label_ref(expect_atom(list_items[1]), labels)),
+      )
+    }
+    b"br_if" => {
+      guard list_items.length() == 2 else {
+        raise WatError::InvalidSyntax("br_if expects one operand")
+      }
+      WatInstr::Core(
+        @core.Instr::BrIf(resolve_label_ref(expect_atom(list_items[1]), labels)),
+      )
+    }
+    b"br_table" => {
+      guard list_items.length() >= 2 else {
+        raise WatError::InvalidSyntax("br_table expects operands")
+      }
+      let (targets, default_target) = parse_br_table_from_list(
+        list_items, labels,
+      )
+      WatInstr::Core(@core.Instr::BrTable(targets, default_target))
     }
     b"memory.size" => {
       guard list_items.length() <= 2 else {
@@ -1350,7 +1655,7 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
   for func in wat.funcs {
     let type_idx = type_index(types, func.params, func.results)
     funcs.push(type_idx)
-    let instrs = resolve_instrs(func.body, func_map, global_map)
+    let instrs = resolve_instrs(func.body, func_map, global_map, types)
     let code : @core.Code = {
       locals: func.locals,
       body: @core.Expr::{ instrs, },
@@ -1416,10 +1721,11 @@ fn resolve_instrs(
   instrs : Array[WatInstr],
   func_map : Map[Bytes, UInt],
   global_map : Map[Bytes, UInt],
+  types : Array[@core.FuncType],
 ) -> Array[@core.Instr] raise WatError {
   let out : Array[@core.Instr] = []
   for instr in instrs {
-    out.push(resolve_instr(instr, func_map, global_map))
+    out.push(resolve_instr(instr, func_map, global_map, types))
   }
   out
 }
@@ -1507,6 +1813,7 @@ fn resolve_instr(
   instr : WatInstr,
   func_map : Map[Bytes, UInt],
   global_map : Map[Bytes, UInt],
+  types : Array[@core.FuncType],
 ) -> @core.Instr raise WatError {
   match instr {
     WatInstr::Core(core_instr) => core_instr
@@ -1516,6 +1823,43 @@ fn resolve_instr(
       @core.Instr::GlobalSet(resolve_global_ref(global_ref, global_map))
     WatInstr::Call(func_ref) =>
       @core.Instr::Call(resolve_func_ref(func_ref, func_map))
+    WatInstr::Block(block_type, body) =>
+      @core.Instr::Block(
+        resolve_block_type(block_type, types),
+        resolve_instrs(body, func_map, global_map, types),
+      )
+    WatInstr::Loop(block_type, body) =>
+      @core.Instr::Loop(
+        resolve_block_type(block_type, types),
+        resolve_instrs(body, func_map, global_map, types),
+      )
+    WatInstr::If(block_type, then_body, else_body) =>
+      @core.Instr::If(
+        resolve_block_type(block_type, types),
+        resolve_instrs(then_body, func_map, global_map, types),
+        resolve_instrs(else_body, func_map, global_map, types),
+      )
+  }
+}
+
+///|
+fn resolve_block_type(
+  block_type : WatBlockType,
+  types : Array[@core.FuncType],
+) -> @core.BlockType {
+  match block_type {
+    Empty => @core.BlockType::Empty
+    Results(results) =>
+      if results.length() == 0 {
+        @core.BlockType::Empty
+      } else if results.length() == 1 {
+        @core.BlockType::Value(results[0])
+      } else {
+        @core.BlockType::TypeIndex(
+          type_index(types, [], results).reinterpret_as_int(),
+        )
+      }
+    TypeIndex(idx) => @core.BlockType::TypeIndex(idx.reinterpret_as_int())
   }
 }
 

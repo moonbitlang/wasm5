@@ -86,3 +86,9 @@ async test "wat encoder matches wasm-tools for memory ops" {
   let wat = "(module (memory (export \"mem\") 1) (func (export \"mem_ops\") (result i32) i32.const 0 i32.const 42 i32.store offset=4 align=4 i32.const 0 i32.load offset=4 align=4 drop i32.const 8 i32.const 7 i32.store16 align=2 i32.const 8 i32.load16_u align=2 drop i32.const 12 i32.const 1 i32.store8 i32.const 12 i32.load8_s drop i32.const 16 i64.const 5 i64.store align=8 i32.const 16 i64.load align=8 drop i32.const 24 i64.const 9 i64.store32 i32.const 24 i64.load32_u drop memory.size drop i32.const 1 memory.grow drop i32.const 0 i32.const 8 i32.const 4 memory.copy i32.const 0 i32.const 0 i32.const 4 memory.fill i32.const 0))"
   assert_wat_matches("memory_ops", wat)
 }
+
+///|
+async test "wat encoder matches wasm-tools for control flow" {
+  let wat = "(module (func (export \"block_if\") (param i32) (result i32) (block $out (result i32) i32.const 7 local.get 0 br_if $out i32.const 42)) (func (export \"loop_br\") (result i32) (block (result i32) (loop $top i32.const 9 br 1))) (func (export \"if_else\") (param i32) (result i32) local.get 0 (if (result i32) (then i32.const 1) (else i32.const 2))) (func (export \"br_table\") (param i32) (block local.get 0 br_table 0 0)))"
+  assert_wat_matches("control_flow", wat)
+}

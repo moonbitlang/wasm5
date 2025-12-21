@@ -363,6 +363,19 @@ fn encode_expr(expr : @core.Expr) -> Array[Byte] raise EncodeError {
 }
 
 ///|
+fn encode_block_type(
+  block_type : @core.BlockType,
+) -> Array[Byte] raise EncodeError {
+  let payload : Array[Byte] = []
+  match block_type {
+    Empty => payload.push(0x40U.to_byte())
+    Value(val_type) => payload.push(encode_valtype(val_type))
+    TypeIndex(type_idx) => append_bytes(payload, encode_i32_leb128(type_idx))
+  }
+  payload
+}
+
+///|
 fn encode_memarg(align : UInt, offset : UInt) -> Array[Byte] {
   let payload : Array[Byte] = []
   append_bytes(payload, encode_u32_leb128(align))
@@ -376,6 +389,55 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
   match instr {
     Unreachable => payload.push(0x00U.to_byte())
     Nop => payload.push(0x01U.to_byte())
+    Block(block_type, instrs) => {
+      payload.push(0x02U.to_byte())
+      append_bytes(payload, encode_block_type(block_type))
+      for item in instrs {
+        append_bytes(payload, encode_instr(item))
+      }
+      payload.push(0x0BU.to_byte())
+    }
+    Loop(block_type, instrs) => {
+      payload.push(0x03U.to_byte())
+      append_bytes(payload, encode_block_type(block_type))
+      for item in instrs {
+        append_bytes(payload, encode_instr(item))
+      }
+      payload.push(0x0BU.to_byte())
+    }
+    If(block_type, then_instrs, else_instrs) => {
+      payload.push(0x04U.to_byte())
+      append_bytes(payload, encode_block_type(block_type))
+      for item in then_instrs {
+        append_bytes(payload, encode_instr(item))
+      }
+      if else_instrs.length() > 0 {
+        payload.push(0x05U.to_byte())
+        for item in else_instrs {
+          append_bytes(payload, encode_instr(item))
+        }
+      }
+      payload.push(0x0BU.to_byte())
+    }
+    Br(idx) => {
+      payload.push(0x0CU.to_byte())
+      append_bytes(payload, encode_u32_leb128(idx))
+    }
+    BrIf(idx) => {
+      payload.push(0x0DU.to_byte())
+      append_bytes(payload, encode_u32_leb128(idx))
+    }
+    BrTable(targets, default_target) => {
+      payload.push(0x0EU.to_byte())
+      append_bytes(
+        payload,
+        encode_u32_leb128(targets.length().reinterpret_as_uint()),
+      )
+      for target in targets {
+        append_bytes(payload, encode_u32_leb128(target))
+      }
+      append_bytes(payload, encode_u32_leb128(default_target))
+    }
     Drop => payload.push(0x1AU.to_byte())
     Select => payload.push(0x1BU.to_byte())
     SelectTyped(types) => {
