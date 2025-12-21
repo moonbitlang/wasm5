@@ -681,8 +681,10 @@ cat <<'WAT' | wasm-tools parse -o "$out_dir/coverage_table.wasm"
   (type $t0 (func))
   (func $f0 (type $t0))
   (func $f1 (type $t0))
-  (table 2 funcref)
+  (table 2 funcref (ref.null func))
   (elem (i32.const 0) $f0 $f1)
+  (elem (i32.const 0) funcref (ref.func $f1))
+  (elem (ref.func $f1))
   (func $table_ops
     i32.const 0
     table.get 0
@@ -716,8 +718,22 @@ cat <<'WAT' | wasm-tools parse -o "$out_dir/coverage_control.wasm"
     local.get 0)
   (table 1 funcref)
   (elem (i32.const 0) $id)
-  (func $control (type $t1)
+  (func $control (type $t1) (local i32 i32)
     nop
+    i32.const 7
+    local.set 0
+    i32.const 8
+    local.tee 1
+    drop
+    block (result i32)
+      i32.const 1
+    end
+    drop
+    block
+      loop
+        br 1
+      end
+    end
     block
       i32.const 0
       br_if 0
@@ -813,6 +829,7 @@ WAT
 
 cat <<'WAT' | wasm-tools parse -o "$out_dir/coverage_valtypes.wasm"
 (module
+  (rec (type $arr (array (mut i32))))
   (type $t0 (func))
   (func $valtypes
     (param i32) (param i64) (param f32) (param f64) (param v128)
