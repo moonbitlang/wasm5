@@ -19,6 +19,12 @@ priv enum WatInstr {
 }
 
 ///|
+priv enum MemArg {
+  Align(UInt)
+  Offset(UInt)
+}
+
+///|
 priv struct WatFunc {
   name : Bytes?
   params : Array[@core.ValType]
@@ -710,12 +716,23 @@ fn parse_instr_from_atom(
       let imm = expect_atom_at(items, idx + 1)
       (WatInstr::Call(parse_func_ref(imm)), idx + 2)
     }
-    b"drop" => (WatInstr::Core(@core.Instr::Drop), idx + 1)
-    b"return" => (WatInstr::Core(@core.Instr::Return), idx + 1)
-    b"i32.add" => (WatInstr::Core(@core.Instr::I32Add), idx + 1)
-    b"i32.sub" => (WatInstr::Core(@core.Instr::I32Sub), idx + 1)
-    b"i32.mul" => (WatInstr::Core(@core.Instr::I32Mul), idx + 1)
-    _ => raise WatError::Unsupported("instruction \{op}")
+    b"memory.size" => {
+      let (mem_idx, next_idx) = parse_mem_index_from_items(items, idx + 1)
+      (WatInstr::Core(@core.Instr::MemorySize(mem_idx)), next_idx)
+    }
+    b"memory.grow" => {
+      let (mem_idx, next_idx) = parse_mem_index_from_items(items, idx + 1)
+      (WatInstr::Core(@core.Instr::MemoryGrow(mem_idx)), next_idx)
+    }
+    _ =>
+      match parse_mem_instr_from_atom(items, idx, op) {
+        Some((instr, next_idx)) => (instr, next_idx)
+        None =>
+          match parse_simple_op(op) {
+            Some(instr) => (WatInstr::Core(instr), idx + 1)
+            None => raise WatError::Unsupported("instruction \{op}")
+          }
+      }
   }
 }
 
@@ -731,6 +748,30 @@ fn parse_instr_from_list(
     raise WatError::InvalidSyntax("instruction head must be atom")
   }
   match op {
+    b"select" =>
+      if list_items.length() == 1 {
+        WatInstr::Core(@core.Instr::Select)
+      } else {
+        guard list_items.length() == 2 else {
+          raise WatError::InvalidSyntax("select expects optional result types")
+        }
+        let result_list = list_items[1]
+        guard result_list is List(result_items) else {
+          raise WatError::InvalidSyntax("select result types must be a list")
+        }
+        guard result_items.length() >= 1 &&
+          result_items[0] is Atom(head) &&
+          head == b"result" else {
+          raise WatError::InvalidSyntax(
+            "select result types must start with result",
+          )
+        }
+        let types : Array[@core.ValType] = []
+        for i in 1..<result_items.length() {
+          types.push(parse_valtype(expect_atom(result_items[i])))
+        }
+        WatInstr::Core(@core.Instr::SelectTyped(types))
+      }
     b"i32.const" => {
       guard list_items.length() == 2 else {
         raise WatError::InvalidSyntax("i32.const expects one operand")
@@ -815,12 +856,418 @@ fn parse_instr_from_list(
       }
       WatInstr::Call(parse_func_ref(expect_atom(list_items[1])))
     }
-    b"drop" => WatInstr::Core(@core.Instr::Drop)
-    b"return" => WatInstr::Core(@core.Instr::Return)
-    b"i32.add" => WatInstr::Core(@core.Instr::I32Add)
-    b"i32.sub" => WatInstr::Core(@core.Instr::I32Sub)
-    b"i32.mul" => WatInstr::Core(@core.Instr::I32Mul)
-    _ => raise WatError::Unsupported("instruction \{op}")
+    b"memory.size" => {
+      guard list_items.length() <= 2 else {
+        raise WatError::InvalidSyntax("memory.size expects zero or one operand")
+      }
+      let mem_idx = if list_items.length() == 2 {
+        parse_uint(expect_atom(list_items[1]))
+      } else {
+        0U
+      }
+      WatInstr::Core(@core.Instr::MemorySize(mem_idx))
+    }
+    b"memory.grow" => {
+      guard list_items.length() <= 2 else {
+        raise WatError::InvalidSyntax("memory.grow expects zero or one operand")
+      }
+      let mem_idx = if list_items.length() == 2 {
+        parse_uint(expect_atom(list_items[1]))
+      } else {
+        0U
+      }
+      WatInstr::Core(@core.Instr::MemoryGrow(mem_idx))
+    }
+    _ =>
+      match parse_mem_instr_from_list(list_items, op) {
+        Some(instr) => instr
+        None =>
+          match parse_simple_op(op) {
+            Some(instr) => {
+              guard list_items.length() == 1 else {
+                raise WatError::InvalidSyntax(
+                  "instruction \{op} takes no operands",
+                )
+              }
+              WatInstr::Core(instr)
+            }
+            None => raise WatError::Unsupported("instruction \{op}")
+          }
+      }
+  }
+}
+
+///|
+fn parse_mem_instr_from_atom(
+  items : Array[SExpr],
+  idx : Int,
+  op : Bytes,
+) -> (WatInstr, Int)? raise WatError {
+  match memarg_default_align(op) {
+    Some(default_align) => {
+      let (align, offset, next_idx) = parse_memarg_from_items(
+        items,
+        idx + 1,
+        default_align,
+      )
+      let instr = match make_mem_instr(op, align, offset) {
+        Some(mem_instr) => mem_instr
+        None => raise WatError::Unsupported("instruction \{op}")
+      }
+      Some((WatInstr::Core(instr), next_idx))
+    }
+    None => None
+  }
+}
+
+///|
+fn parse_mem_instr_from_list(
+  list_items : Array[SExpr],
+  op : Bytes,
+) -> WatInstr? raise WatError {
+  match memarg_default_align(op) {
+    Some(default_align) => {
+      let (align, offset) = parse_memarg_from_list(list_items, 1, default_align)
+      let instr = match make_mem_instr(op, align, offset) {
+        Some(mem_instr) => mem_instr
+        None => raise WatError::Unsupported("instruction \{op}")
+      }
+      Some(WatInstr::Core(instr))
+    }
+    None => None
+  }
+}
+
+///|
+fn parse_memarg_from_items(
+  items : Array[SExpr],
+  start : Int,
+  default_align : UInt,
+) -> (UInt, UInt, Int) raise WatError {
+  let mut align = default_align
+  let mut offset = 0U
+  let mut seen_align = false
+  let mut seen_offset = false
+  let mut idx = start
+  while idx < items.length() {
+    match items[idx] {
+      Atom(atom) =>
+        match parse_memarg_atom(atom) {
+          Some(Align(value)) => {
+            guard not(seen_align) else {
+              raise WatError::InvalidSyntax("duplicate align")
+            }
+            align = value
+            seen_align = true
+            idx = idx + 1
+          }
+          Some(Offset(value)) => {
+            guard not(seen_offset) else {
+              raise WatError::InvalidSyntax("duplicate offset")
+            }
+            offset = value
+            seen_offset = true
+            idx = idx + 1
+          }
+          None => break
+        }
+      _ => break
+    }
+  }
+  (align, offset, idx)
+}
+
+///|
+fn parse_memarg_from_list(
+  list_items : Array[SExpr],
+  start : Int,
+  default_align : UInt,
+) -> (UInt, UInt) raise WatError {
+  let mut align = default_align
+  let mut offset = 0U
+  let mut seen_align = false
+  let mut seen_offset = false
+  for i in start..<list_items.length() {
+    match list_items[i] {
+      Atom(atom) =>
+        match parse_memarg_atom(atom) {
+          Some(Align(value)) => {
+            guard not(seen_align) else {
+              raise WatError::InvalidSyntax("duplicate align")
+            }
+            align = value
+            seen_align = true
+          }
+          Some(Offset(value)) => {
+            guard not(seen_offset) else {
+              raise WatError::InvalidSyntax("duplicate offset")
+            }
+            offset = value
+            seen_offset = true
+          }
+          None =>
+            raise WatError::InvalidSyntax(
+              "memory operands must be offset= or align=",
+            )
+        }
+      _ => raise WatError::InvalidSyntax("memory operands must be atoms")
+    }
+  }
+  (align, offset)
+}
+
+///|
+fn parse_memarg_atom(atom : Bytes) -> MemArg? raise WatError {
+  if bytes_starts_with(atom, b"offset=") {
+    let value = parse_uint_from_bytes(atom, b"offset=".length())
+    return Some(Offset(value))
+  }
+  if bytes_starts_with(atom, b"align=") {
+    let align_bytes = parse_uint_from_bytes(atom, b"align=".length())
+    let align = align_bytes_to_log2(align_bytes)
+    return Some(Align(align))
+  }
+  None
+}
+
+///|
+fn memarg_default_align(op : Bytes) -> UInt? {
+  match op {
+    b"i32.load" | b"f32.load" | b"i32.store" | b"f32.store" => Some(2U)
+    b"i64.load" | b"f64.load" | b"i64.store" | b"f64.store" => Some(3U)
+    b"i32.load8_s"
+    | b"i32.load8_u"
+    | b"i64.load8_s"
+    | b"i64.load8_u"
+    | b"i32.store8"
+    | b"i64.store8" => Some(0U)
+    b"i32.load16_s"
+    | b"i32.load16_u"
+    | b"i64.load16_s"
+    | b"i64.load16_u"
+    | b"i32.store16"
+    | b"i64.store16" => Some(1U)
+    b"i64.load32_s" | b"i64.load32_u" | b"i64.store32" => Some(2U)
+    _ => None
+  }
+}
+
+///|
+fn make_mem_instr(op : Bytes, align : UInt, offset : UInt) -> @core.Instr? {
+  match op {
+    b"i32.load" => Some(@core.Instr::I32Load(align, offset))
+    b"i64.load" => Some(@core.Instr::I64Load(align, offset))
+    b"f32.load" => Some(@core.Instr::F32Load(align, offset))
+    b"f64.load" => Some(@core.Instr::F64Load(align, offset))
+    b"i32.load8_s" => Some(@core.Instr::I32Load8S(align, offset))
+    b"i32.load8_u" => Some(@core.Instr::I32Load8U(align, offset))
+    b"i32.load16_s" => Some(@core.Instr::I32Load16S(align, offset))
+    b"i32.load16_u" => Some(@core.Instr::I32Load16U(align, offset))
+    b"i64.load8_s" => Some(@core.Instr::I64Load8S(align, offset))
+    b"i64.load8_u" => Some(@core.Instr::I64Load8U(align, offset))
+    b"i64.load16_s" => Some(@core.Instr::I64Load16S(align, offset))
+    b"i64.load16_u" => Some(@core.Instr::I64Load16U(align, offset))
+    b"i64.load32_s" => Some(@core.Instr::I64Load32S(align, offset))
+    b"i64.load32_u" => Some(@core.Instr::I64Load32U(align, offset))
+    b"i32.store" => Some(@core.Instr::I32Store(align, offset))
+    b"i64.store" => Some(@core.Instr::I64Store(align, offset))
+    b"f32.store" => Some(@core.Instr::F32Store(align, offset))
+    b"f64.store" => Some(@core.Instr::F64Store(align, offset))
+    b"i32.store8" => Some(@core.Instr::I32Store8(align, offset))
+    b"i32.store16" => Some(@core.Instr::I32Store16(align, offset))
+    b"i64.store8" => Some(@core.Instr::I64Store8(align, offset))
+    b"i64.store16" => Some(@core.Instr::I64Store16(align, offset))
+    b"i64.store32" => Some(@core.Instr::I64Store32(align, offset))
+    _ => None
+  }
+}
+
+///|
+fn align_bytes_to_log2(align_bytes : UInt) -> UInt raise WatError {
+  guard align_bytes > 0U else {
+    raise WatError::InvalidNumber("alignment must be positive")
+  }
+  let mut value = align_bytes
+  let mut log = 0U
+  while value > 1U {
+    guard (value & 1U) == 0U else {
+      raise WatError::InvalidNumber("alignment must be a power of two")
+    }
+    value = value >> 1
+    log = log + 1U
+  }
+  log
+}
+
+///|
+fn parse_mem_index_from_items(
+  items : Array[SExpr],
+  start : Int,
+) -> (UInt, Int) raise WatError {
+  guard start < items.length() else { return (0U, start) }
+  match items[start] {
+    Atom(atom) => {
+      if is_name(atom) {
+        raise WatError::Unsupported("memory index names not supported")
+      }
+      if is_uint_atom(atom) {
+        (parse_uint(atom), start + 1)
+      } else {
+        (0U, start)
+      }
+    }
+    _ => (0U, start)
+  }
+}
+
+///|
+fn parse_simple_op(op : Bytes) -> @core.Instr? {
+  match op {
+    b"unreachable" => Some(@core.Instr::Unreachable)
+    b"nop" => Some(@core.Instr::Nop)
+    b"drop" => Some(@core.Instr::Drop)
+    b"select" => Some(@core.Instr::Select)
+    b"return" => Some(@core.Instr::Return)
+    b"memory.copy" => Some(@core.Instr::MemoryCopy)
+    b"memory.fill" => Some(@core.Instr::MemoryFill)
+    b"ref.is_null" => Some(@core.Instr::RefIsNull)
+    b"i32.eqz" => Some(@core.Instr::I32Eqz)
+    b"i32.eq" => Some(@core.Instr::I32Eq)
+    b"i32.ne" => Some(@core.Instr::I32Ne)
+    b"i32.lt_s" => Some(@core.Instr::I32LtS)
+    b"i32.lt_u" => Some(@core.Instr::I32LtU)
+    b"i32.gt_s" => Some(@core.Instr::I32GtS)
+    b"i32.gt_u" => Some(@core.Instr::I32GtU)
+    b"i32.le_s" => Some(@core.Instr::I32LeS)
+    b"i32.le_u" => Some(@core.Instr::I32LeU)
+    b"i32.ge_s" => Some(@core.Instr::I32GeS)
+    b"i32.ge_u" => Some(@core.Instr::I32GeU)
+    b"i64.eqz" => Some(@core.Instr::I64Eqz)
+    b"i64.eq" => Some(@core.Instr::I64Eq)
+    b"i64.ne" => Some(@core.Instr::I64Ne)
+    b"i64.lt_s" => Some(@core.Instr::I64LtS)
+    b"i64.lt_u" => Some(@core.Instr::I64LtU)
+    b"i64.gt_s" => Some(@core.Instr::I64GtS)
+    b"i64.gt_u" => Some(@core.Instr::I64GtU)
+    b"i64.le_s" => Some(@core.Instr::I64LeS)
+    b"i64.le_u" => Some(@core.Instr::I64LeU)
+    b"i64.ge_s" => Some(@core.Instr::I64GeS)
+    b"i64.ge_u" => Some(@core.Instr::I64GeU)
+    b"f32.eq" => Some(@core.Instr::F32Eq)
+    b"f32.ne" => Some(@core.Instr::F32Ne)
+    b"f32.lt" => Some(@core.Instr::F32Lt)
+    b"f32.gt" => Some(@core.Instr::F32Gt)
+    b"f32.le" => Some(@core.Instr::F32Le)
+    b"f32.ge" => Some(@core.Instr::F32Ge)
+    b"f64.eq" => Some(@core.Instr::F64Eq)
+    b"f64.ne" => Some(@core.Instr::F64Ne)
+    b"f64.lt" => Some(@core.Instr::F64Lt)
+    b"f64.gt" => Some(@core.Instr::F64Gt)
+    b"f64.le" => Some(@core.Instr::F64Le)
+    b"f64.ge" => Some(@core.Instr::F64Ge)
+    b"i32.clz" => Some(@core.Instr::I32Clz)
+    b"i32.ctz" => Some(@core.Instr::I32Ctz)
+    b"i32.popcnt" => Some(@core.Instr::I32Popcnt)
+    b"i32.add" => Some(@core.Instr::I32Add)
+    b"i32.sub" => Some(@core.Instr::I32Sub)
+    b"i32.mul" => Some(@core.Instr::I32Mul)
+    b"i32.div_s" => Some(@core.Instr::I32DivS)
+    b"i32.div_u" => Some(@core.Instr::I32DivU)
+    b"i32.rem_s" => Some(@core.Instr::I32RemS)
+    b"i32.rem_u" => Some(@core.Instr::I32RemU)
+    b"i32.and" => Some(@core.Instr::I32And)
+    b"i32.or" => Some(@core.Instr::I32Or)
+    b"i32.xor" => Some(@core.Instr::I32Xor)
+    b"i32.shl" => Some(@core.Instr::I32Shl)
+    b"i32.shr_s" => Some(@core.Instr::I32ShrS)
+    b"i32.shr_u" => Some(@core.Instr::I32ShrU)
+    b"i32.rotl" => Some(@core.Instr::I32Rotl)
+    b"i32.rotr" => Some(@core.Instr::I32Rotr)
+    b"i64.clz" => Some(@core.Instr::I64Clz)
+    b"i64.ctz" => Some(@core.Instr::I64Ctz)
+    b"i64.popcnt" => Some(@core.Instr::I64Popcnt)
+    b"i64.add" => Some(@core.Instr::I64Add)
+    b"i64.sub" => Some(@core.Instr::I64Sub)
+    b"i64.mul" => Some(@core.Instr::I64Mul)
+    b"i64.div_s" => Some(@core.Instr::I64DivS)
+    b"i64.div_u" => Some(@core.Instr::I64DivU)
+    b"i64.rem_s" => Some(@core.Instr::I64RemS)
+    b"i64.rem_u" => Some(@core.Instr::I64RemU)
+    b"i64.and" => Some(@core.Instr::I64And)
+    b"i64.or" => Some(@core.Instr::I64Or)
+    b"i64.xor" => Some(@core.Instr::I64Xor)
+    b"i64.shl" => Some(@core.Instr::I64Shl)
+    b"i64.shr_s" => Some(@core.Instr::I64ShrS)
+    b"i64.shr_u" => Some(@core.Instr::I64ShrU)
+    b"i64.rotl" => Some(@core.Instr::I64Rotl)
+    b"i64.rotr" => Some(@core.Instr::I64Rotr)
+    b"f32.abs" => Some(@core.Instr::F32Abs)
+    b"f32.neg" => Some(@core.Instr::F32Neg)
+    b"f32.ceil" => Some(@core.Instr::F32Ceil)
+    b"f32.floor" => Some(@core.Instr::F32Floor)
+    b"f32.trunc" => Some(@core.Instr::F32Trunc)
+    b"f32.nearest" => Some(@core.Instr::F32Nearest)
+    b"f32.sqrt" => Some(@core.Instr::F32Sqrt)
+    b"f32.add" => Some(@core.Instr::F32Add)
+    b"f32.sub" => Some(@core.Instr::F32Sub)
+    b"f32.mul" => Some(@core.Instr::F32Mul)
+    b"f32.div" => Some(@core.Instr::F32Div)
+    b"f32.min" => Some(@core.Instr::F32Min)
+    b"f32.max" => Some(@core.Instr::F32Max)
+    b"f32.copysign" => Some(@core.Instr::F32Copysign)
+    b"f64.abs" => Some(@core.Instr::F64Abs)
+    b"f64.neg" => Some(@core.Instr::F64Neg)
+    b"f64.ceil" => Some(@core.Instr::F64Ceil)
+    b"f64.floor" => Some(@core.Instr::F64Floor)
+    b"f64.trunc" => Some(@core.Instr::F64Trunc)
+    b"f64.nearest" => Some(@core.Instr::F64Nearest)
+    b"f64.sqrt" => Some(@core.Instr::F64Sqrt)
+    b"f64.add" => Some(@core.Instr::F64Add)
+    b"f64.sub" => Some(@core.Instr::F64Sub)
+    b"f64.mul" => Some(@core.Instr::F64Mul)
+    b"f64.div" => Some(@core.Instr::F64Div)
+    b"f64.min" => Some(@core.Instr::F64Min)
+    b"f64.max" => Some(@core.Instr::F64Max)
+    b"f64.copysign" => Some(@core.Instr::F64Copysign)
+    b"i32.wrap_i64" => Some(@core.Instr::I32WrapI64)
+    b"i32.trunc_f32_s" => Some(@core.Instr::I32TruncF32S)
+    b"i32.trunc_f32_u" => Some(@core.Instr::I32TruncF32U)
+    b"i32.trunc_f64_s" => Some(@core.Instr::I32TruncF64S)
+    b"i32.trunc_f64_u" => Some(@core.Instr::I32TruncF64U)
+    b"i64.extend_i32_s" => Some(@core.Instr::I64ExtendI32S)
+    b"i64.extend_i32_u" => Some(@core.Instr::I64ExtendI32U)
+    b"i64.trunc_f32_s" => Some(@core.Instr::I64TruncF32S)
+    b"i64.trunc_f32_u" => Some(@core.Instr::I64TruncF32U)
+    b"i64.trunc_f64_s" => Some(@core.Instr::I64TruncF64S)
+    b"i64.trunc_f64_u" => Some(@core.Instr::I64TruncF64U)
+    b"f32.convert_i32_s" => Some(@core.Instr::F32ConvertI32S)
+    b"f32.convert_i32_u" => Some(@core.Instr::F32ConvertI32U)
+    b"f32.convert_i64_s" => Some(@core.Instr::F32ConvertI64S)
+    b"f32.convert_i64_u" => Some(@core.Instr::F32ConvertI64U)
+    b"f32.demote_f64" => Some(@core.Instr::F32DemoteF64)
+    b"f64.convert_i32_s" => Some(@core.Instr::F64ConvertI32S)
+    b"f64.convert_i32_u" => Some(@core.Instr::F64ConvertI32U)
+    b"f64.convert_i64_s" => Some(@core.Instr::F64ConvertI64S)
+    b"f64.convert_i64_u" => Some(@core.Instr::F64ConvertI64U)
+    b"f64.promote_f32" => Some(@core.Instr::F64PromoteF32)
+    b"i32.reinterpret_f32" => Some(@core.Instr::I32ReinterpretF32)
+    b"i64.reinterpret_f64" => Some(@core.Instr::I64ReinterpretF64)
+    b"f32.reinterpret_i32" => Some(@core.Instr::F32ReinterpretI32)
+    b"f64.reinterpret_i64" => Some(@core.Instr::F64ReinterpretI64)
+    b"i32.extend8_s" => Some(@core.Instr::I32Extend8S)
+    b"i32.extend16_s" => Some(@core.Instr::I32Extend16S)
+    b"i64.extend8_s" => Some(@core.Instr::I64Extend8S)
+    b"i64.extend16_s" => Some(@core.Instr::I64Extend16S)
+    b"i64.extend32_s" => Some(@core.Instr::I64Extend32S)
+    b"i32.trunc_sat_f32_s" => Some(@core.Instr::I32TruncSatF32S)
+    b"i32.trunc_sat_f32_u" => Some(@core.Instr::I32TruncSatF32U)
+    b"i32.trunc_sat_f64_s" => Some(@core.Instr::I32TruncSatF64S)
+    b"i32.trunc_sat_f64_u" => Some(@core.Instr::I32TruncSatF64U)
+    b"i64.trunc_sat_f32_s" => Some(@core.Instr::I64TruncSatF32S)
+    b"i64.trunc_sat_f32_u" => Some(@core.Instr::I64TruncSatF32U)
+    b"i64.trunc_sat_f64_s" => Some(@core.Instr::I64TruncSatF64S)
+    b"i64.trunc_sat_f64_u" => Some(@core.Instr::I64TruncSatF64U)
+    _ => None
   }
 }
 
@@ -1231,6 +1678,48 @@ fn parse_valtype(atom : Bytes) -> @core.ValType raise WatError {
     b"externref" => ExternRef
     _ => raise WatError::Unsupported("valtype \{atom}")
   }
+}
+
+///|
+fn bytes_starts_with(bytes : Bytes, prefix : Bytes) -> Bool {
+  if bytes.length() < prefix.length() {
+    return false
+  }
+  for i in 0..<prefix.length() {
+    if bytes[i] != prefix[i] {
+      return false
+    }
+  }
+  true
+}
+
+///|
+fn parse_uint_from_bytes(bytes : Bytes, start : Int) -> UInt raise WatError {
+  guard start < bytes.length() else {
+    raise WatError::InvalidNumber("missing number")
+  }
+  let mut value = 0U
+  for i in start..<bytes.length() {
+    let b = bytes[i]
+    guard b >= b'0' && b <= b'9' else {
+      raise WatError::InvalidNumber("invalid number \{bytes}")
+    }
+    value = value * 10U + (b.to_uint() - b'0'.to_uint())
+  }
+  value
+}
+
+///|
+fn is_uint_atom(atom : Bytes) -> Bool {
+  if atom.length() == 0 {
+    return false
+  }
+  for b in atom {
+    if b < b'0' || b > b'9' {
+      return false
+    }
+  }
+  true
 }
 
 ///|

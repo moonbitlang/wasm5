@@ -363,12 +363,31 @@ fn encode_expr(expr : @core.Expr) -> Array[Byte] raise EncodeError {
 }
 
 ///|
+fn encode_memarg(align : UInt, offset : UInt) -> Array[Byte] {
+  let payload : Array[Byte] = []
+  append_bytes(payload, encode_u32_leb128(align))
+  append_bytes(payload, encode_u32_leb128(offset))
+  payload
+}
+
+///|
 fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
   let payload : Array[Byte] = []
   match instr {
     Unreachable => payload.push(0x00U.to_byte())
     Nop => payload.push(0x01U.to_byte())
     Drop => payload.push(0x1AU.to_byte())
+    Select => payload.push(0x1BU.to_byte())
+    SelectTyped(types) => {
+      payload.push(0x1CU.to_byte())
+      append_bytes(
+        payload,
+        encode_u32_leb128(types.length().reinterpret_as_uint()),
+      )
+      for val_type in types {
+        payload.push(encode_valtype(val_type))
+      }
+    }
     Return => payload.push(0x0FU.to_byte())
     Call(idx) => {
       payload.push(0x10U.to_byte())
@@ -410,9 +429,278 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
       payload.push(0x44U.to_byte())
       append_u64_le(payload, value.reinterpret_as_uint64())
     }
+    I32Load(align, offset) => {
+      payload.push(0x28U.to_byte())
+      append_bytes(payload, encode_memarg(align, offset))
+    }
+    I64Load(align, offset) => {
+      payload.push(0x29U.to_byte())
+      append_bytes(payload, encode_memarg(align, offset))
+    }
+    F32Load(align, offset) => {
+      payload.push(0x2AU.to_byte())
+      append_bytes(payload, encode_memarg(align, offset))
+    }
+    F64Load(align, offset) => {
+      payload.push(0x2BU.to_byte())
+      append_bytes(payload, encode_memarg(align, offset))
+    }
+    I32Load8S(align, offset) => {
+      payload.push(0x2CU.to_byte())
+      append_bytes(payload, encode_memarg(align, offset))
+    }
+    I32Load8U(align, offset) => {
+      payload.push(0x2DU.to_byte())
+      append_bytes(payload, encode_memarg(align, offset))
+    }
+    I32Load16S(align, offset) => {
+      payload.push(0x2EU.to_byte())
+      append_bytes(payload, encode_memarg(align, offset))
+    }
+    I32Load16U(align, offset) => {
+      payload.push(0x2FU.to_byte())
+      append_bytes(payload, encode_memarg(align, offset))
+    }
+    I64Load8S(align, offset) => {
+      payload.push(0x30U.to_byte())
+      append_bytes(payload, encode_memarg(align, offset))
+    }
+    I64Load8U(align, offset) => {
+      payload.push(0x31U.to_byte())
+      append_bytes(payload, encode_memarg(align, offset))
+    }
+    I64Load16S(align, offset) => {
+      payload.push(0x32U.to_byte())
+      append_bytes(payload, encode_memarg(align, offset))
+    }
+    I64Load16U(align, offset) => {
+      payload.push(0x33U.to_byte())
+      append_bytes(payload, encode_memarg(align, offset))
+    }
+    I64Load32S(align, offset) => {
+      payload.push(0x34U.to_byte())
+      append_bytes(payload, encode_memarg(align, offset))
+    }
+    I64Load32U(align, offset) => {
+      payload.push(0x35U.to_byte())
+      append_bytes(payload, encode_memarg(align, offset))
+    }
+    I32Store(align, offset) => {
+      payload.push(0x36U.to_byte())
+      append_bytes(payload, encode_memarg(align, offset))
+    }
+    I64Store(align, offset) => {
+      payload.push(0x37U.to_byte())
+      append_bytes(payload, encode_memarg(align, offset))
+    }
+    F32Store(align, offset) => {
+      payload.push(0x38U.to_byte())
+      append_bytes(payload, encode_memarg(align, offset))
+    }
+    F64Store(align, offset) => {
+      payload.push(0x39U.to_byte())
+      append_bytes(payload, encode_memarg(align, offset))
+    }
+    I32Store8(align, offset) => {
+      payload.push(0x3AU.to_byte())
+      append_bytes(payload, encode_memarg(align, offset))
+    }
+    I32Store16(align, offset) => {
+      payload.push(0x3BU.to_byte())
+      append_bytes(payload, encode_memarg(align, offset))
+    }
+    I64Store8(align, offset) => {
+      payload.push(0x3CU.to_byte())
+      append_bytes(payload, encode_memarg(align, offset))
+    }
+    I64Store16(align, offset) => {
+      payload.push(0x3DU.to_byte())
+      append_bytes(payload, encode_memarg(align, offset))
+    }
+    I64Store32(align, offset) => {
+      payload.push(0x3EU.to_byte())
+      append_bytes(payload, encode_memarg(align, offset))
+    }
+    MemorySize(idx) => {
+      payload.push(0x3FU.to_byte())
+      append_bytes(payload, encode_u32_leb128(idx))
+    }
+    MemoryGrow(idx) => {
+      payload.push(0x40U.to_byte())
+      append_bytes(payload, encode_u32_leb128(idx))
+    }
+    RefIsNull => payload.push(0xD1U.to_byte())
+    MemoryCopy => {
+      payload.push(0xFCU.to_byte())
+      append_bytes(payload, encode_u32_leb128(10U))
+      append_bytes(payload, encode_u32_leb128(0U))
+      append_bytes(payload, encode_u32_leb128(0U))
+    }
+    MemoryFill => {
+      payload.push(0xFCU.to_byte())
+      append_bytes(payload, encode_u32_leb128(11U))
+      append_bytes(payload, encode_u32_leb128(0U))
+    }
+    I32Eqz => payload.push(0x45U.to_byte())
+    I32Eq => payload.push(0x46U.to_byte())
+    I32Ne => payload.push(0x47U.to_byte())
+    I32LtS => payload.push(0x48U.to_byte())
+    I32LtU => payload.push(0x49U.to_byte())
+    I32GtS => payload.push(0x4AU.to_byte())
+    I32GtU => payload.push(0x4BU.to_byte())
+    I32LeS => payload.push(0x4CU.to_byte())
+    I32LeU => payload.push(0x4DU.to_byte())
+    I32GeS => payload.push(0x4EU.to_byte())
+    I32GeU => payload.push(0x4FU.to_byte())
+    I64Eqz => payload.push(0x50U.to_byte())
+    I64Eq => payload.push(0x51U.to_byte())
+    I64Ne => payload.push(0x52U.to_byte())
+    I64LtS => payload.push(0x53U.to_byte())
+    I64LtU => payload.push(0x54U.to_byte())
+    I64GtS => payload.push(0x55U.to_byte())
+    I64GtU => payload.push(0x56U.to_byte())
+    I64LeS => payload.push(0x57U.to_byte())
+    I64LeU => payload.push(0x58U.to_byte())
+    I64GeS => payload.push(0x59U.to_byte())
+    I64GeU => payload.push(0x5AU.to_byte())
+    F32Eq => payload.push(0x5BU.to_byte())
+    F32Ne => payload.push(0x5CU.to_byte())
+    F32Lt => payload.push(0x5DU.to_byte())
+    F32Gt => payload.push(0x5EU.to_byte())
+    F32Le => payload.push(0x5FU.to_byte())
+    F32Ge => payload.push(0x60U.to_byte())
+    F64Eq => payload.push(0x61U.to_byte())
+    F64Ne => payload.push(0x62U.to_byte())
+    F64Lt => payload.push(0x63U.to_byte())
+    F64Gt => payload.push(0x64U.to_byte())
+    F64Le => payload.push(0x65U.to_byte())
+    F64Ge => payload.push(0x66U.to_byte())
+    I32Clz => payload.push(0x67U.to_byte())
+    I32Ctz => payload.push(0x68U.to_byte())
+    I32Popcnt => payload.push(0x69U.to_byte())
     I32Add => payload.push(0x6AU.to_byte())
     I32Sub => payload.push(0x6BU.to_byte())
     I32Mul => payload.push(0x6CU.to_byte())
+    I32DivS => payload.push(0x6DU.to_byte())
+    I32DivU => payload.push(0x6EU.to_byte())
+    I32RemS => payload.push(0x6FU.to_byte())
+    I32RemU => payload.push(0x70U.to_byte())
+    I32And => payload.push(0x71U.to_byte())
+    I32Or => payload.push(0x72U.to_byte())
+    I32Xor => payload.push(0x73U.to_byte())
+    I32Shl => payload.push(0x74U.to_byte())
+    I32ShrS => payload.push(0x75U.to_byte())
+    I32ShrU => payload.push(0x76U.to_byte())
+    I32Rotl => payload.push(0x77U.to_byte())
+    I32Rotr => payload.push(0x78U.to_byte())
+    I64Clz => payload.push(0x79U.to_byte())
+    I64Ctz => payload.push(0x7AU.to_byte())
+    I64Popcnt => payload.push(0x7BU.to_byte())
+    I64Add => payload.push(0x7CU.to_byte())
+    I64Sub => payload.push(0x7DU.to_byte())
+    I64Mul => payload.push(0x7EU.to_byte())
+    I64DivS => payload.push(0x7FU.to_byte())
+    I64DivU => payload.push(0x80U.to_byte())
+    I64RemS => payload.push(0x81U.to_byte())
+    I64RemU => payload.push(0x82U.to_byte())
+    I64And => payload.push(0x83U.to_byte())
+    I64Or => payload.push(0x84U.to_byte())
+    I64Xor => payload.push(0x85U.to_byte())
+    I64Shl => payload.push(0x86U.to_byte())
+    I64ShrS => payload.push(0x87U.to_byte())
+    I64ShrU => payload.push(0x88U.to_byte())
+    I64Rotl => payload.push(0x89U.to_byte())
+    I64Rotr => payload.push(0x8AU.to_byte())
+    F32Abs => payload.push(0x8BU.to_byte())
+    F32Neg => payload.push(0x8CU.to_byte())
+    F32Ceil => payload.push(0x8DU.to_byte())
+    F32Floor => payload.push(0x8EU.to_byte())
+    F32Trunc => payload.push(0x8FU.to_byte())
+    F32Nearest => payload.push(0x90U.to_byte())
+    F32Sqrt => payload.push(0x91U.to_byte())
+    F32Add => payload.push(0x92U.to_byte())
+    F32Sub => payload.push(0x93U.to_byte())
+    F32Mul => payload.push(0x94U.to_byte())
+    F32Div => payload.push(0x95U.to_byte())
+    F32Min => payload.push(0x96U.to_byte())
+    F32Max => payload.push(0x97U.to_byte())
+    F32Copysign => payload.push(0x98U.to_byte())
+    F64Abs => payload.push(0x99U.to_byte())
+    F64Neg => payload.push(0x9AU.to_byte())
+    F64Ceil => payload.push(0x9BU.to_byte())
+    F64Floor => payload.push(0x9CU.to_byte())
+    F64Trunc => payload.push(0x9DU.to_byte())
+    F64Nearest => payload.push(0x9EU.to_byte())
+    F64Sqrt => payload.push(0x9FU.to_byte())
+    F64Add => payload.push(0xA0U.to_byte())
+    F64Sub => payload.push(0xA1U.to_byte())
+    F64Mul => payload.push(0xA2U.to_byte())
+    F64Div => payload.push(0xA3U.to_byte())
+    F64Min => payload.push(0xA4U.to_byte())
+    F64Max => payload.push(0xA5U.to_byte())
+    F64Copysign => payload.push(0xA6U.to_byte())
+    I32WrapI64 => payload.push(0xA7U.to_byte())
+    I32TruncF32S => payload.push(0xA8U.to_byte())
+    I32TruncF32U => payload.push(0xA9U.to_byte())
+    I32TruncF64S => payload.push(0xAAU.to_byte())
+    I32TruncF64U => payload.push(0xABU.to_byte())
+    I64ExtendI32S => payload.push(0xACU.to_byte())
+    I64ExtendI32U => payload.push(0xADU.to_byte())
+    I64TruncF32S => payload.push(0xAEU.to_byte())
+    I64TruncF32U => payload.push(0xAFU.to_byte())
+    I64TruncF64S => payload.push(0xB0U.to_byte())
+    I64TruncF64U => payload.push(0xB1U.to_byte())
+    F32ConvertI32S => payload.push(0xB2U.to_byte())
+    F32ConvertI32U => payload.push(0xB3U.to_byte())
+    F32ConvertI64S => payload.push(0xB4U.to_byte())
+    F32ConvertI64U => payload.push(0xB5U.to_byte())
+    F32DemoteF64 => payload.push(0xB6U.to_byte())
+    F64ConvertI32S => payload.push(0xB7U.to_byte())
+    F64ConvertI32U => payload.push(0xB8U.to_byte())
+    F64ConvertI64S => payload.push(0xB9U.to_byte())
+    F64ConvertI64U => payload.push(0xBAU.to_byte())
+    F64PromoteF32 => payload.push(0xBBU.to_byte())
+    I32ReinterpretF32 => payload.push(0xBCU.to_byte())
+    I64ReinterpretF64 => payload.push(0xBDU.to_byte())
+    F32ReinterpretI32 => payload.push(0xBEU.to_byte())
+    F64ReinterpretI64 => payload.push(0xBFU.to_byte())
+    I32Extend8S => payload.push(0xC0U.to_byte())
+    I32Extend16S => payload.push(0xC1U.to_byte())
+    I64Extend8S => payload.push(0xC2U.to_byte())
+    I64Extend16S => payload.push(0xC3U.to_byte())
+    I64Extend32S => payload.push(0xC4U.to_byte())
+    I32TruncSatF32S => {
+      payload.push(0xFCU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0U))
+    }
+    I32TruncSatF32U => {
+      payload.push(0xFCU.to_byte())
+      append_bytes(payload, encode_u32_leb128(1U))
+    }
+    I32TruncSatF64S => {
+      payload.push(0xFCU.to_byte())
+      append_bytes(payload, encode_u32_leb128(2U))
+    }
+    I32TruncSatF64U => {
+      payload.push(0xFCU.to_byte())
+      append_bytes(payload, encode_u32_leb128(3U))
+    }
+    I64TruncSatF32S => {
+      payload.push(0xFCU.to_byte())
+      append_bytes(payload, encode_u32_leb128(4U))
+    }
+    I64TruncSatF32U => {
+      payload.push(0xFCU.to_byte())
+      append_bytes(payload, encode_u32_leb128(5U))
+    }
+    I64TruncSatF64S => {
+      payload.push(0xFCU.to_byte())
+      append_bytes(payload, encode_u32_leb128(6U))
+    }
+    I64TruncSatF64U => {
+      payload.push(0xFCU.to_byte())
+      append_bytes(payload, encode_u32_leb128(7U))
+    }
     _ => raise EncodeError::Unsupported("instruction \{instr}")
   }
   payload
