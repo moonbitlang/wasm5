@@ -36,7 +36,7 @@ fn parse_single_type(parser : Parser) -> @core.FuncType raise {
       { params: [], results: [] }
     }
     _ =>
-      raise @core.ValidationError::TypeMismatch(
+      raise @errors.ValidationError::TypeMismatch(
         "expected composite type tag, got 0x\{tag.to_string()}",
       )
   }
@@ -88,7 +88,7 @@ fn parse_type_section(parser : Parser) -> Array[@core.FuncType] raise {
         types.push(func_type)
       }
       _ =>
-        raise @core.ValidationError::TypeMismatch(
+        raise @errors.ValidationError::TypeMismatch(
           "expected type tag, got 0x\{tag.to_string()}",
         )
     }

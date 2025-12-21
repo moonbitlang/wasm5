@@ -4,41 +4,6 @@ package "moonbitlang/wasm5/src/core"
 // Values
 
 // Errors
-pub(all) suberror ParseError {
-  UnexpectedEof
-  InvalidMagic
-  UnsupportedVersion
-  InvalidFormat(String)
-}
-pub impl Show for ParseError
-
-pub(all) suberror ValidationError {
-  TypeMismatch(String)
-  InvalidFunctionIndex(Int)
-  InvalidTypeIndex(Int)
-  InvalidLocalIndex(Int)
-  InvalidGlobalIndex(Int)
-  UnknownGlobal(Int)
-  StackSizeMismatch(String)
-  InvalidResultArity(String)
-  InvalidAlignment(String)
-  UnknownLabel(Int)
-  InvalidStartFunction(String)
-  UnknownMemory(Int)
-  InvalidMemorySize(String)
-  ImmutableGlobal(Int)
-  DuplicateExport(String)
-  UnknownExportedFunction(Int)
-  UnknownExportedMemory(Int)
-  UnknownExportedTable(Int)
-  UnknownExportedGlobal(Int)
-  InvalidTableSize(String)
-  UnknownTable(Int)
-  ConstantExpressionRequired(String)
-  UninitializedLocal(Int)
-  UnknownType(Int)
-}
-pub impl Show for ValidationError
 
 // Types and methods
 pub(all) enum BlockType {

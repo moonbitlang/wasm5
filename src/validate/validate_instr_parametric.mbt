@@ -3,7 +3,7 @@ fn validate_instruction_parametric(
   module_ : @core.Module,
   ctx : ValidationCtx,
   instr : @core.Instr,
-) -> Bool raise @core.ValidationError {
+) -> Bool raise @errors.ValidationError {
   let stack = ctx.stack
   match instr {
     Drop =>
@@ -11,7 +11,7 @@ fn validate_instruction_parametric(
       if ctx.is_unreachable && stack.length() == 0 {
         // Polymorphic - pretend we dropped something
       } else if stack.length() < 1 {
-        raise @core.ValidationError::TypeMismatch(
+        raise @errors.ValidationError::TypeMismatch(
           "expected value on stack for drop",
         )
       } else {
@@ -41,7 +41,7 @@ fn validate_instruction_parametric(
           _ => false
         }
         if not(is_val1_numeric) || not(is_val2_numeric) {
-          raise @core.ValidationError::TypeMismatch(
+          raise @errors.ValidationError::TypeMismatch(
             "untyped select requires numeric types, got \{val1} and \{val2}",
           )
         }
@@ -52,7 +52,7 @@ fn validate_instruction_parametric(
         } else if is_subtype(module_, val2, val1) {
           val1 // val2 <: val1, so result is val1 (more general)
         } else {
-          raise @core.ValidationError::TypeMismatch(
+          raise @errors.ValidationError::TypeMismatch(
             "select values must have compatible types: got \{val1} and \{val2}",
           )
         }
@@ -67,13 +67,13 @@ fn validate_instruction_parametric(
             _ => false
           }
           if not(is_numeric) {
-            raise @core.ValidationError::TypeMismatch(
+            raise @errors.ValidationError::TypeMismatch(
               "untyped select requires numeric types, got \{val}",
             )
           }
           stack.push(val)
         } else {
-          raise @core.ValidationError::TypeMismatch(
+          raise @errors.ValidationError::TypeMismatch(
             "select expects 3 operands (2 values + condition)",
           )
         }
@@ -81,7 +81,7 @@ fn validate_instruction_parametric(
         // In unreachable code with empty stack, assume a default type
         stack.push(I32)
       } else {
-        raise @core.ValidationError::TypeMismatch(
+        raise @errors.ValidationError::TypeMismatch(
           "select expects 3 operands (2 values + condition)",
         )
       }
@@ -93,7 +93,7 @@ fn validate_instruction_parametric(
 
       // For MVP, result_types should have exactly 1 type
       if result_types.length() != 1 {
-        raise @core.ValidationError::InvalidResultArity(
+        raise @errors.ValidationError::InvalidResultArity(
           "select must have exactly 1 result type, got \{result_types.length()}",
         )
       }
@@ -111,12 +111,12 @@ fn validate_instruction_parametric(
 
         // Both values must be subtypes of the expected type
         if not(is_subtype(module_, val1, expected_type)) {
-          raise @core.ValidationError::TypeMismatch(
+          raise @errors.ValidationError::TypeMismatch(
             "select value type mismatch: expected \{expected_type}, got \{val1}",
           )
         }
         if not(is_subtype(module_, val2, expected_type)) {
-          raise @core.ValidationError::TypeMismatch(
+          raise @errors.ValidationError::TypeMismatch(
             "select value type mismatch: expected \{expected_type}, got \{val2}",
           )
         }
@@ -126,13 +126,13 @@ fn validate_instruction_parametric(
         if ctx.is_unreachable {
           let val = stack.unsafe_pop()
           if not(is_subtype(module_, val, expected_type)) {
-            raise @core.ValidationError::TypeMismatch(
+            raise @errors.ValidationError::TypeMismatch(
               "select value type mismatch: expected \{expected_type}, got \{val}",
             )
           }
           stack.push(expected_type)
         } else {
-          raise @core.ValidationError::TypeMismatch(
+          raise @errors.ValidationError::TypeMismatch(
             "select expects 3 operands (2 values + condition)",
           )
         }
@@ -140,7 +140,7 @@ fn validate_instruction_parametric(
         // In unreachable code with empty stack, push the expected type
         stack.push(expected_type)
       } else {
-        raise @core.ValidationError::TypeMismatch(
+        raise @errors.ValidationError::TypeMismatch(
           "select expects 3 operands (2 values + condition)",
         )
       }

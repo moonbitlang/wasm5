@@ -3,7 +3,7 @@ fn validate_instruction_table(
   module_ : @core.Module,
   ctx : ValidationCtx,
   instr : @core.Instr,
-) -> Bool raise @core.ValidationError {
+) -> Bool raise @errors.ValidationError {
   let stack = ctx.stack
   match instr {
     // Table bulk operations (stub for now)
@@ -48,13 +48,13 @@ fn validate_instruction_table(
       if ctx.is_unreachable && stack.length() == 0 {
         // Polymorphic - allow
       } else if stack.length() < 1 {
-        raise @core.ValidationError::TypeMismatch(
+        raise @errors.ValidationError::TypeMismatch(
           "table.set expects value on stack",
         )
       } else {
         let actual_type = stack.unsafe_pop()
         if not(is_subtype(module_, actual_type, expected_type)) {
-          raise @core.ValidationError::TypeMismatch(
+          raise @errors.ValidationError::TypeMismatch(
             "table.set value type mismatch: expected \{expected_type}, got \{actual_type}",
           )
         }
@@ -76,13 +76,13 @@ fn validate_instruction_table(
       if ctx.is_unreachable && stack.length() == 0 {
         // Polymorphic - allow
       } else if stack.length() < 1 {
-        raise @core.ValidationError::TypeMismatch(
+        raise @errors.ValidationError::TypeMismatch(
           "table.grow expects init value on stack",
         )
       } else {
         let actual_type = stack.unsafe_pop()
         if not(is_subtype(module_, actual_type, expected_type)) {
-          raise @core.ValidationError::TypeMismatch(
+          raise @errors.ValidationError::TypeMismatch(
             "table.grow init value type mismatch: expected \{expected_type}, got \{actual_type}",
           )
         }

@@ -3,7 +3,7 @@
 ///|
 fn parse_memory_section(
   parser : Parser,
-) -> Array[@core.MemType] raise @core.ParseError {
+) -> Array[@core.MemType] raise @errors.ParseError {
   let count = parser.read_u32_leb128()
   let mems = []
   for i in 0U..<count {

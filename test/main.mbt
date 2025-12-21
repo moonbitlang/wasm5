@@ -703,7 +703,7 @@ async fn handle_assert_invalid(
     // The WebAssembly spec uses "type mismatch" for various validation errors.
     // Our validator distinguishes TypeMismatch and StackSizeMismatch, but both
     // correspond to the spec's "type mismatch" error message.
-    @wasm5_core.ValidationError::TypeMismatch(_) =>
+    @wasm5_errors.ValidationError::TypeMismatch(_) =>
       if not(expected_error.contains("type mismatch")) {
         ctx.fail(
           line,
@@ -711,7 +711,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got TypeMismatch",
         )
       }
-    @wasm5_core.ValidationError::StackSizeMismatch(_) =>
+    @wasm5_errors.ValidationError::StackSizeMismatch(_) =>
       if not(expected_error.contains("type mismatch")) {
         ctx.fail(
           line,
@@ -719,7 +719,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got StackSizeMismatch",
         )
       }
-    @wasm5_core.ValidationError::InvalidResultArity(_) =>
+    @wasm5_errors.ValidationError::InvalidResultArity(_) =>
       if not(expected_error.contains("invalid result arity")) {
         ctx.fail(
           line,
@@ -727,7 +727,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got InvalidResultArity",
         )
       }
-    @wasm5_core.ValidationError::UnknownType(_) =>
+    @wasm5_errors.ValidationError::UnknownType(_) =>
       if not(expected_error.contains("unknown type")) {
         ctx.fail(
           line,
@@ -735,7 +735,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got UnknownType",
         )
       }
-    @wasm5_core.ValidationError::InvalidAlignment(_) =>
+    @wasm5_errors.ValidationError::InvalidAlignment(_) =>
       if not(expected_error.contains("alignment")) {
         ctx.fail(
           line,
@@ -743,7 +743,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got InvalidAlignment",
         )
       }
-    @wasm5_core.ValidationError::UnknownLabel(_) =>
+    @wasm5_errors.ValidationError::UnknownLabel(_) =>
       if not(expected_error.contains("unknown label")) {
         ctx.fail(
           line,
@@ -751,7 +751,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got UnknownLabel",
         )
       }
-    @wasm5_core.ValidationError::InvalidStartFunction(_) =>
+    @wasm5_errors.ValidationError::InvalidStartFunction(_) =>
       if not(expected_error.contains("start function")) {
         ctx.fail(
           line,
@@ -759,7 +759,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got InvalidStartFunction",
         )
       }
-    @wasm5_core.ValidationError::DuplicateExport(name) =>
+    @wasm5_errors.ValidationError::DuplicateExport(name) =>
       if not(expected_error.contains("duplicate export name")) {
         ctx.fail(
           line,
@@ -767,7 +767,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got DuplicateExport(\{name})",
         )
       }
-    @wasm5_core.ValidationError::UnknownExportedFunction(_) =>
+    @wasm5_errors.ValidationError::UnknownExportedFunction(_) =>
       if not(expected_error.contains("unknown function")) {
         ctx.fail(
           line,
@@ -775,7 +775,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got UnknownExportedFunction",
         )
       }
-    @wasm5_core.ValidationError::UnknownExportedMemory(_) =>
+    @wasm5_errors.ValidationError::UnknownExportedMemory(_) =>
       if not(expected_error.contains("unknown memory")) {
         ctx.fail(
           line,
@@ -783,7 +783,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got UnknownExportedMemory",
         )
       }
-    @wasm5_core.ValidationError::UnknownExportedTable(_) =>
+    @wasm5_errors.ValidationError::UnknownExportedTable(_) =>
       if not(expected_error.contains("unknown table")) {
         ctx.fail(
           line,
@@ -791,7 +791,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got UnknownExportedTable",
         )
       }
-    @wasm5_core.ValidationError::UnknownGlobal(_) =>
+    @wasm5_errors.ValidationError::UnknownGlobal(_) =>
       if not(expected_error.contains("unknown global")) {
         ctx.fail(
           line,
@@ -799,7 +799,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got UnknownGlobal",
         )
       }
-    @wasm5_core.ValidationError::UnknownExportedGlobal(_) =>
+    @wasm5_errors.ValidationError::UnknownExportedGlobal(_) =>
       if not(expected_error.contains("unknown global")) {
         ctx.fail(
           line,
@@ -807,7 +807,7 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got UnknownExportedGlobal",
         )
       }
-    @wasm5_core.ValidationError::UninitializedLocal(_) =>
+    @wasm5_errors.ValidationError::UninitializedLocal(_) =>
       if not(expected_error.contains("uninitialized local")) {
         ctx.fail(
           line,

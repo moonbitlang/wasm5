@@ -57,7 +57,7 @@ fn get_func_type_index(
   module_ : @core.Module,
   func_idx : Int,
   import_counts : ImportCounts,
-) -> Int raise @core.ValidationError {
+) -> Int raise @errors.ValidationError {
   if func_idx < import_counts.funcs {
     // Imported function - find type index from imports
     let mut current_import = 0
@@ -79,7 +79,7 @@ fn get_func_type_index(
     // Local function - get type index from funcs array
     let local_idx = func_idx - import_counts.funcs
     if local_idx < 0 || local_idx >= module_.funcs.length() {
-      raise @core.ValidationError::InvalidFunctionIndex(func_idx)
+      raise @errors.ValidationError::InvalidFunctionIndex(func_idx)
     }
     module_.funcs[local_idx].reinterpret_as_int()
   }
@@ -93,7 +93,7 @@ fn validate_binary_op(
   operand_type : @core.ValType,
   result_type : @core.ValType,
   op_name : String,
-) -> Unit raise @core.ValidationError {
+) -> Unit raise @errors.ValidationError {
   ctx.poly_pop_expect(module_, operand_type, op_name)
   ctx.poly_pop_expect(module_, operand_type, op_name)
   ctx.stack.push(result_type)
@@ -109,7 +109,7 @@ fn validate_load(
   natural_align : Int,
   result_type : @core.ValType,
   op_name : String,
-) -> Unit raise @core.ValidationError {
+) -> Unit raise @errors.ValidationError {
   validate_memory_exists(module_, import_counts)
   validate_alignment(align, natural_align)
   ctx.poly_pop_expect(module_, I32, "\{op_name} address")
@@ -126,7 +126,7 @@ fn validate_store(
   natural_align : Int,
   value_type : @core.ValType,
   op_name : String,
-) -> Unit raise @core.ValidationError {
+) -> Unit raise @errors.ValidationError {
   validate_memory_exists(module_, import_counts)
   validate_alignment(align, natural_align)
   ctx.poly_pop_expect(module_, value_type, "\{op_name} value")
@@ -139,7 +139,7 @@ fn validate_store(
 fn validate_alignment(
   align : UInt,
   natural : Int,
-) -> Unit raise @core.ValidationError {
+) -> Unit raise @errors.ValidationError {
   // align is log2 of alignment (e.g., align=2 means 2^2 = 4 byte alignment)
   // natural is the natural alignment in bytes
   let align_int = align.reinterpret_as_int()
@@ -160,7 +160,7 @@ fn validate_alignment(
     }
   }
   if align_int > max_align {
-    raise @core.ValidationError::InvalidAlignment(
+    raise @errors.ValidationError::InvalidAlignment(
       "alignment must not be larger than natural (align=\{align_int}, max=\{max_align})",
     )
   }
@@ -171,10 +171,10 @@ fn validate_alignment(
 fn validate_memory_exists(
   module_ : @core.Module,
   import_counts : ImportCounts,
-) -> Unit raise @core.ValidationError {
+) -> Unit raise @errors.ValidationError {
   let total_mems = import_counts.mems + module_.mems.length()
   if total_mems == 0 {
-    raise @core.ValidationError::UnknownMemory(0)
+    raise @errors.ValidationError::UnknownMemory(0)
   }
 }
 
@@ -187,7 +187,7 @@ fn validate_memory_exists(
 /// - Arithmetic: i32.add, i32.sub, i32.mul, i64.add, i64.sub, i64.mul
 fn validate_const_expr_instructions(
   expr : @core.Expr,
-) -> Unit raise @core.ValidationError {
+) -> Unit raise @errors.ValidationError {
   for instr in expr.instrs {
     match instr {
       I32Const(_)
@@ -204,7 +204,7 @@ fn validate_const_expr_instructions(
       | I64Sub
       | I64Mul => () // Valid constant expression instructions
       _ =>
-        raise @core.ValidationError::ConstantExpressionRequired(
+        raise @errors.ValidationError::ConstantExpressionRequired(
           "invalid instruction in constant expression: \{instr}",
         )
     }
@@ -219,7 +219,7 @@ fn validate_table_init_expr(
   m : @core.Module,
   expr : @core.Expr,
   import_counts : ImportCounts,
-) -> Unit raise @core.ValidationError {
+) -> Unit raise @errors.ValidationError {
   // First check that instructions are valid constant expression instructions
   validate_const_expr_instructions(expr)
 
@@ -230,7 +230,7 @@ fn validate_table_init_expr(
         let global_idx = idx.reinterpret_as_int()
         // Must be an imported global (index < import_counts.globals)
         if global_idx >= import_counts.globals {
-          raise @core.ValidationError::UnknownGlobal(global_idx)
+          raise @errors.ValidationError::UnknownGlobal(global_idx)
         }
         // Also check that the imported global is immutable
         let mut import_global_idx = 0
@@ -239,7 +239,7 @@ fn validate_table_init_expr(
             Global(gt) => {
               if import_global_idx == global_idx {
                 if gt.mutable {
-                  raise @core.ValidationError::ConstantExpressionRequired(
+                  raise @errors.ValidationError::ConstantExpressionRequired(
                     "table initializer global.get must reference immutable global",
                   )
                 }
@@ -263,7 +263,7 @@ fn validate_const_expr_globals(
   m : @core.Module,
   expr : @core.Expr,
   import_counts : ImportCounts,
-) -> Unit raise @core.ValidationError {
+) -> Unit raise @errors.ValidationError {
   for instr in expr.instrs {
     match instr {
       GlobalGet(idx) => {
@@ -296,7 +296,7 @@ fn validate_const_expr_globals(
           }
         }
         if is_mutable {
-          raise @core.ValidationError::ConstantExpressionRequired(
+          raise @errors.ValidationError::ConstantExpressionRequired(
             "global.get in constant expression must reference immutable global",
           )
         }
@@ -319,11 +319,11 @@ fn is_func_type_index(module_ : @core.Module, type_idx : Int) -> Bool {
 fn validate_valtype(
   module_ : @core.Module,
   val_type : @core.ValType,
-) -> Unit raise @core.ValidationError {
+) -> Unit raise @errors.ValidationError {
   match val_type {
     Ref(TypeIndex(idx), _) =>
       if idx < 0 || idx >= module_.types.length() {
-        raise @core.ValidationError::UnknownType(idx)
+        raise @errors.ValidationError::UnknownType(idx)
       }
     _ => () // Other types don't have type indices
   }
