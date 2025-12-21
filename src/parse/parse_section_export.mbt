@@ -7,13 +7,13 @@ fn parse_export_section(parser : Parser) -> Array[@core.Export] raise {
   for i in 0U..<count {
     let name = parser.read_name()
     let desc_tag = parser.read_byte()
-    let desc = match desc_tag {
-      0x00 => @core.ExportDesc::Func(parser.read_u32_leb128())
-      0x01 => @core.ExportDesc::Table(parser.read_u32_leb128())
-      0x02 => @core.ExportDesc::Mem(parser.read_u32_leb128())
-      0x03 => @core.ExportDesc::Global(parser.read_u32_leb128())
+    let desc : @core.ExportDesc = match desc_tag {
+      0x00 => Func(parser.read_u32_leb128())
+      0x01 => Table(parser.read_u32_leb128())
+      0x02 => Mem(parser.read_u32_leb128())
+      0x03 => Global(parser.read_u32_leb128())
       // Exception handling: tag export
-      0x04 => @core.ExportDesc::Tag(parser.read_u32_leb128())
+      0x04 => Tag(parser.read_u32_leb128())
       _ =>
         raise @core.ValidationError::TypeMismatch(
           "invalid export descriptor tag: 0x\{desc_tag.to_string()}",

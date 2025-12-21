@@ -10,7 +10,7 @@ fn validate_instruction_variable(
   let stack = ctx.stack
   match instr {
     // Local operations
-    @core.Instr::LocalGet(idx) => {
+    LocalGet(idx) => {
       let local_idx = idx.reinterpret_as_int()
       let total_locals = func_type.params.length() + code.locals.length()
       if local_idx < 0 || local_idx >= total_locals {
@@ -29,7 +29,7 @@ fn validate_instruction_variable(
       }
       stack.push(local_type)
     }
-    @core.Instr::LocalSet(idx) => {
+    LocalSet(idx) => {
       let local_idx = idx.reinterpret_as_int()
       let total_locals = func_type.params.length() + code.locals.length()
       if local_idx < 0 || local_idx >= total_locals {
@@ -47,7 +47,7 @@ fn validate_instruction_variable(
       }
       ctx.initialized_locals[local_idx] = true
     }
-    @core.Instr::LocalTee(idx) => {
+    LocalTee(idx) => {
       let local_idx = idx.reinterpret_as_int()
       let total_locals = func_type.params.length() + code.locals.length()
       if local_idx < 0 || local_idx >= total_locals {
@@ -70,7 +70,7 @@ fn validate_instruction_variable(
 
     // @core.Global operations
     // Note: @core.Global index space includes imported globals first, then local globals
-    @core.Instr::GlobalGet(idx) => {
+    GlobalGet(idx) => {
       let global_idx = idx.reinterpret_as_int()
       let total_globals = import_counts.globals + module_.globals.length()
       if global_idx < 0 || global_idx >= total_globals {
@@ -79,10 +79,10 @@ fn validate_instruction_variable(
       let global_type = if global_idx < import_counts.globals {
         // It's an imported global - find it in imports
         let mut import_global_idx = 0
-        let mut found_type : @core.ValType = @core.ValType::I32 // default
+        let mut found_type : @core.ValType = I32 // default
         for imp in module_.imports {
           match imp.desc {
-            @core.ImportDesc::Global(gt) => {
+            Global(gt) => {
               if import_global_idx == global_idx {
                 found_type = gt.val_type
                 break
@@ -100,7 +100,7 @@ fn validate_instruction_variable(
       }
       stack.push(global_type)
     }
-    @core.Instr::GlobalSet(idx) => {
+    GlobalSet(idx) => {
       let global_idx = idx.reinterpret_as_int()
       let total_globals = import_counts.globals + module_.globals.length()
       if global_idx < 0 || global_idx >= total_globals {
@@ -109,11 +109,11 @@ fn validate_instruction_variable(
       let (global_type, is_mutable) = if global_idx < import_counts.globals {
         // It's an imported global - find it in imports
         let mut import_global_idx = 0
-        let mut found_type : @core.ValType = @core.ValType::I32 // default
+        let mut found_type : @core.ValType = I32 // default
         let mut found_mutable = false
         for imp in module_.imports {
           match imp.desc {
-            @core.ImportDesc::Global(gt) => {
+            Global(gt) => {
               if import_global_idx == global_idx {
                 found_type = gt.val_type
                 found_mutable = gt.mutable

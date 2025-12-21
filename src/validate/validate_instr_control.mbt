@@ -5,12 +5,12 @@ fn get_block_type(
   block_type : @core.BlockType,
 ) -> (Array[@core.ValType], Array[@core.ValType]) raise @core.ValidationError {
   match block_type {
-    @core.BlockType::Empty => ([], [])
-    @core.BlockType::Value(t) => {
+    Empty => ([], [])
+    Value(t) => {
       validate_valtype(module_, t)
       ([], [t])
     }
-    @core.BlockType::TypeIndex(idx) => {
+    TypeIndex(idx) => {
       if idx < 0 || idx >= module_.types.length() {
         raise @core.ValidationError::InvalidTypeIndex(idx)
       }
@@ -57,8 +57,8 @@ fn validate_instruction_control(
 ) -> Bool raise @core.ValidationError {
   let stack = ctx.stack
   match instr {
-    // @core.Instr::Block instructions
-    @core.Instr::Block(block_type, instrs) => {
+    // Block instructions
+    Block(block_type, instrs) => {
       let (params, results) = get_block_type(module_, block_type)
       // Pop parameters from parent stack using polymorphic stack
       for i = params.length() - 1; i >= 0; i = i - 1 {
@@ -91,7 +91,7 @@ fn validate_instruction_control(
       // because the block might have exited early via branch
       // Check block produces correct results
       if block_ctx.is_unreachable && block_ctx.stack.length() == 0 {
-        // @core.Instr::Unreachable code with empty stack - all polymorphic, push expected results
+        // Unreachable code with empty stack - all polymorphic, push expected results
         for result in results {
           stack.push(result)
         }
@@ -115,7 +115,7 @@ fn validate_instruction_control(
         }
       }
     }
-    @core.Instr::Loop(block_type, instrs) => {
+    Loop(block_type, instrs) => {
       let (params, results) = get_block_type(module_, block_type)
       // Pop parameters from parent stack using polymorphic stack
       for i = params.length() - 1; i >= 0; i = i - 1 {
@@ -132,9 +132,9 @@ fn validate_instruction_control(
       for frame in ctx.control_stack {
         loop_ctx.control_stack.push(frame)
       }
-      loop_ctx.push_control(params, params) // @core.Instr::Loop's br target uses params, not results
+      loop_ctx.push_control(params, params) // Loop's br target uses params, not results
       // Copy initialized locals from parent context
-      // @core.Instr::Loop is similar to block - don't propagate back
+      // Loop is similar to block - don't propagate back
       for i in 0..<ctx.initialized_locals.length() {
         loop_ctx.initialized_locals.push(ctx.initialized_locals[i])
       }
@@ -148,7 +148,7 @@ fn validate_instruction_control(
       // Note: We do NOT propagate initialized_locals back from loop_ctx
       // Check loop produces correct results
       if loop_ctx.is_unreachable && loop_ctx.stack.length() == 0 {
-        // @core.Instr::Unreachable code with empty stack - all polymorphic
+        // Unreachable code with empty stack - all polymorphic
         for result in results {
           stack.push(result)
         }
@@ -172,10 +172,10 @@ fn validate_instruction_control(
         }
       }
     }
-    @core.Instr::If(block_type, then_instrs, else_instrs) => {
+    If(block_type, then_instrs, else_instrs) => {
       let (params, results) = get_block_type(module_, block_type)
       // Pop condition (using polymorphic stack)
-      ctx.poly_pop_expect(module_, @core.ValType::I32, "if condition")
+      ctx.poly_pop_expect(module_, I32, "if condition")
       // Pop parameters from parent stack (using polymorphic stack)
       for i = params.length() - 1; i >= 0; i = i - 1 {
         ctx.poly_pop_expect(module_, params[i], "if parameter")
@@ -202,7 +202,7 @@ fn validate_instruction_control(
       let _ = then_ctx.pop_control()
       // Check then branch produces correct results
       if then_ctx.is_unreachable && then_ctx.stack.length() == 0 {
-        // @core.Instr::Unreachable with empty stack - all polymorphic, valid
+        // Unreachable with empty stack - all polymorphic, valid
       } else if then_ctx.stack.length() != results.length() {
         raise @core.ValidationError::TypeMismatch(
           "if then branch: expected \{results.length()} values, got \{then_ctx.stack.length()}",
@@ -239,7 +239,7 @@ fn validate_instruction_control(
       let _ = else_ctx.pop_control()
       // Check else branch produces correct results
       if else_ctx.is_unreachable && else_ctx.stack.length() == 0 {
-        // @core.Instr::Unreachable with empty stack - all polymorphic, valid
+        // Unreachable with empty stack - all polymorphic, valid
       } else if else_ctx.stack.length() != results.length() {
         raise @core.ValidationError::TypeMismatch(
           "if else branch: expected \{results.length()} values, got \{else_ctx.stack.length()}",
@@ -263,7 +263,7 @@ fn validate_instruction_control(
     }
 
     // Control flow
-    @core.Instr::Return => {
+    Return => {
       // In unreachable code with empty stack, allow polymorphic return
       // Otherwise, validate concrete values on stack
       if not(ctx.is_unreachable) || stack.length() > 0 {
@@ -291,7 +291,7 @@ fn validate_instruction_control(
       // Mark as unreachable and record stack height
       ctx.mark_unreachable()
     }
-    @core.Instr::Br(label) => {
+    Br(label) => {
       // Always validate label exists (even in unreachable code)
       let target_types = ctx.get_label_types(label)
 
@@ -321,13 +321,13 @@ fn validate_instruction_control(
       // Mark as unreachable and record stack height
       ctx.mark_unreachable()
     }
-    @core.Instr::BrIf(label) => {
+    BrIf(label) => {
       // Conditional branch
       // First, validate label exists
       let target_types = ctx.get_label_types(label)
 
       // Pop i32 condition
-      ctx.poly_pop_expect(module_, @core.ValType::I32, "br_if condition")
+      ctx.poly_pop_expect(module_, I32, "br_if condition")
 
       // Pop the label types (checking subtyping) and push them back
       // This "widens" the types to the label types
@@ -345,9 +345,9 @@ fn validate_instruction_control(
       // Note: Unlike br, br_if does NOT mark as unreachable
       // Stack now has the label types (potentially wider than original)
     }
-    @core.Instr::BrTable(labels, default_label) => {
+    BrTable(labels, default_label) => {
       // Table branch - pop i32 index
-      ctx.poly_pop_expect(module_, @core.ValType::I32, "br_table index")
+      ctx.poly_pop_expect(module_, I32, "br_table index")
 
       // Validate all labels exist and have compatible types
       let default_types = ctx.get_label_types(default_label)
@@ -355,7 +355,7 @@ fn validate_instruction_control(
       // All labels (including default) must have the same arity and types
       // TODO: This validation is currently disabled due to a bug where get_label_types
       // returns different types for the same label on different calls. This needs investigation.
-      // The issue manifests as @core.ValType::F32 vs @core.ValType::F64 type mismatches in br_table.wast tests.
+      // The issue manifests as F32 vs F64 type mismatches in br_table.wast tests.
       //
       // For now, we only validate arity (length) matches and that labels exist.
       for label in labels {
@@ -406,7 +406,7 @@ fn validate_instruction_control(
       // @core.Code after is unreachable, record stack height
       ctx.mark_unreachable()
     }
-    @core.Instr::BrOnNull(_label) =>
+    BrOnNull(_label) =>
       // br_on_null: pop nullable ref, branch if null, else push non-null ref
       // The fallthrough path pushes the reference with nullable=false
       if not(ctx.is_unreachable) && stack.length() < 1 {
@@ -416,30 +416,25 @@ fn validate_instruction_control(
       } else if stack.length() >= 1 {
         let popped = stack.unsafe_pop()
         // Make the reference non-nullable for the fallthrough case
-        let non_null_type = match popped {
+        let non_null_type : @core.ValType = match popped {
           // Nullable typed ref becomes non-nullable
-          @core.ValType::Ref(ht, true) => @core.ValType::Ref(ht, false)
+          Ref(ht, true) => Ref(ht, false)
           // Already non-nullable - keep as is (shouldn't happen, but handle it)
-          @core.ValType::Ref(ht, false) => @core.ValType::Ref(ht, false)
+          Ref(ht, false) => Ref(ht, false)
           // Generic nullable refs become non-nullable refs
-          @core.ValType::FuncRef =>
-            @core.ValType::Ref(@core.RefType::Func, false)
-          @core.ValType::ExternRef =>
-            @core.ValType::Ref(@core.RefType::Extern, false)
-          @core.ValType::AnyRef => @core.ValType::Ref(@core.RefType::Any, false)
+          FuncRef => Ref(Func, false)
+          ExternRef => Ref(Extern, false)
+          AnyRef => Ref(Any, false)
           // Null types become their non-null counterparts
-          @core.ValType::NullFuncRef =>
-            @core.ValType::Ref(@core.RefType::Func, false)
-          @core.ValType::NullExternRef =>
-            @core.ValType::Ref(@core.RefType::Extern, false)
-          @core.ValType::NullRef =>
-            @core.ValType::Ref(@core.RefType::Any, false)
+          NullFuncRef => Ref(Func, false)
+          NullExternRef => Ref(Extern, false)
+          NullRef => Ref(Any, false)
           // Other types shouldn't be here, but keep them
           _ => popped
         }
         stack.push(non_null_type)
       }
-    @core.Instr::BrOnNonNull(_label) =>
+    BrOnNonNull(_label) =>
       // br_on_non_null: pop nullable ref, branch if non-null (with the value), else continue
       // Pop the nullable reference
       if not(ctx.is_unreachable) && stack.length() < 1 {
@@ -450,13 +445,13 @@ fn validate_instruction_control(
         let _ = stack.unsafe_pop()
 
       }
-    // @core.Instr::If we branch, we pass the non-null value to the target
+    // If we branch, we pass the non-null value to the target
     // Fallthrough case: the value was null, so nothing is pushed
-    @core.Instr::Nop => ()
-    @core.Instr::Unreachable =>
+    Nop => ()
+    Unreachable =>
       // unreachable instruction marks all subsequent code as unreachable
       ctx.mark_unreachable()
-    @core.Instr::Call(func_idx) => {
+    Call(func_idx) => {
       let idx = func_idx.reinterpret_as_int()
       let total_funcs = import_counts.funcs + module_.funcs.length()
       if idx < 0 || idx >= total_funcs {
@@ -478,7 +473,7 @@ fn validate_instruction_control(
         stack.push(result)
       }
     }
-    @core.Instr::CallIndirect(type_idx, table_idx) => {
+    CallIndirect(type_idx, table_idx) => {
       // Validate table index
       let total_tables = import_counts.tables + module_.tables.length()
       let tidx = table_idx.reinterpret_as_int()
@@ -490,10 +485,10 @@ fn validate_instruction_control(
       let table_elem_type = if tidx < import_counts.tables {
         // Imported table - find it in imports
         let mut import_table_idx = 0
-        let mut elem_type : @core.RefType = @core.RefType::Func // default
+        let mut elem_type : @core.RefType = Func // default
         for imp in module_.imports {
           match imp.desc {
-            @core.ImportDesc::Table(table_type) => {
+            Table(table_type) => {
               if import_table_idx == tidx {
                 elem_type = table_type.elem_type
                 break
@@ -512,7 +507,7 @@ fn validate_instruction_control(
 
       // Check that table element type is funcref-compatible
       match table_elem_type {
-        @core.RefType::Func | @core.RefType::TypeIndex(_) => () // OK - function references
+        Func | TypeIndex(_) => () // OK - function references
         _ =>
           raise @core.ValidationError::TypeMismatch(
             "call_indirect requires funcref table, got \{table_elem_type}",
@@ -524,11 +519,7 @@ fn validate_instruction_control(
       }
       let func_type_called = module_.types[idx]
       // Pop table index
-      ctx.poly_pop_expect(
-        module_,
-        @core.ValType::I32,
-        "call_indirect table index",
-      )
+      ctx.poly_pop_expect(module_, I32, "call_indirect table index")
       // Pop arguments from stack (in reverse order)
       for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
         ctx.poly_pop_expect(
@@ -542,7 +533,7 @@ fn validate_instruction_control(
         stack.push(result)
       }
     }
-    @core.Instr::ReturnCall(func_idx) => {
+    ReturnCall(func_idx) => {
       // return_call: tail call that returns to caller
       // Like doing a call followed by return - must match current function's return type
       let idx = func_idx.reinterpret_as_int()
@@ -567,7 +558,7 @@ fn validate_instruction_control(
       // Mark as unreachable and clear stack - tail call doesn't return to current function
       ctx.mark_unreachable()
     }
-    @core.Instr::ReturnCallIndirect(type_idx, table_idx) => {
+    ReturnCallIndirect(type_idx, table_idx) => {
       // return_call_indirect: tail call through table that returns to caller
       // Like doing a call_indirect followed by return - must match current function's return type
 
@@ -582,10 +573,10 @@ fn validate_instruction_control(
       let table_elem_type = if tidx < import_counts.tables {
         // Imported table - find it in imports
         let mut import_table_idx = 0
-        let mut elem_type : @core.RefType = @core.RefType::Func // default
+        let mut elem_type : @core.RefType = Func // default
         for imp in module_.imports {
           match imp.desc {
-            @core.ImportDesc::Table(table_type) => {
+            Table(table_type) => {
               if import_table_idx == tidx {
                 elem_type = table_type.elem_type
                 break
@@ -604,7 +595,7 @@ fn validate_instruction_control(
 
       // Check that table element type is funcref-compatible
       match table_elem_type {
-        @core.RefType::Func | @core.RefType::TypeIndex(_) => () // OK - function references
+        Func | TypeIndex(_) => () // OK - function references
         _ =>
           raise @core.ValidationError::TypeMismatch(
             "return_call_indirect requires funcref table, got \{table_elem_type}",
@@ -619,11 +610,7 @@ fn validate_instruction_control(
         module_, func_type_called, func_type, "return_call_indirect",
       )
       // Pop table index
-      ctx.poly_pop_expect(
-        module_,
-        @core.ValType::I32,
-        "return_call_indirect table index",
-      )
+      ctx.poly_pop_expect(module_, I32, "return_call_indirect table index")
       // Pop arguments from stack (in reverse order)
       for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
         ctx.poly_pop_expect(
@@ -635,7 +622,7 @@ fn validate_instruction_control(
       // Mark as unreachable and clear stack - tail call doesn't return to current function
       ctx.mark_unreachable()
     }
-    @core.Instr::CallRef(type_idx) => {
+    CallRef(type_idx) => {
       // call_ref: calls function through a reference
       // Stack: [args...] [(ref null $type_idx)] -> [results...]
       let idx = type_idx.reinterpret_as_int()
@@ -646,10 +633,7 @@ fn validate_instruction_control(
 
       // Pop the function reference - must be (ref null $type_idx)
       // Cannot be generic funcref or externref
-      let expected_ref_type = @core.ValType::Ref(
-        @core.RefType::TypeIndex(idx),
-        true,
-      )
+      let expected_ref_type : @core.ValType = Ref(TypeIndex(idx), true)
       ctx.poly_pop_expect(module_, expected_ref_type, "call_ref")
 
       // Pop arguments from stack (in reverse order)
@@ -666,7 +650,7 @@ fn validate_instruction_control(
         stack.push(result)
       }
     }
-    @core.Instr::ReturnCallRef(type_idx) => {
+    ReturnCallRef(type_idx) => {
       // return_call_ref: tail call through a reference
       // Like doing a call_ref followed by return - must match current function's return type
       // Stack: [args...] [(ref null $type_idx)] -> (unreachable)
@@ -681,10 +665,7 @@ fn validate_instruction_control(
 
       // Pop the function reference - must be (ref null $type_idx)
       // Cannot be generic funcref or externref
-      let expected_ref_type = @core.ValType::Ref(
-        @core.RefType::TypeIndex(idx),
-        true,
-      )
+      let expected_ref_type : @core.ValType = Ref(TypeIndex(idx), true)
       ctx.poly_pop_expect(module_, expected_ref_type, "return_call_ref")
 
       // Pop arguments from stack (in reverse order)

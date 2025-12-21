@@ -89,40 +89,40 @@ fn parse_instr(parser : Parser, opcode : Byte) -> @core.Instr raise {
 fn parse_blocktype(parser : Parser) -> @core.BlockType raise @core.ParseError {
   let byte = parser.read_byte()
   match byte {
-    0x40 => @core.BlockType::Empty // empty block type
-    0x7F => @core.BlockType::Value(@core.ValType::I32)
-    0x7E => @core.BlockType::Value(@core.ValType::I64)
-    0x7D => @core.BlockType::Value(@core.ValType::F32)
-    0x7C => @core.BlockType::Value(@core.ValType::F64)
-    0x7B => @core.BlockType::Value(@core.ValType::V128)
-    0x70 => @core.BlockType::Value(@core.ValType::FuncRef)
-    0x6F => @core.BlockType::Value(@core.ValType::ExternRef)
-    0x6E => @core.BlockType::Value(@core.ValType::AnyRef)
-    0x6D => @core.BlockType::Value(@core.ValType::EqRef)
-    0x6C => @core.BlockType::Value(@core.ValType::I31Ref)
-    0x6B => @core.BlockType::Value(@core.ValType::StructRef)
-    0x6A => @core.BlockType::Value(@core.ValType::ArrayRef)
-    0x69 => @core.BlockType::Value(@core.ValType::ExnRef)
-    0x71 => @core.BlockType::Value(@core.ValType::NullRef)
-    0x72 => @core.BlockType::Value(@core.ValType::NullExternRef)
-    0x73 => @core.BlockType::Value(@core.ValType::NullFuncRef)
-    0x74 => @core.BlockType::Value(@core.ValType::NullExnRef)
+    0x40 => Empty // empty block type
+    0x7F => Value(I32)
+    0x7E => Value(I64)
+    0x7D => Value(F32)
+    0x7C => Value(F64)
+    0x7B => Value(V128)
+    0x70 => Value(FuncRef)
+    0x6F => Value(ExternRef)
+    0x6E => Value(AnyRef)
+    0x6D => Value(EqRef)
+    0x6C => Value(I31Ref)
+    0x6B => Value(StructRef)
+    0x6A => Value(ArrayRef)
+    0x69 => Value(ExnRef)
+    0x71 => Value(NullRef)
+    0x72 => Value(NullExternRef)
+    0x73 => Value(NullFuncRef)
+    0x74 => Value(NullExnRef)
     // GC proposal: (ref null $t) - nullable typed reference
     0x63 => {
       let heap_type = parser.read_heap_type()
-      @core.BlockType::Value(@core.ValType::Ref(heap_type, true))
+      Value(Ref(heap_type, true))
     }
     // GC proposal: (ref $t) - non-null typed reference
     0x64 => {
       let heap_type = parser.read_heap_type()
-      @core.BlockType::Value(@core.ValType::Ref(heap_type, false))
+      Value(Ref(heap_type, false))
     }
     _ => {
       // Type index encoded as signed LEB128
       // Put the byte back and read as signed LEB128
       parser.pos = parser.pos - 1
       let type_idx = parser.read_i32_leb128()
-      @core.BlockType::TypeIndex(type_idx)
+      TypeIndex(type_idx)
     }
   }
 }

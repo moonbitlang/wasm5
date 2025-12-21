@@ -6,7 +6,7 @@ fn validate_instruction_parametric(
 ) -> Bool raise @core.ValidationError {
   let stack = ctx.stack
   match instr {
-    @core.Instr::Drop =>
+    Drop =>
       // In unreachable code, drop is valid even with empty stack
       if ctx.is_unreachable && stack.length() == 0 {
         // Polymorphic - pretend we dropped something
@@ -18,10 +18,10 @@ fn validate_instruction_parametric(
         let _ = stack.unsafe_pop()
 
       }
-    @core.Instr::Select => {
+    Select => {
       // Untyped select (0x1B): only numeric types allowed
       // Pop condition (i32), then two values of same type, push one back
-      ctx.poly_pop_expect(module_, @core.ValType::I32, "select condition")
+      ctx.poly_pop_expect(module_, I32, "select condition")
       // Check how many concrete values we have BEFORE popping
       let num_concrete = stack.length()
 
@@ -33,17 +33,11 @@ fn validate_instruction_parametric(
 
         // For untyped select, both values must be numeric types
         let is_val1_numeric = match val1 {
-          @core.ValType::I32
-          | @core.ValType::I64
-          | @core.ValType::F32
-          | @core.ValType::F64 => true
+          I32 | I64 | F32 | F64 => true
           _ => false
         }
         let is_val2_numeric = match val2 {
-          @core.ValType::I32
-          | @core.ValType::I64
-          | @core.ValType::F32
-          | @core.ValType::F64 => true
+          I32 | I64 | F32 | F64 => true
           _ => false
         }
         if not(is_val1_numeric) || not(is_val2_numeric) {
@@ -69,10 +63,7 @@ fn validate_instruction_parametric(
           let val = stack.unsafe_pop()
           // Verify it's numeric
           let is_numeric = match val {
-            @core.ValType::I32
-            | @core.ValType::I64
-            | @core.ValType::F32
-            | @core.ValType::F64 => true
+            I32 | I64 | F32 | F64 => true
             _ => false
           }
           if not(is_numeric) {
@@ -88,17 +79,17 @@ fn validate_instruction_parametric(
         }
       } else if ctx.is_unreachable {
         // In unreachable code with empty stack, assume a default type
-        stack.push(@core.ValType::I32)
+        stack.push(I32)
       } else {
         raise @core.ValidationError::TypeMismatch(
           "select expects 3 operands (2 values + condition)",
         )
       }
     }
-    @core.Instr::SelectTyped(result_types) => {
+    SelectTyped(result_types) => {
       // Typed select (0x1C): any type allowed, must match annotation
       // Pop condition (i32), then two values of annotated type, push one back
-      ctx.poly_pop_expect(module_, @core.ValType::I32, "select condition")
+      ctx.poly_pop_expect(module_, I32, "select condition")
 
       // For MVP, result_types should have exactly 1 type
       if result_types.length() != 1 {

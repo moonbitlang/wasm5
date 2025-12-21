@@ -32,7 +32,7 @@ fn validate_function(
   // Check final stack matches return type
   let stack = ctx.stack
   if ctx.is_unreachable && stack.length() == 0 {
-    // @core.Instr::Unreachable code with empty stack - all values are polymorphic, valid
+    // Unreachable code with empty stack - all values are polymorphic, valid
   } else if stack.length() != func_type.results.length() {
     // Stack size doesn't match expected return values
     if stack.length() < func_type.results.length() {

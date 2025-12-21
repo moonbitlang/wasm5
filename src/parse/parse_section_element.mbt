@@ -25,23 +25,23 @@ fn parse_element_section(parser : Parser) -> Array[@core.Elem] raise {
     }
     let offset : @core.Expr = match flags {
       0 | 2 | 4 | 6 => parse_expr(parser) // active segments have offset
-      _ => @core.Expr::{ instrs: [@core.Instr::I32Const(0U)] } // dummy offset for passive/declarative
+      _ => @core.Expr::{ instrs: [I32Const(0U)] } // dummy offset for passive/declarative
     }
     // Read elemkind or reftype for certain flags
     let elem_type : @core.RefType = match flags {
       1 | 3 => {
         let _elemkind = parser.read_byte()
         // elemkind (0x00 = funcref)
-        @core.RefType::Func
+        Func
       }
       2 => {
         let _elemkind = parser.read_byte()
         // elemkind
-        @core.RefType::Func
+        Func
       }
       5 | 7 => parser.read_reftype()
       6 => parser.read_reftype()
-      _ => @core.RefType::Func // flags 0 and 4: default to funcref
+      _ => Func // flags 0 and 4: default to funcref
     }
     // Read init vector
     let init_count = parser.read_u32_leb128()
@@ -53,7 +53,7 @@ fn parse_element_section(parser : Parser) -> Array[@core.Elem] raise {
         let expr = parse_expr(parser)
         // Extract function index from expression if it's ref.func
         match expr.instrs.get(0) {
-          Some(@core.Instr::RefFunc(idx)) => init.push(idx)
+          Some(RefFunc(idx)) => init.push(idx)
           _ => init.push(0U) // ref.null or other
         }
       } else {
