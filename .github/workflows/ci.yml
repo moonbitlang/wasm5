@@ -19,7 +19,10 @@ jobs:
       - name: Setup MoonBit
         uses: ./.github/actions/setup
 
-      - name: Run tests
+      - name: Run unit tests
+        run: moon test --target native
+
+      - name: Run integration tests
         run: |
           ulimit -s 8176
           moon run test --target native
