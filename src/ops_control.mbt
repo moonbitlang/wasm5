@@ -166,22 +166,22 @@ fn op_br(rt : Runtime) -> RetCode {
   let arity = rt.read_imm_idx()
   let drop_count = rt.read_imm_idx()
 
-  // Save the top `arity` values (the branch result values)
-  let results : Array[Value] = []
-  for _ in 0..<arity {
-    results.push(rt.stack.unsafe_pop())
+  // Optimized: copy in-place instead of using temporary array
+  if arity > 0 && drop_count > 0 {
+    let result_start = rt.stack.length() - arity
+    let dest_start = result_start - drop_count
+
+    // Copy results down to their final position
+    for i = 0; i < arity; i = i + 1 {
+      rt.stack[dest_start + i] = rt.stack[result_start + i]
+    }
   }
 
-  // Drop the unwanted values
+  // Trim stack by drop_count
   for _ in 0..<drop_count {
-    let _ = rt.stack.unsafe_pop()
-
+    ignore(rt.stack.unsafe_pop())
   }
 
-  // Push results back (in reverse order since we popped them)
-  for i = results.length() - 1; i >= 0; i = i - 1 {
-    rt.stack.push(results[i])
-  }
   rt.pc = target_pc
   return next_op(rt)
 }
@@ -194,22 +194,22 @@ fn op_br_if(rt : Runtime) -> RetCode {
   let drop_count = rt.read_imm_idx()
   let cond = rt.pop_i32()
   if cond != 0U {
-    // Save the top `arity` values (the branch result values)
-    let results : Array[Value] = []
-    for _ in 0..<arity {
-      results.push(rt.stack.unsafe_pop())
+    // Optimized: copy in-place instead of using temporary array
+    if arity > 0 && drop_count > 0 {
+      let result_start = rt.stack.length() - arity
+      let dest_start = result_start - drop_count
+
+      // Copy results down to their final position
+      for i = 0; i < arity; i = i + 1 {
+        rt.stack[dest_start + i] = rt.stack[result_start + i]
+      }
     }
 
-    // Drop the unwanted values
+    // Trim stack by drop_count
     for _ in 0..<drop_count {
-      let _ = rt.stack.unsafe_pop()
-
+      ignore(rt.stack.unsafe_pop())
     }
 
-    // Push results back (in reverse order since we popped them)
-    for i = results.length() - 1; i >= 0; i = i - 1 {
-      rt.stack.push(results[i])
-    }
     rt.pc = target_pc
     return next_op(rt)
   } else {
@@ -241,22 +241,22 @@ fn op_br_table(rt : Runtime) -> RetCode {
     }
   }
 
-  // Save the top `arity` values (the branch result values)
-  let results : Array[Value] = []
-  for _ in 0..<arity {
-    results.push(rt.stack.unsafe_pop())
+  // Optimized: copy in-place instead of using temporary array
+  if arity > 0 && drop_count > 0 {
+    let result_start = rt.stack.length() - arity
+    let dest_start = result_start - drop_count
+
+    // Copy results down to their final position
+    for i = 0; i < arity; i = i + 1 {
+      rt.stack[dest_start + i] = rt.stack[result_start + i]
+    }
   }
 
-  // Drop the unwanted values
+  // Trim stack by drop_count
   for _ in 0..<drop_count {
-    let _ = rt.stack.unsafe_pop()
-
+    ignore(rt.stack.unsafe_pop())
   }
 
-  // Push results back (in reverse order since we popped them)
-  for i = results.length() - 1; i >= 0; i = i - 1 {
-    rt.stack.push(results[i])
-  }
   rt.pc = target_pc
   return next_op(rt)
 }
@@ -275,22 +275,22 @@ fn op_br_on_null(rt : Runtime) -> RetCode {
     _ => false
   }
   if is_null {
-    // Save the top `arity` values
-    let results : Array[Value] = []
-    for _ in 0..<arity {
-      results.push(rt.stack.unsafe_pop())
+    // Optimized: copy in-place instead of using temporary array
+    if arity > 0 && drop_count > 0 {
+      let result_start = rt.stack.length() - arity
+      let dest_start = result_start - drop_count
+
+      // Copy results down to their final position
+      for i = 0; i < arity; i = i + 1 {
+        rt.stack[dest_start + i] = rt.stack[result_start + i]
+      }
     }
 
-    // Drop the unwanted values
+    // Trim stack by drop_count
     for _ in 0..<drop_count {
-      let _ = rt.stack.unsafe_pop()
-
+      ignore(rt.stack.unsafe_pop())
     }
 
-    // Push results back
-    for i = results.length() - 1; i >= 0; i = i - 1 {
-      rt.stack.push(results[i])
-    }
     rt.pc = target_pc
     return next_op(rt)
   } else {
