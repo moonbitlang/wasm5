@@ -1800,6 +1800,20 @@ fn parse_instr_from_atom(
         idx + 2,
       )
     }
+    b"br_on_null" => {
+      let imm = expect_atom_at(items, idx + 1)
+      (
+        WatInstr::Core(@core.Instr::BrOnNull(resolve_label_ref(imm, labels))),
+        idx + 2,
+      )
+    }
+    b"br_on_non_null" => {
+      let imm = expect_atom_at(items, idx + 1)
+      (
+        WatInstr::Core(@core.Instr::BrOnNonNull(resolve_label_ref(imm, labels))),
+        idx + 2,
+      )
+    }
     b"br_table" => {
       let (targets, default_target, next_idx) = parse_br_table_from_items(
         items,
@@ -2024,6 +2038,26 @@ fn parse_instr_from_list(
       }
       WatInstr::Core(
         @core.Instr::BrIf(resolve_label_ref(expect_atom(list_items[1]), labels)),
+      )
+    }
+    b"br_on_null" => {
+      guard list_items.length() == 2 else {
+        raise WatError::InvalidSyntax("br_on_null expects one operand")
+      }
+      WatInstr::Core(
+        @core.Instr::BrOnNull(
+          resolve_label_ref(expect_atom(list_items[1]), labels),
+        ),
+      )
+    }
+    b"br_on_non_null" => {
+      guard list_items.length() == 2 else {
+        raise WatError::InvalidSyntax("br_on_non_null expects one operand")
+      }
+      WatInstr::Core(
+        @core.Instr::BrOnNonNull(
+          resolve_label_ref(expect_atom(list_items[1]), labels),
+        ),
       )
     }
     b"br_table" => {

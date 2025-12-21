@@ -559,6 +559,14 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
       payload.push(0x0DU.to_byte())
       append_bytes(payload, encode_u32_leb128(idx))
     }
+    BrOnNull(idx) => {
+      payload.push(0xD5U.to_byte())
+      append_bytes(payload, encode_u32_leb128(idx))
+    }
+    BrOnNonNull(idx) => {
+      payload.push(0xD6U.to_byte())
+      append_bytes(payload, encode_u32_leb128(idx))
+    }
     BrTable(targets, default_target) => {
       payload.push(0x0EU.to_byte())
       append_bytes(

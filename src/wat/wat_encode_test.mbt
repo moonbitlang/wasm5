@@ -94,6 +94,12 @@ async test "wat encoder matches wasm-tools for control flow" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for br_on_null" {
+  let wat = "(module (func (export \"brs\") (param funcref) (block $l local.get 0 br_on_null $l drop local.get 0 br_on_non_null $l drop)))"
+  assert_wat_matches("br_on_null", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for call_indirect" {
   let wat = "(module (table 1 funcref) (func (export \"call\") (param i32 i32) (result i32) local.get 0 local.get 1 call_indirect (param i32) (result i32)))"
   assert_wat_matches("call_indirect", wat)
