@@ -5,7 +5,7 @@ fn validate_function(
   func_type : @core.FuncType,
   code : @core.Code,
   import_counts : ImportCounts,
-) -> Unit raise @core.ValidationError {
+) -> Unit raise @errors.ValidationError {
   // Validate type indices in function parameters
   for param in func_type.params {
     validate_valtype(module_, param)
@@ -36,15 +36,15 @@ fn validate_function(
   } else if stack.length() != func_type.results.length() {
     // Stack size doesn't match expected return values
     if stack.length() < func_type.results.length() {
-      raise @core.ValidationError::StackSizeMismatch(
+      raise @errors.ValidationError::StackSizeMismatch(
         "function: expected \{func_type.results.length()} return values, got \{stack.length()}",
       )
     } else if func_type.results.length() == 0 && stack.length() > 0 {
-      raise @core.ValidationError::StackSizeMismatch(
+      raise @errors.ValidationError::StackSizeMismatch(
         "function: void function should not have values on stack, got \{stack.length()}",
       )
     } else {
-      raise @core.ValidationError::StackSizeMismatch(
+      raise @errors.ValidationError::StackSizeMismatch(
         "function: expected \{func_type.results.length()} return values, got \{stack.length()}",
       )
     }
@@ -53,7 +53,7 @@ fn validate_function(
     for i in 0..<func_type.results.length() {
       // Stack type must be a subtype of expected return type
       if not(is_subtype(module_, stack[i], func_type.results[i])) {
-        raise @core.ValidationError::TypeMismatch(
+        raise @errors.ValidationError::TypeMismatch(
           "function return type mismatch: expected \{func_type.results[i]}, got \{stack[i]}",
         )
       }

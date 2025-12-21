@@ -1,14 +1,14 @@
 // LEB128 decoding
 
 ///|
-fn Parser::read_u32_leb128(self : Parser) -> UInt raise @core.ParseError {
-  fn read_loop(shift : Int, result : UInt) -> UInt raise @core.ParseError {
+fn Parser::read_u32_leb128(self : Parser) -> UInt raise @errors.ParseError {
+  fn read_loop(shift : Int, result : UInt) -> UInt raise @errors.ParseError {
     let byte = self.read_byte()
     // Check for overflow: shift >= 28 means we're on the 5th byte (bits 28-34)
     // For a valid u32, the 5th byte must have value <= 0x0F (only 4 bits used)
     // and no continuation bit (high bit must be 0)
     if shift >= 28 && byte > 0x0F {
-      raise @core.ParseError::InvalidFormat(
+      raise @errors.ParseError::InvalidFormat(
         "LEB128 u32 overflow: value exceeds 32 bits",
       )
     }
@@ -19,7 +19,7 @@ fn Parser::read_u32_leb128(self : Parser) -> UInt raise @core.ParseError {
     } else {
       if shift >= 28 {
         // Continuation bit set on 5th byte - invalid
-        raise @core.ParseError::InvalidFormat(
+        raise @errors.ParseError::InvalidFormat(
           "LEB128 u32 overflow: too many continuation bytes",
         )
       }
@@ -31,7 +31,7 @@ fn Parser::read_u32_leb128(self : Parser) -> UInt raise @core.ParseError {
 }
 
 ///|
-fn Parser::read_i32_leb128(self : Parser) -> Int raise @core.ParseError {
+fn Parser::read_i32_leb128(self : Parser) -> Int raise @errors.ParseError {
   let mut result = 0
   let mut shift = 0
   let mut byte = 0
@@ -43,7 +43,7 @@ fn Parser::read_i32_leb128(self : Parser) -> Int raise @core.ParseError {
       break
     }
     if shift >= 35 {
-      raise @core.ParseError::InvalidFormat("LEB128 i32 too long")
+      raise @errors.ParseError::InvalidFormat("LEB128 i32 too long")
     }
   }
 
@@ -57,7 +57,7 @@ fn Parser::read_i32_leb128(self : Parser) -> Int raise @core.ParseError {
 }
 
 ///|
-fn Parser::read_i64_leb128(self : Parser) -> Int64 raise @core.ParseError {
+fn Parser::read_i64_leb128(self : Parser) -> Int64 raise @errors.ParseError {
   let mut result = 0L
   let mut shift = 0
   let mut byte = 0
@@ -69,7 +69,7 @@ fn Parser::read_i64_leb128(self : Parser) -> Int64 raise @core.ParseError {
       break
     }
     if shift >= 70 {
-      raise @core.ParseError::InvalidFormat("LEB128 i64 too long")
+      raise @errors.ParseError::InvalidFormat("LEB128 i64 too long")
     }
   }
 

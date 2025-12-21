@@ -4,7 +4,7 @@ fn validate_instruction_reference(
   ctx : ValidationCtx,
   import_counts : ImportCounts,
   instr : @core.Instr,
-) -> Bool raise @core.ValidationError {
+) -> Bool raise @errors.ValidationError {
   let stack = ctx.stack
   match instr {
     RefNull(ref_type) => {
@@ -19,7 +19,7 @@ fn validate_instruction_reference(
       // Validate function index
       let total_funcs = import_counts.funcs + module_.funcs.length()
       if idx < 0 || idx >= total_funcs {
-        raise @core.ValidationError::InvalidFunctionIndex(idx)
+        raise @errors.ValidationError::InvalidFunctionIndex(idx)
       }
       let type_idx = get_func_type_index(module_, idx, import_counts)
       // Push typed function reference (non-nullable)
@@ -31,7 +31,7 @@ fn validate_instruction_reference(
       if ctx.is_unreachable && stack.length() == 0 {
         // Unreachable - stack is polymorphic, don't pop anything
       } else if stack.length() < 1 {
-        raise @core.ValidationError::TypeMismatch(
+        raise @errors.ValidationError::TypeMismatch(
           "ref.is_null expects reference on stack",
         )
       } else {

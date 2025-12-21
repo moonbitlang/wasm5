@@ -69,14 +69,14 @@ fn ValidationCtx::pop_control(
 fn ValidationCtx::get_label_types(
   self : ValidationCtx,
   label : UInt,
-) -> Array[@core.ValType] raise @core.ValidationError {
+) -> Array[@core.ValType] raise @errors.ValidationError {
   // Labels are relative depth: 0 is innermost, 1 is next outer, etc.
   let idx = self.control_stack.length() - 1 - label.reinterpret_as_int()
   if idx >= 0 && idx < self.control_stack.length() {
     let (_, results) = self.control_stack[idx]
     results
   } else {
-    raise @core.ValidationError::UnknownLabel(label.reinterpret_as_int())
+    raise @errors.ValidationError::UnknownLabel(label.reinterpret_as_int())
   }
 }
 
@@ -118,7 +118,7 @@ fn ValidationCtx::mark_unreachable(self : ValidationCtx) -> Unit {
 fn ValidationCtx::poly_pop(
   self : ValidationCtx,
   expected : @core.ValType,
-) -> @core.ValType raise @core.ValidationError {
+) -> @core.ValType raise @errors.ValidationError {
   if self.stack.length() > 0 {
     self.stack.unsafe_pop()
   } else if self.is_unreachable {
@@ -126,7 +126,7 @@ fn ValidationCtx::poly_pop(
     // (popping from below the unreachable boundary)
     expected
   } else {
-    raise @core.ValidationError::TypeMismatch(
+    raise @errors.ValidationError::TypeMismatch(
       "expected value on stack, got empty stack",
     )
   }
@@ -141,7 +141,7 @@ fn ValidationCtx::poly_pop_expect(
   module_ : @core.Module,
   expected : @core.ValType,
   op_name : String,
-) -> Unit raise @core.ValidationError {
+) -> Unit raise @errors.ValidationError {
   // In unreachable mode, concrete values are those currently on the stack
   // (they were pushed after unreachable). Polymorphic values are those
   // we pop from an empty stack (they would have been there before unreachable).
@@ -152,7 +152,7 @@ fn ValidationCtx::poly_pop_expect(
   // Use subtyping: actual must be a subtype of expected
   if (not(self.is_unreachable) || is_concrete_value) &&
     not(is_subtype(module_, actual, expected)) {
-    raise @core.ValidationError::TypeMismatch(
+    raise @errors.ValidationError::TypeMismatch(
       "\{op_name} requires \{expected}, got \{actual}",
     )
   }

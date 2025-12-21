@@ -51,7 +51,7 @@ fn Parser::read_reftype_with_nullability(
             let type_idx = self.read_i32_leb128()
             (TypeIndex(type_idx), true) // Default to nullable
           } else {
-            raise @core.ValidationError::TypeMismatch(
+            raise @errors.ValidationError::TypeMismatch(
               "invalid reftype: 0x\{byte.to_string()}",
             )
           }
@@ -115,7 +115,7 @@ fn Parser::read_reftype(self : Parser) -> @core.RefType raise {
             // This might appear in some edge cases
             Func
           } else {
-            raise @core.ValidationError::TypeMismatch(
+            raise @errors.ValidationError::TypeMismatch(
               "invalid reference type: 0x\{byte.to_string()}",
             )
           }
