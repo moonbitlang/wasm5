@@ -66,12 +66,12 @@ pub fn Runtime::compile(self : Runtime) -> Unit raise RuntimeError {
         self.locals = []
         for local_type in code.locals {
           match local_type {
-            @core.ValType::I32 => self.locals.push(Value::I32(0U))
-            @core.ValType::I64 => self.locals.push(Value::I64(0UL))
-            @core.ValType::F32 => self.locals.push(Value::F32(0.0))
-            @core.ValType::F64 => self.locals.push(Value::F64(0.0))
-            @core.ValType::FuncRef => self.locals.push(Value::Ref(None))
-            @core.ValType::ExternRef => self.locals.push(Value::Ref(None))
+            I32 => self.locals.push(Value::I32(0U))
+            I64 => self.locals.push(Value::I64(0UL))
+            F32 => self.locals.push(Value::F32(0.0))
+            F64 => self.locals.push(Value::F64(0.0))
+            FuncRef => self.locals.push(Value::Ref(None))
+            ExternRef => self.locals.push(Value::Ref(None))
             _ => self.locals.push(Value::I32(0U))
           }
         }
@@ -119,7 +119,7 @@ pub fn Runtime::call_compiled(
   for exp in self.module_.exports {
     if exp.name == func_name {
       match exp.desc {
-        @core.ExportDesc::Func(idx) => {
+        Func(idx) => {
           func_idx = Some(idx.reinterpret_as_int())
           break
         }

@@ -1,9 +1,9 @@
 ///|
 fn make_const_module(value : UInt, name : Bytes) -> @core.Module {
-  let func_type : @core.FuncType = { params: [], results: [@core.ValType::I32] }
+  let func_type : @core.FuncType = { params: [], results: [I32] }
   let code : @core.Code = {
     locals: [],
-    body: @core.Expr::{ instrs: [@core.Instr::I32Const(value)] },
+    body: @core.Expr::{ instrs: [I32Const(value)] },
     compiled: None,
   }
   @core.Module::{
@@ -16,28 +16,21 @@ fn make_const_module(value : UInt, name : Bytes) -> @core.Module {
     datas: [],
     start: None,
     imports: [],
-    exports: [@core.Export::{ name, desc: @core.ExportDesc::Func(0U) }],
+    exports: [@core.Export::{ name, desc: Func(0U) }],
     codes: [code],
   }
 }
 
 ///|
 fn make_import_call_module() -> @core.Module {
-  let func_type : @core.FuncType = { params: [], results: [@core.ValType::I32] }
+  let func_type : @core.FuncType = { params: [], results: [I32] }
   let code : @core.Code = {
     locals: [],
-    body: @core.Expr::{ instrs: [@core.Instr::Call(0U)] },
+    body: @core.Expr::{ instrs: [Call(0U)] },
     compiled: None,
   }
-  let import_ : @core.Import = {
-    module_: b"m",
-    name: b"f",
-    desc: @core.ImportDesc::Func(0U),
-  }
-  let export_ : @core.Export = {
-    name: b"call_imported",
-    desc: @core.ExportDesc::Func(1U),
-  }
+  let import_ : @core.Import = { module_: b"m", name: b"f", desc: Func(0U) }
+  let export_ : @core.Export = { name: b"call_imported", desc: Func(1U) }
   @core.Module::{
     types: [func_type],
     funcs: [0U],
@@ -78,19 +71,10 @@ test "runtime call imported function" {
 
 ///|
 test "runtime evaluates global init expr" {
-  let global_type : @core.GlobalType = {
-    val_type: @core.ValType::I32,
-    mutable: false,
-  }
+  let global_type : @core.GlobalType = { val_type: I32, mutable: false }
   let global_ : @core.Global = {
     type_: global_type,
-    init: @core.Expr::{
-      instrs: [
-        @core.Instr::I32Const(1U),
-        @core.Instr::I32Const(2U),
-        @core.Instr::I32Add,
-      ],
-    },
+    init: @core.Expr::{ instrs: [I32Const(1U), I32Const(2U), I32Add] },
   }
   let module_ : @core.Module = {
     types: [],

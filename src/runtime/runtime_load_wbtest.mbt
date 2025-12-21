@@ -8,7 +8,7 @@ test "runtime load with resolver" {
   let func_type : @core.FuncType = { params: [], results: [] }
   let mem_type : @core.MemType = { limits: { min: 1U, max: Some(2U) } }
   let table_type : @core.TableType = {
-    elem_type: @core.RefType::Func,
+    elem_type: Func,
     limits: { min: 1U, max: Some(2U) },
     init: None,
     nullable: true,
@@ -21,49 +21,43 @@ test "runtime load with resolver" {
     mems: [],
     globals: [
       {
-        type_: { val_type: @core.ValType::I32, mutable: false },
-        init: make_expr([@core.Instr::I32Const(7U)]),
+        type_: { val_type: I32, mutable: false },
+        init: make_expr([I32Const(7U)]),
       },
     ],
     elems: [
       {
         table_idx: 0U,
-        offset: make_expr([@core.Instr::I32Const(0U)]),
+        offset: make_expr([I32Const(0U)]),
         init: [0U],
         is_active: true,
-        elem_type: @core.RefType::Func,
+        elem_type: Func,
       },
     ],
     datas: [
       {
         mem_idx: 0U,
-        offset: make_expr([@core.Instr::I32Const(0U)]),
+        offset: make_expr([I32Const(0U)]),
         init: data_view,
         is_active: true,
       },
     ],
     start: None,
     imports: [
-      { module_: b"m", name: b"f", desc: @core.ImportDesc::Func(0U) },
-      { module_: b"m", name: b"mem", desc: @core.ImportDesc::Mem(mem_type) },
+      { module_: b"m", name: b"f", desc: Func(0U) },
+      { module_: b"m", name: b"mem", desc: Mem(mem_type) },
       {
         module_: b"m",
         name: b"g0",
-        desc: @core.ImportDesc::Global({
-          val_type: @core.ValType::I32,
-          mutable: false,
-        }),
+        desc: Global({ val_type: I32, mutable: false }),
       },
       {
         module_: b"m",
         name: b"g1",
-        desc: @core.ImportDesc::Global({
-          val_type: @core.ValType::F64,
-          mutable: false,
-        }),
+        desc: Global({ val_type: F64, mutable: false }),
       },
-      { module_: b"m", name: b"t0", desc: @core.ImportDesc::Table(table_type) },
-      { module_: b"m", name: b"t1", desc: @core.ImportDesc::Table(table_type) },
+      { module_: b"m", name: b"t0", desc: Table(table_type) },
+      { module_: b"m", name: b"t1", desc: Table(table_type) },
     ],
     exports: [],
     codes: [make_code([])],
@@ -111,9 +105,7 @@ test "runtime load fallback memory" {
     elems: [],
     datas: [],
     start: None,
-    imports: [
-      { module_: b"m", name: b"mem", desc: @core.ImportDesc::Mem(mem_type) },
-    ],
+    imports: [{ module_: b"m", name: b"mem", desc: Mem(mem_type) }],
     exports: [],
     codes: [],
   }
@@ -155,7 +147,7 @@ test "runtime load missing imported function" {
     elems: [],
     datas: [],
     start: None,
-    imports: [{ module_: b"m", name: b"f", desc: @core.ImportDesc::Func(0U) }],
+    imports: [{ module_: b"m", name: b"f", desc: Func(0U) }],
     exports: [],
     codes: [],
   }
@@ -172,45 +164,21 @@ test "runtime load missing imported function" {
 ///|
 test "eval const expr values" {
   let globals = [Value::I32(4U)]
-  let add_expr = make_expr([
-    @core.Instr::I32Const(3U),
-    @core.Instr::GlobalGet(0U),
-    @core.Instr::I32Add,
-  ])
+  let add_expr = make_expr([I32Const(3U), GlobalGet(0U), I32Add])
   assert_eq(eval_const_expr(add_expr, globals), Value::I32(7U))
-  let sub_expr = make_expr([
-    @core.Instr::I32Const(5U),
-    @core.Instr::I32Const(2U),
-    @core.Instr::I32Sub,
-  ])
+  let sub_expr = make_expr([I32Const(5U), I32Const(2U), I32Sub])
   assert_eq(eval_const_expr(sub_expr, []), Value::I32(3U))
-  let mul_expr = make_expr([
-    @core.Instr::I32Const(2U),
-    @core.Instr::I32Const(4U),
-    @core.Instr::I32Mul,
-  ])
+  let mul_expr = make_expr([I32Const(2U), I32Const(4U), I32Mul])
   assert_eq(eval_const_expr(mul_expr, []), Value::I32(8U))
-  let i64_expr = make_expr([@core.Instr::I64Const(10UL)])
+  let i64_expr = make_expr([I64Const(10UL)])
   assert_eq(eval_const_expr(i64_expr, []), Value::I64(10UL))
-  let i64_add = make_expr([
-    @core.Instr::I64Const(1UL),
-    @core.Instr::I64Const(2UL),
-    @core.Instr::I64Add,
-  ])
+  let i64_add = make_expr([I64Const(1UL), I64Const(2UL), I64Add])
   assert_eq(eval_const_expr(i64_add, []), Value::I64(3UL))
-  let i64_sub = make_expr([
-    @core.Instr::I64Const(5UL),
-    @core.Instr::I64Const(3UL),
-    @core.Instr::I64Sub,
-  ])
+  let i64_sub = make_expr([I64Const(5UL), I64Const(3UL), I64Sub])
   assert_eq(eval_const_expr(i64_sub, []), Value::I64(2UL))
-  let i64_mul = make_expr([
-    @core.Instr::I64Const(2UL),
-    @core.Instr::I64Const(6UL),
-    @core.Instr::I64Mul,
-  ])
+  let i64_mul = make_expr([I64Const(2UL), I64Const(6UL), I64Mul])
   assert_eq(eval_const_expr(i64_mul, []), Value::I64(12UL))
-  let ref_expr = make_expr([@core.Instr::RefFunc(2U)])
+  let ref_expr = make_expr([RefFunc(2U)])
   assert_eq(eval_const_expr(ref_expr, []), Value::Ref(Some(2)))
 }
 
@@ -225,7 +193,7 @@ test "eval const expr errors" {
   }
   assert_eq(saw_error, true)
   saw_error = false
-  let _ = eval_const_expr(make_expr([@core.Instr::GlobalGet(0U)]), []) catch {
+  let _ = eval_const_expr(make_expr([GlobalGet(0U)]), []) catch {
     _ => {
       saw_error = true
       Value::I32(0U)
@@ -233,14 +201,7 @@ test "eval const expr errors" {
   }
   assert_eq(saw_error, true)
   saw_error = false
-  let _ = eval_const_expr(
-    make_expr([
-      @core.Instr::I32Const(1U),
-      @core.Instr::F32Const(1.0),
-      @core.Instr::I32Add,
-    ]),
-    [],
-  ) catch {
+  let _ = eval_const_expr(make_expr([I32Const(1U), F32Const(1.0), I32Add]), []) catch {
     _ => {
       saw_error = true
       Value::I32(0U)
@@ -248,7 +209,7 @@ test "eval const expr errors" {
   }
   assert_eq(saw_error, true)
   saw_error = false
-  let _ = eval_const_expr(make_expr([@core.Instr::Nop]), []) catch {
+  let _ = eval_const_expr(make_expr([Nop]), []) catch {
     _ => {
       saw_error = true
       Value::I32(0U)
@@ -256,10 +217,7 @@ test "eval const expr errors" {
   }
   assert_eq(saw_error, true)
   saw_error = false
-  let _ = eval_const_expr(
-    make_expr([@core.Instr::I32Const(1U), @core.Instr::I32Const(2U)]),
-    [],
-  ) catch {
+  let _ = eval_const_expr(make_expr([I32Const(1U), I32Const(2U)]), []) catch {
     _ => {
       saw_error = true
       Value::I32(0U)

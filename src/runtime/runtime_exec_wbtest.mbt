@@ -26,7 +26,7 @@ fn module_with(
 test "runtime compile start function" {
   let func_type : @core.FuncType = { params: [], results: [] }
   let code : @core.Code = {
-    locals: [@core.ValType::I32],
+    locals: [I32],
     body: @core.Expr::{ instrs: [] },
     compiled: None,
   }
@@ -57,13 +57,13 @@ test "runtime execute error branches" {
 
 ///|
 test "runtime call compiled imported func" {
-  let func_type : @core.FuncType = { params: [], results: [@core.ValType::I32] }
+  let func_type : @core.FuncType = { params: [], results: [I32] }
   let module_ = module_with(
     [func_type],
     [],
     [],
-    [{ module_: b"m", name: b"f", desc: @core.ImportDesc::Func(0U) }],
-    [{ name: b"f", desc: @core.ExportDesc::Func(0U) }],
+    [{ module_: b"m", name: b"f", desc: Func(0U) }],
+    [{ name: b"f", desc: Func(0U) }],
     None,
   )
   let resolver = ImportResolver::new()
@@ -90,7 +90,7 @@ test "runtime call compiled non func export" {
     datas: [],
     start: None,
     imports: [],
-    exports: [{ name: b"mem", desc: @core.ExportDesc::Mem(0U) }],
+    exports: [{ name: b"mem", desc: Mem(0U) }],
     codes: [],
   }
   let rt = Runtime::load_with_resolver(module_, ImportResolver::new())
@@ -117,7 +117,7 @@ test "runtime call compiled local errors" {
     [0U],
     [code],
     [],
-    [{ name: b"local", desc: @core.ExportDesc::Func(0U) }],
+    [{ name: b"local", desc: Func(0U) }],
     None,
   )
   let rt_not_compiled = Runtime::load_with_resolver(
@@ -133,7 +133,7 @@ test "runtime call compiled local errors" {
   }
   assert_eq(saw_not_compiled, true)
   let code_bad : @core.Code = {
-    locals: [@core.ValType::V128],
+    locals: [V128],
     body: @core.Expr::{ instrs: [] },
     compiled: Some(0),
   }
@@ -142,7 +142,7 @@ test "runtime call compiled local errors" {
     [0U],
     [code_bad],
     [],
-    [{ name: b"bad", desc: @core.ExportDesc::Func(0U) }],
+    [{ name: b"bad", desc: Func(0U) }],
     None,
   )
   let rt_bad = Runtime::load_with_resolver(module_bad, ImportResolver::new())

@@ -188,14 +188,14 @@ test "ops control branching" {
 
 ///|
 test "ops control calls and return" {
-  let type0 : @core.FuncType = { params: [], results: [@core.ValType::I32] }
+  let type0 : @core.FuncType = { params: [], results: [I32] }
   let code0 : @core.Code = {
     locals: [],
     body: @core.Expr::{ instrs: [] },
     compiled: Some(3),
   }
   let module_import = base_module([type0], [], [], [
-    { module_: b"m", name: b"f", desc: @core.ImportDesc::Func(0U) },
+    { module_: b"m", name: b"f", desc: Func(0U) },
   ])
   let rt_import = Runtime::{
     module_: module_import,
