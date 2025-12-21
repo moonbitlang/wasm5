@@ -104,3 +104,9 @@ async test "wat encoder matches wasm-tools for typeuse names" {
   let wat = "(module (type $t (func (param i32) (result i32))) (table 1 funcref) (func (type $t) (param $x i32) (result i32) local.get $x) (func (export \"call\") (param i32 i32) (result i32) local.get 0 local.get 1 call_indirect (type $t)))"
   assert_wat_matches("typeuse_names", wat)
 }
+
+///|
+async test "wat encoder matches wasm-tools for table and ref ops" {
+  let wat = "(module (table 1 funcref) (elem (i32.const 0) 0) (func (export \"table_ops\") (param i32 funcref i32 i32 i32) (result i32) local.get 0 table.get drop local.get 0 local.get 1 table.set table.size drop local.get 2 local.get 1 table.grow drop local.get 3 local.get 4 local.get 0 table.init 0 local.get 3 local.get 4 local.get 0 table.copy elem.drop 0 ref.null func drop ref.func 0 drop i32.const 0))"
+  assert_wat_matches("table_ref_ops", wat)
+}

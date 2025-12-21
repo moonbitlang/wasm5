@@ -262,10 +262,52 @@ fn encode_start_section(start : UInt?) -> Array[Byte] {
 
 ///|
 fn encode_element_section(
-  _elems : Array[@core.Elem],
+  elems : Array[@core.Elem],
 ) -> Array[Byte] raise EncodeError {
-  guard _elems.length() > 0 else { return [] }
-  raise EncodeError::Unsupported("element section")
+  guard elems.length() > 0 else { return [] }
+  let payload : Array[Byte] = []
+  append_bytes(payload, encode_u32_leb128(elems.length().reinterpret_as_uint()))
+  for elem in elems {
+    guard elem.elem_type == @core.RefType::Func else {
+      raise EncodeError::Unsupported("elem type \{elem.elem_type}")
+    }
+    if elem.is_active {
+      if elem.table_idx == 0U {
+        payload.push(0x00U.to_byte())
+        append_bytes(payload, encode_expr(elem.offset))
+        append_bytes(
+          payload,
+          encode_u32_leb128(elem.init.length().reinterpret_as_uint()),
+        )
+        for idx in elem.init {
+          append_bytes(payload, encode_u32_leb128(idx))
+        }
+      } else {
+        payload.push(0x02U.to_byte())
+        append_bytes(payload, encode_u32_leb128(elem.table_idx))
+        append_bytes(payload, encode_expr(elem.offset))
+        payload.push(0x00U.to_byte())
+        append_bytes(
+          payload,
+          encode_u32_leb128(elem.init.length().reinterpret_as_uint()),
+        )
+        for idx in elem.init {
+          append_bytes(payload, encode_u32_leb128(idx))
+        }
+      }
+    } else {
+      payload.push(0x01U.to_byte())
+      payload.push(0x00U.to_byte())
+      append_bytes(
+        payload,
+        encode_u32_leb128(elem.init.length().reinterpret_as_uint()),
+      )
+      for idx in elem.init {
+        append_bytes(payload, encode_u32_leb128(idx))
+      }
+    }
+  }
+  payload
 }
 
 ///|
@@ -489,6 +531,49 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
       payload.push(0x11U.to_byte())
       append_bytes(payload, encode_u32_leb128(type_idx))
       append_bytes(payload, encode_u32_leb128(table_idx))
+    }
+    RefNull(ref_type) => {
+      payload.push(0xD0U.to_byte())
+      payload.push(encode_reftype(ref_type))
+    }
+    RefFunc(idx) => {
+      payload.push(0xD2U.to_byte())
+      append_bytes(payload, encode_u32_leb128(idx))
+    }
+    TableGet(idx) => {
+      payload.push(0x25U.to_byte())
+      append_bytes(payload, encode_u32_leb128(idx))
+    }
+    TableSet(idx) => {
+      payload.push(0x26U.to_byte())
+      append_bytes(payload, encode_u32_leb128(idx))
+    }
+    TableSize(idx) => {
+      payload.push(0xFCU.to_byte())
+      append_bytes(payload, encode_u32_leb128(16U))
+      append_bytes(payload, encode_u32_leb128(idx))
+    }
+    TableGrow(idx) => {
+      payload.push(0xFCU.to_byte())
+      append_bytes(payload, encode_u32_leb128(15U))
+      append_bytes(payload, encode_u32_leb128(idx))
+    }
+    TableInit(table_idx, elem_idx) => {
+      payload.push(0xFCU.to_byte())
+      append_bytes(payload, encode_u32_leb128(12U))
+      append_bytes(payload, encode_u32_leb128(elem_idx))
+      append_bytes(payload, encode_u32_leb128(table_idx))
+    }
+    TableCopy(dst_idx, src_idx) => {
+      payload.push(0xFCU.to_byte())
+      append_bytes(payload, encode_u32_leb128(14U))
+      append_bytes(payload, encode_u32_leb128(dst_idx))
+      append_bytes(payload, encode_u32_leb128(src_idx))
+    }
+    ElemDrop(idx) => {
+      payload.push(0xFCU.to_byte())
+      append_bytes(payload, encode_u32_leb128(13U))
+      append_bytes(payload, encode_u32_leb128(idx))
     }
     LocalGet(idx) => {
       payload.push(0x20U.to_byte())
