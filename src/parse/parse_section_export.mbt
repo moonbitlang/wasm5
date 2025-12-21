@@ -6,7 +6,13 @@ fn parse_export_section(parser : Parser) -> Array[@core.Export] raise {
   let exports = []
   for i in 0U..<count {
     let name = parser.read_name()
-    let desc_tag = parser.read_byte()
+    let desc_tag = match parser.view() {
+      [byte, .. rest] => {
+        parser.update_view(rest)
+        byte
+      }
+      _ => raise ParseError::UnexpectedEof
+    }
     let desc : @core.ExportDesc = match desc_tag {
       0x00 => Func(parser.read_u32_leb128())
       0x01 => Table(parser.read_u32_leb128())

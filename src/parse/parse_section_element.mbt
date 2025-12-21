@@ -30,12 +30,24 @@ fn parse_element_section(parser : Parser) -> Array[@core.Elem] raise {
     // Read elemkind or reftype for certain flags
     let elem_type : @core.RefType = match flags {
       1 | 3 => {
-        let _elemkind = parser.read_byte()
+        let _elemkind = match parser.view() {
+          [byte, .. rest] => {
+            parser.update_view(rest)
+            byte
+          }
+          _ => raise ParseError::UnexpectedEof
+        }
         // elemkind (0x00 = funcref)
         Func
       }
       2 => {
-        let _elemkind = parser.read_byte()
+        let _elemkind = match parser.view() {
+          [byte, .. rest] => {
+            parser.update_view(rest)
+            byte
+          }
+          _ => raise ParseError::UnexpectedEof
+        }
         // elemkind
         Func
       }

@@ -3,7 +3,13 @@
 ///|
 fn Parser::read_u32_leb128(self : Parser) -> UInt raise ParseError {
   fn read_loop(shift : Int, result : UInt) -> UInt raise ParseError {
-    let byte = self.read_byte()
+    let byte = match self.view() {
+      [value, .. rest] => {
+        self.update_view(rest)
+        value
+      }
+      _ => raise ParseError::UnexpectedEof
+    }
     // Check for overflow: shift >= 28 means we're on the 5th byte (bits 28-34)
     // For a valid u32, the 5th byte must have value <= 0x0F (only 4 bits used)
     // and no continuation bit (high bit must be 0)
@@ -36,7 +42,14 @@ fn Parser::read_i32_leb128(self : Parser) -> Int raise ParseError {
   let mut shift = 0
   let mut byte = 0
   while true {
-    byte = self.read_byte().to_int()
+    let next_byte = match self.view() {
+      [value, .. rest] => {
+        self.update_view(rest)
+        value
+      }
+      _ => raise ParseError::UnexpectedEof
+    }
+    byte = next_byte.to_int()
     result = result | ((byte & 0x7f) << shift)
     shift = shift + 7
     if (byte & 0x80) == 0 {
@@ -62,7 +75,14 @@ fn Parser::read_i64_leb128(self : Parser) -> Int64 raise ParseError {
   let mut shift = 0
   let mut byte = 0
   while true {
-    byte = self.read_byte().to_int()
+    let next_byte = match self.view() {
+      [value, .. rest] => {
+        self.update_view(rest)
+        value
+      }
+      _ => raise ParseError::UnexpectedEof
+    }
+    byte = next_byte.to_int()
     result = result | ((byte & 0x7f).to_int64() << shift)
     shift = shift + 7
     if (byte & 0x80) == 0 {

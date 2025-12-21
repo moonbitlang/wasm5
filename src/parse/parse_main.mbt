@@ -23,7 +23,13 @@ pub fn parse(b : Bytes) -> @core.Module raise {
   let mut exports : Array[@core.Export] = []
   let mut codes : Array[@core.Code] = []
   while !parser.eof() {
-    let section_id = parser.read_byte()
+    let section_id = match parser.view() {
+      [byte, .. rest] => {
+        parser.update_view(rest)
+        byte
+      }
+      _ => raise ParseError::UnexpectedEof
+    }
     let section_size = parser.read_u32_leb128()
     let section_start = parser.pos
     match section_id {

@@ -9,26 +9,62 @@ fn parse_instr_reference(parser : Parser, opcode : Byte) -> @core.Instr? raise {
     // Reference instructions
     0xD0 => {
       // ref.null heaptype
-      let heap_type = parser.read_byte()
-      let ref_type : @core.RefType = match heap_type {
-        0x70 => Func // funcref
-        0x6F => Extern // externref
-        0x6E => Any // anyref
-        0x6D => Eq // eqref
-        0x6C => I31 // i31ref
-        0x6B => Struct // structref
-        0x6A => Array // arrayref
-        0x69 => Exn // exnref
-        0x71 => None // none
-        0x72 => NoExtern // noextern
-        0x73 => NoFunc // nofunc
-        0x74 => NoExn // noexn
-        _ => {
+      let view = parser.view()
+      let ref_type : @core.RefType = match view {
+        [0x70, .. rest] => {
+          parser.update_view(rest)
+          Func
+        }
+        [0x6F, .. rest] => {
+          parser.update_view(rest)
+          Extern
+        }
+        [0x6E, .. rest] => {
+          parser.update_view(rest)
+          Any
+        }
+        [0x6D, .. rest] => {
+          parser.update_view(rest)
+          Eq
+        }
+        [0x6C, .. rest] => {
+          parser.update_view(rest)
+          I31
+        }
+        [0x6B, .. rest] => {
+          parser.update_view(rest)
+          Struct
+        }
+        [0x6A, .. rest] => {
+          parser.update_view(rest)
+          Array
+        }
+        [0x69, .. rest] => {
+          parser.update_view(rest)
+          Exn
+        }
+        [0x71, .. rest] => {
+          parser.update_view(rest)
+          None
+        }
+        [0x72, .. rest] => {
+          parser.update_view(rest)
+          NoExtern
+        }
+        [0x73, .. rest] => {
+          parser.update_view(rest)
+          NoFunc
+        }
+        [0x74, .. rest] => {
+          parser.update_view(rest)
+          NoExn
+        }
+        [_, ..] => {
           // Assume it's a type index (negative or positive)
-          parser.pos = parser.pos - 1
           let type_idx = parser.read_i32_leb128()
           TypeIndex(type_idx)
         }
+        _ => raise ParseError::UnexpectedEof
       }
       Some(RefNull(ref_type))
     }

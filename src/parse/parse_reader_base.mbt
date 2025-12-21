@@ -26,17 +26,6 @@ fn Parser::eof(self : Parser) -> Bool {
 }
 
 ///|
-fn Parser::read_byte(self : Parser) -> Byte raise ParseError {
-  match self.view() {
-    [byte, .. rest] => {
-      self.update_view(rest)
-      byte
-    }
-    _ => raise ParseError::UnexpectedEof
-  }
-}
-
-///|
 fn Parser::read_bytes(self : Parser, n : UInt) -> BytesView raise ParseError {
   let n_int = UInt::reinterpret_as_int(n)
   guard n_int >= 0 else {
