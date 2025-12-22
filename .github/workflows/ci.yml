@@ -53,7 +53,7 @@ jobs:
           url="https://github.com/bytecodealliance/wasm-tools/releases/download/v${version}/${asset}"
           curl -fsSL "$url" -o /tmp/wasm-tools.tar.gz
           mkdir -p "$HOME/.local/bin"
-          tar -xzf /tmp/wasm-tools.tar.gz -C "$HOME/.local/bin" wasm-tools
+          tar -xzf /tmp/wasm-tools.tar.gz -C "$HOME/.local/bin" --strip-components=1 "wasm-tools-${version}-${arch_tag}-${platform}/wasm-tools"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           wasm-tools --version
 
