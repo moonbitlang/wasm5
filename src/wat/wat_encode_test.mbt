@@ -106,6 +106,18 @@ async test "wat encoder matches wasm-tools for call_indirect" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for call_indirect table list" {
+  let wat = "(module (type $t (func (param i32) (result i32))) (table $tab 1 funcref) (func $f (type $t) (param i32) (result i32) local.get 0) (elem (i32.const 0) $f) (func (export \"call\") (param i32 i32) (result i32) local.get 0 local.get 1 (call_indirect $tab (type $t))))"
+  assert_wat_matches("call_indirect_table_list", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for call_indirect table inline" {
+  let wat = "(module (table $tab 1 funcref) (func (export \"call\") (param i32 i32) (result i32) local.get 0 local.get 1 call_indirect $tab (param i32) (result i32)))"
+  assert_wat_matches("call_indirect_table_inline", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for return_call" {
   let wat = "(module (func $f (result i32) i32.const 7) (func (export \"call\") (result i32) return_call $f))"
   assert_wat_matches("return_call", wat)
@@ -115,6 +127,12 @@ async test "wat encoder matches wasm-tools for return_call" {
 async test "wat encoder matches wasm-tools for return_call_indirect" {
   let wat = "(module (type $t (func (param i32) (result i32))) (table $tab 1 funcref) (func $f (type $t) (param i32) (result i32) local.get 0) (elem (i32.const 0) $f) (func (export \"call\") (param i32) (result i32) local.get 0 i32.const 0 return_call_indirect $tab (type $t)))"
   assert_wat_matches("return_call_indirect", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for return_call_indirect list" {
+  let wat = "(module (table $tab 1 funcref) (func (export \"call\") (param i32 i32) (result i32) local.get 0 local.get 1 (return_call_indirect $tab (param i32) (result i32))))"
+  assert_wat_matches("return_call_indirect_list", wat)
 }
 
 ///|
