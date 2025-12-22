@@ -230,3 +230,21 @@ async test "wat encoder matches wasm-tools for memory indexed ops" {
   let wat = "(module (memory 1) (data $d \"hi\") (data \"ok\") (func (export \"bulk\") (param i32 i32 i32) local.get 0 local.get 1 local.get 2 memory.init $d local.get 0 local.get 1 local.get 2 memory.copy 0 0 local.get 0 local.get 1 local.get 2 memory.fill 0) (func (export \"size\") (result i32) memory.size 0) (func (export \"grow\") (param i32) (result i32) local.get 0 memory.grow 0))"
   assert_wat_matches("memory_indexed_ops", wat)
 }
+
+///|
+async test "wat encoder matches wasm-tools for list form table/memory ops" {
+  let wat = "(module (memory 1) (table $tab 1 funcref) (func (export \"list_ops\") (param i32 funcref i32) (result i32) local.get 0 (table.get $tab) drop local.get 0 local.get 1 (table.set $tab) (table.size $tab) drop local.get 1 local.get 2 (table.grow $tab) drop (memory.size 0) drop local.get 2 (memory.grow 0) drop i32.const 0))"
+  assert_wat_matches("list_ops", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for elem table index 1" {
+  let wat = "(module (table 1 funcref) (table $tab1 1 funcref) (func $f) (elem (table $tab1) (offset (i32.const 0)) func $f))"
+  assert_wat_matches("elem_table_idx", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for br_table labels" {
+  let wat = "(module (func (export \"brs\") (param i32) (result i32) (block $out (block $in local.get 0 br_table $in $out)) i32.const 7))"
+  assert_wat_matches("br_table_labels", wat)
+}
