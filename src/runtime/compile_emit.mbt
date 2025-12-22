@@ -1006,7 +1006,7 @@ fn Runtime::compile_wasm_instr(
     }
     // Reference instructions
     RefNull(_ref_type) => {
-      ctx.push_type(FuncRef) // Use FuncRef as placeholder
+      ctx.push_type(reftype_to_valtype(_ref_type))
       self.emit(WasmInstr(op_ref_null))
       // Encode the ref type as an immediate
       let type_idx = match _ref_type {
@@ -1027,7 +1027,14 @@ fn Runtime::compile_wasm_instr(
       self.emit(ImmediateIdx(type_idx))
     }
     RefFunc(func_idx) => {
-      ctx.push_type(FuncRef)
+      let func_idx_int = func_idx.reinterpret_as_int()
+      let num_imported = count_imported_funcs(self.module_)
+      let type_idx = get_func_type_idx(self.module_, func_idx_int, num_imported)
+      if type_idx >= 0 {
+        ctx.push_type(Ref(TypeIndex(type_idx), false))
+      } else {
+        ctx.push_type(FuncRef)
+      }
       self.emit(WasmInstr(op_ref_func))
       self.emit(ImmediateIdx(func_idx.reinterpret_as_int()))
     }
@@ -1043,8 +1050,11 @@ fn Runtime::compile_wasm_instr(
       self.emit(WasmInstr(op_ref_eq))
     }
     RefAsNonNull => {
-      ctx.pop_type()
-      ctx.push_type(FuncRef)
+      let popped = ctx.pop_type_value()
+      match popped {
+        Some(val_type) => ctx.push_type(non_null_ref_type(val_type))
+        None => ctx.push_type(Ref(Any, false))
+      }
       self.emit(WasmInstr(op_ref_as_non_null))
     }
     // Indirect call
@@ -1119,5 +1129,45 @@ fn Runtime::compile_wasm_instr(
       self.emit(WasmInstr(op_return_call_ref))
       self.emit(ImmediateIdx(type_idx_int))
     }
+  }
+}
+
+///|
+fn reftype_to_valtype(ref_type : @core.RefType) -> @core.ValType {
+  match ref_type {
+    Func => FuncRef
+    Extern => ExternRef
+    Any => AnyRef
+    Eq => EqRef
+    I31 => I31Ref
+    Struct => StructRef
+    Array => ArrayRef
+    Exn => ExnRef
+    None => NullRef
+    NoFunc => NullFuncRef
+    NoExtern => NullExternRef
+    NoExn => NullExnRef
+    TypeIndex(_) => Ref(ref_type, true)
+  }
+}
+
+///|
+fn non_null_ref_type(val_type : @core.ValType) -> @core.ValType {
+  match val_type {
+    Ref(heap_type, true) => Ref(heap_type, false)
+    Ref(heap_type, false) => Ref(heap_type, false)
+    FuncRef => Ref(Func, false)
+    ExternRef => Ref(Extern, false)
+    AnyRef => Ref(Any, false)
+    EqRef => Ref(Eq, false)
+    I31Ref => Ref(I31, false)
+    StructRef => Ref(Struct, false)
+    ArrayRef => Ref(Array, false)
+    ExnRef => Ref(Exn, false)
+    NullRef => Ref(Any, false)
+    NullFuncRef => Ref(Func, false)
+    NullExternRef => Ref(Extern, false)
+    NullExnRef => Ref(Exn, false)
+    _ => val_type
   }
 }
