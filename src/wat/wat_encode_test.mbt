@@ -212,3 +212,21 @@ async test "wat encoder matches wasm-tools for elem passive" {
   let wat = "(module (func $f) (elem func $f))"
   assert_wat_matches("elem_passive", wat)
 }
+
+///|
+async test "wat encoder matches wasm-tools for table indexed ops" {
+  let wat = "(module (table $tab 2 funcref) (func $f) (elem (i32.const 0) $f) (func (export \"ops\") (param i32 funcref i32) (result i32) local.get 0 table.get $tab drop local.get 0 local.get 1 table.set $tab table.size $tab drop local.get 2 local.get 1 table.grow $tab drop i32.const 0))"
+  assert_wat_matches("table_indexed_ops", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for table init/copy indexed" {
+  let wat = "(module (table $dst 2 funcref) (table $src 2 funcref) (func $f) (elem $e func $f) (func (export \"init\") (param i32 i32 i32) local.get 0 local.get 1 local.get 2 table.init $dst $e) (func (export \"copy\") (param i32 i32 i32) local.get 0 local.get 1 local.get 2 table.copy $dst $src))"
+  assert_wat_matches("table_init_copy_indexed", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for memory indexed ops" {
+  let wat = "(module (memory 1) (data $d \"hi\") (data \"ok\") (func (export \"bulk\") (param i32 i32 i32) local.get 0 local.get 1 local.get 2 memory.init $d local.get 0 local.get 1 local.get 2 memory.copy 0 0 local.get 0 local.get 1 local.get 2 memory.fill 0) (func (export \"size\") (result i32) memory.size 0) (func (export \"grow\") (param i32) (result i32) local.get 0 memory.grow 0))"
+  assert_wat_matches("memory_indexed_ops", wat)
+}
