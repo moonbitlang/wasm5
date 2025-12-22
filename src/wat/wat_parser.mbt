@@ -1239,7 +1239,20 @@ fn parse_data(
   }
   if idx < items.length() {
     match items[idx] {
-      List(_) | Atom(_) => {
+      List(list_items) =>
+        if list_items.length() > 0 &&
+          list_items[0] is Atom(tag) &&
+          tag == b"offset" {
+          let offset_items = slice_sexprs(list_items, 1)
+          offset_expr = parse_instrs(offset_items, Map::new(), [], type_map)
+          is_active = true
+          idx = idx + 1
+        } else {
+          offset_expr = parse_instrs([items[idx]], Map::new(), [], type_map)
+          is_active = true
+          idx = idx + 1
+        }
+      Atom(_) => {
         offset_expr = parse_instrs([items[idx]], Map::new(), [], type_map)
         is_active = true
         idx = idx + 1
@@ -1594,39 +1607,28 @@ fn append_types(
   type_map : Map[Bytes, UInt],
   allow_names~ : Bool,
 ) -> Unit raise WatError {
-  let mut pending = 0
+  let mut pending = false
   for i in 1..<items.length() {
     match items[i] {
       Atom(atom) => {
         if allow_names && is_name(atom) {
-          pending = pending + 1
+          guard not(pending) else {
+            raise WatError::InvalidSyntax("duplicate name without type")
+          }
+          pending = true
           continue
         }
-        let val_type = parse_valtype_atom(atom, type_map)
-        if pending == 0 {
-          dst.push(val_type)
-        } else {
-          for _ in 0..<pending {
-            dst.push(val_type)
-          }
-          pending = 0
-        }
+        dst.push(parse_valtype_atom(atom, type_map))
+        pending = false
       }
       List(_) => {
-        let val_type = parse_valtype_expr(items[i], type_map)
-        if pending == 0 {
-          dst.push(val_type)
-        } else {
-          for _ in 0..<pending {
-            dst.push(val_type)
-          }
-          pending = 0
-        }
+        dst.push(parse_valtype_expr(items[i], type_map))
+        pending = false
       }
       _ => raise WatError::InvalidSyntax("expected type")
     }
   }
-  if pending > 0 {
+  if pending {
     raise WatError::InvalidSyntax("dangling name without type")
   }
 }
@@ -1638,43 +1640,30 @@ fn append_named_types(
   items : Array[SExpr],
   type_map : Map[Bytes, UInt],
 ) -> Unit raise WatError {
-  let pending : Array[Bytes] = []
+  let mut pending : Bytes? = None
   for i in 1..<items.length() {
     match items[i] {
       Atom(atom) => {
         if is_name(atom) {
-          pending.push(atom)
+          guard pending is None else {
+            raise WatError::InvalidSyntax("duplicate name without type")
+          }
+          pending = Some(atom)
           continue
         }
-        let val_type = parse_valtype_atom(atom, type_map)
-        if pending.length() == 0 {
-          dst_types.push(val_type)
-          dst_names.push(None)
-        } else {
-          for name in pending {
-            dst_types.push(val_type)
-            dst_names.push(Some(name))
-          }
-          pending.clear()
-        }
+        dst_types.push(parse_valtype_atom(atom, type_map))
+        dst_names.push(pending)
+        pending = None
       }
       List(_) => {
-        let val_type = parse_valtype_expr(items[i], type_map)
-        if pending.length() == 0 {
-          dst_types.push(val_type)
-          dst_names.push(None)
-        } else {
-          for name in pending {
-            dst_types.push(val_type)
-            dst_names.push(Some(name))
-          }
-          pending.clear()
-        }
+        dst_types.push(parse_valtype_expr(items[i], type_map))
+        dst_names.push(pending)
+        pending = None
       }
       _ => raise WatError::InvalidSyntax("expected type")
     }
   }
-  if pending.length() > 0 {
+  if pending is Some(_) {
     raise WatError::InvalidSyntax("dangling name without type")
   }
 }

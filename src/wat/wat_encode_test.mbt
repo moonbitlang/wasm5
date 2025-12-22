@@ -170,3 +170,15 @@ async test "wat encoder matches wasm-tools for multi-name params and locals" {
   let wat = "(module (func (export \"sum\") (param $x i32) (param $y i32) (result i32) local.get $x local.get $y i32.add) (func (export \"locals\") (param $x i32) (param $y i32) (result i32) (local $a i64) (local $b i64) local.get $x local.get $y i32.add drop local.get $a drop local.get $b drop i32.const 0))"
   assert_wat_matches("multi_name_params", wat)
 }
+
+///|
+async test "wat encoder matches wasm-tools for data offset list" {
+  let wat = "(module (memory (export \"mem\") 1) (data (offset (i32.const 0)) \"hi\") (data (memory 0) (offset (i32.const 4)) \"ok\"))"
+  assert_wat_matches("data_offset_list", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for elem offset list" {
+  let wat = "(module (table 1 funcref) (func $f) (elem (offset (i32.const 0)) func $f))"
+  assert_wat_matches("elem_offset_list", wat)
+}
