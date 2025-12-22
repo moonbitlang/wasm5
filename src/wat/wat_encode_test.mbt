@@ -178,7 +178,19 @@ async test "wat encoder matches wasm-tools for data offset list" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for data passive" {
+  let wat = "(module (memory 1) (data \"hi\") (func (export \"init\") (param i32 i32 i32) local.get 0 local.get 1 local.get 2 memory.init 0))"
+  assert_wat_matches("data_passive", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for elem offset list" {
   let wat = "(module (table 1 funcref) (func $f) (elem (offset (i32.const 0)) func $f))"
   assert_wat_matches("elem_offset_list", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for elem passive" {
+  let wat = "(module (func $f) (elem func $f))"
+  assert_wat_matches("elem_passive", wat)
 }

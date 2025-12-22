@@ -1319,6 +1319,18 @@ fn parse_elem(
           offset_instrs = parse_instrs(offset_items, Map::new(), [], type_map)
           is_active = true
           idx = idx + 1
+        } else if list_items.length() > 0 &&
+          list_items[0] is Atom(tag) &&
+          tag == b"func" {
+          ()
+        } else {
+          offset_instrs = parse_instrs([items[idx]], Map::new(), [], type_map)
+          is_active = true
+          idx = idx + 1
+        }
+      Atom(atom) =>
+        if atom == b"func" {
+          ()
         } else {
           offset_instrs = parse_instrs([items[idx]], Map::new(), [], type_map)
           is_active = true
