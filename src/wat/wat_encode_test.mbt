@@ -5,7 +5,37 @@ async fn ensure_dir(path : String) -> Unit {
 }
 
 ///|
+async fn wasm_tools_available() -> Bool {
+  let base_dir = "target/wat_tests"
+  ensure_dir(base_dir)
+  let ok_path = base_dir + "/.wasm_tools_ok"
+  let missing_path = base_dir + "/.wasm_tools_missing"
+  if @fs.exists(ok_path) {
+    return true
+  }
+  if @fs.exists(missing_path) {
+    return false
+  }
+  let exit_code = @process.run("wasm-tools", ["--version"]) catch {
+    _ => {
+      let missing_file = @fs.create(missing_path, permission=0o644)
+      missing_file.close()
+      return false
+    }
+  }
+  if exit_code == 0 {
+    let ok_file = @fs.create(ok_path, permission=0o644)
+    ok_file.close()
+    return true
+  }
+  let missing_file = @fs.create(missing_path, permission=0o644)
+  missing_file.close()
+  false
+}
+
+///|
 async fn assert_wat_matches(name : String, wat : String) -> Unit {
+  guard wasm_tools_available() else { return }
   let base_dir = "target/wat_tests"
   ensure_dir(base_dir)
   let dir = base_dir + "/" + name + "/"
