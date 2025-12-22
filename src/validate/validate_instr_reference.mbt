@@ -62,8 +62,8 @@ fn validate_instruction_reference(
     RefAsNonNull =>
       // ref.as_non_null pops a reference and pushes a non-nullable reference
       if ctx.is_unreachable && stack.length() == 0 {
-        // Unreachable - stack is polymorphic, don't pop anything
-        stack.push(Ref(Any, false))
+        // Unreachable - stack is polymorphic, result stays polymorphic
+        ()
       } else if stack.length() < 1 {
         raise ValidationError::TypeMismatch(
           "ref.as_non_null expects reference on stack",
