@@ -152,3 +152,15 @@ async test "wat encoder matches wasm-tools for ref eq ops" {
   let wat = "(module (func (export \"eq\") (param funcref funcref) (result i32) local.get 0 local.get 1 ref.eq) (func (export \"asnn\") (param funcref) (result funcref) local.get 0 ref.as_non_null))"
   assert_wat_matches("ref_eq_ops", wat)
 }
+
+///|
+async test "wat encoder matches wasm-tools for block typeuse params" {
+  let wat = "(module (type $t (func (param i32 i64) (result i32))) (func (export \"block_params\") (param i32 i64) (result i32) local.get 0 local.get 1 (block (type $t) (param i32 i64) (result i32) drop drop i32.const 7)))"
+  assert_wat_matches("block_typeuse_params", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for typed select and ref.is_null" {
+  let wat = "(module (func (export \"select_typed\") (param i32 i32 i32) (result i32) local.get 0 local.get 1 local.get 2 (select (result i32))) (func (export \"ref_is_null\") (param funcref) (result i32) local.get 0 ref.is_null))"
+  assert_wat_matches("select_ref_ops", wat)
+}

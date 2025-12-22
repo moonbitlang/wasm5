@@ -44,7 +44,7 @@ priv enum WatInstr {
 priv enum WatBlockType {
   Empty
   Results(Array[@core.ValType])
-  TypeIndex(UInt)
+  TypeUse(WatTypeUse)
 }
 
 ///|
@@ -514,9 +514,9 @@ fn parse_block_type(
   type_map : Map[Bytes, UInt],
 ) -> (WatBlockType, Int) raise WatError {
   let mut idx = start
+  let params : Array[@core.ValType] = []
   let results : Array[@core.ValType] = []
-  let mut seen_result = false
-  let mut type_index : UInt? = None
+  let mut type_ref : WatTypeRef? = None
   while idx < items.length() {
     match items[idx] {
       List(list_items) => {
@@ -525,31 +525,18 @@ fn parse_block_type(
         }
         match tag {
           b"result" => {
-            guard not(seen_result) else {
-              raise WatError::InvalidSyntax("duplicate result in block type")
-            }
-            for i in 1..<list_items.length() {
-              results.push(parse_valtype_expr(list_items[i], type_map))
-            }
-            seen_result = true
+            append_types(results, list_items, type_map, allow_names=false)
+            idx = idx + 1
+          }
+          b"param" => {
+            append_types(params, list_items, type_map, allow_names=true)
             idx = idx + 1
           }
           b"type" => {
-            guard type_index is None else {
+            guard type_ref is None else {
               raise WatError::InvalidSyntax("duplicate type in block type")
             }
-            guard list_items.length() == 2 else {
-              raise WatError::InvalidSyntax("type expects one index")
-            }
-            let atom = expect_atom(list_items[1])
-            if is_name(atom) {
-              match type_map.get(atom) {
-                Some(idx) => type_index = Some(idx)
-                None => raise WatError::UnknownIdentifier("type \{atom}")
-              }
-            } else {
-              type_index = Some(parse_uint(atom))
-            }
+            type_ref = Some(parse_type_ref(list_items))
             idx = idx + 1
           }
           _ => break
@@ -558,17 +545,14 @@ fn parse_block_type(
       _ => break
     }
   }
-  guard not(seen_result && type_index is Some(_)) else {
-    raise WatError::Unsupported("block type with both type and result")
-  }
-  let block_type = match type_index {
-    Some(idx) => WatBlockType::TypeIndex(idx)
-    None =>
-      if results.length() == 0 {
-        WatBlockType::Empty
-      } else {
-        WatBlockType::Results(results)
-      }
+  let block_type = if type_ref is None && params.length() == 0 {
+    if results.length() == 0 {
+      WatBlockType::Empty
+    } else {
+      WatBlockType::Results(results)
+    }
+  } else {
+    WatBlockType::TypeUse({ type_ref, params, results })
   }
   (block_type, idx)
 }
@@ -3277,7 +3261,7 @@ fn resolve_instr(
     }
     WatInstr::Block(block_type, body) =>
       @core.Instr::Block(
-        resolve_block_type(block_type, types),
+        resolve_block_type(block_type, type_defs, type_map, types),
         resolve_instrs(
           body, func_map, table_map, elem_map, mem_map, data_map, global_map, type_defs,
           type_map, types,
@@ -3285,7 +3269,7 @@ fn resolve_instr(
       )
     WatInstr::Loop(block_type, body) =>
       @core.Instr::Loop(
-        resolve_block_type(block_type, types),
+        resolve_block_type(block_type, type_defs, type_map, types),
         resolve_instrs(
           body, func_map, table_map, elem_map, mem_map, data_map, global_map, type_defs,
           type_map, types,
@@ -3293,7 +3277,7 @@ fn resolve_instr(
       )
     WatInstr::If(block_type, then_body, else_body) =>
       @core.Instr::If(
-        resolve_block_type(block_type, types),
+        resolve_block_type(block_type, type_defs, type_map, types),
         resolve_instrs(
           then_body, func_map, table_map, elem_map, mem_map, data_map, global_map,
           type_defs, type_map, types,
@@ -3309,8 +3293,10 @@ fn resolve_instr(
 ///|
 fn resolve_block_type(
   block_type : WatBlockType,
+  type_defs : Array[WatTypeDef],
+  type_map : Map[Bytes, UInt],
   types : Array[@core.FuncType],
-) -> @core.BlockType {
+) -> @core.BlockType raise WatError {
   match block_type {
     Empty => @core.BlockType::Empty
     Results(results) =>
@@ -3323,7 +3309,17 @@ fn resolve_block_type(
           type_index(types, [], results).reinterpret_as_int(),
         )
       }
-    TypeIndex(idx) => @core.BlockType::TypeIndex(idx.reinterpret_as_int())
+    TypeUse(typeuse) => {
+      let idx = resolve_type_use_index(
+        typeuse.type_ref,
+        typeuse.params,
+        typeuse.results,
+        type_defs,
+        type_map,
+        types,
+      )
+      @core.BlockType::TypeIndex(idx.reinterpret_as_int())
+    }
   }
 }
 
