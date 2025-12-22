@@ -1594,17 +1594,40 @@ fn append_types(
   type_map : Map[Bytes, UInt],
   allow_names~ : Bool,
 ) -> Unit raise WatError {
+  let mut pending = 0
   for i in 1..<items.length() {
     match items[i] {
       Atom(atom) => {
         if allow_names && is_name(atom) {
+          pending = pending + 1
           continue
         }
-        dst.push(parse_valtype_atom(atom, type_map))
+        let val_type = parse_valtype_atom(atom, type_map)
+        if pending == 0 {
+          dst.push(val_type)
+        } else {
+          for _ in 0..<pending {
+            dst.push(val_type)
+          }
+          pending = 0
+        }
       }
-      List(_) => dst.push(parse_valtype_expr(items[i], type_map))
+      List(_) => {
+        let val_type = parse_valtype_expr(items[i], type_map)
+        if pending == 0 {
+          dst.push(val_type)
+        } else {
+          for _ in 0..<pending {
+            dst.push(val_type)
+          }
+          pending = 0
+        }
+      }
       _ => raise WatError::InvalidSyntax("expected type")
     }
+  }
+  if pending > 0 {
+    raise WatError::InvalidSyntax("dangling name without type")
   }
 }
 
@@ -1615,29 +1638,44 @@ fn append_named_types(
   items : Array[SExpr],
   type_map : Map[Bytes, UInt],
 ) -> Unit raise WatError {
-  let mut pending : Bytes? = None
+  let pending : Array[Bytes] = []
   for i in 1..<items.length() {
     match items[i] {
       Atom(atom) => {
-        if is_name(atom) && pending is None {
-          pending = Some(atom)
+        if is_name(atom) {
+          pending.push(atom)
           continue
         }
-        dst_types.push(parse_valtype_atom(atom, type_map))
-        dst_names.push(pending)
-        pending = None
+        let val_type = parse_valtype_atom(atom, type_map)
+        if pending.length() == 0 {
+          dst_types.push(val_type)
+          dst_names.push(None)
+        } else {
+          for name in pending {
+            dst_types.push(val_type)
+            dst_names.push(Some(name))
+          }
+          pending.clear()
+        }
       }
       List(_) => {
-        dst_types.push(parse_valtype_expr(items[i], type_map))
-        dst_names.push(pending)
-        pending = None
+        let val_type = parse_valtype_expr(items[i], type_map)
+        if pending.length() == 0 {
+          dst_types.push(val_type)
+          dst_names.push(None)
+        } else {
+          for name in pending {
+            dst_types.push(val_type)
+            dst_names.push(Some(name))
+          }
+          pending.clear()
+        }
       }
       _ => raise WatError::InvalidSyntax("expected type")
     }
   }
-  match pending {
-    Some(_) => raise WatError::InvalidSyntax("dangling name without type")
-    None => ()
+  if pending.length() > 0 {
+    raise WatError::InvalidSyntax("dangling name without type")
   }
 }
 

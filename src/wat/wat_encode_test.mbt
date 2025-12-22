@@ -164,3 +164,9 @@ async test "wat encoder matches wasm-tools for typed select and ref.is_null" {
   let wat = "(module (func (export \"select_typed\") (param i32 i32 i32) (result i32) local.get 0 local.get 1 local.get 2 select (result i32)) (func (export \"ref_is_null\") (param funcref) (result i32) local.get 0 ref.is_null))"
   assert_wat_matches("select_ref_ops", wat)
 }
+
+///|
+async test "wat encoder matches wasm-tools for multi-name params and locals" {
+  let wat = "(module (func (export \"sum\") (param $x i32) (param $y i32) (result i32) local.get $x local.get $y i32.add) (func (export \"locals\") (param $x i32) (param $y i32) (result i32) (local $a i64) (local $b i64) local.get $x local.get $y i32.add drop local.get $a drop local.get $b drop i32.const 0))"
+  assert_wat_matches("multi_name_params", wat)
+}
