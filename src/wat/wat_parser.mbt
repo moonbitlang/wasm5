@@ -1909,6 +1909,24 @@ fn parse_instr_from_atom(
       let (mem_ref, next_idx) = parse_memory_index_from_items(items, idx + 1)
       (WatInstr::MemoryGrow(mem_ref), next_idx)
     }
+    b"select" => {
+      if idx + 1 < items.length() {
+        match items[idx + 1] {
+          List(result_items) =>
+            if result_items.length() > 0 &&
+              result_items[0] is Atom(head) &&
+              head == b"result" {
+              let types : Array[@core.ValType] = []
+              for i in 1..<result_items.length() {
+                types.push(parse_valtype_expr(result_items[i], type_map))
+              }
+              return (WatInstr::Core(@core.Instr::SelectTyped(types)), idx + 2)
+            }
+          _ => ()
+        }
+      }
+      (WatInstr::Core(@core.Instr::Select), idx + 1)
+    }
     _ =>
       match parse_mem_instr_from_atom(items, idx, op) {
         Some((instr, next_idx)) => (instr, next_idx)
