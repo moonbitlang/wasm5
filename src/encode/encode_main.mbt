@@ -797,6 +797,8 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
       append_bytes(payload, encode_u32_leb128(idx))
     }
     RefIsNull => payload.push(0xD1U.to_byte())
+    RefEq => payload.push(0xD3U.to_byte())
+    RefAsNonNull => payload.push(0xD4U.to_byte())
     MemoryInit(data_idx) => {
       payload.push(0xFCU.to_byte())
       append_bytes(payload, encode_u32_leb128(8U))

@@ -73,6 +73,8 @@ fn build_compile_instrs() -> Array[@core.Instr] {
   instrs.push(RefNull(Func))
   instrs.push(RefFunc(0U))
   instrs.push(RefIsNull)
+  instrs.push(RefEq)
+  instrs.push(RefAsNonNull)
   instrs.push(I32Const(0U))
   instrs.push(I64Const(0UL))
   instrs.push(F32Const(0.0))

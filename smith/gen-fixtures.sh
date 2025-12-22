@@ -817,7 +817,6 @@ cat <<'WAT' | wasm-tools parse -o "$out_dir/coverage_reference.wasm"
     ref.null func
     ref.eq
     drop
-    drop
     ref.null func
     br_on_null 0
     drop

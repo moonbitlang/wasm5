@@ -1036,6 +1036,17 @@ fn Runtime::compile_wasm_instr(
       ctx.push_type(I32)
       self.emit(WasmInstr(op_ref_is_null))
     }
+    RefEq => {
+      ctx.pop_type()
+      ctx.pop_type()
+      ctx.push_type(I32)
+      self.emit(WasmInstr(op_ref_eq))
+    }
+    RefAsNonNull => {
+      ctx.pop_type()
+      ctx.push_type(FuncRef)
+      self.emit(WasmInstr(op_ref_as_non_null))
+    }
     // Indirect call
     CallIndirect(type_idx, table_idx) => {
       // Pop table index (i32)

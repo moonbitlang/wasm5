@@ -146,3 +146,9 @@ async test "wat encoder matches wasm-tools for ref types" {
   let wat = "(module (type $t (func)) (func $f (type $t)) (table 1 (ref null $t)) (func (export \"short\") (param funcref externref anyref eqref i31ref structref arrayref exnref nullref nullfuncref nullexternref nullexnref)) (func (export \"typed\") (param (ref func) (ref extern) (ref any)) (result (ref $t) (ref null $t) (ref null func)) ref.func $f ref.null $t ref.null func))"
   assert_wat_matches("ref_types", wat)
 }
+
+///|
+async test "wat encoder matches wasm-tools for ref eq ops" {
+  let wat = "(module (func (export \"eq\") (param funcref funcref) (result i32) local.get 0 local.get 1 ref.eq) (func (export \"asnn\") (param funcref) (result funcref) local.get 0 ref.as_non_null))"
+  assert_wat_matches("ref_eq_ops", wat)
+}
