@@ -63,6 +63,8 @@ test "compile helpers imported func result truncation" {
     module_: empty_module(),
     ops: [],
     stack: [],
+    sp: 0,
+    num_locals: 0,
     locals: [],
     pc: 0,
     running: false,
@@ -85,7 +87,7 @@ test "compile helpers imported func result truncation" {
 test "compile helpers tail call return branches" {
   let rt = make_runtime([], [], 0)
   rt.running = true
-  rt.call_stack.push(CallFrame::{ return_pc: 3, locals: [Value::I32(7U)] })
+  rt.call_stack.push(CallFrame::{ return_pc: 3, caller_sp: 0, caller_num_locals: 0, locals: [Value::I32(7U)] })
   assert_ok(rt.handle_tail_call_return())
   assert_eq(rt.pc, 4)
   assert_eq(rt.locals, [Value::I32(7U)])

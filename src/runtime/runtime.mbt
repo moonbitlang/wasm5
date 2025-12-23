@@ -224,6 +224,8 @@ pub struct Runtime {
   module_ : @core.Module
   ops : Array[MInstr]
   stack : Array[UInt64] // Unified stack for locals and operand stack (tagless)
+  sp : Int // Stack pointer: index of first local in unified stack
+  num_locals : Int // Number of locals for current function
   mut locals : Array[Value] // TODO: Remove after unifying with stack
   mut pc : Int
   mut running : Bool // Execution loop control flag
@@ -478,6 +480,8 @@ pub fn Runtime::load_with_resolver(
     module_: m,
     ops: [],
     stack: [],
+    sp: 0,
+    num_locals: 0,
     locals: [],
     pc: 0,
     running: false,

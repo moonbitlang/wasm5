@@ -39,7 +39,9 @@ pub enum MInstr {
 /// Call frame for function calls
 pub struct CallFrame {
   return_pc : Int
-  locals : Array[Value]
+  caller_sp : Int // Stack pointer of calling function
+  caller_num_locals : Int // Number of locals in calling function
+  locals : Array[Value] // TODO: Remove after fully unified stack
 }
 
 ///|

@@ -33,6 +33,8 @@ fn base_runtime(
     module_,
     ops,
     stack: stack64,
+    sp: 0,
+    num_locals: 0,
     locals,
     pc: 0,
     running: true,
@@ -211,6 +213,8 @@ test "ops control calls and return" {
     module_: module_import,
     ops: [ImmediateIdx(0), ImmediateIdx(0)],
     stack: [],
+    sp: 0,
+    num_locals: 0,
     locals: [],
     pc: 0,
     running: true,
@@ -235,7 +239,7 @@ test "ops control calls and return" {
   assert_ok(op_call(rt_local))
   assert_eq(rt_local.pc, 3)
   assert_eq(rt_local.call_stack.length(), 1)
-  let frame = CallFrame::{ return_pc: 5, locals: [] }
+  let frame = CallFrame::{ return_pc: 5, caller_sp: 0, caller_num_locals: 0, locals: [] }
   let rt_return = base_runtime(module_local, [], [Value::I32(1U)], [])
   rt_return.call_stack.push(frame)
   assert_ok(op_return(rt_return))
@@ -256,6 +260,8 @@ test "ops control indirect calls" {
     module_: module_local,
     ops: [ImmediateIdx(0), ImmediateIdx(0), ImmediateIdx(0)],
     stack: [0UL],
+    sp: 0,
+    num_locals: 0,
     locals: [],
     pc: 0,
     running: true,
@@ -274,6 +280,8 @@ test "ops control indirect calls" {
     module_: module_local,
     ops: [ImmediateIdx(0), ImmediateIdx(1), ImmediateIdx(0)],
     stack: [0UL],
+    sp: 0,
+    num_locals: 0,
     locals: [],
     pc: 0,
     running: true,
@@ -291,6 +299,8 @@ test "ops control indirect calls" {
     module_: module_local,
     ops: [ImmediateIdx(0), ImmediateIdx(0), ImmediateIdx(0)],
     stack: [0UL],
+    sp: 0,
+    num_locals: 0,
     locals: [],
     pc: 0,
     running: true,
@@ -336,6 +346,8 @@ test "ops control ref calls and tables" {
     module_: module_local,
     ops: [ImmediateIdx(0), ImmediateIdx(0)],
     stack: [0UL, 0UL],  // I32(0) and Ref(func_idx=0)
+    sp: 0,
+    num_locals: 0,
     locals: [],
     pc: 0,
     running: true,
@@ -363,6 +375,8 @@ test "ops control table grow and globals" {
     module_: module_local,
     ops: [ImmediateIdx(0), ImmediateIdx(0)],
     stack: [],
+    sp: 0,
+    num_locals: 0,
     locals: [],
     pc: 0,
     running: true,
@@ -381,6 +395,8 @@ test "ops control table grow and globals" {
     module_: module_local,
     ops: [ImmediateIdx(0), ImmediateIdx(0)],
     stack: [0xFFFFFFFF_FFFFFFFFUL, 1UL],  // Ref(None)=-1, I32(1)
+    sp: 0,
+    num_locals: 0,
     locals: [],
     pc: 0,
     running: true,
@@ -399,6 +415,8 @@ test "ops control table grow and globals" {
     module_: module_local,
     ops: [ImmediateIdx(0), ImmediateIdx(0)],
     stack: [9UL],
+    sp: 0,
+    num_locals: 0,
     locals: [],
     pc: 0,
     running: true,

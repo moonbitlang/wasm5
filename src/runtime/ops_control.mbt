@@ -284,7 +284,7 @@ fn op_call(rt : Runtime) -> RetCode {
   let args = rt.pop_arguments(func_type)
 
   // Save frame
-  rt.call_stack.push(CallFrame::{ return_pc: rt.pc, locals: rt.locals })
+  rt.call_stack.push(CallFrame::{ return_pc: rt.pc, caller_sp: rt.sp, caller_num_locals: rt.num_locals, locals: rt.locals })
 
   // Set up new locals
   let init_result = rt.initialize_locals(args, code)
@@ -401,7 +401,7 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
   let args = rt.pop_arguments(actual_type)
 
   // Save frame
-  rt.call_stack.push(CallFrame::{ return_pc: rt.pc, locals: rt.locals })
+  rt.call_stack.push(CallFrame::{ return_pc: rt.pc, caller_sp: rt.sp, caller_num_locals: rt.num_locals, locals: rt.locals })
 
   // Set up new locals
   let init_result = rt.initialize_locals(args, code)
@@ -620,7 +620,7 @@ fn op_call_ref(rt : Runtime) -> RetCode {
   let args = rt.pop_arguments(func_type)
 
   // Save frame
-  rt.call_stack.push(CallFrame::{ return_pc: rt.pc, locals: rt.locals })
+  rt.call_stack.push(CallFrame::{ return_pc: rt.pc, caller_sp: rt.sp, caller_num_locals: rt.num_locals, locals: rt.locals })
 
   // Set up new locals
   let init_result = rt.initialize_locals(args, code)
