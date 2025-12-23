@@ -806,7 +806,10 @@ fn Runtime::compile_wasm_instr(
       self.emit(WasmInstr(op_call))
       self.emit(ImmediateIdx(func_idx_int))
     }
-    Return => self.emit(WasmInstr(op_return))
+    Return => {
+      self.emit(WasmInstr(op_return))
+      self.emit(ImmediateIdx(ctx.func_result_count))
+    }
     // Memory instructions (load: pop addr, push value; store: pop addr+value)
     I32Load(_align, offset) => {
       // pop i32 addr, push i32 value

@@ -117,51 +117,63 @@ fn get_func_type_idx(
 }
 
 ///|
-/// Pop function arguments from the stack
-fn Runtime::pop_arguments(self : Runtime, num_params : Int) -> Array[Value] {
+/// Pop function arguments from the stack (converts UInt64 to Value)
+fn Runtime::pop_arguments(
+  self : Runtime,
+  func_type : @core.FuncType,
+) -> Array[Value] {
+  let num_params = func_type.params.length()
   let args : Array[Value] = Array::make(num_params, Value::I32(0U))
   for i = num_params - 1; i >= 0; i = i - 1 {
-    args[i] = self.stack.unsafe_pop()
+    let raw = self.stack.unsafe_pop()
+    args[i] = stack_to_value(raw, func_type.params[i])
   }
   args
 }
 
 ///|
-/// Initialize local variables for a function call
-fn Runtime::initialize_locals(
-  self : Runtime,
-  args : Array[Value],
-  code : @core.Code,
-) -> RetCode {
-  self.locals = []
-  for arg in args {
-    self.locals.push(arg)
-  }
+/// Push default values for declared locals onto the unified stack.
+/// Params are already on the stack - this only handles declared locals.
+fn Runtime::init_declared_locals(self : Runtime, code : @core.Code) -> RetCode {
   for local_type in code.locals {
     match local_type {
-      I32 => self.locals.push(Value::I32(0U))
-      I64 => self.locals.push(Value::I64(0UL))
-      F32 => self.locals.push(Value::F32(0.0))
-      F64 => self.locals.push(Value::F64(0.0))
-      FuncRef => self.locals.push(Value::Ref(None))
-      ExternRef => self.locals.push(Value::Ref(None))
-      AnyRef
-      | ExnRef
-      | NullRef
-      | NullFuncRef
-      | NullExnRef
-      | NullExternRef
-      | EqRef
-      | I31Ref
-      | StructRef
-      | ArrayRef
-      | Ref(_, _) => self.locals.push(Value::Ref(None))
+      I32 | I64 | F32 | F64 => self.stack.push(0UL)
+      FuncRef | ExternRef | AnyRef | ExnRef | NullRef | NullFuncRef |
+      NullExnRef | NullExternRef | EqRef | I31Ref | StructRef | ArrayRef |
+      Ref(_, _) => self.stack.push((-1L).reinterpret_as_uint64()) // null ref
       _ => {
         self.error_detail = "Unsupported local type: \{local_type}"
         return UnsupportedLocalType
       }
     }
   }
+  OK
+}
+
+///|
+/// Initialize locals for entry point (call_compiled, start function).
+/// Pushes args onto stack, then declared locals, and sets sp/num_locals.
+fn Runtime::initialize_entry_locals(
+  self : Runtime,
+  args : Array[Value],
+  code : @core.Code,
+) -> RetCode {
+  // sp points to start of locals (current stack position)
+  self.sp = self.stack.length()
+
+  // Push arguments as first locals
+  for arg in args {
+    self.stack.push(value_to_stack(arg))
+  }
+
+  // Push default values for declared locals
+  let result = self.init_declared_locals(code)
+  if result != OK {
+    return result
+  }
+
+  // Set num_locals
+  self.num_locals = args.length() + code.locals.length()
   OK
 }
 
@@ -194,7 +206,7 @@ fn check_type_signature_match(
 }
 
 ///|
-/// Call an imported function and push results onto the stack
+/// Call an imported function and push results onto the stack (as UInt64)
 fn Runtime::call_imported_function(
   self : Runtime,
   func_idx : Int,
@@ -209,18 +221,19 @@ fn Runtime::call_imported_function(
     results.length()
   }
   for i in 0..<count {
-    self.stack.push(results[i])
+    self.stack.push(value_to_stack(results[i]))
   }
 }
 
 ///|
-/// Handle return from a tail call (return_call variants)
+/// Handle return from a tail call to imported function.
+/// Results are already on stack, just restore caller state.
 fn Runtime::handle_tail_call_return(self : Runtime) -> RetCode {
   if self.call_stack.length() > 0 {
     let frame = self.call_stack.unsafe_pop()
-    self.pc = frame.return_pc
-    self.locals = frame.locals
-    self.pc += 1
+    self.sp = frame.caller_sp
+    self.num_locals = frame.caller_num_locals
+    self.pc = frame.return_pc + 1
   } else {
     self.running = false
   }
@@ -250,71 +263,210 @@ fn Runtime::read_imm_idx(self : Runtime) -> Int {
 }
 
 // ============================================================================
-// Stack value pop helpers
+// Tagless UInt64 stack representation
+// ============================================================================
+//
+// All WebAssembly values are stored as UInt64 on the stack:
+//   - i32: stored in lower 32 bits (zero-extended)
+//   - i64: stored directly
+//   - f32: bit pattern in lower 32 bits (zero-extended)
+//   - f64: bit pattern stored directly
+//   - ref: stored as Int64 (with -1 representing null)
+//
+// This eliminates tagged union overhead and enables:
+//   - Faster stack operations (no tag checking)
+//   - Unified locals and operand stack
+//   - Arguments stay in place during calls (zero-copy)
+// ============================================================================
+
+///|
+/// Value pair for binary i32 operations
+priv struct TwoI32(UInt, UInt)
+
+///|
+/// Value pair for binary i64 operations
+#valtype
+priv struct TwoI64(UInt64, UInt64)
+
+///|
+/// Value pair for binary f32 operations
+#valtype
+priv struct TwoF32(Float, Float)
+
+///|
+/// Value pair for binary f64 operations
+#valtype
+priv struct TwoF64(Double, Double)
+
+// ============================================================================
+// Stack pop operations (UInt64 -> typed value)
+// ============================================================================
+
+///|
+fn pop_i32(stack : Array[UInt64]) -> UInt {
+  (stack.unsafe_pop() & 0xFFFFFFFFUL).to_uint()
+}
+
+///|
+fn pop_two_i32(stack : Array[UInt64]) -> TwoI32 {
+  let b = pop_i32(stack)
+  let a = pop_i32(stack)
+  TwoI32(a, b)
+}
+
+///|
+fn pop_i64(stack : Array[UInt64]) -> UInt64 {
+  stack.unsafe_pop()
+}
+
+///|
+fn pop_two_i64(stack : Array[UInt64]) -> TwoI64 {
+  let b = pop_i64(stack)
+  let a = pop_i64(stack)
+  TwoI64(a, b)
+}
+
+///|
+fn pop_f32(stack : Array[UInt64]) -> Float {
+  let bits = (stack.unsafe_pop() & 0xFFFFFFFFUL).to_uint()
+  Float::reinterpret_from_uint(bits)
+}
+
+///|
+fn pop_two_f32(stack : Array[UInt64]) -> TwoF32 {
+  let b = pop_f32(stack)
+  let a = pop_f32(stack)
+  TwoF32(a, b)
+}
+
+///|
+fn pop_f64(stack : Array[UInt64]) -> Double {
+  stack.unsafe_pop().reinterpret_as_double()
+}
+
+///|
+fn pop_two_f64(stack : Array[UInt64]) -> TwoF64 {
+  let b = pop_f64(stack)
+  let a = pop_f64(stack)
+  TwoF64(a, b)
+}
+
+///|
+fn pop_ref(stack : Array[UInt64]) -> Int {
+  stack.unsafe_pop().reinterpret_as_int64().to_int()
+}
+
+// ============================================================================
+// Stack push operations (typed value -> UInt64)
+// ============================================================================
+
+///|
+fn push_i32(stack : Array[UInt64], v : UInt) -> Unit {
+  stack.push(v.to_uint64())
+}
+
+///|
+fn push_i64(stack : Array[UInt64], v : UInt64) -> Unit {
+  stack.push(v)
+}
+
+///|
+fn push_f32(stack : Array[UInt64], v : Float) -> Unit {
+  stack.push(v.reinterpret_as_uint().to_uint64())
+}
+
+///|
+fn push_f64(stack : Array[UInt64], v : Double) -> Unit {
+  stack.push(v.reinterpret_as_uint64())
+}
+
+///|
+fn push_ref(stack : Array[UInt64], v : Int) -> Unit {
+  stack.push(v.to_int64().reinterpret_as_uint64())
+}
+
+// ============================================================================
+// Value conversion helpers (for imported function interface)
+// ============================================================================
+
+///|
+/// Convert UInt64 stack value to tagged Value based on expected type
+fn stack_to_value(raw : UInt64, val_type : @core.ValType) -> Value {
+  match val_type {
+    I32 => Value::I32((raw & 0xFFFFFFFFUL).to_uint())
+    I64 => Value::I64(raw)
+    F32 => Value::F32(Float::reinterpret_from_uint((raw & 0xFFFFFFFFUL).to_uint()))
+    F64 => Value::F64(raw.reinterpret_as_double())
+    FuncRef | ExternRef | AnyRef | NullRef | NullFuncRef | NullExternRef |
+    EqRef | I31Ref | StructRef | ArrayRef | ExnRef | NullExnRef | Ref(_, _) => {
+      let idx = raw.reinterpret_as_int64().to_int()
+      if idx == -1 {
+        Value::Ref(None)
+      } else {
+        Value::Ref(Some(idx))
+      }
+    }
+    V128 => Value::I32((raw & 0xFFFFFFFFUL).to_uint()) // V128 not fully supported yet
+  }
+}
+
+///|
+/// Convert tagged Value to UInt64 stack value
+fn value_to_stack(v : Value) -> UInt64 {
+  match v {
+    I32(x) => x.to_uint64()
+    I64(x) => x
+    F32(x) => x.reinterpret_as_uint().to_uint64()
+    F64(x) => x.reinterpret_as_uint64()
+    Ref(None) => (-1).to_int64().reinterpret_as_uint64()
+    Ref(Some(idx)) => idx.to_int64().reinterpret_as_uint64()
+  }
+}
+
+// ============================================================================
+// Runtime stack helpers (for compatibility during transition)
 // ============================================================================
 
 ///|
 fn Runtime::pop_two_i32(self : Runtime) -> (UInt, UInt) {
-  let b = self.stack.unsafe_pop()
-  let a = self.stack.unsafe_pop()
-  match (a, b) {
-    (Value::I32(a_val), Value::I32(b_val)) => (a_val, b_val)
-    _ => abort("Type error: expected two i32 values")
-  }
+  let TwoI32(a, b) = pop_two_i32(self.stack)
+  (a, b)
 }
 
 ///|
 fn Runtime::pop_i32(self : Runtime) -> UInt {
-  match self.stack.unsafe_pop() {
-    Value::I32(v) => v
-    _ => abort("Type error: expected i32")
-  }
+  pop_i32(self.stack)
 }
 
 ///|
 fn Runtime::pop_two_i64(self : Runtime) -> (UInt64, UInt64) {
-  let b = self.stack.unsafe_pop()
-  let a = self.stack.unsafe_pop()
-  match (a, b) {
-    (Value::I64(a_val), Value::I64(b_val)) => (a_val, b_val)
-    _ => abort("Type error: expected two i64 values")
-  }
+  let TwoI64(a, b) = pop_two_i64(self.stack)
+  (a, b)
 }
 
 ///|
 fn Runtime::pop_i64(self : Runtime) -> UInt64 {
-  match self.stack.unsafe_pop() {
-    Value::I64(v) => v
-    _ => abort("Type error: expected i64")
-  }
+  pop_i64(self.stack)
 }
 
 ///|
 fn Runtime::pop_f32(self : Runtime) -> Float {
-  match self.stack.unsafe_pop() {
-    Value::F32(v) => v
-    _ => abort("Type error: expected f32")
-  }
+  pop_f32(self.stack)
 }
 
 ///|
 fn Runtime::pop_two_f32(self : Runtime) -> (Float, Float) {
-  let b = self.pop_f32()
-  let a = self.pop_f32()
+  let TwoF32(a, b) = pop_two_f32(self.stack)
   (a, b)
 }
 
 ///|
 fn Runtime::pop_f64(self : Runtime) -> Double {
-  match self.stack.unsafe_pop() {
-    Value::F64(v) => v
-    _ => abort("Type error: expected f64")
-  }
+  pop_f64(self.stack)
 }
 
 ///|
 fn Runtime::pop_two_f64(self : Runtime) -> (Double, Double) {
-  let b = self.pop_f64()
-  let a = self.pop_f64()
+  let TwoF64(a, b) = pop_two_f64(self.stack)
   (a, b)
 }

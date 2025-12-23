@@ -4,21 +4,24 @@ fn make_code(locals : Array[@core.ValType]) -> @core.Code {
 }
 
 ///|
-test "compile helpers initialize locals" {
+test "compile helpers initialize entry locals" {
   let rt = make_runtime([], [], 0)
   let code = make_code([I32, Ref(Func, true)])
-  assert_ok(rt.initialize_locals([Value::I32(9U)], code))
-  assert_eq(rt.locals.length(), 3)
-  assert_eq(rt.locals[0], Value::I32(9U))
-  assert_eq(rt.locals[1], Value::I32(0U))
-  assert_eq(rt.locals[2], Value::Ref(None))
+  assert_ok(rt.initialize_entry_locals([Value::I32(9U)], code))
+  // Check unified stack: [arg0=9, local0=0, local1=null_ref]
+  assert_eq(rt.stack.length(), 3)
+  assert_eq(rt.stack[0], 9UL) // arg
+  assert_eq(rt.stack[1], 0UL) // i32 local
+  assert_eq(rt.stack[2], (-1L).reinterpret_as_uint64()) // null ref
+  assert_eq(rt.sp, 0)
+  assert_eq(rt.num_locals, 3)
 }
 
 ///|
-test "compile helpers initialize locals unsupported" {
+test "compile helpers init declared locals unsupported" {
   let rt = make_runtime([], [], 0)
   let code = make_code([V128])
-  assert_ret(rt.initialize_locals([], code), UnsupportedLocalType)
+  assert_ret(rt.init_declared_locals(code), UnsupportedLocalType)
 }
 
 ///|
@@ -63,7 +66,8 @@ test "compile helpers imported func result truncation" {
     module_: empty_module(),
     ops: [],
     stack: [],
-    locals: [],
+    sp: 0,
+    num_locals: 0,
     pc: 0,
     running: false,
     call_stack: [],
@@ -78,17 +82,20 @@ test "compile helpers imported func result truncation" {
     error_detail: "",
   }
   rt.call_imported_function(0, [], 1)
-  assert_eq(rt.stack, [Value::I32(1U)])
+  assert_eq(rt.stack, [1UL])
 }
 
 ///|
 test "compile helpers tail call return branches" {
   let rt = make_runtime([], [], 0)
   rt.running = true
-  rt.call_stack.push(CallFrame::{ return_pc: 3, locals: [Value::I32(7U)] })
+  rt.sp = 5
+  rt.num_locals = 3
+  rt.call_stack.push(CallFrame::{ return_pc: 3, caller_sp: 10, caller_num_locals: 2 })
   assert_ok(rt.handle_tail_call_return())
   assert_eq(rt.pc, 4)
-  assert_eq(rt.locals, [Value::I32(7U)])
+  assert_eq(rt.sp, 10)
+  assert_eq(rt.num_locals, 2)
   let rt_empty = make_runtime([], [], 0)
   rt_empty.running = true
   assert_ok(rt_empty.handle_tail_call_return())

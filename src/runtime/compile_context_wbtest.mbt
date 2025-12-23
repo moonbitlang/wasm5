@@ -1,6 +1,6 @@
 ///|
 test "compile context branch helpers" {
-  let ctx = CompileCtx::new()
+  let ctx = CompileCtx::new(0)
   ctx.push_control(LoopKind, [I32], [I64], 7)
   ctx.push_control(BlockKind, [], [I32], 0)
   assert_eq(ctx.get_branch_arity(1), 1)

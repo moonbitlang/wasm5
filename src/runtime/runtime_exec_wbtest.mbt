@@ -34,8 +34,8 @@ test "runtime compile start function" {
   let rt = Runtime::load_with_resolver(module_, ImportResolver::new())
   rt.compile()
   assert_eq(rt.ops.length() > 0, true)
+  // Stack is cleared after start function execution (unified stack model)
   assert_eq(rt.stack.length(), 0)
-  assert_eq(rt.locals.length(), 1)
 }
 
 ///|

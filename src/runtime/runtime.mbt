@@ -223,8 +223,9 @@ pub fn ImportResolver::get_memory(
 pub struct Runtime {
   module_ : @core.Module
   ops : Array[MInstr]
-  stack : Array[Value]
-  mut locals : Array[Value]
+  stack : Array[UInt64] // Unified stack for locals and operand stack (tagless)
+  mut sp : Int // Stack pointer: index of first local in unified stack
+  mut num_locals : Int // Number of locals for current function
   mut pc : Int
   mut running : Bool // Execution loop control flag
   call_stack : Array[CallFrame]
@@ -478,7 +479,8 @@ pub fn Runtime::load_with_resolver(
     module_: m,
     ops: [],
     stack: [],
-    locals: [],
+    sp: 0,
+    num_locals: 0,
     pc: 0,
     running: false,
     call_stack: [],
