@@ -4,7 +4,10 @@ async fn run_harness(filename : String) -> Unit {
     "test/reference_tests/", filename,
   )
   if file_failures.length() > 0 {
-    fail("Failures in \{filename}")
+    for failure in file_failures {
+      println(failure)
+    }
+    fail("\{file_failures.length()} failure(s) in \{filename}")
   }
   if file_skipped > 0 {
     println("Skipped \{file_skipped} tests in \{filename}")

@@ -1,6 +1,6 @@
 ///|
 /// Test failure record
-struct TestFailure {
+pub struct TestFailure {
   line : Int
   test_type : String
   message : String
@@ -8,14 +8,23 @@ struct TestFailure {
 }
 
 ///|
+pub impl Show for TestFailure with output(self, logger) {
+  if self.line >= 0 {
+    logger.write_string("[\{self.test_type}] \{self.source_file}:\{self.line}: \{self.message}")
+  } else {
+    logger.write_string("[\{self.test_type}] \{self.source_file}: \{self.message}")
+  }
+}
+
+///|
 /// Registered module entry for cross-module imports
-struct RegisteredModule {
+priv struct RegisteredModule {
   runtime : @wasm5_runtime.Runtime
 }
 
 ///|
 /// Module registry for cross-module imports
-struct ModuleRegistry(Map[String, RegisteredModule])
+priv struct ModuleRegistry(Map[String, RegisteredModule])
 
 ///|
 fn ModuleRegistry::new() -> ModuleRegistry {
@@ -24,7 +33,7 @@ fn ModuleRegistry::new() -> ModuleRegistry {
 
 ///|
 /// Test context passed to handlers
-struct TestContext {
+priv struct TestContext {
   dir : String
   source_file : String
   failures : Array[TestFailure]
@@ -170,7 +179,7 @@ fn register_module(
 
 ///|
 /// Error for unsupported test types
-suberror TestUnsupported {
+priv suberror TestUnsupported {
   UnsupportedArgType(String)
   UnsupportedExpectedType(String)
 }
@@ -1001,54 +1010,6 @@ pub async fn process_wast_file(
   (test_result, skipped)
 }
 
-///|
-fn print_summary(
-  failures : Array[TestFailure],
-  skipped_tests : Int,
-  skipped_files : Int,
-) -> Unit {
-  println("\n" + "=".repeat(60))
-  println("TEST SUMMARY")
-  println("=".repeat(60))
-  if failures.length() == 0 {
-    println("All tests passed! \u{2705}")
-  } else {
-    println("Total failures: \{failures.length()}")
-    println("")
-    for failure in failures {
-      if failure.line >= 0 {
-        println(
-          "[\{failure.test_type}] \{failure.source_file}:\{failure.line}: \{failure.message}",
-        )
-      } else {
-        println(
-          "[\{failure.test_type}] \{failure.source_file}: \{failure.message}",
-        )
-      }
-    }
-    println("")
-    println("Tests failed: \{failures.length()} \u{274c}")
-  }
-  if skipped_tests > 0 || skipped_files > 0 {
-    println("Skipped: \{skipped_tests} test(s), \{skipped_files} file(s)")
-  }
-}
-
-///|
-/// Blacklist of wast files to skip entirely
-/// - WAT text format tests (comments, annotations) - we only support binary WASM
-/// - Files requiring unimplemented features (linking, try_table)
-/// - Files causing runtime crashes (elem.wast)
-let blacklisted_wast_files : Array[String] = [
-  "comments.wast", // WAT text format test
-   "annotations.wast", // WAT text format test
-   "linking.wast", // Requires cross-module imports/exports
-   "try_table.wast", // Requires exception handling
-   "elem.wast", // don't know why now
-   "instance.wast", // Requires module instances (linking)
-   "type-equivalence.wast", // Requires advanced type equivalence
-   "type-rec.wast", // Requires recursive types
-]
 
 ///|
 /// Whitelist of individual tests to skip (file, line)
@@ -1116,33 +1077,3 @@ let whitelisted_tests : Array[(String, Set[Int])] = [
   ("func_ptrs.wast", Set::from_array([49])),
 ]
 
-///|
-async fn collect_wast_files(dir : String) -> Array[String] {
-  let wast_files : Array[String] = []
-  let entries = @fs.readdir(dir)
-  for entry in entries {
-    if entry.has_suffix(".wast") && not(blacklisted_wast_files.contains(entry)) {
-      wast_files.push(entry)
-    }
-  }
-  wast_files
-}
-
-// ///|
-// async fn main {
-//   let failures : Array[TestFailure] = []
-//   let mut skipped_tests = 0
-//   let wast_files = collect_wast_files("test/reference_tests/")
-//   for wast_file in wast_files {
-//     let (file_failures, file_skipped) = process_wast_file(
-//       "test/reference_tests/", wast_file,
-//     )
-//     failures.append(file_failures)
-//     skipped_tests += file_skipped
-//   }
-//   let skipped_files = blacklisted_wast_files.length()
-//   print_summary(failures, skipped_tests, skipped_files)
-//   if failures.length() > 0 {
-//     fail("Tests failed")
-//   }
-// }
