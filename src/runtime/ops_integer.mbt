@@ -66,6 +66,12 @@ fn op_i32_rem_s(rt : Runtime) -> RetCode {
   if b == 0U {
     return DivisionByZero
   }
+  // INT_MIN % -1 = 0, but division would overflow and cause SIGFPE
+  if a == 0x80000000U && b == 0xFFFFFFFFU {
+    rt.stack.push(Value::I32(0U))
+    rt.pc += 1
+    return OK
+  }
   let result = (a.reinterpret_as_int() % b.reinterpret_as_int()).reinterpret_as_uint()
   rt.stack.push(Value::I32(result))
   rt.pc += 1
@@ -409,6 +415,12 @@ fn op_i64_rem_s(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_i64()
   if b == 0UL {
     return DivisionByZero
+  }
+  // INT64_MIN % -1 = 0, but division would overflow and cause SIGFPE
+  if a == 0x8000000000000000UL && b == 0xFFFFFFFFFFFFFFFFUL {
+    rt.stack.push(Value::I64(0UL))
+    rt.pc += 1
+    return OK
   }
   let result = (a.reinterpret_as_int64() % b.reinterpret_as_int64()).reinterpret_as_uint64()
   rt.stack.push(Value::I64(result))
