@@ -16,6 +16,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache wasmtools
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/bin/wasm-tools
+          key: ${{ runner.os }}-wasmtools-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install wasmtools
+        run: |
+          if ! command -v wasm-tools &> /dev/null; then
+            cargo install wasm-tools
+          fi
+          wasm-tools --version
+
       - name: Setup MoonBit
         uses: ./.github/actions/setup
 
@@ -24,5 +37,9 @@ jobs:
 
       - name: Run integration tests
         run: |
-          ulimit -s 8176
-          moon run test --target native
+          moon run test --target native 2>&1 | tee test_output.txt
+    
+          if ! grep -q "All tests passed!" test_output.txt; then
+            echo "Integration tests did not pass!"
+            exit 1
+          fi
