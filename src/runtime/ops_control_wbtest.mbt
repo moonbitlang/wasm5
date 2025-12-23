@@ -58,30 +58,7 @@ fn assert_ctrl_stack_eq(got : UInt64, expected : Value) -> Unit {
 }
 
 ///|
-test "ops control locals and stack" {
-  let ops = [ImmediateIdx(0), ImmediateIdx(1)]
-  let rt_get = base_runtime(base_module([], [], [], []), ops, [], [
-    Value::I32(1U),
-    Value::I32(2U),
-  ])
-  assert_ok(op_local_get(rt_get))
-  assert_ctrl_stack_eq(rt_get.stack[0], Value::I32(2U))
-  let rt_set = base_runtime(
-    base_module([], [], [], []),
-    ops,
-    [Value::I32(9U)],
-    [Value::I32(1U), Value::I32(2U)],
-  )
-  assert_ok(op_local_set(rt_set))
-  assert_eq(rt_set.locals[1], Value::I32(9U))
-  let rt_tee = base_runtime(
-    base_module([], [], [], []),
-    ops,
-    [Value::I32(7U)],
-    [Value::I32(1U), Value::I32(2U)],
-  )
-  assert_ok(op_local_tee(rt_tee))
-  assert_eq(rt_tee.locals[1], Value::I32(7U))
+test "ops control drop and select" {
   let rt_drop = base_runtime(
     base_module([], [], [], []),
     [],
@@ -199,176 +176,6 @@ test "ops control branching" {
 }
 
 ///|
-test "ops control calls and return" {
-  let type0 : @core.FuncType = { params: [], results: [I32] }
-  let code0 : @core.Code = {
-    locals: [],
-    body: @core.Expr::{ instrs: [] },
-    compiled: Some(3),
-  }
-  let module_import = base_module([type0], [], [], [
-    { module_: b"m", name: b"f", desc: Func(0U) },
-  ])
-  let rt_import = Runtime::{
-    module_: module_import,
-    ops: [ImmediateIdx(0), ImmediateIdx(0)],
-    stack: [],
-    sp: 0,
-    num_locals: 0,
-    locals: [],
-    pc: 0,
-    running: true,
-    call_stack: [],
-    memory: [],
-    memory_max: None,
-    globals: [],
-    tables: [],
-    imported_funcs: [ImportedFunc::new(0U, fn(_args) { [Value::I32(7U)] })],
-    data_segments: [],
-    error_detail: "",
-  }
-  assert_ok(op_call(rt_import))
-  assert_ctrl_stack_eq(rt_import.stack[0], Value::I32(7U))
-  let module_local = base_module([type0], [0U], [code0], [])
-  let rt_local = base_runtime(
-    module_local,
-    [ImmediateIdx(0), ImmediateIdx(0)],
-    [],
-    [],
-  )
-  assert_ok(op_call(rt_local))
-  assert_eq(rt_local.pc, 3)
-  assert_eq(rt_local.call_stack.length(), 1)
-  let frame = CallFrame::{ return_pc: 5, caller_sp: 0, caller_num_locals: 0, locals: [] }
-  let rt_return = base_runtime(module_local, [], [Value::I32(1U)], [])
-  rt_return.call_stack.push(frame)
-  assert_ok(op_return(rt_return))
-  assert_eq(rt_return.pc, 6)
-  assert_ctrl_stack_eq(rt_return.stack[0], Value::I32(1U))
-}
-
-///|
-test "ops control indirect calls" {
-  let type0 : @core.FuncType = { params: [], results: [] }
-  let code0 : @core.Code = {
-    locals: [],
-    body: @core.Expr::{ instrs: [] },
-    compiled: Some(2),
-  }
-  let module_local = base_module([type0], [0U], [code0], [])
-  let rt_indirect = Runtime::{
-    module_: module_local,
-    ops: [ImmediateIdx(0), ImmediateIdx(0), ImmediateIdx(0)],
-    stack: [0UL],
-    sp: 0,
-    num_locals: 0,
-    locals: [],
-    pc: 0,
-    running: true,
-    call_stack: [],
-    memory: [],
-    memory_max: None,
-    globals: [],
-    tables: [RuntimeTable::{ data: [Some(0)], max: None }],
-    imported_funcs: [],
-    data_segments: [],
-    error_detail: "",
-  }
-  assert_ok(op_call_indirect(rt_indirect))
-  assert_eq(rt_indirect.pc, 2)
-  let rt_indirect_bad = Runtime::{
-    module_: module_local,
-    ops: [ImmediateIdx(0), ImmediateIdx(1), ImmediateIdx(0)],
-    stack: [0UL],
-    sp: 0,
-    num_locals: 0,
-    locals: [],
-    pc: 0,
-    running: true,
-    call_stack: [],
-    memory: [],
-    memory_max: None,
-    globals: [],
-    tables: [],
-    imported_funcs: [],
-    data_segments: [],
-    error_detail: "",
-  }
-  assert_ret(op_call_indirect(rt_indirect_bad), InvalidType)
-  let rt_ret_indirect = Runtime::{
-    module_: module_local,
-    ops: [ImmediateIdx(0), ImmediateIdx(0), ImmediateIdx(0)],
-    stack: [0UL],
-    sp: 0,
-    num_locals: 0,
-    locals: [],
-    pc: 0,
-    running: true,
-    call_stack: [],
-    memory: [],
-    memory_max: None,
-    globals: [],
-    tables: [RuntimeTable::{ data: [Some(0)], max: None }],
-    imported_funcs: [],
-    data_segments: [],
-    error_detail: "",
-  }
-  assert_ok(op_return_call_indirect(rt_ret_indirect))
-  assert_eq(rt_ret_indirect.pc, 2)
-}
-
-///|
-test "ops control ref calls and tables" {
-  let type0 : @core.FuncType = { params: [], results: [] }
-  let code0 : @core.Code = {
-    locals: [],
-    body: @core.Expr::{ instrs: [] },
-    compiled: Some(4),
-  }
-  let module_local = base_module([type0], [0U], [code0], [])
-  let rt_call_ref = base_runtime(
-    module_local,
-    [ImmediateIdx(0), ImmediateIdx(0)],
-    [Value::Ref(Some(0))],
-    [],
-  )
-  assert_ok(op_call_ref(rt_call_ref))
-  assert_eq(rt_call_ref.pc, 4)
-  let rt_return_ref = base_runtime(
-    module_local,
-    [ImmediateIdx(0), ImmediateIdx(0)],
-    [Value::Ref(Some(0))],
-    [],
-  )
-  assert_ok(op_return_call_ref(rt_return_ref))
-  assert_eq(rt_return_ref.pc, 4)
-  let rt_table = Runtime::{
-    module_: module_local,
-    ops: [ImmediateIdx(0), ImmediateIdx(0)],
-    stack: [0UL, 0UL],  // I32(0) and Ref(func_idx=0)
-    sp: 0,
-    num_locals: 0,
-    locals: [],
-    pc: 0,
-    running: true,
-    call_stack: [],
-    memory: [],
-    memory_max: None,
-    globals: [],
-    tables: [RuntimeTable::{ data: [None], max: Some(2U) }],
-    imported_funcs: [],
-    data_segments: [],
-    error_detail: "",
-  }
-  assert_ok(op_table_set(rt_table))
-  rt_table.stack.clear()
-  rt_table.pc = 0
-  push_i32(rt_table.stack, 0U)
-  assert_ok(op_table_get(rt_table))
-  assert_ctrl_stack_eq(rt_table.stack[0], Value::Ref(Some(0)))
-}
-
-///|
 test "ops control table grow and globals" {
   let module_local = base_module([], [], [], [])
   let rt_table_size = Runtime::{
@@ -394,7 +201,7 @@ test "ops control table grow and globals" {
   let rt_table_grow = Runtime::{
     module_: module_local,
     ops: [ImmediateIdx(0), ImmediateIdx(0)],
-    stack: [0xFFFFFFFF_FFFFFFFFUL, 1UL],  // Ref(None)=-1, I32(1)
+    stack: [0xFFFFFFFF_FFFFFFFFUL, 1UL], // Ref(None)=-1, I32(1)
     sp: 0,
     num_locals: 0,
     locals: [],

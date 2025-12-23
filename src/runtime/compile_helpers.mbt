@@ -132,37 +132,48 @@ fn Runtime::pop_arguments(
 }
 
 ///|
-/// Initialize local variables for a function call
-/// Sets up locals array (stack is operand-only)
-fn Runtime::initialize_locals(
-  self : Runtime,
-  args : Array[Value],
-  code : @core.Code,
-) -> RetCode {
-  // Initialize locals array with arguments and default values
-  self.locals = []
-  for arg in args {
-    self.locals.push(arg)
-  }
+/// Push default values for declared locals onto the unified stack.
+/// Params are already on the stack - this only handles declared locals.
+fn Runtime::init_declared_locals(self : Runtime, code : @core.Code) -> RetCode {
   for local_type in code.locals {
     match local_type {
-      I32 => self.locals.push(Value::I32(0U))
-      I64 => self.locals.push(Value::I64(0UL))
-      F32 => self.locals.push(Value::F32(0.0))
-      F64 => self.locals.push(Value::F64(0.0))
+      I32 | I64 | F32 | F64 => self.stack.push(0UL)
       FuncRef | ExternRef | AnyRef | ExnRef | NullRef | NullFuncRef |
       NullExnRef | NullExternRef | EqRef | I31Ref | StructRef | ArrayRef |
-      Ref(_, _) => self.locals.push(Value::Ref(None))
+      Ref(_, _) => self.stack.push((-1L).reinterpret_as_uint64()) // null ref
       _ => {
         self.error_detail = "Unsupported local type: \{local_type}"
         return UnsupportedLocalType
       }
     }
   }
+  OK
+}
 
-  // Set num_locals for reference (sp is no longer used for locals)
+///|
+/// Initialize locals for entry point (call_compiled, start function).
+/// Pushes args onto stack, then declared locals, and sets sp/num_locals.
+fn Runtime::initialize_entry_locals(
+  self : Runtime,
+  args : Array[Value],
+  code : @core.Code,
+) -> RetCode {
+  // sp points to start of locals (current stack position)
+  self.sp = self.stack.length()
+
+  // Push arguments as first locals
+  for arg in args {
+    self.stack.push(value_to_stack(arg))
+  }
+
+  // Push default values for declared locals
+  let result = self.init_declared_locals(code)
+  if result != OK {
+    return result
+  }
+
+  // Set num_locals
   self.num_locals = args.length() + code.locals.length()
-  self.sp = 0
   OK
 }
 

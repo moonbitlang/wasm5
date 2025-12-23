@@ -878,7 +878,7 @@ test "compile helpers pop arguments" {
 
 ///|
 test "compile context stack ops and errors" {
-  let ctx = CompileCtx::new()
+  let ctx = CompileCtx::new(0)
   ctx.push_type(I32)
   ctx.pop_type()
   ctx.push_types([I32, I64])

@@ -1,7 +1,9 @@
 ///|
+/// Local access uses unified stack: stack[sp + idx]
 fn op_local_get(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
-  rt.stack.push(value_to_stack(rt.locals[idx]))
+  let value = rt.stack[rt.sp + idx]
+  rt.stack.push(value)
   rt.pc += 1
   OK
 }
@@ -9,17 +11,8 @@ fn op_local_get(rt : Runtime) -> RetCode {
 ///|
 fn op_local_set(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
-  let raw = rt.stack.unsafe_pop()
-  // Write to old locals array (backward compatible)
-  // Infer type from existing local's tag
-  let val_type : @core.ValType = match rt.locals[idx] {
-    I32(_) => I32
-    I64(_) => I64
-    F32(_) => F32
-    F64(_) => F64
-    Ref(_) => FuncRef
-  }
-  rt.locals[idx] = stack_to_value(raw, val_type)
+  let value = rt.stack.unsafe_pop()
+  rt.stack[rt.sp + idx] = value
   rt.pc += 1
   OK
 }
@@ -27,16 +20,8 @@ fn op_local_set(rt : Runtime) -> RetCode {
 ///|
 fn op_local_tee(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
-  let raw = rt.stack[rt.stack.length() - 1]
-  // Write to old locals array (backward compatible)
-  let val_type : @core.ValType = match rt.locals[idx] {
-    I32(_) => I32
-    I64(_) => I64
-    F32(_) => F32
-    F64(_) => F64
-    Ref(_) => FuncRef
-  }
-  rt.locals[idx] = stack_to_value(raw, val_type)
+  let value = rt.stack[rt.stack.length() - 1]
+  rt.stack[rt.sp + idx] = value
   rt.pc += 1
   OK
 }
@@ -278,54 +263,67 @@ fn op_call(rt : Runtime) -> RetCode {
     rt.error_detail = "Function not compiled: \{func_idx}"
     return FunctionNotCompiled
   }
-  let args = rt.pop_arguments(func_type)
 
-  // Save frame
+  // Unified stack: arguments are already on stack, they become callee's first locals
+  // new_sp points to where arguments start (they stay in place!)
+  let num_params = func_type.params.length()
+  let new_sp = rt.stack.length() - num_params
+
+  // Save caller's frame
   rt.call_stack.push(
     CallFrame::{
       return_pc: rt.pc,
       caller_sp: rt.sp,
       caller_num_locals: rt.num_locals,
-      locals: rt.locals,
+      locals: [], // No longer used
     },
   )
 
-  // Set up new locals for callee (stack remains as-is for operands)
-  let init_result = rt.initialize_locals(args, code)
+  // Push default values for declared locals (not params - they're already on stack)
+  let init_result = rt.init_declared_locals(code)
   if init_result != OK {
     return init_result
   }
+
+  // Update frame state
+  rt.sp = new_sp
+  rt.num_locals = num_params + code.locals.length()
   rt.pc = callee_pc
   OK
 }
 
 ///|
 fn op_return(rt : Runtime) -> RetCode {
+  // Read result count from immediate (emitted at compile time)
+  let num_return_values = rt.read_imm_idx()
+
+  // Unified stack return:
+  // Return values are the top num_return_values values on the stack
+  // Copy them in-place to: stack[sp .. sp + num_return_values)
+  // Then trim stack to sp + num_return_values
+  let return_start = rt.stack.length() - num_return_values
+
+  // Copy return values to start of frame
+  for i = 0; i < num_return_values; i = i + 1 {
+    rt.stack[rt.sp + i] = rt.stack[return_start + i]
+  }
+
+  // Trim stack to keep only return values at frame position
+  let target_len = rt.sp + num_return_values
+  while rt.stack.length() > target_len {
+    let _ = rt.stack.unsafe_pop()
+  }
+
   if rt.call_stack.length() == 0 {
+    // Entry function returning - results are now at stack[0..num_return_values)
     rt.running = false
     return OK
   }
 
-  // Pop return value (if any) from operand stack
-  // Note: For functions with no return value, the stack might be empty
-  // For functions with return value, it should be on top
-  let return_value : UInt64? = if rt.stack.length() > 0 {
-    Some(rt.stack.unsafe_pop())
-  } else {
-    None
-  }
-
   // Restore caller's state
   let frame = rt.call_stack.unsafe_pop()
-  rt.locals = frame.locals
   rt.sp = frame.caller_sp
   rt.num_locals = frame.caller_num_locals
-
-  // Push return value onto operand stack (stack is shared, no need to restore)
-  match return_value {
-    Some(v) => rt.stack.push(v)
-    None => ()
-  }
 
   rt.pc = frame.return_pc + 1
   OK
@@ -413,35 +411,38 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
     rt.error_detail = "Function not compiled: \{func_idx}"
     return FunctionNotCompiled
   }
-  let args = rt.pop_arguments(actual_type)
 
-  // Save frame
+  // Unified stack: arguments are already on stack, they become callee's first locals
+  let num_params = actual_type.params.length()
+  let new_sp = rt.stack.length() - num_params
+
+  // Save caller's frame
   rt.call_stack.push(
     CallFrame::{
       return_pc: rt.pc,
       caller_sp: rt.sp,
       caller_num_locals: rt.num_locals,
-      locals: rt.locals,
+      locals: [],
     },
   )
 
-  // Set up new locals for callee (stack remains as-is for operands)
-  let init_result = rt.initialize_locals(args, code)
+  // Push default values for declared locals
+  let init_result = rt.init_declared_locals(code)
   if init_result != OK {
     return init_result
   }
+
+  // Update frame state
+  rt.sp = new_sp
+  rt.num_locals = num_params + code.locals.length()
   rt.pc = callee_pc
   OK
 }
 
 ///|
 fn op_end(rt : Runtime) -> RetCode {
-  if rt.call_stack.length() > 0 {
-    op_return(rt)
-  } else {
-    rt.running = false
-    OK
-  }
+  // op_end always triggers the return logic to handle result copying
+  op_return(rt)
 }
 
 ///|
@@ -472,14 +473,34 @@ fn op_return_call(rt : Runtime) -> RetCode {
     rt.error_detail = "Function not compiled: \{func_idx}"
     return FunctionNotCompiled
   }
-  let args = rt.pop_arguments(func_type)
+  // Tail call: reuse current frame
+  // Pop arguments, trim stack to sp, push args back as new locals
+  let num_params = func_type.params.length()
 
-  // For tail call: replace current locals instead of pushing new frame
-  rt.stack.clear()
-  let init_result = rt.initialize_locals(args, code)
+  // Save arguments from stack top
+  let args : Array[UInt64] = []
+  for _ in 0..<num_params {
+    args.push(rt.stack.unsafe_pop())
+  }
+
+  // Trim stack to sp (remove current frame)
+  while rt.stack.length() > rt.sp {
+    let _ = rt.stack.unsafe_pop()
+  }
+
+  // Push arguments back as new locals (in correct order)
+  for i = num_params - 1; i >= 0; i = i - 1 {
+    rt.stack.push(args[i])
+  }
+
+  // Push default values for declared locals
+  let init_result = rt.init_declared_locals(code)
   if init_result != OK {
     return init_result
   }
+
+  // Update num_locals (sp stays same)
+  rt.num_locals = num_params + code.locals.length()
   rt.pc = callee_pc
   OK
 }
@@ -565,14 +586,34 @@ fn op_return_call_indirect(rt : Runtime) -> RetCode {
     rt.error_detail = "Function not compiled: \{func_idx}"
     return FunctionNotCompiled
   }
-  let args = rt.pop_arguments(actual_type)
 
-  // For tail call: replace current locals instead of pushing new frame
-  rt.stack.clear()
-  let init_result = rt.initialize_locals(args, code)
+  // Tail call: reuse current frame
+  let num_params = actual_type.params.length()
+
+  // Save arguments from stack top
+  let args : Array[UInt64] = []
+  for _ in 0..<num_params {
+    args.push(rt.stack.unsafe_pop())
+  }
+
+  // Trim stack to sp (remove current frame)
+  while rt.stack.length() > rt.sp {
+    let _ = rt.stack.unsafe_pop()
+  }
+
+  // Push arguments back as new locals (in correct order)
+  for i = num_params - 1; i >= 0; i = i - 1 {
+    rt.stack.push(args[i])
+  }
+
+  // Push default values for declared locals
+  let init_result = rt.init_declared_locals(code)
   if init_result != OK {
     return init_result
   }
+
+  // Update num_locals (sp stays same)
+  rt.num_locals = num_params + code.locals.length()
   rt.pc = callee_pc
   OK
 }
@@ -641,23 +682,30 @@ fn op_call_ref(rt : Runtime) -> RetCode {
     rt.error_detail = "Function not compiled: \{func_idx}"
     return FunctionNotCompiled
   }
-  let args = rt.pop_arguments(func_type)
 
-  // Save frame
+  // Unified stack: arguments are already on stack, they become callee's first locals
+  let num_params = func_type.params.length()
+  let new_sp = rt.stack.length() - num_params
+
+  // Save caller's frame
   rt.call_stack.push(
     CallFrame::{
       return_pc: rt.pc,
       caller_sp: rt.sp,
       caller_num_locals: rt.num_locals,
-      locals: rt.locals,
+      locals: [],
     },
   )
 
-  // Set up new locals for callee (stack remains as-is for operands)
-  let init_result = rt.initialize_locals(args, code)
+  // Push default values for declared locals
+  let init_result = rt.init_declared_locals(code)
   if init_result != OK {
     return init_result
   }
+
+  // Update frame state
+  rt.sp = new_sp
+  rt.num_locals = num_params + code.locals.length()
   rt.pc = callee_pc
   OK
 }
@@ -725,14 +773,34 @@ fn op_return_call_ref(rt : Runtime) -> RetCode {
     rt.error_detail = "Function not compiled: \{func_idx}"
     return FunctionNotCompiled
   }
-  let args = rt.pop_arguments(func_type)
 
-  // For tail call: replace current locals instead of pushing new frame
-  rt.stack.clear()
-  let init_result = rt.initialize_locals(args, code)
+  // Tail call: reuse current frame
+  let num_params = func_type.params.length()
+
+  // Save arguments from stack top
+  let args : Array[UInt64] = []
+  for _ in 0..<num_params {
+    args.push(rt.stack.unsafe_pop())
+  }
+
+  // Trim stack to sp (remove current frame)
+  while rt.stack.length() > rt.sp {
+    let _ = rt.stack.unsafe_pop()
+  }
+
+  // Push arguments back as new locals (in correct order)
+  for i = num_params - 1; i >= 0; i = i - 1 {
+    rt.stack.push(args[i])
+  }
+
+  // Push default values for declared locals
+  let init_result = rt.init_declared_locals(code)
   if init_result != OK {
     return init_result
   }
+
+  // Update num_locals (sp stays same)
+  rt.num_locals = num_params + code.locals.length()
   rt.pc = callee_pc
   OK
 }

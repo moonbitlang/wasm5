@@ -71,11 +71,12 @@ pub struct CompileBlock {
 pub struct CompileCtx {
   type_stack : Array[@core.ValType]
   control_stack : Array[CompileBlock]
+  func_result_count : Int // Number of results the function returns
 }
 
 ///|
-fn CompileCtx::new() -> CompileCtx {
-  { type_stack: [], control_stack: [] }
+fn CompileCtx::new(func_result_count : Int) -> CompileCtx {
+  { type_stack: [], control_stack: [], func_result_count }
 }
 
 ///|

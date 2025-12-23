@@ -8,8 +8,8 @@ fn Runtime::compile_func(
   let type_idx = self.module_.funcs[func_idx].reinterpret_as_int()
   let func_type = self.module_.types[type_idx]
 
-  // Create compile-time context
-  let ctx = CompileCtx::new()
+  // Create compile-time context with function result count
+  let ctx = CompileCtx::new(func_type.results.length())
 
   // Push function parameters onto type stack (they become locals)
   // Parameters are already in locals, but we need them on the type stack
@@ -28,10 +28,10 @@ fn Runtime::compile_func(
   for instr in code.body.instrs {
     self.compile_wasm_instr(ctx, instr)
   }
+  // Emit op_end with result count (implicit return at function end)
   self.emit(WasmInstr(op_end))
-
-  // Now we know the end PC - patch all pending branches from function body
-  let end_pc = self.ops.length() - 1 // Points to op_end
+  let end_pc = self.ops.length() - 1 // Points to op_end (before immediate)
+  self.emit(ImmediateIdx(ctx.func_result_count))
   let func_block = ctx.pop_control()
   for slot in func_block.pending_br_patches {
     self.ops[slot] = ImmediateIdx(end_pc)
@@ -66,8 +66,8 @@ pub fn Runtime::compile(self : Runtime) -> Unit raise RuntimeError {
         self.stack.clear()
         self.call_stack.clear()
 
-        // Initialize locals (start function has no parameters)
-        let init_result = self.initialize_locals([], code)
+        // Initialize entry locals (start function has no parameters)
+        let init_result = self.initialize_entry_locals([], code)
         if init_result != OK {
           raise init_result.to_error(self.error_detail)
         }
@@ -144,12 +144,12 @@ pub fn Runtime::call_compiled(
     )
   }
 
-  // Clear stack and call_stack before setting up locals
+  // Clear stack and call_stack before setting up entry frame
   self.stack.clear()
   self.call_stack.clear()
 
-  // Initialize locals (pushes to stack and sets sp/num_locals)
-  let init_result = self.initialize_locals(args, code)
+  // Initialize entry locals (pushes args and locals onto stack, sets sp/num_locals)
+  let init_result = self.initialize_entry_locals(args, code)
   if init_result != OK {
     raise init_result.to_error(self.error_detail)
   }
@@ -157,17 +157,14 @@ pub fn Runtime::call_compiled(
   self.pc = start_pc
   self.execute()
 
-  // Pop results from operand stack (stack is operand-only)
+  // Extract results from unified stack
+  // After function returns, results are at stack[0..num_results)
   let results : Array[Value] = []
   let result_types = func_type.results
   for i in 0..<result_types.length() {
-    if self.stack.length() > 0 {
-      let raw = self.stack.unsafe_pop()
-      // Pop in reverse order, so access result types from the end
-      let type_idx = result_types.length() - 1 - i
-      results.push(stack_to_value(raw, result_types[type_idx]))
+    if i < self.stack.length() {
+      results.push(stack_to_value(self.stack[i], result_types[i]))
     }
   }
-  results.rev_in_place()
   results
 }

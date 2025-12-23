@@ -4,21 +4,24 @@ fn make_code(locals : Array[@core.ValType]) -> @core.Code {
 }
 
 ///|
-test "compile helpers initialize locals" {
+test "compile helpers initialize entry locals" {
   let rt = make_runtime([], [], 0)
   let code = make_code([I32, Ref(Func, true)])
-  assert_ok(rt.initialize_locals([Value::I32(9U)], code))
-  assert_eq(rt.locals.length(), 3)
-  assert_eq(rt.locals[0], Value::I32(9U))
-  assert_eq(rt.locals[1], Value::I32(0U))
-  assert_eq(rt.locals[2], Value::Ref(None))
+  assert_ok(rt.initialize_entry_locals([Value::I32(9U)], code))
+  // Check unified stack: [arg0=9, local0=0, local1=null_ref]
+  assert_eq(rt.stack.length(), 3)
+  assert_eq(rt.stack[0], 9UL) // arg
+  assert_eq(rt.stack[1], 0UL) // i32 local
+  assert_eq(rt.stack[2], (-1L).reinterpret_as_uint64()) // null ref
+  assert_eq(rt.sp, 0)
+  assert_eq(rt.num_locals, 3)
 }
 
 ///|
-test "compile helpers initialize locals unsupported" {
+test "compile helpers init declared locals unsupported" {
   let rt = make_runtime([], [], 0)
   let code = make_code([V128])
-  assert_ret(rt.initialize_locals([], code), UnsupportedLocalType)
+  assert_ret(rt.init_declared_locals(code), UnsupportedLocalType)
 }
 
 ///|
