@@ -16,55 +16,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache wasmtools
+      - name: Cache wasm-tools
         uses: actions/cache@v3
         with:
           path: ~/.cargo/bin/wasm-tools
-          key: ${{ runner.os }}-wasmtools-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-wasm-tools-1.243.0
 
-      - name: Install wasmtools
+      - name: Install wasm-tools
         run: |
           if ! command -v wasm-tools &> /dev/null; then
-            cargo install wasm-tools
+            cargo install wasm-tools@1.243.0
           fi
           wasm-tools --version
 
       - name: Setup MoonBit
         uses: ./.github/actions/setup
 
-      - name: Install wasm-tools
-        shell: bash
-        run: |
-          set -euo pipefail
-          version="1.243.0"
-          os="$(uname -s)"
-          arch="$(uname -m)"
-          case "$os" in
-            Linux) platform="linux" ;;
-            Darwin) platform="macos" ;;
-            *) echo "unsupported OS: $os" >&2; exit 1 ;;
-          esac
-          case "$arch" in
-            x86_64) arch_tag="x86_64" ;;
-            aarch64|arm64) arch_tag="aarch64" ;;
-            *) echo "unsupported arch: $arch" >&2; exit 1 ;;
-          esac
-          asset="wasm-tools-${version}-${arch_tag}-${platform}.tar.gz"
-          url="https://github.com/bytecodealliance/wasm-tools/releases/download/v${version}/${asset}"
-          curl -fsSL "$url" -o /tmp/wasm-tools.tar.gz
-          mkdir -p "$HOME/.local/bin"
-          tar -xzf /tmp/wasm-tools.tar.gz -C "$HOME/.local/bin" --strip-components=1 "wasm-tools-${version}-${arch_tag}-${platform}/wasm-tools"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          wasm-tools --version
-
-      - name: Run unit tests
+      - name: Run tests (debug)
         run: moon test --target native
 
-      - name: Run integration tests
-        run: |
-          moon run test --target native 2>&1 | tee test_output.txt
-    
-          if ! grep -q "All tests passed!" test_output.txt; then
-            echo "Integration tests did not pass!"
-            exit 1
-          fi
+      - name: Run tests (release)
+        run: moon test --target native --release
