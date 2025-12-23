@@ -28,9 +28,9 @@ fn Runtime::compile_func(
   for instr in code.body.instrs {
     self.compile_wasm_instr(ctx, instr)
   }
-  // Emit op_end with result count (implicit return at function end)
-  self.emit(WasmInstr(op_end))
-  let end_pc = self.ops.length() - 1 // Points to op_end (before immediate)
+  // Emit implicit return at function end
+  self.emit(WasmInstr(op_return))
+  let end_pc = self.ops.length() - 1 // Points to op_return (before immediate)
   self.emit(ImmediateIdx(ctx.func_result_count))
   let func_block = ctx.pop_control()
   for slot in func_block.pending_br_patches {

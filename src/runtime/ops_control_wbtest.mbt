@@ -25,7 +25,6 @@ fn base_runtime(
   module_ : @core.Module,
   ops : Array[MInstr],
   stack : Array[Value],
-  locals : Array[Value],
 ) -> Runtime {
   // Convert Value arrays to UInt64
   let stack64 = stack.map(value_to_stack)
@@ -35,7 +34,6 @@ fn base_runtime(
     stack: stack64,
     sp: 0,
     num_locals: 0,
-    locals,
     pc: 0,
     running: true,
     call_stack: [],
@@ -63,7 +61,6 @@ test "ops control drop and select" {
     base_module([], [], [], []),
     [],
     [Value::I32(1U)],
-    [],
   )
   assert_ok(op_drop(rt_drop))
   assert_eq(rt_drop.stack.length(), 0)
@@ -71,7 +68,6 @@ test "ops control drop and select" {
     base_module([], [], [], []),
     [],
     [Value::I32(10U), Value::I32(20U), Value::I32(1U)],
-    [],
   )
   assert_ok(op_select(rt_select))
   assert_ctrl_stack_eq(rt_select.stack[0], Value::I32(10U))
@@ -83,7 +79,6 @@ test "ops control branching" {
     base_module([], [], [], []),
     [ImmediateIdx(0), ImmediateIdx(7)],
     [Value::I32(1U)],
-    [],
   )
   assert_ok(op_if(rt_if_true))
   assert_eq(rt_if_true.pc, 2)
@@ -91,7 +86,6 @@ test "ops control branching" {
     base_module([], [], [], []),
     [ImmediateIdx(0), ImmediateIdx(9)],
     [Value::I32(0U)],
-    [],
   )
   assert_ok(op_if(rt_if_false))
   assert_eq(rt_if_false.pc, 9)
@@ -99,7 +93,6 @@ test "ops control branching" {
     base_module([], [], [], []),
     [ImmediateIdx(0), ImmediateIdx(10), ImmediateIdx(1), ImmediateIdx(1)],
     [Value::I32(1U), Value::I32(2U), Value::I32(3U)],
-    [],
   )
   assert_ok(op_br(rt_br))
   assert_eq(rt_br.pc, 10)
@@ -108,7 +101,6 @@ test "ops control branching" {
     base_module([], [], [], []),
     [ImmediateIdx(0), ImmediateIdx(5), ImmediateIdx(1), ImmediateIdx(0)],
     [Value::I32(9U), Value::I32(1U)],
-    [],
   )
   assert_ok(op_br_if(rt_br_if))
   assert_eq(rt_br_if.pc, 5)
@@ -117,7 +109,6 @@ test "ops control branching" {
     base_module([], [], [], []),
     [ImmediateIdx(0), ImmediateIdx(5), ImmediateIdx(1), ImmediateIdx(0)],
     [Value::I32(9U), Value::I32(0U)],
-    [],
   )
   assert_ok(op_br_if(rt_br_if_false))
   assert_eq(rt_br_if_false.pc, 4)
@@ -135,7 +126,6 @@ test "ops control branching" {
       ImmediateIdx(0),
     ],
     [Value::I32(7U), Value::I32(1U)],
-    [],
   )
   assert_ok(op_br_table(rt_br_table))
   assert_eq(rt_br_table.pc, 20)
@@ -153,7 +143,6 @@ test "ops control branching" {
       ImmediateIdx(0),
     ],
     [Value::I32(7U), Value::I32(5U)],
-    [],
   )
   assert_ok(op_br_table(rt_br_table_default))
   assert_eq(rt_br_table_default.pc, 30)
@@ -161,7 +150,6 @@ test "ops control branching" {
     base_module([], [], [], []),
     [ImmediateIdx(0), ImmediateIdx(8), ImmediateIdx(0), ImmediateIdx(0)],
     [Value::Ref(None)],
-    [],
   )
   assert_ok(op_br_on_null(rt_br_on_null))
   assert_eq(rt_br_on_null.pc, 8)
@@ -169,7 +157,6 @@ test "ops control branching" {
     base_module([], [], [], []),
     [ImmediateIdx(0), ImmediateIdx(4), ImmediateIdx(0), ImmediateIdx(0)],
     [Value::Ref(Some(1))],
-    [],
   )
   assert_ok(op_br_on_non_null(rt_br_on_non_null))
   assert_eq(rt_br_on_non_null.pc, 4)
@@ -184,7 +171,6 @@ test "ops control table grow and globals" {
     stack: [],
     sp: 0,
     num_locals: 0,
-    locals: [],
     pc: 0,
     running: true,
     call_stack: [],
@@ -204,7 +190,6 @@ test "ops control table grow and globals" {
     stack: [0xFFFFFFFF_FFFFFFFFUL, 1UL], // Ref(None)=-1, I32(1)
     sp: 0,
     num_locals: 0,
-    locals: [],
     pc: 0,
     running: true,
     call_stack: [],
@@ -224,7 +209,6 @@ test "ops control table grow and globals" {
     stack: [9UL],
     sp: 0,
     num_locals: 0,
-    locals: [],
     pc: 0,
     running: true,
     call_stack: [],
@@ -250,18 +234,16 @@ test "ops control reference ops" {
     module_local,
     [ImmediateIdx(0), ImmediateIdx(0)],
     [],
-    [],
   )
   assert_ok(op_ref_null(rt_ref_null))
   assert_ctrl_stack_eq(rt_ref_null.stack[0], Value::Ref(None))
-  let rt_ref_is_null = base_runtime(module_local, [], [Value::Ref(None)], [])
+  let rt_ref_is_null = base_runtime(module_local, [], [Value::Ref(None)])
   assert_ok(op_ref_is_null(rt_ref_is_null))
   assert_ctrl_stack_eq(rt_ref_is_null.stack[0], Value::I32(1U))
   let rt_ref_eq_same = base_runtime(
     module_local,
     [],
     [Value::Ref(Some(1)), Value::Ref(Some(1))],
-    [],
   )
   assert_ok(op_ref_eq(rt_ref_eq_same))
   assert_ctrl_stack_eq(rt_ref_eq_same.stack[0], Value::I32(1U))
@@ -269,7 +251,6 @@ test "ops control reference ops" {
     module_local,
     [],
     [Value::Ref(Some(1)), Value::Ref(Some(2))],
-    [],
   )
   assert_ok(op_ref_eq(rt_ref_eq_diff))
   assert_ctrl_stack_eq(rt_ref_eq_diff.stack[0], Value::I32(0U))
@@ -277,7 +258,6 @@ test "ops control reference ops" {
     module_local,
     [],
     [Value::Ref(Some(0))],
-    [],
   )
   assert_ok(op_ref_as_non_null(rt_ref_as_non_null))
   assert_ctrl_stack_eq(rt_ref_as_non_null.stack[0], Value::Ref(Some(0)))
@@ -285,7 +265,6 @@ test "ops control reference ops" {
     module_local,
     [],
     [Value::Ref(None)],
-    [],
   )
   assert_ret(op_ref_as_non_null(rt_ref_as_non_null_null), InvalidType)
 }
@@ -297,20 +276,17 @@ test "ops control table bulk stubs" {
     module_local,
     [ImmediateIdx(0), ImmediateIdx(0), ImmediateIdx(0)],
     [Value::I32(0U), Value::I32(0U), Value::I32(0U)],
-    [],
   )
   assert_ok(op_table_init(rt_table_init))
   let rt_table_copy = base_runtime(
     module_local,
     [ImmediateIdx(0), ImmediateIdx(0), ImmediateIdx(0)],
     [Value::I32(0U), Value::I32(0U), Value::I32(0U)],
-    [],
   )
   assert_ok(op_table_copy(rt_table_copy))
   let rt_elem_drop = base_runtime(
     module_local,
     [ImmediateIdx(0), ImmediateIdx(0)],
-    [],
     [],
   )
   assert_ok(op_elem_drop(rt_elem_drop))
@@ -319,7 +295,7 @@ test "ops control table bulk stubs" {
 ///|
 test "ops control nop and unreachable" {
   let module_local = base_module([], [], [], [])
-  let rt_nop = base_runtime(module_local, [], [], [])
+  let rt_nop = base_runtime(module_local, [], [])
   assert_ok(op_nop(rt_nop))
   assert_ret(op_unreachable(rt_nop), Unreachable)
 }

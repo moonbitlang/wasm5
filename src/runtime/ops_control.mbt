@@ -271,12 +271,7 @@ fn op_call(rt : Runtime) -> RetCode {
 
   // Save caller's frame
   rt.call_stack.push(
-    CallFrame::{
-      return_pc: rt.pc,
-      caller_sp: rt.sp,
-      caller_num_locals: rt.num_locals,
-      locals: [], // No longer used
-    },
+    CallFrame::{ return_pc: rt.pc, caller_sp: rt.sp, caller_num_locals: rt.num_locals },
   )
 
   // Push default values for declared locals (not params - they're already on stack)
@@ -418,12 +413,7 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
 
   // Save caller's frame
   rt.call_stack.push(
-    CallFrame::{
-      return_pc: rt.pc,
-      caller_sp: rt.sp,
-      caller_num_locals: rt.num_locals,
-      locals: [],
-    },
+    CallFrame::{ return_pc: rt.pc, caller_sp: rt.sp, caller_num_locals: rt.num_locals },
   )
 
   // Push default values for declared locals
@@ -437,12 +427,6 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
   rt.num_locals = num_params + code.locals.length()
   rt.pc = callee_pc
   OK
-}
-
-///|
-fn op_end(rt : Runtime) -> RetCode {
-  // op_end always triggers the return logic to handle result copying
-  op_return(rt)
 }
 
 ///|
@@ -689,12 +673,7 @@ fn op_call_ref(rt : Runtime) -> RetCode {
 
   // Save caller's frame
   rt.call_stack.push(
-    CallFrame::{
-      return_pc: rt.pc,
-      caller_sp: rt.sp,
-      caller_num_locals: rt.num_locals,
-      locals: [],
-    },
+    CallFrame::{ return_pc: rt.pc, caller_sp: rt.sp, caller_num_locals: rt.num_locals },
   )
 
   // Push default values for declared locals

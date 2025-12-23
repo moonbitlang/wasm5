@@ -29,7 +29,6 @@ fn make_runtime(
     stack: stack64,
     sp: 0,
     num_locals: 0,
-    locals: [],
     pc: 0,
     running: false,
     call_stack: [],
@@ -727,7 +726,6 @@ test "ops memory load/store and size" {
     stack: [1UL], // i32(1) as UInt64
     sp: 0,
     num_locals: 0,
-    locals: [],
     pc: 0,
     running: false,
     call_stack: [],
@@ -784,7 +782,6 @@ test "ops memory out of bounds and bulk ops" {
     stack: [0UL, 0UL, 2UL], // i32 values as UInt64
     sp: 0,
     num_locals: 0,
-    locals: [],
     pc: 0,
     running: false,
     call_stack: [],
@@ -805,7 +802,6 @@ test "ops memory out of bounds and bulk ops" {
     stack: [],
     sp: 0,
     num_locals: 0,
-    locals: [],
     pc: 0,
     running: false,
     call_stack: [],

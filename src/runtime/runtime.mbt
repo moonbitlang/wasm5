@@ -226,7 +226,6 @@ pub struct Runtime {
   stack : Array[UInt64] // Unified stack for locals and operand stack (tagless)
   mut sp : Int // Stack pointer: index of first local in unified stack
   mut num_locals : Int // Number of locals for current function
-  mut locals : Array[Value] // TODO: Remove after unifying with stack
   mut pc : Int
   mut running : Bool // Execution loop control flag
   call_stack : Array[CallFrame]
@@ -482,7 +481,6 @@ pub fn Runtime::load_with_resolver(
     stack: [],
     sp: 0,
     num_locals: 0,
-    locals: [],
     pc: 0,
     running: false,
     call_stack: [],
