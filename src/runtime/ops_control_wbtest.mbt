@@ -27,10 +27,12 @@ fn base_runtime(
   stack : Array[Value],
   locals : Array[Value],
 ) -> Runtime {
+  // Convert Value arrays to UInt64
+  let stack64 = stack.map(value_to_stack)
   Runtime::{
     module_,
     ops,
-    stack,
+    stack: stack64,
     locals,
     pc: 0,
     running: true,
@@ -46,6 +48,14 @@ fn base_runtime(
 }
 
 ///|
+fn assert_ctrl_stack_eq(got : UInt64, expected : Value) -> Unit {
+  let exp = value_to_stack(expected)
+  if got != exp {
+    abort("stack element mismatch")
+  }
+}
+
+///|
 test "ops control locals and stack" {
   let ops = [ImmediateIdx(0), ImmediateIdx(1)]
   let rt_get = base_runtime(base_module([], [], [], []), ops, [], [
@@ -53,7 +63,7 @@ test "ops control locals and stack" {
     Value::I32(2U),
   ])
   assert_ok(op_local_get(rt_get))
-  assert_eq(rt_get.stack[0], Value::I32(2U))
+  assert_ctrl_stack_eq(rt_get.stack[0], Value::I32(2U))
   let rt_set = base_runtime(
     base_module([], [], [], []),
     ops,
@@ -85,7 +95,7 @@ test "ops control locals and stack" {
     [],
   )
   assert_ok(op_select(rt_select))
-  assert_eq(rt_select.stack[0], Value::I32(10U))
+  assert_ctrl_stack_eq(rt_select.stack[0], Value::I32(10U))
 }
 
 ///|
@@ -114,7 +124,7 @@ test "ops control branching" {
   )
   assert_ok(op_br(rt_br))
   assert_eq(rt_br.pc, 10)
-  assert_eq(rt_br.stack, [Value::I32(1U), Value::I32(3U)])
+  assert_eq(rt_br.stack, [1UL, 3UL])
   let rt_br_if = base_runtime(
     base_module([], [], [], []),
     [ImmediateIdx(0), ImmediateIdx(5), ImmediateIdx(1), ImmediateIdx(0)],
@@ -123,7 +133,7 @@ test "ops control branching" {
   )
   assert_ok(op_br_if(rt_br_if))
   assert_eq(rt_br_if.pc, 5)
-  assert_eq(rt_br_if.stack[0], Value::I32(9U))
+  assert_ctrl_stack_eq(rt_br_if.stack[0], Value::I32(9U))
   let rt_br_if_false = base_runtime(
     base_module([], [], [], []),
     [ImmediateIdx(0), ImmediateIdx(5), ImmediateIdx(1), ImmediateIdx(0)],
@@ -214,7 +224,7 @@ test "ops control calls and return" {
     error_detail: "",
   }
   assert_ok(op_call(rt_import))
-  assert_eq(rt_import.stack[0], Value::I32(7U))
+  assert_ctrl_stack_eq(rt_import.stack[0], Value::I32(7U))
   let module_local = base_module([type0], [0U], [code0], [])
   let rt_local = base_runtime(
     module_local,
@@ -230,7 +240,7 @@ test "ops control calls and return" {
   rt_return.call_stack.push(frame)
   assert_ok(op_return(rt_return))
   assert_eq(rt_return.pc, 6)
-  assert_eq(rt_return.stack[0], Value::I32(1U))
+  assert_ctrl_stack_eq(rt_return.stack[0], Value::I32(1U))
 }
 
 ///|
@@ -245,7 +255,7 @@ test "ops control indirect calls" {
   let rt_indirect = Runtime::{
     module_: module_local,
     ops: [ImmediateIdx(0), ImmediateIdx(0), ImmediateIdx(0)],
-    stack: [Value::I32(0U)],
+    stack: [0UL],
     locals: [],
     pc: 0,
     running: true,
@@ -263,7 +273,7 @@ test "ops control indirect calls" {
   let rt_indirect_bad = Runtime::{
     module_: module_local,
     ops: [ImmediateIdx(0), ImmediateIdx(1), ImmediateIdx(0)],
-    stack: [Value::I32(0U)],
+    stack: [0UL],
     locals: [],
     pc: 0,
     running: true,
@@ -280,7 +290,7 @@ test "ops control indirect calls" {
   let rt_ret_indirect = Runtime::{
     module_: module_local,
     ops: [ImmediateIdx(0), ImmediateIdx(0), ImmediateIdx(0)],
-    stack: [Value::I32(0U)],
+    stack: [0UL],
     locals: [],
     pc: 0,
     running: true,
@@ -325,7 +335,7 @@ test "ops control ref calls and tables" {
   let rt_table = Runtime::{
     module_: module_local,
     ops: [ImmediateIdx(0), ImmediateIdx(0)],
-    stack: [Value::I32(0U), Value::Ref(Some(0))],
+    stack: [0UL, 0UL],  // I32(0) and Ref(func_idx=0)
     locals: [],
     pc: 0,
     running: true,
@@ -341,9 +351,9 @@ test "ops control ref calls and tables" {
   assert_ok(op_table_set(rt_table))
   rt_table.stack.clear()
   rt_table.pc = 0
-  rt_table.stack.push(Value::I32(0U))
+  push_i32(rt_table.stack, 0U)
   assert_ok(op_table_get(rt_table))
-  assert_eq(rt_table.stack[0], Value::Ref(Some(0)))
+  assert_ctrl_stack_eq(rt_table.stack[0], Value::Ref(Some(0)))
 }
 
 ///|
@@ -366,11 +376,11 @@ test "ops control table grow and globals" {
     error_detail: "",
   }
   assert_ok(op_table_size(rt_table_size))
-  assert_eq(rt_table_size.stack[0], Value::I32(2U))
+  assert_ctrl_stack_eq(rt_table_size.stack[0], Value::I32(2U))
   let rt_table_grow = Runtime::{
     module_: module_local,
     ops: [ImmediateIdx(0), ImmediateIdx(0)],
-    stack: [Value::Ref(None), Value::I32(1U)],
+    stack: [0xFFFFFFFF_FFFFFFFFUL, 1UL],  // Ref(None)=-1, I32(1)
     locals: [],
     pc: 0,
     running: true,
@@ -384,11 +394,11 @@ test "ops control table grow and globals" {
     error_detail: "",
   }
   assert_ok(op_table_grow(rt_table_grow))
-  assert_eq(rt_table_grow.stack[0], Value::I32(1U))
+  assert_ctrl_stack_eq(rt_table_grow.stack[0], Value::I32(1U))
   let rt_global = Runtime::{
     module_: module_local,
     ops: [ImmediateIdx(0), ImmediateIdx(0)],
-    stack: [Value::I32(9U)],
+    stack: [9UL],
     locals: [],
     pc: 0,
     running: true,
@@ -405,7 +415,7 @@ test "ops control table grow and globals" {
   rt_global.stack.clear()
   rt_global.pc = 0
   assert_ok(op_global_get(rt_global))
-  assert_eq(rt_global.stack[0], Value::I32(9U))
+  assert_ctrl_stack_eq(rt_global.stack[0], Value::I32(9U))
 }
 
 ///|
@@ -418,10 +428,10 @@ test "ops control reference ops" {
     [],
   )
   assert_ok(op_ref_null(rt_ref_null))
-  assert_eq(rt_ref_null.stack[0], Value::Ref(None))
+  assert_ctrl_stack_eq(rt_ref_null.stack[0], Value::Ref(None))
   let rt_ref_is_null = base_runtime(module_local, [], [Value::Ref(None)], [])
   assert_ok(op_ref_is_null(rt_ref_is_null))
-  assert_eq(rt_ref_is_null.stack[0], Value::I32(1U))
+  assert_ctrl_stack_eq(rt_ref_is_null.stack[0], Value::I32(1U))
   let rt_ref_eq_same = base_runtime(
     module_local,
     [],
@@ -429,7 +439,7 @@ test "ops control reference ops" {
     [],
   )
   assert_ok(op_ref_eq(rt_ref_eq_same))
-  assert_eq(rt_ref_eq_same.stack[0], Value::I32(1U))
+  assert_ctrl_stack_eq(rt_ref_eq_same.stack[0], Value::I32(1U))
   let rt_ref_eq_diff = base_runtime(
     module_local,
     [],
@@ -437,7 +447,7 @@ test "ops control reference ops" {
     [],
   )
   assert_ok(op_ref_eq(rt_ref_eq_diff))
-  assert_eq(rt_ref_eq_diff.stack[0], Value::I32(0U))
+  assert_ctrl_stack_eq(rt_ref_eq_diff.stack[0], Value::I32(0U))
   let rt_ref_as_non_null = base_runtime(
     module_local,
     [],
@@ -445,7 +455,7 @@ test "ops control reference ops" {
     [],
   )
   assert_ok(op_ref_as_non_null(rt_ref_as_non_null))
-  assert_eq(rt_ref_as_non_null.stack[0], Value::Ref(Some(0)))
+  assert_ctrl_stack_eq(rt_ref_as_non_null.stack[0], Value::Ref(Some(0)))
   let rt_ref_as_non_null_null = base_runtime(
     module_local,
     [],

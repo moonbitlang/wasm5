@@ -157,9 +157,13 @@ pub fn Runtime::call_compiled(
   self.pc = start_pc
   self.execute()
   let results : Array[Value] = []
-  for _ in 0..<func_type.results.length() {
+  let result_types = func_type.results
+  for i in 0..<result_types.length() {
     if self.stack.length() > 0 {
-      results.push(self.stack.unsafe_pop())
+      let raw = self.stack.unsafe_pop()
+      // Pop in reverse order, so access result types from the end
+      let type_idx = result_types.length() - 1 - i
+      results.push(stack_to_value(raw, result_types[type_idx]))
     }
   }
   results.rev_in_place()

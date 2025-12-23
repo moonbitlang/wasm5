@@ -78,7 +78,7 @@ test "compile helpers imported func result truncation" {
     error_detail: "",
   }
   rt.call_imported_function(0, [], 1)
-  assert_eq(rt.stack, [Value::I32(1U)])
+  assert_eq(rt.stack, [1UL])
 }
 
 ///|

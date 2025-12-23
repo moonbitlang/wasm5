@@ -223,8 +223,8 @@ pub fn ImportResolver::get_memory(
 pub struct Runtime {
   module_ : @core.Module
   ops : Array[MInstr]
-  stack : Array[Value]
-  mut locals : Array[Value]
+  stack : Array[UInt64] // Unified stack for locals and operand stack (tagless)
+  mut locals : Array[Value] // TODO: Remove after unifying with stack
   mut pc : Int
   mut running : Bool // Execution loop control flag
   call_stack : Array[CallFrame]
