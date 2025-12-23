@@ -422,6 +422,37 @@ test "ops control reference ops" {
   let rt_ref_is_null = base_runtime(module_local, [], [Value::Ref(None)], [])
   assert_ok(op_ref_is_null(rt_ref_is_null))
   assert_eq(rt_ref_is_null.stack[0], Value::I32(1U))
+  let rt_ref_eq_same = base_runtime(
+    module_local,
+    [],
+    [Value::Ref(Some(1)), Value::Ref(Some(1))],
+    [],
+  )
+  assert_ok(op_ref_eq(rt_ref_eq_same))
+  assert_eq(rt_ref_eq_same.stack[0], Value::I32(1U))
+  let rt_ref_eq_diff = base_runtime(
+    module_local,
+    [],
+    [Value::Ref(Some(1)), Value::Ref(Some(2))],
+    [],
+  )
+  assert_ok(op_ref_eq(rt_ref_eq_diff))
+  assert_eq(rt_ref_eq_diff.stack[0], Value::I32(0U))
+  let rt_ref_as_non_null = base_runtime(
+    module_local,
+    [],
+    [Value::Ref(Some(0))],
+    [],
+  )
+  assert_ok(op_ref_as_non_null(rt_ref_as_non_null))
+  assert_eq(rt_ref_as_non_null.stack[0], Value::Ref(Some(0)))
+  let rt_ref_as_non_null_null = base_runtime(
+    module_local,
+    [],
+    [Value::Ref(None)],
+    [],
+  )
+  assert_ret(op_ref_as_non_null(rt_ref_as_non_null_null), InvalidType)
 }
 
 ///|

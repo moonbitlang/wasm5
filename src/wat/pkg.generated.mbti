@@ -1,0 +1,28 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/wasm5/src/wat"
+
+import(
+  "moonbitlang/wasm5/src/core"
+)
+
+// Values
+pub fn wat_to_module(String) -> @core.Module raise WatError
+
+pub fn wat_to_wasm(String) -> Bytes raise WatError
+
+// Errors
+pub suberror WatError {
+  InvalidSyntax(String)
+  InvalidNumber(String)
+  UnknownIdentifier(String)
+  Unsupported(String)
+  Encode(String)
+}
+pub impl Show for WatError
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

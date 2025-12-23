@@ -39,8 +39,8 @@ fn parse_instr_reference(parser : Parser, opcode : Byte) -> @core.Instr? raise {
       Some(RefFunc(func_idx))
     }
     // GC proposal reference instructions
-    0xD3 => Some(RefIsNull) // ref.eq - treat as ref.is_null for now
-    0xD4 => Some(Nop) // ref.as_non_null - placeholder
+    0xD3 => Some(RefEq) // ref.eq
+    0xD4 => Some(RefAsNonNull) // ref.as_non_null
     0xD5 => Some(BrOnNull(parser.read_u32_leb128()))
     0xD6 => Some(BrOnNonNull(parser.read_u32_leb128()))
     _ => None

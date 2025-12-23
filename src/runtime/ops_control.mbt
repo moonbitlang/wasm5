@@ -882,6 +882,46 @@ fn op_ref_is_null(rt : Runtime) -> RetCode {
 }
 
 ///|
+fn op_ref_eq(rt : Runtime) -> RetCode {
+  // ref.eq compares two references for identity equality
+  let rhs = rt.stack.unsafe_pop()
+  let lhs = rt.stack.unsafe_pop()
+  match (lhs, rhs) {
+    (Value::Ref(left), Value::Ref(right)) => {
+      let eq = if left == right { 1U } else { 0U }
+      rt.stack.push(Value::I32(eq))
+      rt.pc += 1
+      OK
+    }
+    _ => {
+      rt.error_detail = "ref.eq expects reference operands"
+      InvalidType
+    }
+  }
+}
+
+///|
+fn op_ref_as_non_null(rt : Runtime) -> RetCode {
+  // ref.as_non_null traps on null references
+  let value = rt.stack.unsafe_pop()
+  match value {
+    Value::Ref(None) => {
+      rt.error_detail = "ref.as_non_null: null reference"
+      InvalidType
+    }
+    Value::Ref(Some(_)) => {
+      rt.stack.push(value)
+      rt.pc += 1
+      OK
+    }
+    _ => {
+      rt.error_detail = "ref.as_non_null expects reference operand"
+      InvalidType
+    }
+  }
+}
+
+///|
 fn op_global_get(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
   rt.stack.push(rt.globals[idx])

@@ -40,7 +40,85 @@ fn validate_instruction_reference(
       }
       stack.push(I32) // Push result
     }
+    RefEq => {
+      // ref.eq pops two references and pushes i32
+      if ctx.is_unreachable && stack.length() == 0 {
+        // Unreachable - stack is polymorphic, don't pop anything
+      } else if stack.length() < 2 {
+        raise ValidationError::TypeMismatch(
+          "ref.eq expects two references on stack",
+        )
+      } else {
+        let rhs = stack.unsafe_pop()
+        let lhs = stack.unsafe_pop()
+        guard is_ref_valtype(lhs) && is_ref_valtype(rhs) else {
+          raise ValidationError::TypeMismatch(
+            "ref.eq expects reference operands",
+          )
+        }
+      }
+      stack.push(I32)
+    }
+    RefAsNonNull =>
+      // ref.as_non_null pops a reference and pushes a non-nullable reference
+      if ctx.is_unreachable && stack.length() == 0 {
+        // Unreachable - stack is polymorphic, result stays polymorphic
+        ()
+      } else if stack.length() < 1 {
+        raise ValidationError::TypeMismatch(
+          "ref.as_non_null expects reference on stack",
+        )
+      } else {
+        let popped = stack.unsafe_pop()
+        guard is_ref_valtype(popped) else {
+          raise ValidationError::TypeMismatch(
+            "ref.as_non_null expects reference operand",
+          )
+        }
+        stack.push(non_null_ref_type(popped))
+      }
     _ => return false
   }
   true
+}
+
+///|
+fn is_ref_valtype(val_type : @core.ValType) -> Bool {
+  match val_type {
+    FuncRef
+    | ExternRef
+    | AnyRef
+    | EqRef
+    | I31Ref
+    | StructRef
+    | ArrayRef
+    | ExnRef
+    | NullRef
+    | NullFuncRef
+    | NullExternRef
+    | NullExnRef
+    | Ref(_, _) => true
+    _ => false
+  }
+}
+
+///|
+fn non_null_ref_type(val_type : @core.ValType) -> @core.ValType {
+  match val_type {
+    Ref(heap_type, true) => Ref(heap_type, false)
+    Ref(heap_type, false) => Ref(heap_type, false)
+    FuncRef => Ref(Func, false)
+    ExternRef => Ref(Extern, false)
+    AnyRef => Ref(Any, false)
+    EqRef => Ref(Eq, false)
+    I31Ref => Ref(I31, false)
+    StructRef => Ref(Struct, false)
+    ArrayRef => Ref(Array, false)
+    ExnRef => Ref(Exn, false)
+    NullRef => Ref(Any, false)
+    NullFuncRef => Ref(Func, false)
+    NullExternRef => Ref(Extern, false)
+    NullExnRef => Ref(Exn, false)
+    _ => val_type
+  }
 }

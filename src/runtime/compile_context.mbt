@@ -90,6 +90,15 @@ fn CompileCtx::pop_type(self : CompileCtx) -> Unit {
 }
 
 ///|
+fn CompileCtx::pop_type_value(self : CompileCtx) -> @core.ValType? {
+  if self.type_stack.length() > 0 {
+    Some(self.type_stack.unsafe_pop())
+  } else {
+    None
+  }
+}
+
+///|
 fn CompileCtx::pop_types(self : CompileCtx, n : Int) -> Unit {
   for _ in 0..<n {
     self.pop_type()

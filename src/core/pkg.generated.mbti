@@ -145,6 +145,8 @@ pub(all) enum Instr {
   RefNull(RefType)
   RefFunc(UInt)
   RefIsNull
+  RefEq
+  RefAsNonNull
   I32Const(UInt)
   I64Const(UInt64)
   F32Const(Float)

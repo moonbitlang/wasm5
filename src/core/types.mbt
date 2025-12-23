@@ -267,6 +267,8 @@ pub(all) enum Instr {
   RefNull(RefType) // ref.null with heap type
   RefFunc(UInt) // ref.func with function index
   RefIsNull // ref.is_null - check if reference is null
+  RefEq // ref.eq - reference equality
+  RefAsNonNull // ref.as_non_null - trap if reference is null
 
   // Numeric instructions - constants
   I32Const(UInt)

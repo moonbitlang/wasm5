@@ -3,12 +3,16 @@
     {
       "path": "moonbitlang/wasm5/src/core",
       "alias": "core"
+    },
+    {
+      "path": "moonbitlang/wasm5/src/encode",
+      "alias": "encode"
     }
   ],
   "test-import": [
     "moonbitlang/async",
     "moonbitlang/async/fs",
-    "moonbitlang/wasm5/src/parse"
-  ],
-  "native-stub": ["print.c", "op.c"]
+    "moonbitlang/async/process",
+    "moonbitlang/async/io"
+  ]
 }

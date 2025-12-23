@@ -32,6 +32,31 @@ jobs:
       - name: Setup MoonBit
         uses: ./.github/actions/setup
 
+      - name: Install wasm-tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="1.243.0"
+          os="$(uname -s)"
+          arch="$(uname -m)"
+          case "$os" in
+            Linux) platform="linux" ;;
+            Darwin) platform="macos" ;;
+            *) echo "unsupported OS: $os" >&2; exit 1 ;;
+          esac
+          case "$arch" in
+            x86_64) arch_tag="x86_64" ;;
+            aarch64|arm64) arch_tag="aarch64" ;;
+            *) echo "unsupported arch: $arch" >&2; exit 1 ;;
+          esac
+          asset="wasm-tools-${version}-${arch_tag}-${platform}.tar.gz"
+          url="https://github.com/bytecodealliance/wasm-tools/releases/download/v${version}/${asset}"
+          curl -fsSL "$url" -o /tmp/wasm-tools.tar.gz
+          mkdir -p "$HOME/.local/bin"
+          tar -xzf /tmp/wasm-tools.tar.gz -C "$HOME/.local/bin" --strip-components=1 "wasm-tools-${version}-${arch_tag}-${platform}/wasm-tools"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          wasm-tools --version
+
       - name: Run unit tests
         run: moon test --target native
 
