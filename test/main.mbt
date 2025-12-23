@@ -1045,7 +1045,6 @@ let blacklisted_wast_files : Array[String] = [
    "instance.wast", // Requires module instances (linking)
    "type-equivalence.wast", // Requires advanced type equivalence
    "type-rec.wast", // Requires recursive types
-   "i32.wast", "i64.wast", // fail on linux
 ]
 
 ///|
