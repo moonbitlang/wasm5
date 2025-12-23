@@ -62,21 +62,16 @@ pub fn Runtime::compile(self : Runtime) -> Unit raise RuntimeError {
           raise RuntimeError::FunctionNotCompiled("Start function not compiled")
         }
 
-        // Set up execution context for start function
-        self.locals = []
-        for local_type in code.locals {
-          match local_type {
-            I32 => self.locals.push(Value::I32(0U))
-            I64 => self.locals.push(Value::I64(0UL))
-            F32 => self.locals.push(Value::F32(0.0))
-            F64 => self.locals.push(Value::F64(0.0))
-            FuncRef => self.locals.push(Value::Ref(None))
-            ExternRef => self.locals.push(Value::Ref(None))
-            _ => self.locals.push(Value::I32(0U))
-          }
-        }
+        // Clear stack and call_stack before setting up locals
         self.stack.clear()
         self.call_stack.clear()
+
+        // Initialize locals (start function has no parameters)
+        let init_result = self.initialize_locals([], code)
+        if init_result != OK {
+          raise init_result.to_error(self.error_detail)
+        }
+
         self.pc = start_pc
 
         // Execute start function, ignoring runtime errors
@@ -148,14 +143,21 @@ pub fn Runtime::call_compiled(
       "Function not compiled: \{func_name}",
     )
   }
+
+  // Clear stack and call_stack before setting up locals
+  self.stack.clear()
+  self.call_stack.clear()
+
+  // Initialize locals (pushes to stack and sets sp/num_locals)
   let init_result = self.initialize_locals(args, code)
   if init_result != OK {
     raise init_result.to_error(self.error_detail)
   }
-  self.stack.clear()
-  self.call_stack.clear()
+
   self.pc = start_pc
   self.execute()
+
+  // Pop results from operand stack (stack is operand-only)
   let results : Array[Value] = []
   let result_types = func_type.results
   for i in 0..<result_types.length() {

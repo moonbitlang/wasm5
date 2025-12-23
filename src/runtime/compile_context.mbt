@@ -39,9 +39,9 @@ pub enum MInstr {
 /// Call frame for function calls
 pub struct CallFrame {
   return_pc : Int
-  caller_sp : Int // Stack pointer of calling function
-  caller_num_locals : Int // Number of locals in calling function
-  locals : Array[Value] // TODO: Remove after fully unified stack
+  caller_sp : Int // Stack pointer of calling function (unused but kept for future)
+  caller_num_locals : Int // Number of locals in calling function (unused but kept for future)
+  locals : Array[Value] // Locals array saved on call, restored on return
 }
 
 ///|

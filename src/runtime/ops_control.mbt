@@ -10,17 +10,16 @@ fn op_local_get(rt : Runtime) -> RetCode {
 fn op_local_set(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
   let raw = rt.stack.unsafe_pop()
-  // Preserve the type from the existing local
-  rt.locals[idx] = match rt.locals[idx] {
-    I32(_) => Value::I32((raw & 0xFFFFFFFFUL).to_uint())
-    I64(_) => Value::I64(raw)
-    F32(_) => Value::F32(Float::reinterpret_from_uint((raw & 0xFFFFFFFFUL).to_uint()))
-    F64(_) => Value::F64(raw.reinterpret_as_double())
-    Ref(_) => {
-      let idx = raw.reinterpret_as_int64().to_int()
-      if idx == -1 { Value::Ref(None) } else { Value::Ref(Some(idx)) }
-    }
+  // Write to old locals array (backward compatible)
+  // Infer type from existing local's tag
+  let val_type : @core.ValType = match rt.locals[idx] {
+    I32(_) => I32
+    I64(_) => I64
+    F32(_) => F32
+    F64(_) => F64
+    Ref(_) => FuncRef
   }
+  rt.locals[idx] = stack_to_value(raw, val_type)
   rt.pc += 1
   OK
 }
@@ -29,17 +28,15 @@ fn op_local_set(rt : Runtime) -> RetCode {
 fn op_local_tee(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
   let raw = rt.stack[rt.stack.length() - 1]
-  // Preserve the type from the existing local
-  rt.locals[idx] = match rt.locals[idx] {
-    I32(_) => Value::I32((raw & 0xFFFFFFFFUL).to_uint())
-    I64(_) => Value::I64(raw)
-    F32(_) => Value::F32(Float::reinterpret_from_uint((raw & 0xFFFFFFFFUL).to_uint()))
-    F64(_) => Value::F64(raw.reinterpret_as_double())
-    Ref(_) => {
-      let idx = raw.reinterpret_as_int64().to_int()
-      if idx == -1 { Value::Ref(None) } else { Value::Ref(Some(idx)) }
-    }
+  // Write to old locals array (backward compatible)
+  let val_type : @core.ValType = match rt.locals[idx] {
+    I32(_) => I32
+    I64(_) => I64
+    F32(_) => F32
+    F64(_) => F64
+    Ref(_) => FuncRef
   }
+  rt.locals[idx] = stack_to_value(raw, val_type)
   rt.pc += 1
   OK
 }
@@ -284,9 +281,16 @@ fn op_call(rt : Runtime) -> RetCode {
   let args = rt.pop_arguments(func_type)
 
   // Save frame
-  rt.call_stack.push(CallFrame::{ return_pc: rt.pc, caller_sp: rt.sp, caller_num_locals: rt.num_locals, locals: rt.locals })
+  rt.call_stack.push(
+    CallFrame::{
+      return_pc: rt.pc,
+      caller_sp: rt.sp,
+      caller_num_locals: rt.num_locals,
+      locals: rt.locals,
+    },
+  )
 
-  // Set up new locals
+  // Set up new locals for callee (stack remains as-is for operands)
   let init_result = rt.initialize_locals(args, code)
   if init_result != OK {
     return init_result
@@ -301,17 +305,28 @@ fn op_return(rt : Runtime) -> RetCode {
     rt.running = false
     return OK
   }
+
+  // Pop return value (if any) from operand stack
+  // Note: For functions with no return value, the stack might be empty
+  // For functions with return value, it should be on top
   let return_value : UInt64? = if rt.stack.length() > 0 {
     Some(rt.stack.unsafe_pop())
   } else {
     None
   }
+
+  // Restore caller's state
   let frame = rt.call_stack.unsafe_pop()
   rt.locals = frame.locals
+  rt.sp = frame.caller_sp
+  rt.num_locals = frame.caller_num_locals
+
+  // Push return value onto operand stack (stack is shared, no need to restore)
   match return_value {
     Some(v) => rt.stack.push(v)
     None => ()
   }
+
   rt.pc = frame.return_pc + 1
   OK
 }
@@ -401,9 +416,16 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
   let args = rt.pop_arguments(actual_type)
 
   // Save frame
-  rt.call_stack.push(CallFrame::{ return_pc: rt.pc, caller_sp: rt.sp, caller_num_locals: rt.num_locals, locals: rt.locals })
+  rt.call_stack.push(
+    CallFrame::{
+      return_pc: rt.pc,
+      caller_sp: rt.sp,
+      caller_num_locals: rt.num_locals,
+      locals: rt.locals,
+    },
+  )
 
-  // Set up new locals
+  // Set up new locals for callee (stack remains as-is for operands)
   let init_result = rt.initialize_locals(args, code)
   if init_result != OK {
     return init_result
@@ -453,6 +475,7 @@ fn op_return_call(rt : Runtime) -> RetCode {
   let args = rt.pop_arguments(func_type)
 
   // For tail call: replace current locals instead of pushing new frame
+  rt.stack.clear()
   let init_result = rt.initialize_locals(args, code)
   if init_result != OK {
     return init_result
@@ -545,6 +568,7 @@ fn op_return_call_indirect(rt : Runtime) -> RetCode {
   let args = rt.pop_arguments(actual_type)
 
   // For tail call: replace current locals instead of pushing new frame
+  rt.stack.clear()
   let init_result = rt.initialize_locals(args, code)
   if init_result != OK {
     return init_result
@@ -620,9 +644,16 @@ fn op_call_ref(rt : Runtime) -> RetCode {
   let args = rt.pop_arguments(func_type)
 
   // Save frame
-  rt.call_stack.push(CallFrame::{ return_pc: rt.pc, caller_sp: rt.sp, caller_num_locals: rt.num_locals, locals: rt.locals })
+  rt.call_stack.push(
+    CallFrame::{
+      return_pc: rt.pc,
+      caller_sp: rt.sp,
+      caller_num_locals: rt.num_locals,
+      locals: rt.locals,
+    },
+  )
 
-  // Set up new locals
+  // Set up new locals for callee (stack remains as-is for operands)
   let init_result = rt.initialize_locals(args, code)
   if init_result != OK {
     return init_result
@@ -697,6 +728,7 @@ fn op_return_call_ref(rt : Runtime) -> RetCode {
   let args = rt.pop_arguments(func_type)
 
   // For tail call: replace current locals instead of pushing new frame
+  rt.stack.clear()
   let init_result = rt.initialize_locals(args, code)
   if init_result != OK {
     return init_result

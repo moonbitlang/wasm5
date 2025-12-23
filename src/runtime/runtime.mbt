@@ -224,8 +224,8 @@ pub struct Runtime {
   module_ : @core.Module
   ops : Array[MInstr]
   stack : Array[UInt64] // Unified stack for locals and operand stack (tagless)
-  sp : Int // Stack pointer: index of first local in unified stack
-  num_locals : Int // Number of locals for current function
+  mut sp : Int // Stack pointer: index of first local in unified stack
+  mut num_locals : Int // Number of locals for current function
   mut locals : Array[Value] // TODO: Remove after unifying with stack
   mut pc : Int
   mut running : Bool // Execution loop control flag

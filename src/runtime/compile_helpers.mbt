@@ -133,11 +133,13 @@ fn Runtime::pop_arguments(
 
 ///|
 /// Initialize local variables for a function call
+/// Sets up locals array (stack is operand-only)
 fn Runtime::initialize_locals(
   self : Runtime,
   args : Array[Value],
   code : @core.Code,
 ) -> RetCode {
+  // Initialize locals array with arguments and default values
   self.locals = []
   for arg in args {
     self.locals.push(arg)
@@ -148,25 +150,19 @@ fn Runtime::initialize_locals(
       I64 => self.locals.push(Value::I64(0UL))
       F32 => self.locals.push(Value::F32(0.0))
       F64 => self.locals.push(Value::F64(0.0))
-      FuncRef => self.locals.push(Value::Ref(None))
-      ExternRef => self.locals.push(Value::Ref(None))
-      AnyRef
-      | ExnRef
-      | NullRef
-      | NullFuncRef
-      | NullExnRef
-      | NullExternRef
-      | EqRef
-      | I31Ref
-      | StructRef
-      | ArrayRef
-      | Ref(_, _) => self.locals.push(Value::Ref(None))
+      FuncRef | ExternRef | AnyRef | ExnRef | NullRef | NullFuncRef |
+      NullExnRef | NullExternRef | EqRef | I31Ref | StructRef | ArrayRef |
+      Ref(_, _) => self.locals.push(Value::Ref(None))
       _ => {
         self.error_detail = "Unsupported local type: \{local_type}"
         return UnsupportedLocalType
       }
     }
   }
+
+  // Set num_locals for reference (sp is no longer used for locals)
+  self.num_locals = args.length() + code.locals.length()
+  self.sp = 0
   OK
 }
 
