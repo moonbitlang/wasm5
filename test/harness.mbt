@@ -941,6 +941,9 @@ async fn process_meta(
       }
       for cmd in commands {
         process_command(ctx, cmd)
+        // HACK: avoid the problem of deep nested continutations caused
+        // by running many sync code in an async loop
+        @async.pause()
       }
       ctx.skipped_count
     }
@@ -958,7 +961,7 @@ async fn process_meta(
 
 ///|
 /// Result of processing a wast file: (failures, skipped_count)
-async fn process_wast_file(
+pub async fn process_wast_file(
   wast_dir : String,
   wast_file : String,
 ) -> (Array[TestFailure], Int) {
@@ -1125,21 +1128,21 @@ async fn collect_wast_files(dir : String) -> Array[String] {
   wast_files
 }
 
-///|
-async fn main {
-  let failures : Array[TestFailure] = []
-  let mut skipped_tests = 0
-  let wast_files = collect_wast_files("test/reference_tests/")
-  for wast_file in wast_files {
-    let (file_failures, file_skipped) = process_wast_file(
-      "test/reference_tests/", wast_file,
-    )
-    failures.append(file_failures)
-    skipped_tests += file_skipped
-  }
-  let skipped_files = blacklisted_wast_files.length()
-  print_summary(failures, skipped_tests, skipped_files)
-  if failures.length() > 0 {
-    fail("Tests failed")
-  }
-}
+// ///|
+// async fn main {
+//   let failures : Array[TestFailure] = []
+//   let mut skipped_tests = 0
+//   let wast_files = collect_wast_files("test/reference_tests/")
+//   for wast_file in wast_files {
+//     let (file_failures, file_skipped) = process_wast_file(
+//       "test/reference_tests/", wast_file,
+//     )
+//     failures.append(file_failures)
+//     skipped_tests += file_skipped
+//   }
+//   let skipped_files = blacklisted_wast_files.length()
+//   print_summary(failures, skipped_tests, skipped_files)
+//   if failures.length() > 0 {
+//     fail("Tests failed")
+//   }
+// }
