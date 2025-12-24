@@ -166,6 +166,7 @@ priv struct WatTable {
   name : Bytes?
   table_type : @core.TableType
   init : Array[WatInstr]?
+  inline_elem : Array[FuncRef]?
   exports : Array[Bytes]
 }
 
@@ -205,6 +206,7 @@ priv struct WatElem {
   is_declarative : Bool
   elem_type : @core.RefType
   elem_nullable : Bool
+  explicit_table : Bool
 }
 
 ///|
@@ -920,8 +922,29 @@ fn parse_module_field(
         name: table.name,
         table_type: table.table_type,
         init: table.init,
+        inline_elem: table.inline_elem,
         exports: [],
       })
+      match table.inline_elem {
+        Some(funcs) => {
+          let init : Array[Array[WatInstr]] = []
+          for func_ref in funcs {
+            init.push([WatInstr::RefFunc(func_ref)])
+          }
+          module_.elems.push({
+            name: None,
+            table_ref: IndexRef::Index(table_index),
+            offset: [WatInstr::Core(@core.Instr::I32Const(0U))],
+            init,
+            is_active: true,
+            is_declarative: false,
+            elem_type: table.table_type.elem_type,
+            elem_nullable: table.table_type.nullable,
+            explicit_table: true,
+          })
+        }
+        None => ()
+      }
     }
     b"global" => {
       let global_ = parse_global(items, type_map)
@@ -1258,6 +1281,7 @@ fn parse_table(
   let mut elem_type : @core.RefType? = None
   let mut elem_nullable : Bool? = None
   let mut init_item : SExpr? = None
+  let mut inline_elem : Array[FuncRef]? = None
   for i in idx..<items.length() {
     match items[i] {
       List(list_items) => {
@@ -1266,8 +1290,36 @@ fn parse_table(
         }
         match tag {
           b"export" => exports.push(parse_inline_export(list_items))
+          b"elem" => {
+            guard inline_elem is None else {
+              raise WatError::InvalidSyntax("duplicate inline elem")
+            }
+            guard init_item is None else {
+              raise WatError::InvalidSyntax(
+                "table init conflicts with inline elem",
+              )
+            }
+            guard elem_type is Some(_) else {
+              raise WatError::InvalidSyntax(
+                "table inline elem requires element type",
+              )
+            }
+            let funcs : Array[FuncRef] = []
+            for j in 1..<list_items.length() {
+              match list_items[j] {
+                Atom(atom) => funcs.push(parse_func_ref(atom))
+                _ =>
+                  raise WatError::InvalidSyntax(
+                    "inline elem expects function references",
+                  )
+              }
+            }
+            inline_elem = Some(funcs)
+          }
           _ =>
-            if elem_type is None && is_reftype_expr(items[i]) {
+            if inline_elem is Some(_) {
+              raise WatError::InvalidSyntax("unexpected table item")
+            } else if elem_type is None && is_reftype_expr(items[i]) {
               let (ref_type, nullable) = parse_reftype_expr(items[i], type_map)
               elem_type = Some(ref_type)
               elem_nullable = Some(nullable)
@@ -1284,7 +1336,9 @@ fn parse_table(
         }
       }
       Atom(atom) =>
-        if is_uint_atom(atom) {
+        if inline_elem is Some(_) {
+          raise WatError::InvalidSyntax("unexpected table item")
+        } else if is_uint_atom(atom) {
           limit_atoms.push(atom)
         } else if elem_type is None && is_reftype_expr(items[i]) {
           let (ref_type, nullable) = parse_reftype_expr(items[i], type_map)
@@ -1309,13 +1363,22 @@ fn parse_table(
     Some(value) => value
     None => true
   }
-  let limits = parse_limits_from_atoms(limit_atoms)
+  let limits = match inline_elem {
+    Some(funcs) => {
+      guard limit_atoms.length() == 0 else {
+        raise WatError::InvalidSyntax("inline elem cannot specify limits")
+      }
+      let count = funcs.length().reinterpret_as_uint()
+      @core.Limits::{ min: count, max: Some(count) }
+    }
+    None => parse_limits_from_atoms(limit_atoms)
+  }
   let init_instrs = match init_item {
     Some(init_expr) => Some(parse_instrs([init_expr], Map::new(), [], type_map))
     None => None
   }
   let table_type : @core.TableType = { elem_type, limits, init: None, nullable }
-  WatTable::{ name, table_type, init: init_instrs, exports }
+  WatTable::{ name, table_type, init: init_instrs, inline_elem, exports }
 }
 
 ///|
@@ -1599,6 +1662,7 @@ fn parse_elem(
   let mut is_active = false
   let mut elem_type = @core.RefType::Func
   let mut elem_nullable = true
+  let mut explicit_table = false
   if idx < items.length() && not(is_reftype_expr(items[idx])) {
     match items[idx] {
       List(list_items) =>
@@ -1609,6 +1673,7 @@ fn parse_elem(
             raise WatError::InvalidSyntax("table expects one index")
           }
           table_ref = parse_index_ref(expect_atom(list_items[1]))
+          explicit_table = true
           idx = idx + 1
         }
       _ => ()
@@ -1683,6 +1748,7 @@ fn parse_elem(
     is_declarative,
     elem_type,
     elem_nullable,
+    explicit_table,
   }
 }
 
@@ -4446,6 +4512,7 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
       is_declarative: elem.is_declarative,
       elem_type: elem.elem_type,
       elem_nullable: elem.elem_nullable,
+      explicit_table: elem.explicit_table,
     })
   }
   let exports : Array[@core.Export] = []

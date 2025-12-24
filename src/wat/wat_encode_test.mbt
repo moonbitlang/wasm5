@@ -250,6 +250,24 @@ async test "wat encoder matches wasm-tools for table and ref ops" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for inline table elem" {
+  let wat = "(module (func $f) (table funcref (elem $f)))"
+  assert_wat_matches("inline_table_elem", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for inline table elem typed" {
+  let wat = "(module (func $f) (table (ref func) (elem $f)))"
+  assert_wat_matches("inline_table_elem_typed", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for inline table elem empty" {
+  let wat = "(module (table funcref (elem)))"
+  assert_wat_matches("inline_table_elem_empty", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for table init expr" {
   let wat = "(module (func $f (result i32) i32.const 0) (table 2 funcref (ref.func $f)))"
   assert_wat_matches("table_init_expr", wat)

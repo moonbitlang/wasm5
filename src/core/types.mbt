@@ -212,6 +212,7 @@ pub(all) struct Elem {
   is_declarative : Bool // True for declarative segments (flags 3,7)
   elem_type : RefType // Element heap type
   elem_nullable : Bool // Whether element type is nullable
+  explicit_table : Bool // True when table index was explicitly provided in WAT
 }
 
 // Data segment (for memory initialization)

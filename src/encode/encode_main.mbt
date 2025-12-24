@@ -353,7 +353,8 @@ fn encode_element_section(
       if elem.is_active {
         if elem.elem_type == @core.RefType::Func &&
           elem.elem_nullable &&
-          elem.table_idx == 0U {
+          elem.table_idx == 0U &&
+          not(elem.explicit_table) {
           flag = 0x04U
         } else {
           flag = 0x06U
@@ -368,7 +369,7 @@ fn encode_element_section(
         emit_reftype = true
       }
     } else if elem.is_active {
-      if elem.table_idx == 0U {
+      if elem.table_idx == 0U && not(elem.explicit_table) {
         flag = 0x00U
       } else {
         flag = 0x02U

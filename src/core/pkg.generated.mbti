@@ -102,6 +102,7 @@ pub(all) struct Elem {
   is_declarative : Bool
   elem_type : RefType
   elem_nullable : Bool
+  explicit_table : Bool
 }
 
 pub(all) struct Export {

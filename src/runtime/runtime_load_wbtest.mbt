@@ -38,6 +38,7 @@ test "runtime load with resolver" {
         is_declarative: false,
         elem_type: Func,
         elem_nullable: true,
+        explicit_table: false,
       },
     ],
     datas: [

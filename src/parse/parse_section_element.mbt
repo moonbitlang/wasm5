@@ -24,6 +24,7 @@ fn parse_element_section(parser : Parser) -> Array[@core.Elem] raise {
       2 | 6 => parser.read_u32_leb128() // explicit table index
       _ => 0U // passive/declarative segments have no table
     }
+    let explicit_table = flags == 2 || flags == 6
     let offset : @core.Expr = match flags {
       0 | 2 | 4 | 6 => parse_expr(parser) // active segments have offset
       _ => @core.Expr::{ instrs: [I32Const(0U)] } // dummy offset for passive/declarative
@@ -66,6 +67,7 @@ fn parse_element_section(parser : Parser) -> Array[@core.Elem] raise {
       is_declarative,
       elem_type,
       elem_nullable,
+      explicit_table,
     })
   }
   elems
