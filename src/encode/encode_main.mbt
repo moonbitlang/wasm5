@@ -633,15 +633,26 @@ fn encode_memarg(align : UInt, offset : UInt, memory_idx : UInt) -> Array[Byte] 
 fn encode_table_type(
   table_type : @core.TableType,
 ) -> Array[Byte] raise EncodeError {
-  guard table_type.init is None else {
-    raise EncodeError::Unsupported("table init expr")
-  }
   let payload : Array[Byte] = []
-  append_bytes(
-    payload,
-    encode_reftype(table_type.elem_type, table_type.nullable),
-  )
-  append_bytes(payload, encode_limits(table_type.limits))
+  match table_type.init {
+    Some(init_expr) => {
+      payload.push(0x40U.to_byte())
+      payload.push(0x00U.to_byte())
+      append_bytes(
+        payload,
+        encode_reftype(table_type.elem_type, table_type.nullable),
+      )
+      append_bytes(payload, encode_limits(table_type.limits))
+      append_bytes(payload, encode_expr(init_expr))
+    }
+    None => {
+      append_bytes(
+        payload,
+        encode_reftype(table_type.elem_type, table_type.nullable),
+      )
+      append_bytes(payload, encode_limits(table_type.limits))
+    }
+  }
   payload
 }
 

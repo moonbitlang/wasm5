@@ -220,6 +220,18 @@ async test "wat encoder matches wasm-tools for table and ref ops" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for table init expr" {
+  let wat = "(module (func $f (result i32) i32.const 0) (table 2 funcref (ref.func $f)))"
+  assert_wat_matches("table_init_expr", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for non-nullable table init" {
+  let wat = "(module (func $f) (table 1 (ref func) (ref.func $f)))"
+  assert_wat_matches("table_init_expr_nonnull", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for elem exprs active" {
   let wat = "(module (table 2 funcref) (func $f (result i32) i32.const 0) (elem (i32.const 0) (ref null func) (ref.func $f) (ref.null func)))"
   assert_wat_matches("elem_expr_active", wat)

@@ -418,8 +418,21 @@ pub fn Runtime::load_with_resolver(
   // Then add local tables
   for table in m.tables {
     let table_size = table.limits.min.reinterpret_as_int()
-    // Initialize table with null references
-    let table_data : Array[Int?] = Array::make(table_size, None)
+    // Initialize table with default value (null unless table has init expr)
+    let init_ref = match table.init {
+      Some(init_expr) => {
+        let init_value = eval_const_expr(init_expr, globals)
+        match init_value {
+          Ref(ref_idx) => ref_idx
+          _ =>
+            raise RuntimeError::UnsupportedInitExpression(
+              "table init expression must produce a reference",
+            )
+        }
+      }
+      None => None
+    }
+    let table_data : Array[Int?] = Array::make(table_size, init_ref)
     tables.push({ data: table_data, max: table.limits.max })
   }
   // Initialize element segments (copy function references into tables)

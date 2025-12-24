@@ -165,6 +165,7 @@ priv struct WatMemory {
 priv struct WatTable {
   name : Bytes?
   table_type : @core.TableType
+  init : Array[WatInstr]?
   exports : Array[Bytes]
 }
 
@@ -907,6 +908,7 @@ fn parse_module_field(
       module_.tables.push({
         name: table.name,
         table_type: table.table_type,
+        init: table.init,
         exports: [],
       })
     }
@@ -1206,6 +1208,7 @@ fn parse_table(
   let limit_atoms : Array[Bytes] = []
   let mut elem_type : @core.RefType? = None
   let mut elem_nullable : Bool? = None
+  let mut init_item : SExpr? = None
   for i in idx..<items.length() {
     match items[i] {
       List(list_items) => {
@@ -1214,26 +1217,37 @@ fn parse_table(
         }
         match tag {
           b"export" => exports.push(parse_inline_export(list_items))
-          _ => {
-            let (ref_type, nullable) = parse_reftype_expr(items[i], type_map)
-            guard elem_type is None else {
-              raise WatError::InvalidSyntax("duplicate table elem type")
+          _ =>
+            if elem_type is None && is_reftype_expr(items[i]) {
+              let (ref_type, nullable) = parse_reftype_expr(items[i], type_map)
+              elem_type = Some(ref_type)
+              elem_nullable = Some(nullable)
+            } else if init_item is None {
+              guard elem_type is Some(_) else {
+                raise WatError::InvalidSyntax(
+                  "table init requires element type",
+                )
+              }
+              init_item = Some(items[i])
+            } else {
+              raise WatError::InvalidSyntax("duplicate table init")
             }
-            elem_type = Some(ref_type)
-            elem_nullable = Some(nullable)
-          }
         }
       }
       Atom(atom) =>
         if is_uint_atom(atom) {
           limit_atoms.push(atom)
-        } else {
+        } else if elem_type is None && is_reftype_expr(items[i]) {
           let (ref_type, nullable) = parse_reftype_expr(items[i], type_map)
-          guard elem_type is None else {
-            raise WatError::InvalidSyntax("duplicate table elem type")
-          }
           elem_type = Some(ref_type)
           elem_nullable = Some(nullable)
+        } else if init_item is None {
+          guard elem_type is Some(_) else {
+            raise WatError::InvalidSyntax("table init requires element type")
+          }
+          init_item = Some(items[i])
+        } else {
+          raise WatError::InvalidSyntax("duplicate table init")
         }
       StringLit(_) =>
         raise WatError::InvalidSyntax("unexpected string in table")
@@ -1247,8 +1261,12 @@ fn parse_table(
     None => true
   }
   let limits = parse_limits_from_atoms(limit_atoms)
+  let init_instrs = match init_item {
+    Some(init_expr) => Some(parse_instrs([init_expr], Map::new(), [], type_map))
+    None => None
+  }
   let table_type : @core.TableType = { elem_type, limits, init: None, nullable }
-  WatTable::{ name, table_type, exports }
+  WatTable::{ name, table_type, init: init_instrs, exports }
 }
 
 ///|
@@ -4334,7 +4352,24 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
   }
   let tables : Array[@core.TableType] = []
   for table in wat.tables {
-    tables.push(table.table_type)
+    let init_expr = match table.init {
+      Some(init_instrs) =>
+        Some(@core.Expr::{
+          instrs: resolve_const_instrs(
+            init_instrs,
+            global_map,
+            wat.global_imports,
+            func_map,
+          ),
+        })
+      None => None
+    }
+    tables.push({
+      elem_type: table.table_type.elem_type,
+      limits: table.table_type.limits,
+      init: init_expr,
+      nullable: table.table_type.nullable,
+    })
   }
   let elems : Array[@core.Elem] = []
   for elem in wat.elems {
