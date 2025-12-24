@@ -314,3 +314,15 @@ async test "wat encoder matches wasm-tools for br_table labels" {
   let wat = "(module (func (export \"brs\") (param i32) (result i32) (block $out (block $in local.get 0 br_table $in $out)) i32.const 7))"
   assert_wat_matches("br_table_labels", wat)
 }
+
+///|
+async test "wat encoder matches wasm-tools for tag import and throw" {
+  let wat = "(module (type $t (func (param i32))) (import \"env\" \"e\" (tag $e (type $t))) (func (export \"throw\") (param i32) local.get 0 throw $e))"
+  assert_wat_matches("tag_import_throw", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for try_table" {
+  let wat = "(module (type $t (func (param i32))) (tag $e (export \"e\") (type $t)) (func (export \"try\") (param i32) (result i32) (block $out (result i32) (try_table (result i32) (catch $e $out) local.get 0 throw $e i32.const 7))))"
+  assert_wat_matches("try_table", wat)
+}

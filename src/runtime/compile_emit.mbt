@@ -607,6 +607,21 @@ fn Runtime::compile_wasm_instr(
     } // pop 3, push 1 => net -2
     Nop => self.emit(WasmInstr(op_nop))
     Unreachable => self.emit(WasmInstr(op_unreachable))
+    Throw(tag_idx) => {
+      let tag_idx_int = tag_idx.reinterpret_as_int()
+      let num_imported = count_imported_tags(self.module_)
+      let type_idx = get_tag_type_idx(self.module_, tag_idx_int, num_imported)
+      if type_idx >= 0 {
+        let tag_type = self.module_.types[type_idx]
+        ctx.pop_types(tag_type.params.length())
+      }
+      self.emit(WasmInstr(op_throw))
+      self.emit(ImmediateIdx(tag_idx_int))
+    }
+    Rethrow(label_idx) => {
+      self.emit(WasmInstr(op_rethrow))
+      self.emit(ImmediateIdx(label_idx.reinterpret_as_int()))
+    }
     // Control flow
     Block(block_type, instrs) => {
       let (params, results) = get_compile_block_type(self.module_, block_type)
@@ -780,6 +795,20 @@ fn Runtime::compile_wasm_instr(
       // Patch the jump at end of then branch
       self.ops[end_jump_slot] = ImmediateIdx(end_pc)
       // Pop control frame and patch all pending branches from inside the if
+      let block = ctx.pop_control()
+      for slot in block.pending_br_patches {
+        self.ops[slot] = ImmediateIdx(end_pc)
+      }
+      ctx.truncate_stack(block.stack_height_at_entry)
+      ctx.push_types(block.results)
+    }
+    TryTable(block_type, _catches, instrs) => {
+      let (params, results) = get_compile_block_type(self.module_, block_type)
+      ctx.push_control(BlockKind, params, results, 0)
+      for instr in instrs {
+        self.compile_wasm_instr(ctx, instr)
+      }
+      let end_pc = self.ops.length()
       let block = ctx.pop_control()
       for slot in block.pending_br_patches {
         self.ops[slot] = ImmediateIdx(end_pc)

@@ -29,6 +29,7 @@ priv struct ImportCounts {
   tables : Int
   mems : Int
   globals : Int
+  tags : Int
 }
 
 ///|
@@ -39,16 +40,18 @@ fn get_import_counts(module_ : @core.Module) -> ImportCounts {
   let mut tables = 0
   let mut mems = 0
   let mut globals = 0
+  let mut tags = 0
   for imp in module_.imports {
     match imp.desc {
       Func(_) => funcs += 1
       Table(_) => tables += 1
       Mem(_) => mems += 1
       Global(_) => globals += 1
+      Tag(_) => tags += 1
       _ => ()
     }
   }
-  { funcs, tables, mems, globals }
+  { funcs, tables, mems, globals, tags }
 }
 
 ///|
@@ -82,6 +85,39 @@ fn get_func_type_index(
       raise ValidationError::InvalidFunctionIndex(func_idx)
     }
     module_.funcs[local_idx].reinterpret_as_int()
+  }
+}
+
+///|
+/// Get the type index for a tag (imported or local)
+fn get_tag_type_index(
+  module_ : @core.Module,
+  tag_idx : Int,
+  import_counts : ImportCounts,
+) -> Int raise ValidationError {
+  if tag_idx < import_counts.tags {
+    // Imported tag - find type index from imports
+    let mut current_import = 0
+    let mut found_type_idx = 0
+    for imp in module_.imports {
+      match imp.desc {
+        Tag(tidx) => {
+          if current_import == tag_idx {
+            found_type_idx = tidx.reinterpret_as_int()
+            break
+          }
+          current_import += 1
+        }
+        _ => ()
+      }
+    }
+    found_type_idx
+  } else {
+    let local_idx = tag_idx - import_counts.tags
+    if local_idx < 0 || local_idx >= module_.tags.length() {
+      raise ValidationError::UnknownTag(tag_idx)
+    }
+    module_.tags[local_idx].type_idx.reinterpret_as_int()
   }
 }
 

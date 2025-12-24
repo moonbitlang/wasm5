@@ -26,6 +26,7 @@ pub fn parse(b : Bytes) -> @core.Module raise {
   let mut tables : Array[@core.TableType] = []
   let mut mems : Array[@core.MemType] = []
   let mut globals : Array[@core.Global] = []
+  let mut tags : Array[@core.Tag] = []
   let mut elems : Array[@core.Elem] = []
   let mut datas : Array[@core.Data] = []
   let mut start : UInt? = None
@@ -43,6 +44,7 @@ pub fn parse(b : Bytes) -> @core.Module raise {
       4 => tables = parse_table_section(parser)
       5 => mems = parse_memory_section(parser)
       6 => globals = parse_global_section(parser)
+      13 => tags = parse_tag_section(parser)
       7 => exports = parse_export_section(parser)
       8 => start = Some(parser.read_u32_leb128())
       9 => elems = parse_element_section(parser)
@@ -62,6 +64,7 @@ pub fn parse(b : Bytes) -> @core.Module raise {
     tables,
     mems,
     globals,
+    tags,
     elems,
     datas,
     start,

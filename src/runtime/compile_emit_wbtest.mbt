@@ -249,6 +249,7 @@ fn make_compile_module(instrs : Array[@core.Instr]) -> @core.Module {
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,

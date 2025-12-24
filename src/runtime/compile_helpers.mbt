@@ -81,6 +81,19 @@ fn count_imported_funcs(module_ : @core.Module) -> Int {
 }
 
 ///|
+/// Count the number of imported tags in a module
+fn count_imported_tags(module_ : @core.Module) -> Int {
+  let mut count = 0
+  for imp in module_.imports {
+    match imp.desc {
+      Tag(_) => count += 1
+      _ => ()
+    }
+  }
+  count
+}
+
+///|
 /// Get the type index for a function (imported or local)
 /// Returns -1 if the function index is invalid
 fn get_func_type_idx(
@@ -110,6 +123,40 @@ fn get_func_type_idx(
     let local_idx = func_idx - num_imported
     if local_idx >= 0 && local_idx < module_.funcs.length() {
       module_.funcs[local_idx].reinterpret_as_int()
+    } else {
+      -1
+    }
+  }
+}
+
+///|
+/// Get the type index for a tag (imported or local)
+/// Returns -1 if the tag index is invalid
+fn get_tag_type_idx(
+  module_ : @core.Module,
+  tag_idx : Int,
+  num_imported : Int,
+) -> Int {
+  if tag_idx < num_imported {
+    let mut import_idx = 0
+    let mut type_idx = -1
+    for imp in module_.imports {
+      match imp.desc {
+        Tag(tidx) => {
+          if import_idx == tag_idx {
+            type_idx = tidx.reinterpret_as_int()
+            break
+          }
+          import_idx += 1
+        }
+        _ => ()
+      }
+    }
+    type_idx
+  } else {
+    let local_idx = tag_idx - num_imported
+    if local_idx >= 0 && local_idx < module_.tags.length() {
+      module_.tags[local_idx].type_idx.reinterpret_as_int()
     } else {
       -1
     }

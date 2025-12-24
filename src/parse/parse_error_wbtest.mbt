@@ -138,7 +138,7 @@ test "parse instr control variants" {
   assert_eq(instr is Some(_), true)
   let bytes_try_table : Array[Byte] = []
   bytes_try_table.push(b'\x40')
-  push_u32_leb(bytes_try_table, 5U)
+  push_u32_leb(bytes_try_table, 4U)
   bytes_try_table.push(b'\x00')
   push_u32_leb(bytes_try_table, 0U)
   push_u32_leb(bytes_try_table, 0U)
@@ -149,7 +149,6 @@ test "parse instr control variants" {
   push_u32_leb(bytes_try_table, 0U)
   bytes_try_table.push(b'\x03')
   push_u32_leb(bytes_try_table, 0U)
-  bytes_try_table.push(b'\x04')
   bytes_try_table.push(b'\x0b')
   let instr = parse_instr_control(make_parser(bytes_try_table), b'\x1f')
   assert_eq(instr is Some(_), true)
@@ -548,6 +547,7 @@ test "parse main header errors" {
         tables: [],
         mems: [],
         globals: [],
+        tags: [],
         elems: [],
         datas: [],
         start: None,
@@ -572,6 +572,7 @@ test "parse main header errors" {
         tables: [],
         mems: [],
         globals: [],
+        tags: [],
         elems: [],
         datas: [],
         start: None,
@@ -606,6 +607,7 @@ test "parse main section skips" {
         tables: [],
         mems: [],
         globals: [],
+        tags: [],
         elems: [],
         datas: [],
         start: None,

@@ -13,6 +13,14 @@ pub(all) enum BlockType {
 }
 pub impl Show for BlockType
 
+pub(all) enum CatchClause {
+  Catch(UInt, UInt)
+  CatchRef(UInt, UInt)
+  CatchAll(UInt)
+  CatchAllRef(UInt)
+}
+pub impl Show for CatchClause
+
 pub(all) struct Code {
   locals : Array[ValType]
   body : Expr
@@ -86,6 +94,7 @@ pub(all) enum Instr {
   Block(BlockType, Array[Instr])
   Loop(BlockType, Array[Instr])
   If(BlockType, Array[Instr], Array[Instr])
+  TryTable(BlockType, Array[CatchClause], Array[Instr])
   Br(UInt)
   BrIf(UInt)
   BrTable(Array[UInt], UInt)
@@ -98,6 +107,8 @@ pub(all) enum Instr {
   ReturnCallIndirect(UInt, UInt)
   CallRef(UInt)
   ReturnCallRef(UInt)
+  Throw(UInt)
+  Rethrow(UInt)
   Drop
   Select
   SelectTyped(Array[ValType])
@@ -306,6 +317,7 @@ pub(all) struct Module {
   tables : Array[TableType]
   mems : Array[MemType]
   globals : Array[Global]
+  tags : Array[Tag]
   elems : Array[Elem]
   datas : Array[Data]
   start : UInt?
@@ -337,6 +349,10 @@ pub(all) struct TableType {
   limits : Limits
   init : Expr?
   nullable : Bool
+}
+
+pub(all) struct Tag {
+  type_idx : UInt
 }
 
 pub(all) enum ValType {

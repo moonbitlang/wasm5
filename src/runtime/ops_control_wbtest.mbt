@@ -11,6 +11,7 @@ fn base_module(
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,

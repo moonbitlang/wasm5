@@ -165,6 +165,11 @@ pub(all) struct Global {
   init : Expr
 }
 
+///|
+pub(all) struct Tag {
+  type_idx : UInt
+}
+
 // Element segment (for table initialization)
 
 ///|
@@ -196,6 +201,7 @@ pub(all) enum Instr {
   Block(BlockType, Array[Instr])
   Loop(BlockType, Array[Instr])
   If(BlockType, Array[Instr], Array[Instr])
+  TryTable(BlockType, Array[CatchClause], Array[Instr]) // Exception handling
   Br(UInt)
   BrIf(UInt)
   BrTable(Array[UInt], UInt)
@@ -208,6 +214,8 @@ pub(all) enum Instr {
   ReturnCallIndirect(UInt, UInt) // tail call proposal
   CallRef(UInt) // typed function references
   ReturnCallRef(UInt) // typed function references
+  Throw(UInt) // exception handling
+  Rethrow(UInt) // exception handling
 
   // Parametric instructions
   Drop
@@ -428,6 +436,14 @@ pub(all) enum Instr {
   I64TruncSatF64U
 } derive(Show)
 
+///|
+pub(all) enum CatchClause {
+  Catch(UInt, UInt) // tag index, label index
+  CatchRef(UInt, UInt) // tag index, label index
+  CatchAll(UInt) // label index
+  CatchAllRef(UInt) // label index
+} derive(Show)
+
 // Expression (sequence of instructions)
 
 ///|
@@ -454,6 +470,7 @@ pub(all) struct Module {
   tables : Array[TableType] // table section
   mems : Array[MemType] // memory section
   globals : Array[Global] // global section
+  tags : Array[Tag] // tag section (exception handling)
   elems : Array[Elem] // element section
   datas : Array[Data] // data section
   start : UInt? // start section (optional function index)

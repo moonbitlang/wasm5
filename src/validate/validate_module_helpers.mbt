@@ -37,7 +37,7 @@ fn validate_module_type_indices(m : @core.Module) -> Unit raise ValidationError 
     }
   }
 
-  // Validate type indices in imported functions
+  // Validate type indices in imported functions and tags
   for imp in m.imports {
     match imp.desc {
       Func(tidx) => {
@@ -46,7 +46,27 @@ fn validate_module_type_indices(m : @core.Module) -> Unit raise ValidationError 
           raise ValidationError::InvalidTypeIndex(type_idx)
         }
       }
+      Tag(tidx) => {
+        let type_idx = tidx.reinterpret_as_int()
+        if type_idx < 0 || type_idx >= m.types.length() {
+          raise ValidationError::InvalidTypeIndex(type_idx)
+        }
+        if m.types[type_idx].results.length() > 0 {
+          raise ValidationError::TypeMismatch("tag type must not have results")
+        }
+      }
       _ => ()
+    }
+  }
+
+  // Validate type indices in tags
+  for tag in m.tags {
+    let type_idx = tag.type_idx.reinterpret_as_int()
+    if type_idx < 0 || type_idx >= m.types.length() {
+      raise ValidationError::InvalidTypeIndex(type_idx)
+    }
+    if m.types[type_idx].results.length() > 0 {
+      raise ValidationError::TypeMismatch("tag type must not have results")
     }
   }
 
@@ -482,7 +502,13 @@ fn validate_module_exports(
           raise ValidationError::UnknownExportedGlobal(global_idx)
         }
       }
-      Tag(_) => () // Skip tag export validation for now
+      Tag(idx) => {
+        let tag_idx = idx.reinterpret_as_int()
+        let total_tags = import_counts.tags + m.tags.length()
+        if tag_idx < 0 || tag_idx >= total_tags {
+          raise ValidationError::UnknownExportedTag(tag_idx)
+        }
+      }
     }
   }
 }

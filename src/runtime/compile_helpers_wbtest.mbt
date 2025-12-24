@@ -43,6 +43,7 @@ test "compile helpers func type lookup with non func imports" {
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,

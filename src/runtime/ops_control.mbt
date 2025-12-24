@@ -802,6 +802,20 @@ fn op_nop(rt : Runtime) -> RetCode {
 fn op_unreachable(_rt : Runtime) -> RetCode {
   return Unreachable
 }
+
+///|
+fn op_throw(rt : Runtime) -> RetCode {
+  let tag_idx = rt.read_imm_idx()
+  rt.error_detail = "throw not implemented for tag \{tag_idx}"
+  InvalidType
+}
+
+///|
+fn op_rethrow(rt : Runtime) -> RetCode {
+  let label_idx = rt.read_imm_idx()
+  rt.error_detail = "rethrow not implemented for label \{label_idx}"
+  InvalidType
+}
 // =============================================================================
 // Table bulk operations (stub implementations)
 // =============================================================================

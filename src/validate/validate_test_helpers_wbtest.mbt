@@ -11,6 +11,7 @@ fn test_empty_module() -> @core.Module {
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,

@@ -25,6 +25,7 @@ test "runtime load with resolver" {
         init: make_expr([I32Const(7U)]),
       },
     ],
+    tags: [],
     elems: [
       {
         table_idx: 0U,
@@ -102,6 +103,7 @@ test "runtime load fallback memory" {
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -123,6 +125,7 @@ test "runtime load local memory" {
     tables: [],
     mems: [mem_type],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -144,6 +147,7 @@ test "runtime load missing imported function" {
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,

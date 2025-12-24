@@ -261,6 +261,66 @@ fn validate_instruction_control(
         stack.push(result)
       }
     }
+    TryTable(block_type, catches, instrs) => {
+      let (params, results) = get_block_type(module_, block_type)
+      for i = params.length() - 1; i >= 0; i = i - 1 {
+        ctx.poly_pop_expect(module_, params[i], "try_table parameter")
+      }
+      let try_ctx = ValidationCtx::new()
+      for param in params {
+        try_ctx.stack.push(param)
+      }
+      for frame in ctx.control_stack {
+        try_ctx.control_stack.push(frame)
+      }
+      try_ctx.push_control(params, results)
+      for i in 0..<ctx.initialized_locals.length() {
+        try_ctx.initialized_locals.push(ctx.initialized_locals[i])
+      }
+      let total_tags = import_counts.tags + module_.tags.length()
+      for clause in catches {
+        match clause {
+          Catch(tag_idx, label_idx) | CatchRef(tag_idx, label_idx) => {
+            let tag_int = tag_idx.reinterpret_as_int()
+            if tag_int < 0 || tag_int >= total_tags {
+              raise ValidationError::UnknownTag(tag_int)
+            }
+            let _ = try_ctx.get_label_types(label_idx)
+
+          }
+          CatchAll(label_idx) | CatchAllRef(label_idx) => {
+            let _ = try_ctx.get_label_types(label_idx)
+
+          }
+        }
+      }
+      for block_instr in instrs {
+        validate_instruction(
+          module_, func_type, code, try_ctx, block_instr, import_counts,
+        )
+      }
+      let _ = try_ctx.pop_control()
+      if try_ctx.is_unreachable && try_ctx.stack.length() == 0 {
+        for result in results {
+          stack.push(result)
+        }
+      } else if try_ctx.stack.length() != results.length() {
+        raise ValidationError::TypeMismatch(
+          "try_table: expected \{results.length()} values, got \{try_ctx.stack.length()}",
+        )
+      } else {
+        for i in 0..<results.length() {
+          if not(is_subtype(module_, try_ctx.stack[i], results[i])) {
+            raise ValidationError::TypeMismatch(
+              "try_table result type mismatch: expected \{results[i]}, got \{try_ctx.stack[i]}",
+            )
+          }
+        }
+        for result in results {
+          stack.push(result)
+        }
+      }
+    }
 
     // Control flow
     Return => {
@@ -451,6 +511,23 @@ fn validate_instruction_control(
     Unreachable =>
       // unreachable instruction marks all subsequent code as unreachable
       ctx.mark_unreachable()
+    Throw(tag_idx) => {
+      let tag_int = tag_idx.reinterpret_as_int()
+      let total_tags = import_counts.tags + module_.tags.length()
+      if tag_int < 0 || tag_int >= total_tags {
+        raise ValidationError::UnknownTag(tag_int)
+      }
+      let type_idx = get_tag_type_index(module_, tag_int, import_counts)
+      let tag_type = module_.types[type_idx]
+      for i = tag_type.params.length() - 1; i >= 0; i = i - 1 {
+        ctx.poly_pop_expect(module_, tag_type.params[i], "throw argument")
+      }
+      ctx.mark_unreachable()
+    }
+    Rethrow(label_idx) => {
+      let _ = ctx.get_label_types(label_idx)
+      ctx.mark_unreachable()
+    }
     Call(func_idx) => {
       let idx = func_idx.reinterpret_as_int()
       let total_funcs = import_counts.funcs + module_.funcs.length()

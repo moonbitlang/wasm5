@@ -30,6 +30,8 @@ pub fn encode(module_ : @core.Module) -> Bytes raise EncodeError {
   push_section(out, 5U, mem_payload)
   let global_payload = encode_global_section(module_.globals)
   push_section(out, 6U, global_payload)
+  let tag_payload = encode_tag_section(module_.tags)
+  push_section(out, 13U, tag_payload)
   let export_payload = encode_export_section(module_.exports)
   push_section(out, 7U, export_payload)
   let start_payload = encode_start_section(module_.start)
@@ -151,7 +153,11 @@ fn encode_import_section(
           },
         )
       }
-      Tag(_) => raise EncodeError::Unsupported("tag import")
+      Tag(type_idx) => {
+        payload.push(0x04U.to_byte())
+        payload.push(0x00U.to_byte())
+        append_bytes(payload, encode_u32_leb128(type_idx))
+      }
     }
   }
   payload
@@ -220,6 +226,18 @@ fn encode_global_section(
 }
 
 ///|
+fn encode_tag_section(tags : Array[@core.Tag]) -> Array[Byte] {
+  guard tags.length() > 0 else { return [] }
+  let payload : Array[Byte] = []
+  append_bytes(payload, encode_u32_leb128(tags.length().reinterpret_as_uint()))
+  for tag in tags {
+    payload.push(0x00U.to_byte())
+    append_bytes(payload, encode_u32_leb128(tag.type_idx))
+  }
+  payload
+}
+
+///|
 fn encode_export_section(
   exports : Array[@core.Export],
 ) -> Array[Byte] raise EncodeError {
@@ -248,7 +266,10 @@ fn encode_export_section(
         payload.push(0x03U.to_byte())
         append_bytes(payload, encode_u32_leb128(idx))
       }
-      Tag(_) => raise EncodeError::Unsupported("tag export")
+      Tag(idx) => {
+        payload.push(0x04U.to_byte())
+        append_bytes(payload, encode_u32_leb128(idx))
+      }
     }
   }
   payload
@@ -551,6 +572,40 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
       }
       payload.push(0x0BU.to_byte())
     }
+    TryTable(block_type, catches, instrs) => {
+      payload.push(0x1FU.to_byte())
+      append_bytes(payload, encode_block_type(block_type))
+      append_bytes(
+        payload,
+        encode_u32_leb128(catches.length().reinterpret_as_uint()),
+      )
+      for clause in catches {
+        match clause {
+          Catch(tag_idx, label_idx) => {
+            payload.push(0x00U.to_byte())
+            append_bytes(payload, encode_u32_leb128(tag_idx))
+            append_bytes(payload, encode_u32_leb128(label_idx))
+          }
+          CatchRef(tag_idx, label_idx) => {
+            payload.push(0x01U.to_byte())
+            append_bytes(payload, encode_u32_leb128(tag_idx))
+            append_bytes(payload, encode_u32_leb128(label_idx))
+          }
+          CatchAll(label_idx) => {
+            payload.push(0x02U.to_byte())
+            append_bytes(payload, encode_u32_leb128(label_idx))
+          }
+          CatchAllRef(label_idx) => {
+            payload.push(0x03U.to_byte())
+            append_bytes(payload, encode_u32_leb128(label_idx))
+          }
+        }
+      }
+      for item in instrs {
+        append_bytes(payload, encode_instr(item))
+      }
+      payload.push(0x0BU.to_byte())
+    }
     Br(idx) => {
       payload.push(0x0CU.to_byte())
       append_bytes(payload, encode_u32_leb128(idx))
@@ -591,6 +646,14 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
       }
     }
     Return => payload.push(0x0FU.to_byte())
+    Throw(idx) => {
+      payload.push(0x08U.to_byte())
+      append_bytes(payload, encode_u32_leb128(idx))
+    }
+    Rethrow(idx) => {
+      payload.push(0x09U.to_byte())
+      append_bytes(payload, encode_u32_leb128(idx))
+    }
     Call(idx) => {
       payload.push(0x10U.to_byte())
       append_bytes(payload, encode_u32_leb128(idx))

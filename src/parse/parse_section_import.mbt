@@ -23,7 +23,12 @@ fn parse_import_section(parser : Parser) -> Array[@core.Import] raise {
       }
       // Exception handling: tag import
       0x04 => {
-        let _ = parser.read_byte() // tag attribute (should be 0x00)
+        let attr = parser.read_byte()
+        if attr != 0x00U.to_byte() {
+          raise @validate.ValidationError::TypeMismatch(
+            "invalid tag attribute: 0x\{attr.to_string()}",
+          )
+        }
         let type_idx = parser.read_u32_leb128()
         Tag(type_idx)
       }
