@@ -5318,6 +5318,75 @@ fn parse_hex_payload(
 }
 
 ///|
+fn hex_digit_value(b : Byte, atom : Bytes) -> Int raise WatError {
+  if b >= b'0' && b <= b'9' {
+    return (b.to_uint() - b'0'.to_uint()).reinterpret_as_int()
+  }
+  if b >= b'a' && b <= b'f' {
+    return (b.to_uint() - b'a'.to_uint() + 10U).reinterpret_as_int()
+  }
+  if b >= b'A' && b <= b'F' {
+    return (b.to_uint() - b'A'.to_uint() + 10U).reinterpret_as_int()
+  }
+  raise WatError::InvalidNumber("invalid float \{atom}")
+}
+
+///|
+fn parse_hex_float(
+  bytes : Bytes,
+  neg : Bool,
+  atom : Bytes,
+) -> Double raise WatError {
+  guard bytes_starts_with(bytes, b"0x") else {
+    raise WatError::InvalidNumber("invalid float \{atom}")
+  }
+  let mut idx = 2
+  let mut seen_digit = false
+  let mut after_dot = false
+  let mut frac_digits = 0
+  let mut significand : Double = 0.0
+  while idx < bytes.length() && bytes[idx] != b'p' {
+    let b = bytes[idx]
+    if b == b'.' {
+      guard not(after_dot) else {
+        raise WatError::InvalidNumber("invalid float \{atom}")
+      }
+      after_dot = true
+      idx = idx + 1
+      continue
+    }
+    let digit = hex_digit_value(b, atom)
+    seen_digit = true
+    significand = significand * 16.0 + digit.to_double()
+    if after_dot {
+      frac_digits = frac_digits + 1
+    }
+    idx = idx + 1
+  }
+  guard seen_digit else {
+    raise WatError::InvalidNumber("invalid float \{atom}")
+  }
+  guard idx < bytes.length() && bytes[idx] == b'p' else {
+    raise WatError::InvalidNumber("invalid float \{atom}")
+  }
+  let exp_bytes = slice_bytes(bytes, idx + 1)
+  guard exp_bytes.length() > 0 else {
+    raise WatError::InvalidNumber("invalid float \{atom}")
+  }
+  let exp_text = bytes_to_string(exp_bytes)
+  let exp = @strconv.parse_int(exp_text) catch {
+    _ => raise WatError::InvalidNumber("invalid float \{atom}")
+  }
+  let exp2 = exp - frac_digits * 4
+  let value = significand * @math.pow(2.0, exp2.to_double())
+  if neg {
+    -value
+  } else {
+    value
+  }
+}
+
+///|
 fn parse_float(atom : Bytes) -> Float raise WatError {
   let cleaned = strip_underscores(atom)
   let (neg, rest) = split_sign(cleaned)
@@ -5374,6 +5443,9 @@ fn parse_double(atom : Bytes) -> Double raise WatError {
       bits = bits | 0x8000_0000_0000_0000UL
     }
     return bits.reinterpret_as_double()
+  }
+  if bytes_starts_with(lower, b"0x") {
+    return parse_hex_float(lower, neg, atom)
   }
   let text = bytes_to_string(cleaned)
   @strconv.parse_double(text) catch {

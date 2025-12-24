@@ -154,6 +154,12 @@ async test "wat encoder matches wasm-tools for float nan/inf literals" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for hex float literals" {
+  let wat = "(module (func (export \"f\") (result f32 f64) f32.const 0x1.8p+1 f64.const -0x1.0p-1))"
+  assert_wat_matches("float_hex", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for numeric literals" {
   let wat = "(module (func (export \"lit\") (result i32 i64 i32 i64) i32.const 0x2a i64.const -0x2a i32.const 1_000 i64.const 0x1_000))"
   assert_wat_matches("numeric_literals", wat)
