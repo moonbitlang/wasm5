@@ -76,6 +76,36 @@ pub(all) struct FuncType {
   results : Array[ValType]
 }
 
+///|
+pub(all) enum StorageType {
+  Val(ValType)
+  I8
+  I16
+} derive(Show, Eq)
+
+///|
+pub(all) struct FieldType {
+  storage : StorageType
+  mutable : Bool
+}
+
+///|
+pub(all) struct StructType {
+  fields : Array[FieldType]
+}
+
+///|
+pub(all) struct ArrayType {
+  element : FieldType
+}
+
+///|
+pub(all) enum TypeDef {
+  Func(FuncType)
+  Struct(StructType)
+  Array(ArrayType)
+} derive(Show, Eq)
+
 // Block type (can be empty, single value, or type index to function type)
 
 ///|
@@ -312,6 +342,34 @@ pub(all) enum Instr {
   RefAsNonNull // ref.as_non_null - trap if reference is null
   RefTest(RefType, Bool) // ref.test (heap type, nullable)
   RefCast(RefType, Bool) // ref.cast (heap type, nullable)
+  // GC instructions (struct/array, casts, i31)
+  StructNew(UInt)
+  StructNewDefault(UInt)
+  StructGet(UInt, UInt)
+  StructGetS(UInt, UInt)
+  StructGetU(UInt, UInt)
+  StructSet(UInt, UInt)
+  ArrayNew(UInt)
+  ArrayNewDefault(UInt)
+  ArrayNewFixed(UInt, UInt)
+  ArrayNewData(UInt, UInt)
+  ArrayNewElem(UInt, UInt)
+  ArrayGet(UInt)
+  ArrayGetS(UInt)
+  ArrayGetU(UInt)
+  ArraySet(UInt)
+  ArrayLen
+  ArrayFill(UInt)
+  ArrayCopy(UInt, UInt)
+  ArrayInitData(UInt, UInt)
+  ArrayInitElem(UInt, UInt)
+  BrOnCast(UInt, RefType, Bool, RefType, Bool)
+  BrOnCastFail(UInt, RefType, Bool, RefType, Bool)
+  AnyConvertExtern
+  ExternConvertAny
+  RefI31
+  I31GetS
+  I31GetU
 
   // Numeric instructions - constants
   I32Const(UInt)
@@ -499,7 +557,7 @@ pub(all) struct Code {
 ///|
 /// Module structure according to WASM specification
 pub(all) struct Module {
-  types : Array[FuncType] // type section
+  types : Array[TypeDef] // type section
   funcs : Array[UInt] // function section (type indices)
   tables : Array[TableType] // table section
   mems : Array[MemType] // memory section

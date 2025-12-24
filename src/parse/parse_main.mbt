@@ -21,7 +21,7 @@ pub fn parse(b : Bytes) -> @core.Module raise {
   }
 
   // Parse sections
-  let mut types : Array[@core.FuncType] = []
+  let mut types : Array[@core.TypeDef] = []
   let mut funcs : Array[UInt] = []
   let mut tables : Array[@core.TableType] = []
   let mut mems : Array[@core.MemType] = []

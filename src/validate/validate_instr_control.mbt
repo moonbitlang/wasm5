@@ -11,12 +11,27 @@ fn get_block_type(
       ([], [t])
     }
     TypeIndex(idx) => {
-      if idx < 0 || idx >= module_.types.length() {
-        raise ValidationError::InvalidTypeIndex(idx)
-      }
-      let func_type = module_.types[idx]
+      let func_type = get_func_type_by_index(module_, idx, "block type")
       (func_type.params, func_type.results)
     }
+  }
+}
+
+///|
+fn get_func_type_by_index(
+  module_ : @core.Module,
+  type_idx : Int,
+  context : String,
+) -> @core.FuncType raise ValidationError {
+  if type_idx < 0 || type_idx >= module_.types.length() {
+    raise ValidationError::InvalidTypeIndex(type_idx)
+  }
+  match module_.types[type_idx] {
+    Func(func_type) => func_type
+    _ =>
+      raise ValidationError::TypeMismatch(
+        "\{context} must refer to func type",
+      )
   }
 }
 
@@ -518,7 +533,7 @@ fn validate_instruction_control(
         raise ValidationError::UnknownTag(tag_int)
       }
       let type_idx = get_tag_type_index(module_, tag_int, import_counts)
-      let tag_type = module_.types[type_idx]
+      let tag_type = get_func_type_by_index(module_, type_idx, "tag type")
       for i = tag_type.params.length() - 1; i >= 0; i = i - 1 {
         ctx.poly_pop_expect(module_, tag_type.params[i], "throw argument")
       }
@@ -536,7 +551,11 @@ fn validate_instruction_control(
       }
       // Get the function type
       let type_idx = get_func_type_index(module_, idx, import_counts)
-      let func_type_called = module_.types[type_idx]
+      let func_type_called = get_func_type_by_index(
+        module_,
+        type_idx,
+        "call",
+      )
       // Pop arguments from stack (in reverse order)
       for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
         ctx.poly_pop_expect(
@@ -591,10 +610,11 @@ fn validate_instruction_control(
           )
       }
       let idx = type_idx.reinterpret_as_int()
-      if idx < 0 || idx >= module_.types.length() {
-        raise ValidationError::InvalidTypeIndex(idx)
-      }
-      let func_type_called = module_.types[idx]
+      let func_type_called = get_func_type_by_index(
+        module_,
+        idx,
+        "call_indirect",
+      )
       // Pop table index
       ctx.poly_pop_expect(module_, I32, "call_indirect table index")
       // Pop arguments from stack (in reverse order)
@@ -617,10 +637,11 @@ fn validate_instruction_control(
 
       // Find the type index for this function
       let type_idx = get_func_type_index(module_, idx, import_counts)
-      if type_idx < 0 || type_idx >= module_.types.length() {
-        raise ValidationError::InvalidTypeIndex(type_idx)
-      }
-      let func_type_called = module_.types[type_idx]
+      let func_type_called = get_func_type_by_index(
+        module_,
+        type_idx,
+        "return_call",
+      )
       validate_tail_call_return_type(
         module_, func_type_called, func_type, "return_call",
       )
@@ -679,10 +700,11 @@ fn validate_instruction_control(
           )
       }
       let idx = type_idx.reinterpret_as_int()
-      if idx < 0 || idx >= module_.types.length() {
-        raise ValidationError::InvalidTypeIndex(idx)
-      }
-      let func_type_called = module_.types[idx]
+      let func_type_called = get_func_type_by_index(
+        module_,
+        idx,
+        "return_call_indirect",
+      )
       validate_tail_call_return_type(
         module_, func_type_called, func_type, "return_call_indirect",
       )
@@ -703,10 +725,11 @@ fn validate_instruction_control(
       // call_ref: calls function through a reference
       // Stack: [args...] [(ref null $type_idx)] -> [results...]
       let idx = type_idx.reinterpret_as_int()
-      if idx < 0 || idx >= module_.types.length() {
-        raise ValidationError::InvalidTypeIndex(idx)
-      }
-      let func_type_called = module_.types[idx]
+      let func_type_called = get_func_type_by_index(
+        module_,
+        idx,
+        "call_ref",
+      )
 
       // Pop the function reference - must be (ref null $type_idx)
       // Cannot be generic funcref or externref
@@ -732,10 +755,11 @@ fn validate_instruction_control(
       // Like doing a call_ref followed by return - must match current function's return type
       // Stack: [args...] [(ref null $type_idx)] -> (unreachable)
       let idx = type_idx.reinterpret_as_int()
-      if idx < 0 || idx >= module_.types.length() {
-        raise ValidationError::InvalidTypeIndex(idx)
-      }
-      let func_type_called = module_.types[idx]
+      let func_type_called = get_func_type_by_index(
+        module_,
+        idx,
+        "return_call_ref",
+      )
       validate_tail_call_return_type(
         module_, func_type_called, func_type, "return_call_ref",
       )

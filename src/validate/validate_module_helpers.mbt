@@ -1,12 +1,22 @@
 ///|
 fn validate_module_type_indices(m : @core.Module) -> Unit raise ValidationError {
   // Validate that all type indices in type definitions are valid
-  for func_type in m.types {
-    for param in func_type.params {
-      validate_valtype(m, param)
-    }
-    for result in func_type.results {
-      validate_valtype(m, result)
+  for type_def in m.types {
+    match type_def {
+      Func(func_type) => {
+        for param in func_type.params {
+          validate_valtype(m, param)
+        }
+        for result in func_type.results {
+          validate_valtype(m, result)
+        }
+      }
+      Struct(struct_type) =>
+        for field in struct_type.fields {
+          validate_storage_type(m, field.storage)
+        }
+      Array(array_type) =>
+        validate_storage_type(m, array_type.element.storage)
     }
   }
 
@@ -45,14 +55,30 @@ fn validate_module_type_indices(m : @core.Module) -> Unit raise ValidationError 
         if type_idx < 0 || type_idx >= m.types.length() {
           raise ValidationError::InvalidTypeIndex(type_idx)
         }
+        match m.types[type_idx] {
+          Func(_) => ()
+          _ =>
+            raise ValidationError::TypeMismatch(
+              "function type index must refer to func type",
+            )
+        }
       }
       Tag(tidx) => {
         let type_idx = tidx.reinterpret_as_int()
         if type_idx < 0 || type_idx >= m.types.length() {
           raise ValidationError::InvalidTypeIndex(type_idx)
         }
-        if m.types[type_idx].results.length() > 0 {
-          raise ValidationError::TypeMismatch("tag type must not have results")
+        match m.types[type_idx] {
+          Func(func_type) =>
+            if func_type.results.length() > 0 {
+              raise ValidationError::TypeMismatch(
+                "tag type must not have results",
+              )
+            }
+          _ =>
+            raise ValidationError::TypeMismatch(
+              "tag type index must refer to func type",
+            )
         }
       }
       _ => ()
@@ -65,8 +91,15 @@ fn validate_module_type_indices(m : @core.Module) -> Unit raise ValidationError 
     if type_idx < 0 || type_idx >= m.types.length() {
       raise ValidationError::InvalidTypeIndex(type_idx)
     }
-    if m.types[type_idx].results.length() > 0 {
-      raise ValidationError::TypeMismatch("tag type must not have results")
+    match m.types[type_idx] {
+      Func(func_type) =>
+        if func_type.results.length() > 0 {
+          raise ValidationError::TypeMismatch("tag type must not have results")
+        }
+      _ =>
+        raise ValidationError::TypeMismatch(
+          "tag type index must refer to func type",
+        )
     }
   }
 
@@ -75,6 +108,13 @@ fn validate_module_type_indices(m : @core.Module) -> Unit raise ValidationError 
     let type_idx = m.funcs[i].reinterpret_as_int()
     if type_idx < 0 || type_idx >= m.types.length() {
       raise ValidationError::InvalidTypeIndex(type_idx)
+    }
+    match m.types[type_idx] {
+      Func(_) => ()
+      _ =>
+        raise ValidationError::TypeMismatch(
+          "function type index must refer to func type",
+        )
     }
   }
 }
@@ -99,7 +139,13 @@ fn validate_module_start_function(
 
       // Get the function type
       let type_idx = get_func_type_index(m, func_idx, import_counts)
-      let func_type = m.types[type_idx]
+      let func_type = match m.types[type_idx] {
+        Func(ft) => ft
+        _ =>
+          raise ValidationError::TypeMismatch(
+            "start function type must refer to func type",
+          )
+      }
 
       // Start function must have type [] -> []
       if func_type.params.length() > 0 {

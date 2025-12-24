@@ -5,7 +5,7 @@ fn make_expr(instrs : Array[@core.Instr]) -> @core.Expr {
 
 ///|
 test "runtime load with resolver" {
-  let func_type : @core.FuncType = { params: [], results: [] }
+  let func_type : @core.TypeDef = Func({ params: [], results: [] })
   let mem_type : @core.MemType = {
     limits: { min: 1U, max: Some(2U) },
     shared: false,
@@ -149,7 +149,7 @@ test "runtime load local memory" {
 
 ///|
 test "runtime load missing imported function" {
-  let func_type : @core.FuncType = { params: [], results: [] }
+  let func_type : @core.TypeDef = Func({ params: [], results: [] })
   let module_ : @core.Module = {
     types: [func_type],
     funcs: [],

@@ -94,6 +94,74 @@ fn count_imported_tags(module_ : @core.Module) -> Int {
 }
 
 ///|
+fn require_func_type(
+  module_ : @core.Module,
+  type_idx : Int,
+  context : String,
+) -> @core.FuncType raise RuntimeError {
+  if type_idx < 0 || type_idx >= module_.types.length() {
+    raise RuntimeError::InvalidType(
+      "\{context}: invalid type index \{type_idx}",
+    )
+  }
+  match module_.types[type_idx] {
+    Func(func_type) => func_type
+    _ =>
+      raise RuntimeError::InvalidType(
+        "\{context}: expected func type",
+      )
+  }
+}
+
+///|
+fn require_struct_type(
+  module_ : @core.Module,
+  type_idx : Int,
+  context : String,
+) -> @core.StructType raise RuntimeError {
+  if type_idx < 0 || type_idx >= module_.types.length() {
+    raise RuntimeError::InvalidType(
+      "\{context}: invalid type index \{type_idx}",
+    )
+  }
+  match module_.types[type_idx] {
+    Struct(struct_type) => struct_type
+    _ =>
+      raise RuntimeError::InvalidType(
+        "\{context}: expected struct type",
+      )
+  }
+}
+
+///|
+fn require_array_type(
+  module_ : @core.Module,
+  type_idx : Int,
+  context : String,
+) -> @core.ArrayType raise RuntimeError {
+  if type_idx < 0 || type_idx >= module_.types.length() {
+    raise RuntimeError::InvalidType(
+      "\{context}: invalid type index \{type_idx}",
+    )
+  }
+  match module_.types[type_idx] {
+    Array(array_type) => array_type
+    _ =>
+      raise RuntimeError::InvalidType(
+        "\{context}: expected array type",
+      )
+  }
+}
+
+///|
+fn storage_value_type(storage : @core.StorageType) -> @core.ValType {
+  match storage {
+    Val(val_type) => val_type
+    I8 | I16 => I32
+  }
+}
+
+///|
 /// Get the type index for a function (imported or local)
 /// Returns -1 if the function index is invalid
 fn get_func_type_idx(

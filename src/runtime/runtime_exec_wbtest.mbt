@@ -1,6 +1,6 @@
 ///|
 fn module_with(
-  types : Array[@core.FuncType],
+  types : Array[@core.TypeDef],
   funcs : Array[UInt],
   codes : Array[@core.Code],
   imports : Array[@core.Import],
@@ -25,7 +25,7 @@ fn module_with(
 
 ///|
 test "runtime compile start function" {
-  let func_type : @core.FuncType = { params: [], results: [] }
+  let func_type : @core.TypeDef = Func({ params: [], results: [] })
   let code : @core.Code = {
     locals: [I32],
     body: @core.Expr::{ instrs: [] },
@@ -58,7 +58,7 @@ test "runtime execute error branches" {
 
 ///|
 test "runtime call compiled imported func" {
-  let func_type : @core.FuncType = { params: [], results: [I32] }
+  let func_type : @core.TypeDef = Func({ params: [], results: [I32] })
   let module_ = module_with(
     [func_type],
     [],

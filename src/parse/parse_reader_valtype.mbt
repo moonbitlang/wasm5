@@ -77,3 +77,16 @@ fn Parser::read_valtype(self : Parser) -> @core.ValType raise {
       }
   }
 }
+
+///|
+fn Parser::read_storage_type(self : Parser) -> @core.StorageType raise {
+  let byte = self.read_byte()
+  match byte {
+    0x78 => I8
+    0x77 => I16
+    _ => {
+      self.pos = self.pos - 1
+      StorageType::Val(self.read_valtype())
+    }
+  }
+}

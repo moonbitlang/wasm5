@@ -220,6 +220,24 @@ async test "wat encoder matches wasm-tools for data segments and memory.init" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for gc struct/array ops" {
+  let wat = "(module (type $s (struct (field i32) (field (mut i32)))) (type $sp (struct (field i8) (field (mut i16)))) (type $a16 (array (mut i16))) (type $a32 (array (mut i32))) (func (export \"gc_ops\") (param i32 i32 i32) (result i32) struct.new_default $s drop local.get 0 local.get 1 struct.new $s struct.get $s 0 drop local.get 0 local.get 1 struct.new $s local.get 2 struct.set $s 1 struct.new_default $sp struct.get_s $sp 0 drop struct.new_default $sp struct.get_u $sp 1 drop local.get 0 array.new_default $a16 array.len drop local.get 1 local.get 2 array.new_fixed $a16 2 drop local.get 1 local.get 0 array.new $a16 local.get 0 array.get_u $a16 drop local.get 1 local.get 0 array.new $a16 local.get 0 array.get_s $a16 drop local.get 1 local.get 0 array.new $a32 local.get 0 array.get $a32 drop local.get 1 local.get 0 array.new $a16 local.get 0 local.get 2 array.set $a16 local.get 1 local.get 0 array.new $a16 local.get 0 local.get 2 local.get 1 array.fill $a16 local.get 1 local.get 0 array.new $a16 local.get 0 local.get 1 local.get 0 array.new $a16 local.get 0 local.get 2 array.copy $a16 $a16 i32.const 0))"
+  assert_wat_matches("gc_struct_array_ops", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for gc data/elem ops" {
+  let wat = "(module (type $a (array (mut i8))) (func $f (result i32) i32.const 0) (table $t 1 funcref) (elem $e (i32.const 0) $f) (data $d \"hi\") (func (export \"gc_data\") (param i32) (result i32) i32.const 0 local.get 0 array.new_data $a $d drop i32.const 0 local.get 0 array.new_elem $a $e drop local.get 0 array.new_default $a i32.const 0 i32.const 0 local.get 0 array.init_data $a $d local.get 0 array.new_default $a i32.const 0 i32.const 0 local.get 0 array.init_elem $a $e i32.const 0))"
+  assert_wat_matches("gc_data_elem_ops", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for gc cast and i31 ops" {
+  let wat = "(module (type $s (struct (field i32))) (func (export \"gc_casts\") (param (ref null $s)) (result i32) (block (result (ref null $s)) local.get 0 br_on_cast 0 (ref $s) (ref null $s)) drop (block (result (ref null $s)) local.get 0 br_on_cast_fail 0 (ref $s) (ref null $s)) drop i32.const 7 ref.i31 i31.get_s drop i32.const 7 ref.i31 i31.get_u drop ref.null extern any.convert_extern drop ref.null any extern.convert_any drop i32.const 0))"
+  assert_wat_matches("gc_cast_i31_ops", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for call_ref and return_call_ref" {
   let wat = "(module (type $t (func (param i32) (result i32))) (table 1 funcref) (func $f (type $t) (param i32) (result i32) local.get 0) (elem (i32.const 0) $f) (func (export \"call\") (param i32) (result i32) local.get 0 ref.func $f call_ref $t) (func (export \"tail\") (param i32) (result i32) local.get 0 ref.func $f return_call_ref $t))"
   assert_wat_matches("call_ref", wat)

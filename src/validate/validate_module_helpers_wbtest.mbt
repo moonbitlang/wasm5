@@ -1,7 +1,7 @@
 ///|
 test "validate module type index errors" {
   let module_table : @core.Module = {
-    types: [{ params: [], results: [] }],
+    types: [Func({ params: [], results: [] })],
     funcs: [],
     tables: [
       {
@@ -30,7 +30,7 @@ test "validate module type index errors" {
   }
   assert_eq(saw_error, true)
   let module_elem : @core.Module = {
-    types: [{ params: [], results: [] }],
+    types: [Func({ params: [], results: [] })],
     funcs: [],
     tables: [],
     mems: [],
@@ -60,7 +60,7 @@ test "validate module type index errors" {
   }
   assert_eq(saw_error, true)
   let module_import : @core.Module = {
-    types: [{ params: [], results: [] }],
+    types: [Func({ params: [], results: [] })],
     funcs: [],
     tables: [],
     mems: [],
@@ -88,7 +88,7 @@ test "validate module type index errors" {
   }
   assert_eq(saw_error, true)
   let module_funcs : @core.Module = {
-    types: [{ params: [], results: [] }],
+    types: [Func({ params: [], results: [] })],
     funcs: [1U],
     tables: [],
     mems: [],
@@ -110,7 +110,7 @@ test "validate module type index errors" {
   }
   assert_eq(saw_error, true)
   let module_globals : @core.Module = {
-    types: [{ params: [], results: [] }],
+    types: [Func({ params: [], results: [] })],
     funcs: [],
     tables: [],
     mems: [],
@@ -141,7 +141,7 @@ test "validate module type index errors" {
 ///|
 test "validate module type results" {
   let module_results : @core.Module = {
-    types: [{ params: [], results: [I32] }],
+    types: [Func({ params: [], results: [I32] })],
     funcs: [],
     tables: [],
     mems: [],
@@ -185,7 +185,7 @@ test "validate module start function errors" {
   }
   assert_eq(saw_error, true)
   let module_params : @core.Module = {
-    types: [{ params: [I32], results: [] }],
+    types: [Func({ params: [I32], results: [] })],
     funcs: [0U],
     tables: [],
     mems: [],
@@ -210,7 +210,7 @@ test "validate module start function errors" {
   }
   assert_eq(saw_error, true)
   let module_results : @core.Module = {
-    types: [{ params: [], results: [I32] }],
+    types: [Func({ params: [], results: [I32] })],
     funcs: [0U],
     tables: [],
     mems: [],
@@ -618,7 +618,7 @@ test "validate module table errors" {
   }
   assert_eq(saw_error, true)
   let module_nullable_typed : @core.Module = {
-    types: [{ params: [], results: [] }],
+    types: [Func({ params: [], results: [] })],
     funcs: [],
     tables: [
       {
@@ -643,7 +643,7 @@ test "validate module table errors" {
     get_import_counts(module_nullable_typed),
   )
   let module_typed_init : @core.Module = {
-    types: [{ params: [], results: [] }],
+    types: [Func({ params: [], results: [] })],
     funcs: [0U],
     tables: [
       {
@@ -941,7 +941,7 @@ test "validate module data segment errors" {
 test "validate module exports errors" {
   let dup_name = Bytes::from_array([b'x'])
   let module_dup : @core.Module = {
-    types: [{ params: [], results: [] }],
+    types: [Func({ params: [], results: [] })],
     funcs: [0U],
     tables: [],
     mems: [],
@@ -1156,7 +1156,7 @@ test "validate module global initializers" {
 
 ///|
 test "validate module function bodies" {
-  let func_type : @core.FuncType = { params: [], results: [] }
+  let func_type : @core.TypeDef = Func({ params: [], results: [] })
   let code = test_make_code([], [])
   let module_funcs : @core.Module = {
     types: [func_type],

@@ -1,7 +1,7 @@
 // Section parsers: type section
 
 ///|
-fn parse_single_type(parser : Parser) -> @core.FuncType raise {
+fn parse_single_type(parser : Parser) -> @core.TypeDef raise {
   let tag = parser.read_byte()
   // Handle composite types from GC proposal
   match tag {
@@ -17,23 +17,40 @@ fn parse_single_type(parser : Parser) -> @core.FuncType raise {
       for _ in 0U..<result_count {
         results.push(parser.read_valtype())
       }
-      { params, results }
+      TypeDef::Func({ params, results })
     }
-    // struct type (GC proposal) - skip fields, return empty func type
+    // struct type (GC proposal)
     0x5F => {
       let field_count = parser.read_u32_leb128()
+      let fields : Array[@core.FieldType] = []
       for _ in 0U..<field_count {
-        let _ = parser.read_valtype() // field type
-        let _ = parser.read_byte()
-        // mutability
+        let storage = parser.read_storage_type()
+        let mut_byte = parser.read_byte()
+        let mutable = match mut_byte {
+          0x00 => false
+          0x01 => true
+          _ =>
+            raise @validate.ValidationError::TypeMismatch(
+              "invalid mutability byte: 0x\{mut_byte.to_string()}",
+            )
+        }
+        fields.push({ storage, mutable })
       }
-      { params: [], results: [] }
+      TypeDef::Struct({ fields })
     }
-    // array type (GC proposal) - skip element, return empty func type
+    // array type (GC proposal)
     0x5E => {
-      let _ = parser.read_valtype() // element type
-      let _ = parser.read_byte() // mutability
-      { params: [], results: [] }
+      let storage = parser.read_storage_type()
+      let mut_byte = parser.read_byte()
+      let mutable = match mut_byte {
+        0x00 => false
+        0x01 => true
+        _ =>
+          raise @validate.ValidationError::TypeMismatch(
+            "invalid mutability byte: 0x\{mut_byte.to_string()}",
+          )
+      }
+      TypeDef::Array({ element: { storage, mutable } })
     }
     _ =>
       raise @validate.ValidationError::TypeMismatch(
@@ -43,7 +60,7 @@ fn parse_single_type(parser : Parser) -> @core.FuncType raise {
 }
 
 ///|
-fn parse_type_section(parser : Parser) -> Array[@core.FuncType] raise {
+fn parse_type_section(parser : Parser) -> Array[@core.TypeDef] raise {
   let count = parser.read_u32_leb128()
   let types = []
   for i in 0U..<count {
@@ -54,8 +71,8 @@ fn parse_type_section(parser : Parser) -> Array[@core.FuncType] raise {
       0x4E => {
         let rec_count = parser.read_u32_leb128()
         for _ in 0U..<rec_count {
-          let func_type = parse_single_type(parser)
-          types.push(func_type)
+          let type_def = parse_single_type(parser)
+          types.push(type_def)
         }
         continue
       }
@@ -66,8 +83,8 @@ fn parse_type_section(parser : Parser) -> Array[@core.FuncType] raise {
           let _ = parser.read_u32_leb128()
           // supertype index, ignored
         }
-        let func_type = parse_single_type(parser)
-        types.push(func_type)
+        let type_def = parse_single_type(parser)
+        types.push(type_def)
         continue
       }
       // sub final - final subtype (with supertypes)
@@ -77,15 +94,15 @@ fn parse_type_section(parser : Parser) -> Array[@core.FuncType] raise {
           let _ = parser.read_u32_leb128()
           // supertype index, ignored
         }
-        let func_type = parse_single_type(parser)
-        types.push(func_type)
+        let type_def = parse_single_type(parser)
+        types.push(type_def)
         continue
       }
       // Standard function type
       0x60 => {
         parser.pos = parser.pos - 1 // Put the byte back
-        let func_type = parse_single_type(parser)
-        types.push(func_type)
+        let type_def = parse_single_type(parser)
+        types.push(type_def)
       }
       _ =>
         raise @validate.ValidationError::TypeMismatch(

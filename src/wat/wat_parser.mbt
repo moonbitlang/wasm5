@@ -46,6 +46,10 @@ priv enum WatInstr {
   MemoryFill(IndexRef)
   Throw(IndexRef)
   Rethrow(UInt)
+  ArrayNewData(UInt, IndexRef)
+  ArrayNewElem(UInt, IndexRef)
+  ArrayInitData(UInt, IndexRef)
+  ArrayInitElem(UInt, IndexRef)
   Block(WatBlockType, Array[WatInstr])
   Loop(WatBlockType, Array[WatInstr])
   If(WatBlockType, Array[WatInstr], Array[WatInstr])
@@ -83,8 +87,7 @@ priv struct WatCallIndirect {
 ///|
 priv struct WatTypeDef {
   name : Bytes?
-  params : Array[@core.ValType]
-  results : Array[@core.ValType]
+  type_def : @core.TypeDef
 }
 
 ///|
@@ -1608,6 +1611,77 @@ fn parse_inline_export(items : Array[SExpr]) -> Bytes raise WatError {
 }
 
 ///|
+fn parse_storage_type_atom(
+  atom : Bytes,
+  type_map : Map[Bytes, UInt],
+) -> @core.StorageType raise WatError {
+  match atom {
+    b"i8" => I8
+    b"i16" => I16
+    _ => StorageType::Val(parse_valtype_atom(atom, type_map))
+  }
+}
+
+///|
+fn parse_storage_type_expr(
+  expr : SExpr,
+  type_map : Map[Bytes, UInt],
+) -> @core.StorageType raise WatError {
+  match expr {
+    Atom(atom) => parse_storage_type_atom(atom, type_map)
+    List(_) => StorageType::Val(parse_valtype_expr(expr, type_map))
+    _ => raise WatError::InvalidSyntax("expected storage type")
+  }
+}
+
+///|
+fn parse_field_type_expr(
+  expr : SExpr,
+  type_map : Map[Bytes, UInt],
+) -> @core.FieldType raise WatError {
+  match expr {
+    List(list_items) =>
+      if list_items.length() > 0 &&
+        list_items[0] is Atom(tag) &&
+        tag == b"mut" {
+        guard list_items.length() == 2 else {
+          raise WatError::InvalidSyntax("mut expects one type")
+        }
+        let storage = parse_storage_type_expr(list_items[1], type_map)
+        { storage, mutable: true }
+      } else {
+        let storage = parse_storage_type_expr(expr, type_map)
+        { storage, mutable: false }
+      }
+    _ => {
+      let storage = parse_storage_type_expr(expr, type_map)
+      { storage, mutable: false }
+    }
+  }
+}
+
+///|
+fn parse_field_type(
+  items : Array[SExpr],
+  type_map : Map[Bytes, UInt],
+) -> @core.FieldType raise WatError {
+  guard items.length() >= 2 else {
+    raise WatError::InvalidSyntax("field expects type")
+  }
+  let mut idx = 1
+  if items[idx] is Atom(atom) && is_name(atom) {
+    idx = idx + 1
+  }
+  guard idx < items.length() else {
+    raise WatError::InvalidSyntax("field expects type")
+  }
+  guard idx == items.length() - 1 else {
+    raise WatError::InvalidSyntax("field expects single type")
+  }
+  parse_field_type_expr(items[idx], type_map)
+}
+
+///|
 fn parse_type_def(
   items : Array[SExpr],
   type_map : Map[Bytes, UInt],
@@ -1619,32 +1693,59 @@ fn parse_type_def(
     idx = idx + 1
   }
   guard idx < items.length() && items[idx] is List(list_items) else {
-    raise WatError::InvalidSyntax("type expects func")
+    raise WatError::InvalidSyntax("type expects definition list")
   }
   guard list_items.length() > 0 && list_items[0] is Atom(tag) else {
-    raise WatError::InvalidSyntax("type func head must be atom")
+    raise WatError::InvalidSyntax("type head must be atom")
   }
-  guard tag == b"func" else {
-    raise WatError::InvalidSyntax("type expects func")
-  }
-  let params : Array[@core.ValType] = []
-  let results : Array[@core.ValType] = []
-  for i in 1..<list_items.length() {
-    match list_items[i] {
-      List(inner) => {
-        guard inner.length() > 0 && inner[0] is Atom(inner_tag) else {
-          raise WatError::InvalidSyntax("func type item tag must be atom")
-        }
-        match inner_tag {
-          b"param" => append_types(params, inner, type_map, allow_names=true)
-          b"result" => append_types(results, inner, type_map, allow_names=false)
-          _ => raise WatError::Unsupported("func type item \{inner_tag}")
+  let type_def = match tag {
+    b"func" => {
+      let params : Array[@core.ValType] = []
+      let results : Array[@core.ValType] = []
+      for i in 1..<list_items.length() {
+        match list_items[i] {
+          List(inner) => {
+            guard inner.length() > 0 && inner[0] is Atom(inner_tag) else {
+              raise WatError::InvalidSyntax("func type item tag must be atom")
+            }
+            match inner_tag {
+              b"param" => append_types(params, inner, type_map, allow_names=true)
+              b"result" => append_types(results, inner, type_map, allow_names=false)
+              _ => raise WatError::Unsupported("func type item \{inner_tag}")
+            }
+          }
+          _ => raise WatError::InvalidSyntax("unexpected item in type")
         }
       }
-      _ => raise WatError::InvalidSyntax("unexpected item in type")
+      @core.TypeDef::Func({ params, results })
     }
+    b"struct" => {
+      let fields : Array[@core.FieldType] = []
+      for i in 1..<list_items.length() {
+        match list_items[i] {
+          List(field_items) => {
+            guard field_items.length() > 0 &&
+              field_items[0] is Atom(field_tag) &&
+              field_tag == b"field" else {
+              raise WatError::InvalidSyntax("struct expects field items")
+            }
+            fields.push(parse_field_type(field_items, type_map))
+          }
+          _ => raise WatError::InvalidSyntax("struct expects field lists")
+        }
+      }
+      @core.TypeDef::Struct({ fields })
+    }
+    b"array" => {
+      guard list_items.length() == 2 else {
+        raise WatError::InvalidSyntax("array expects element type")
+      }
+      let element = parse_field_type_expr(list_items[1], type_map)
+      @core.TypeDef::Array({ element })
+    }
+    _ => raise WatError::InvalidSyntax("type expects func, struct, or array")
   }
-  WatTypeDef::{ name, params, results }
+  WatTypeDef::{ name, type_def }
 }
 
 ///|
@@ -1666,6 +1767,14 @@ fn parse_type_ref_atom(atom : Bytes) -> WatTypeRef raise WatError {
 }
 
 ///|
+fn parse_type_index_atom(
+  atom : Bytes,
+  type_map : Map[Bytes, UInt],
+) -> UInt raise WatError {
+  resolve_type_ref(parse_type_ref_atom(atom), type_map)
+}
+
+///|
 fn resolve_type_use(
   type_ref : WatTypeRef?,
   inline_params : Array[@core.ValType],
@@ -1680,19 +1789,31 @@ fn resolve_type_use(
         raise WatError::UnknownIdentifier("type \{idx}")
       }
       let def = type_defs[idx.reinterpret_as_int()]
+      let func_type = expect_func_type_def(def, "typeuse")
       if inline_params.length() > 0 || inline_results.length() > 0 {
         guard same_sig_arrays(
           inline_params,
           inline_results,
-          def.params,
-          def.results,
+          func_type.params,
+          func_type.results,
         ) else {
           raise WatError::InvalidSyntax("typeuse does not match type")
         }
       }
-      (Some(idx), def.params, def.results)
+      (Some(idx), func_type.params, func_type.results)
     }
     None => (None, inline_params, inline_results)
+  }
+}
+
+///|
+fn expect_func_type_def(
+  def : WatTypeDef,
+  context : String,
+) -> @core.FuncType raise WatError {
+  match def.type_def {
+    Func(func_type) => func_type
+    _ => raise WatError::InvalidSyntax("\{context} expects func type")
   }
 }
 
@@ -1718,7 +1839,7 @@ fn resolve_type_use_index(
   results : Array[@core.ValType],
   type_defs : Array[WatTypeDef],
   type_map : Map[Bytes, UInt],
-  types : Array[@core.FuncType],
+  types : Array[@core.TypeDef],
 ) -> UInt raise WatError {
   match type_ref {
     Some(ref_) => {
@@ -1727,8 +1848,14 @@ fn resolve_type_use_index(
         raise WatError::UnknownIdentifier("type \{idx}")
       }
       let def = type_defs[idx.reinterpret_as_int()]
+      let func_type = expect_func_type_def(def, "typeuse")
       if params.length() > 0 || results.length() > 0 {
-        guard same_sig_arrays(params, results, def.params, def.results) else {
+        guard same_sig_arrays(
+          params,
+          results,
+          func_type.params,
+          func_type.results,
+        ) else {
           raise WatError::InvalidSyntax("typeuse does not match type")
         }
       }
@@ -2110,6 +2237,203 @@ fn parse_instr_from_atom(
       let (ref_type, nullable) = parse_reftype_expr(items[idx + 1], type_map)
       (WatInstr::Core(@core.Instr::RefCast(ref_type, nullable)), idx + 2)
     }
+    b"struct.new" => {
+      let imm = expect_atom_at(items, idx + 1)
+      let type_idx = parse_type_index_atom(imm, type_map)
+      (WatInstr::Core(@core.Instr::StructNew(type_idx)), idx + 2)
+    }
+    b"struct.new_default" => {
+      let imm = expect_atom_at(items, idx + 1)
+      let type_idx = parse_type_index_atom(imm, type_map)
+      (WatInstr::Core(@core.Instr::StructNewDefault(type_idx)), idx + 2)
+    }
+    b"struct.get" => {
+      let type_atom = expect_atom_at(items, idx + 1)
+      let field_atom = expect_atom_at(items, idx + 2)
+      let type_idx = parse_type_index_atom(type_atom, type_map)
+      let field_idx = parse_uint(field_atom)
+      (
+        WatInstr::Core(@core.Instr::StructGet(type_idx, field_idx)),
+        idx + 3,
+      )
+    }
+    b"struct.get_s" => {
+      let type_atom = expect_atom_at(items, idx + 1)
+      let field_atom = expect_atom_at(items, idx + 2)
+      let type_idx = parse_type_index_atom(type_atom, type_map)
+      let field_idx = parse_uint(field_atom)
+      (
+        WatInstr::Core(@core.Instr::StructGetS(type_idx, field_idx)),
+        idx + 3,
+      )
+    }
+    b"struct.get_u" => {
+      let type_atom = expect_atom_at(items, idx + 1)
+      let field_atom = expect_atom_at(items, idx + 2)
+      let type_idx = parse_type_index_atom(type_atom, type_map)
+      let field_idx = parse_uint(field_atom)
+      (
+        WatInstr::Core(@core.Instr::StructGetU(type_idx, field_idx)),
+        idx + 3,
+      )
+    }
+    b"struct.set" => {
+      let type_atom = expect_atom_at(items, idx + 1)
+      let field_atom = expect_atom_at(items, idx + 2)
+      let type_idx = parse_type_index_atom(type_atom, type_map)
+      let field_idx = parse_uint(field_atom)
+      (
+        WatInstr::Core(@core.Instr::StructSet(type_idx, field_idx)),
+        idx + 3,
+      )
+    }
+    b"array.new" => {
+      let imm = expect_atom_at(items, idx + 1)
+      let type_idx = parse_type_index_atom(imm, type_map)
+      (WatInstr::Core(@core.Instr::ArrayNew(type_idx)), idx + 2)
+    }
+    b"array.new_default" => {
+      let imm = expect_atom_at(items, idx + 1)
+      let type_idx = parse_type_index_atom(imm, type_map)
+      (WatInstr::Core(@core.Instr::ArrayNewDefault(type_idx)), idx + 2)
+    }
+    b"array.new_fixed" => {
+      let type_atom = expect_atom_at(items, idx + 1)
+      let len_atom = expect_atom_at(items, idx + 2)
+      let type_idx = parse_type_index_atom(type_atom, type_map)
+      let len = parse_uint(len_atom)
+      (
+        WatInstr::Core(@core.Instr::ArrayNewFixed(type_idx, len)),
+        idx + 3,
+      )
+    }
+    b"array.new_data" => {
+      let type_atom = expect_atom_at(items, idx + 1)
+      let data_atom = expect_atom_at(items, idx + 2)
+      let type_idx = parse_type_index_atom(type_atom, type_map)
+      (WatInstr::ArrayNewData(type_idx, parse_index_ref(data_atom)), idx + 3)
+    }
+    b"array.new_elem" => {
+      let type_atom = expect_atom_at(items, idx + 1)
+      let elem_atom = expect_atom_at(items, idx + 2)
+      let type_idx = parse_type_index_atom(type_atom, type_map)
+      (WatInstr::ArrayNewElem(type_idx, parse_index_ref(elem_atom)), idx + 3)
+    }
+    b"array.get" => {
+      let imm = expect_atom_at(items, idx + 1)
+      let type_idx = parse_type_index_atom(imm, type_map)
+      (WatInstr::Core(@core.Instr::ArrayGet(type_idx)), idx + 2)
+    }
+    b"array.get_s" => {
+      let imm = expect_atom_at(items, idx + 1)
+      let type_idx = parse_type_index_atom(imm, type_map)
+      (WatInstr::Core(@core.Instr::ArrayGetS(type_idx)), idx + 2)
+    }
+    b"array.get_u" => {
+      let imm = expect_atom_at(items, idx + 1)
+      let type_idx = parse_type_index_atom(imm, type_map)
+      (WatInstr::Core(@core.Instr::ArrayGetU(type_idx)), idx + 2)
+    }
+    b"array.set" => {
+      let imm = expect_atom_at(items, idx + 1)
+      let type_idx = parse_type_index_atom(imm, type_map)
+      (WatInstr::Core(@core.Instr::ArraySet(type_idx)), idx + 2)
+    }
+    b"array.len" => (WatInstr::Core(@core.Instr::ArrayLen), idx + 1)
+    b"array.fill" => {
+      let imm = expect_atom_at(items, idx + 1)
+      let type_idx = parse_type_index_atom(imm, type_map)
+      (WatInstr::Core(@core.Instr::ArrayFill(type_idx)), idx + 2)
+    }
+    b"array.copy" => {
+      let dst_atom = expect_atom_at(items, idx + 1)
+      let src_atom = expect_atom_at(items, idx + 2)
+      let dst_idx = parse_type_index_atom(dst_atom, type_map)
+      let src_idx = parse_type_index_atom(src_atom, type_map)
+      (
+        WatInstr::Core(@core.Instr::ArrayCopy(dst_idx, src_idx)),
+        idx + 3,
+      )
+    }
+    b"array.init_data" => {
+      let type_atom = expect_atom_at(items, idx + 1)
+      let data_atom = expect_atom_at(items, idx + 2)
+      let type_idx = parse_type_index_atom(type_atom, type_map)
+      (
+        WatInstr::ArrayInitData(type_idx, parse_index_ref(data_atom)),
+        idx + 3,
+      )
+    }
+    b"array.init_elem" => {
+      let type_atom = expect_atom_at(items, idx + 1)
+      let elem_atom = expect_atom_at(items, idx + 2)
+      let type_idx = parse_type_index_atom(type_atom, type_map)
+      (
+        WatInstr::ArrayInitElem(type_idx, parse_index_ref(elem_atom)),
+        idx + 3,
+      )
+    }
+    b"br_on_cast" => {
+      let label_atom = expect_atom_at(items, idx + 1)
+      guard idx + 3 < items.length() else {
+        raise WatError::InvalidSyntax("br_on_cast expects label and types")
+      }
+      let label = resolve_label_ref(label_atom, labels)
+      let (target_type, target_nullable) = parse_reftype_expr(
+        items[idx + 2],
+        type_map,
+      )
+      let (source_type, source_nullable) = parse_reftype_expr(
+        items[idx + 3],
+        type_map,
+      )
+      (
+        WatInstr::Core(
+          @core.Instr::BrOnCast(
+            label,
+            target_type,
+            target_nullable,
+            source_type,
+            source_nullable,
+          ),
+        ),
+        idx + 4,
+      )
+    }
+    b"br_on_cast_fail" => {
+      let label_atom = expect_atom_at(items, idx + 1)
+      guard idx + 3 < items.length() else {
+        raise WatError::InvalidSyntax("br_on_cast_fail expects label and types")
+      }
+      let label = resolve_label_ref(label_atom, labels)
+      let (target_type, target_nullable) = parse_reftype_expr(
+        items[idx + 2],
+        type_map,
+      )
+      let (source_type, source_nullable) = parse_reftype_expr(
+        items[idx + 3],
+        type_map,
+      )
+      (
+        WatInstr::Core(
+          @core.Instr::BrOnCastFail(
+            label,
+            target_type,
+            target_nullable,
+            source_type,
+            source_nullable,
+          ),
+        ),
+        idx + 4,
+      )
+    }
+    b"any.convert_extern" =>
+      (WatInstr::Core(@core.Instr::AnyConvertExtern), idx + 1)
+    b"extern.convert_any" =>
+      (WatInstr::Core(@core.Instr::ExternConvertAny), idx + 1)
+    b"ref.i31" => (WatInstr::Core(@core.Instr::RefI31), idx + 1)
+    b"i31.get_s" => (WatInstr::Core(@core.Instr::I31GetS), idx + 1)
+    b"i31.get_u" => (WatInstr::Core(@core.Instr::I31GetU), idx + 1)
     b"table.get" => {
       let (table_ref, next_idx) = parse_table_index_from_items(items, idx + 1)
       (WatInstr::TableGet(table_ref), next_idx)
@@ -2305,6 +2629,204 @@ fn parse_instr_from_list(
       let (ref_type, nullable) = parse_reftype_expr(list_items[1], type_map)
       WatInstr::Core(@core.Instr::RefCast(ref_type, nullable))
     }
+    b"struct.new" => {
+      guard list_items.length() == 2 else {
+        raise WatError::InvalidSyntax("struct.new expects one operand")
+      }
+      let type_idx = parse_type_index_atom(expect_atom(list_items[1]), type_map)
+      WatInstr::Core(@core.Instr::StructNew(type_idx))
+    }
+    b"struct.new_default" => {
+      guard list_items.length() == 2 else {
+        raise WatError::InvalidSyntax("struct.new_default expects one operand")
+      }
+      let type_idx = parse_type_index_atom(expect_atom(list_items[1]), type_map)
+      WatInstr::Core(@core.Instr::StructNewDefault(type_idx))
+    }
+    b"struct.get" => {
+      guard list_items.length() == 3 else {
+        raise WatError::InvalidSyntax("struct.get expects type and field")
+      }
+      let type_idx = parse_type_index_atom(expect_atom(list_items[1]), type_map)
+      let field_idx = parse_uint(expect_atom(list_items[2]))
+      WatInstr::Core(@core.Instr::StructGet(type_idx, field_idx))
+    }
+    b"struct.get_s" => {
+      guard list_items.length() == 3 else {
+        raise WatError::InvalidSyntax("struct.get_s expects type and field")
+      }
+      let type_idx = parse_type_index_atom(expect_atom(list_items[1]), type_map)
+      let field_idx = parse_uint(expect_atom(list_items[2]))
+      WatInstr::Core(@core.Instr::StructGetS(type_idx, field_idx))
+    }
+    b"struct.get_u" => {
+      guard list_items.length() == 3 else {
+        raise WatError::InvalidSyntax("struct.get_u expects type and field")
+      }
+      let type_idx = parse_type_index_atom(expect_atom(list_items[1]), type_map)
+      let field_idx = parse_uint(expect_atom(list_items[2]))
+      WatInstr::Core(@core.Instr::StructGetU(type_idx, field_idx))
+    }
+    b"struct.set" => {
+      guard list_items.length() == 3 else {
+        raise WatError::InvalidSyntax("struct.set expects type and field")
+      }
+      let type_idx = parse_type_index_atom(expect_atom(list_items[1]), type_map)
+      let field_idx = parse_uint(expect_atom(list_items[2]))
+      WatInstr::Core(@core.Instr::StructSet(type_idx, field_idx))
+    }
+    b"array.new" => {
+      guard list_items.length() == 2 else {
+        raise WatError::InvalidSyntax("array.new expects one operand")
+      }
+      let type_idx = parse_type_index_atom(expect_atom(list_items[1]), type_map)
+      WatInstr::Core(@core.Instr::ArrayNew(type_idx))
+    }
+    b"array.new_default" => {
+      guard list_items.length() == 2 else {
+        raise WatError::InvalidSyntax("array.new_default expects one operand")
+      }
+      let type_idx = parse_type_index_atom(expect_atom(list_items[1]), type_map)
+      WatInstr::Core(@core.Instr::ArrayNewDefault(type_idx))
+    }
+    b"array.new_fixed" => {
+      guard list_items.length() == 3 else {
+        raise WatError::InvalidSyntax("array.new_fixed expects type and length")
+      }
+      let type_idx = parse_type_index_atom(expect_atom(list_items[1]), type_map)
+      let len = parse_uint(expect_atom(list_items[2]))
+      WatInstr::Core(@core.Instr::ArrayNewFixed(type_idx, len))
+    }
+    b"array.new_data" => {
+      guard list_items.length() == 3 else {
+        raise WatError::InvalidSyntax("array.new_data expects type and data")
+      }
+      let type_idx = parse_type_index_atom(expect_atom(list_items[1]), type_map)
+      WatInstr::ArrayNewData(type_idx, parse_index_ref(expect_atom(list_items[2])))
+    }
+    b"array.new_elem" => {
+      guard list_items.length() == 3 else {
+        raise WatError::InvalidSyntax("array.new_elem expects type and elem")
+      }
+      let type_idx = parse_type_index_atom(expect_atom(list_items[1]), type_map)
+      WatInstr::ArrayNewElem(type_idx, parse_index_ref(expect_atom(list_items[2])))
+    }
+    b"array.get" => {
+      guard list_items.length() == 2 else {
+        raise WatError::InvalidSyntax("array.get expects one operand")
+      }
+      let type_idx = parse_type_index_atom(expect_atom(list_items[1]), type_map)
+      WatInstr::Core(@core.Instr::ArrayGet(type_idx))
+    }
+    b"array.get_s" => {
+      guard list_items.length() == 2 else {
+        raise WatError::InvalidSyntax("array.get_s expects one operand")
+      }
+      let type_idx = parse_type_index_atom(expect_atom(list_items[1]), type_map)
+      WatInstr::Core(@core.Instr::ArrayGetS(type_idx))
+    }
+    b"array.get_u" => {
+      guard list_items.length() == 2 else {
+        raise WatError::InvalidSyntax("array.get_u expects one operand")
+      }
+      let type_idx = parse_type_index_atom(expect_atom(list_items[1]), type_map)
+      WatInstr::Core(@core.Instr::ArrayGetU(type_idx))
+    }
+    b"array.set" => {
+      guard list_items.length() == 2 else {
+        raise WatError::InvalidSyntax("array.set expects one operand")
+      }
+      let type_idx = parse_type_index_atom(expect_atom(list_items[1]), type_map)
+      WatInstr::Core(@core.Instr::ArraySet(type_idx))
+    }
+    b"array.len" => {
+      guard list_items.length() == 1 else {
+        raise WatError::InvalidSyntax("array.len expects no operands")
+      }
+      WatInstr::Core(@core.Instr::ArrayLen)
+    }
+    b"array.fill" => {
+      guard list_items.length() == 2 else {
+        raise WatError::InvalidSyntax("array.fill expects one operand")
+      }
+      let type_idx = parse_type_index_atom(expect_atom(list_items[1]), type_map)
+      WatInstr::Core(@core.Instr::ArrayFill(type_idx))
+    }
+    b"array.copy" => {
+      guard list_items.length() == 3 else {
+        raise WatError::InvalidSyntax("array.copy expects dst and src types")
+      }
+      let dst_idx = parse_type_index_atom(expect_atom(list_items[1]), type_map)
+      let src_idx = parse_type_index_atom(expect_atom(list_items[2]), type_map)
+      WatInstr::Core(@core.Instr::ArrayCopy(dst_idx, src_idx))
+    }
+    b"array.init_data" => {
+      guard list_items.length() == 3 else {
+        raise WatError::InvalidSyntax("array.init_data expects type and data")
+      }
+      let type_idx = parse_type_index_atom(expect_atom(list_items[1]), type_map)
+      WatInstr::ArrayInitData(type_idx, parse_index_ref(expect_atom(list_items[2])))
+    }
+    b"array.init_elem" => {
+      guard list_items.length() == 3 else {
+        raise WatError::InvalidSyntax("array.init_elem expects type and elem")
+      }
+      let type_idx = parse_type_index_atom(expect_atom(list_items[1]), type_map)
+      WatInstr::ArrayInitElem(type_idx, parse_index_ref(expect_atom(list_items[2])))
+    }
+    b"br_on_cast" => {
+      guard list_items.length() == 4 else {
+        raise WatError::InvalidSyntax("br_on_cast expects label and types")
+      }
+      let label = resolve_label_ref(expect_atom(list_items[1]), labels)
+      let (target_type, target_nullable) = parse_reftype_expr(
+        list_items[2],
+        type_map,
+      )
+      let (source_type, source_nullable) = parse_reftype_expr(
+        list_items[3],
+        type_map,
+      )
+      WatInstr::Core(
+        @core.Instr::BrOnCast(
+          label,
+          target_type,
+          target_nullable,
+          source_type,
+          source_nullable,
+        ),
+      )
+    }
+    b"br_on_cast_fail" => {
+      guard list_items.length() == 4 else {
+        raise WatError::InvalidSyntax("br_on_cast_fail expects label and types")
+      }
+      let label = resolve_label_ref(expect_atom(list_items[1]), labels)
+      let (target_type, target_nullable) = parse_reftype_expr(
+        list_items[2],
+        type_map,
+      )
+      let (source_type, source_nullable) = parse_reftype_expr(
+        list_items[3],
+        type_map,
+      )
+      WatInstr::Core(
+        @core.Instr::BrOnCastFail(
+          label,
+          target_type,
+          target_nullable,
+          source_type,
+          source_nullable,
+        ),
+      )
+    }
+    b"any.convert_extern" =>
+      WatInstr::Core(@core.Instr::AnyConvertExtern)
+    b"extern.convert_any" =>
+      WatInstr::Core(@core.Instr::ExternConvertAny)
+    b"ref.i31" => WatInstr::Core(@core.Instr::RefI31)
+    b"i31.get_s" => WatInstr::Core(@core.Instr::I31GetS)
+    b"i31.get_u" => WatInstr::Core(@core.Instr::I31GetU)
     b"ref.func" => {
       guard list_items.length() == 2 else {
         raise WatError::InvalidSyntax("ref.func expects one operand")
@@ -3682,9 +4204,9 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
     }
     data_index = data_index + 1U
   }
-  let types : Array[@core.FuncType] = []
+  let types : Array[@core.TypeDef] = []
   for type_def in wat.type_defs {
-    types.push({ params: type_def.params, results: type_def.results })
+    types.push(type_def.type_def)
   }
   let type_map = Map::new()
   for i in 0..<wat.type_defs.length() {
@@ -3866,7 +4388,7 @@ fn resolve_instrs(
   tag_map : Map[Bytes, UInt],
   type_defs : Array[WatTypeDef],
   type_map : Map[Bytes, UInt],
-  types : Array[@core.FuncType],
+  types : Array[@core.TypeDef],
 ) -> Array[@core.Instr] raise WatError {
   let out : Array[@core.Instr] = []
   for instr in instrs {
@@ -3970,7 +4492,7 @@ fn resolve_instr(
   tag_map : Map[Bytes, UInt],
   type_defs : Array[WatTypeDef],
   type_map : Map[Bytes, UInt],
-  types : Array[@core.FuncType],
+  types : Array[@core.TypeDef],
 ) -> @core.Instr raise WatError {
   match instr {
     WatInstr::Core(core_instr) => core_instr
@@ -4080,6 +4602,22 @@ fn resolve_instr(
       let mem_idx = resolve_index_ref(mem_ref, mem_map, "memory")
       @core.Instr::MemoryFill(mem_idx)
     }
+    WatInstr::ArrayNewData(type_idx, data_ref) => {
+      let data_idx = resolve_index_ref(data_ref, data_map, "data")
+      @core.Instr::ArrayNewData(type_idx, data_idx)
+    }
+    WatInstr::ArrayNewElem(type_idx, elem_ref) => {
+      let elem_idx = resolve_index_ref(elem_ref, elem_map, "elem")
+      @core.Instr::ArrayNewElem(type_idx, elem_idx)
+    }
+    WatInstr::ArrayInitData(type_idx, data_ref) => {
+      let data_idx = resolve_index_ref(data_ref, data_map, "data")
+      @core.Instr::ArrayInitData(type_idx, data_idx)
+    }
+    WatInstr::ArrayInitElem(type_idx, elem_ref) => {
+      let elem_idx = resolve_index_ref(elem_ref, elem_map, "elem")
+      @core.Instr::ArrayInitElem(type_idx, elem_idx)
+    }
     WatInstr::Throw(tag_ref) =>
       @core.Instr::Throw(resolve_index_ref(tag_ref, tag_map, "tag"))
     WatInstr::Rethrow(label_idx) => @core.Instr::Rethrow(label_idx)
@@ -4152,7 +4690,7 @@ fn resolve_block_type(
   block_type : WatBlockType,
   type_defs : Array[WatTypeDef],
   type_map : Map[Bytes, UInt],
-  types : Array[@core.FuncType],
+  types : Array[@core.TypeDef],
 ) -> @core.BlockType raise WatError {
   match block_type {
     Empty => @core.BlockType::Empty
@@ -4266,16 +4804,20 @@ fn ensure_unique_name(
 
 ///|
 fn type_index(
-  types : Array[@core.FuncType],
+  types : Array[@core.TypeDef],
   params : Array[@core.ValType],
   results : Array[@core.ValType],
 ) -> UInt {
   for i in 0..<types.length() {
-    if same_sig(types[i], params, results) {
-      return i.reinterpret_as_uint()
+    match types[i] {
+      Func(func_type) =>
+        if same_sig(func_type, params, results) {
+          return i.reinterpret_as_uint()
+        }
+      _ => ()
     }
   }
-  types.push({ params, results })
+  types.push(Func({ params, results }))
   (types.length() - 1).reinterpret_as_uint()
 }
 

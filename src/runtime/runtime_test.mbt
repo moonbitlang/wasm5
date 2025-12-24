@@ -1,6 +1,6 @@
 ///|
 fn make_const_module(value : UInt, name : Bytes) -> @core.Module {
-  let func_type : @core.FuncType = { params: [], results: [I32] }
+  let func_type : @core.TypeDef = Func({ params: [], results: [I32] })
   let code : @core.Code = {
     locals: [],
     body: @core.Expr::{ instrs: [I32Const(value)] },
@@ -24,7 +24,7 @@ fn make_const_module(value : UInt, name : Bytes) -> @core.Module {
 
 ///|
 fn make_import_call_module() -> @core.Module {
-  let func_type : @core.FuncType = { params: [], results: [I32] }
+  let func_type : @core.TypeDef = Func({ params: [], results: [I32] })
   let code : @core.Code = {
     locals: [],
     body: @core.Expr::{ instrs: [Call(0U)] },

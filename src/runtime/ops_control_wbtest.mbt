@@ -1,6 +1,6 @@
 ///|
 fn base_module(
-  types : Array[@core.FuncType],
+  types : Array[@core.TypeDef],
   funcs : Array[UInt],
   codes : Array[@core.Code],
   imports : Array[@core.Import],

@@ -774,7 +774,7 @@ test "validate table instruction errors" {
 test "validate control instruction branches" {
   let func_type : @core.FuncType = { params: [I32], results: [I32] }
   let module_funcs : @core.Module = {
-    types: [func_type],
+    types: [Func(func_type)],
     funcs: [0U],
     tables: [
       {
@@ -1024,7 +1024,7 @@ test "validate control instruction branches" {
 test "validate control block loop if branches" {
   let block_type : @core.FuncType = { params: [I32], results: [I64] }
   let module_block : @core.Module = {
-    types: [block_type],
+    types: [Func(block_type)],
     funcs: [],
     tables: [],
     mems: [],
@@ -1377,7 +1377,7 @@ test "validate control loop results" {
 test "validate control if branch coverage" {
   let block_type : @core.FuncType = { params: [I32], results: [I32] }
   let module_if : @core.Module = {
-    types: [block_type],
+    types: [Func(block_type)],
     funcs: [],
     tables: [],
     mems: [],
@@ -1616,7 +1616,7 @@ test "validate control call errors" {
   }
   assert_eq(saw_error, true)
   let module_import_table : @core.Module = {
-    types: [{ params: [], results: [] }],
+    types: [Func({ params: [], results: [] })],
     funcs: [],
     tables: [],
     mems: [],
@@ -1653,7 +1653,7 @@ test "validate control call errors" {
   )
   assert_eq(ok, true)
   let module_import_scan : @core.Module = {
-    types: [{ params: [], results: [] }],
+    types: [Func({ params: [], results: [] })],
     funcs: [],
     tables: [],
     mems: [],
@@ -1707,7 +1707,7 @@ test "validate control call errors" {
   assert_eq(ok, true)
   saw_error = false
   let module_table_bad : @core.Module = {
-    types: [{ params: [], results: [] }],
+    types: [Func({ params: [], results: [] })],
     funcs: [],
     tables: [
       {
@@ -1781,7 +1781,7 @@ test "validate control call errors" {
   assert_eq(saw_error, true)
   saw_error = false
   let module_return_call : @core.Module = {
-    types: [{ params: [], results: [] }],
+    types: [Func({ params: [], results: [] })],
     funcs: [1U],
     tables: [],
     mems: [],
@@ -1921,7 +1921,7 @@ test "validate function stack mismatch" {
   }
   assert_eq(saw_error, true)
   let module_types : @core.Module = {
-    types: [{ params: [], results: [] }],
+    types: [Func({ params: [], results: [] })],
     funcs: [],
     tables: [],
     mems: [],

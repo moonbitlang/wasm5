@@ -52,7 +52,7 @@ test "validate helper counts and type lookup" {
     },
   ]
   let module_ : @core.Module = {
-    types: [func_type0, func_type1],
+    types: [Func(func_type0), Func(func_type1)],
     funcs: [0U],
     tables: [],
     mems: [],
@@ -94,7 +94,7 @@ test "validate helper import scan in func lookup" {
     nullable: true,
   }
   let module_ : @core.Module = {
-    types: [func_type],
+    types: [Func(func_type)],
     funcs: [],
     tables: [],
     mems: [],
@@ -335,7 +335,7 @@ test "validate valtype and subtype" {
   }
   assert_eq(saw_error, true)
   let module_types : @core.Module = {
-    types: [{ params: [], results: [] }],
+    types: [Func({ params: [], results: [] })],
     funcs: [],
     tables: [],
     mems: [],

@@ -1,8 +1,8 @@
 ///|
-fn compile_module_types() -> Array[@core.FuncType] {
-  let type0 : @core.FuncType = { params: [I32, I64], results: [I32] }
-  let type1 : @core.FuncType = { params: [], results: [I32] }
-  let type2 : @core.FuncType = { params: [], results: [] }
+fn compile_module_types() -> Array[@core.TypeDef] {
+  let type0 : @core.TypeDef = Func({ params: [I32, I64], results: [I32] })
+  let type1 : @core.TypeDef = Func({ params: [], results: [I32] })
+  let type2 : @core.TypeDef = Func({ params: [], results: [] })
   [type0, type1, type2]
 }
 

@@ -357,9 +357,35 @@ fn validate_const_expr_globals(
 ///|
 /// Check if a type index refers to a function type in the module
 fn is_func_type_index(module_ : @core.Module, type_idx : Int) -> Bool {
-  // In our current implementation, all entries in module_.types are @core.FuncType
-  // So any valid type index is a function type
-  type_idx >= 0 && type_idx < module_.types.length()
+  if type_idx < 0 || type_idx >= module_.types.length() {
+    return false
+  }
+  match module_.types[type_idx] {
+    Func(_) => true
+    _ => false
+  }
+}
+
+///|
+fn is_struct_type_index(module_ : @core.Module, type_idx : Int) -> Bool {
+  if type_idx < 0 || type_idx >= module_.types.length() {
+    return false
+  }
+  match module_.types[type_idx] {
+    Struct(_) => true
+    _ => false
+  }
+}
+
+///|
+fn is_array_type_index(module_ : @core.Module, type_idx : Int) -> Bool {
+  if type_idx < 0 || type_idx >= module_.types.length() {
+    return false
+  }
+  match module_.types[type_idx] {
+    Array(_) => true
+    _ => false
+  }
 }
 
 ///|
@@ -374,6 +400,17 @@ fn validate_valtype(
         raise ValidationError::UnknownType(idx)
       }
     _ => () // Other types don't have type indices
+  }
+}
+
+///|
+fn validate_storage_type(
+  module_ : @core.Module,
+  storage_type : @core.StorageType,
+) -> Unit raise ValidationError {
+  match storage_type {
+    Val(val_type) => validate_valtype(module_, val_type)
+    I8 | I16 => ()
   }
 }
 
@@ -427,6 +464,17 @@ fn is_subtype(
     (Ref(Extern, _), ExternRef) => true
     // Ref(Func, _) is compatible with FuncRef (nullable funcref)
     (Ref(Func, _), FuncRef) => true
+    // Ref(I31, _) is compatible with i31ref
+    (Ref(I31, _), I31Ref) => true
+    // Ref(Struct, _) is compatible with structref
+    (Ref(Struct, _), StructRef) => true
+    // Ref(Array, _) is compatible with arrayref
+    (Ref(Array, _), ArrayRef) => true
+    // Ref(Eq, _) is compatible with eqref
+    (Ref(Eq, _), EqRef) => true
+    // i31ref/structref/arrayref are eqref
+    (Ref(I31, _), EqRef) | (Ref(Struct, _), EqRef) | (Ref(Array, _), EqRef) =>
+      true
     // Ref(TypeIndex(n), _) is a typed function reference, compatible with FuncRef
     // only if type n is actually a function type
     (Ref(TypeIndex(n), _), FuncRef) => is_func_type_index(module_, n)
@@ -434,6 +482,19 @@ fn is_subtype(
     (Ref(TypeIndex(n), false), Ref(Func, false)) =>
       is_func_type_index(module_, n)
     (Ref(TypeIndex(n), _), Ref(Func, true)) => is_func_type_index(module_, n)
+    // Typed struct/array references are compatible with structref/arrayref
+    (Ref(TypeIndex(n), _), StructRef) => is_struct_type_index(module_, n)
+    (Ref(TypeIndex(n), _), ArrayRef) => is_array_type_index(module_, n)
+    (Ref(TypeIndex(n), _), EqRef) =>
+      is_struct_type_index(module_, n) || is_array_type_index(module_, n)
+    (Ref(TypeIndex(n), false), Ref(Struct, false)) =>
+      is_struct_type_index(module_, n)
+    (Ref(TypeIndex(n), _), Ref(Struct, true)) =>
+      is_struct_type_index(module_, n)
+    (Ref(TypeIndex(n), false), Ref(Array, false)) =>
+      is_array_type_index(module_, n)
+    (Ref(TypeIndex(n), _), Ref(Array, true)) =>
+      is_array_type_index(module_, n)
     // NOTE: FuncRef is NOT a subtype of typed function references
     // General funcref cannot be used where specific typed reference is required
     // (FuncRef, Ref(TypeIndex(n), true)) => false

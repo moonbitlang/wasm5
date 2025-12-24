@@ -91,26 +91,58 @@ fn append_u64_le(dst : Array[Byte], value : UInt64) -> Unit {
 
 ///|
 fn encode_type_section(
-  types : Array[@core.FuncType],
+  types : Array[@core.TypeDef],
 ) -> Array[Byte] raise EncodeError {
   guard types.length() > 0 else { return [] }
   let payload : Array[Byte] = []
   append_bytes(payload, encode_u32_leb128(types.length().reinterpret_as_uint()))
-  for func_type in types {
-    payload.push(0x60U.to_byte())
-    append_bytes(
-      payload,
-      encode_u32_leb128(func_type.params.length().reinterpret_as_uint()),
-    )
-    for param in func_type.params {
-      append_bytes(payload, encode_valtype(param))
-    }
-    append_bytes(
-      payload,
-      encode_u32_leb128(func_type.results.length().reinterpret_as_uint()),
-    )
-    for result in func_type.results {
-      append_bytes(payload, encode_valtype(result))
+  for type_def in types {
+    match type_def {
+      Func(func_type) => {
+        payload.push(0x60U.to_byte())
+        append_bytes(
+          payload,
+          encode_u32_leb128(func_type.params.length().reinterpret_as_uint()),
+        )
+        for param in func_type.params {
+          append_bytes(payload, encode_valtype(param))
+        }
+        append_bytes(
+          payload,
+          encode_u32_leb128(func_type.results.length().reinterpret_as_uint()),
+        )
+        for result in func_type.results {
+          append_bytes(payload, encode_valtype(result))
+        }
+      }
+      Struct(struct_type) => {
+        payload.push(0x5FU.to_byte())
+        append_bytes(
+          payload,
+          encode_u32_leb128(struct_type.fields.length().reinterpret_as_uint()),
+        )
+        for field in struct_type.fields {
+          append_bytes(payload, encode_storage_type(field.storage))
+          payload.push(
+            if field.mutable {
+              0x01U.to_byte()
+            } else {
+              0x00U.to_byte()
+            },
+          )
+        }
+      }
+      Array(array_type) => {
+        payload.push(0x5EU.to_byte())
+        append_bytes(payload, encode_storage_type(array_type.element.storage))
+        payload.push(
+          if array_type.element.mutable {
+            0x01U.to_byte()
+          } else {
+            0x00U.to_byte()
+          },
+        )
+      }
     }
   }
   payload
@@ -963,6 +995,171 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
       append_bytes(payload, encode_u32_leb128(opcode))
       append_bytes(payload, encode_heap_type(ref_type))
     }
+    StructNew(type_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x00U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+    }
+    StructNewDefault(type_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x01U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+    }
+    StructGet(type_idx, field_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x02U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+      append_bytes(payload, encode_u32_leb128(field_idx))
+    }
+    StructGetS(type_idx, field_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x03U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+      append_bytes(payload, encode_u32_leb128(field_idx))
+    }
+    StructGetU(type_idx, field_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x04U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+      append_bytes(payload, encode_u32_leb128(field_idx))
+    }
+    StructSet(type_idx, field_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x05U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+      append_bytes(payload, encode_u32_leb128(field_idx))
+    }
+    ArrayNew(type_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x06U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+    }
+    ArrayNewDefault(type_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x07U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+    }
+    ArrayNewFixed(type_idx, len) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x08U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+      append_bytes(payload, encode_u32_leb128(len))
+    }
+    ArrayNewData(type_idx, data_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x09U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+      append_bytes(payload, encode_u32_leb128(data_idx))
+    }
+    ArrayNewElem(type_idx, elem_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x0AU))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+      append_bytes(payload, encode_u32_leb128(elem_idx))
+    }
+    ArrayGet(type_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x0BU))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+    }
+    ArrayGetS(type_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x0CU))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+    }
+    ArrayGetU(type_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x0DU))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+    }
+    ArraySet(type_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x0EU))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+    }
+    ArrayLen => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x0FU))
+    }
+    ArrayFill(type_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x10U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+    }
+    ArrayCopy(dst_type, src_type) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x11U))
+      append_bytes(payload, encode_u32_leb128(dst_type))
+      append_bytes(payload, encode_u32_leb128(src_type))
+    }
+    ArrayInitData(type_idx, data_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x12U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+      append_bytes(payload, encode_u32_leb128(data_idx))
+    }
+    ArrayInitElem(type_idx, elem_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x13U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+      append_bytes(payload, encode_u32_leb128(elem_idx))
+    }
+    BrOnCast(label, target_type, target_nullable, source_type, source_nullable) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x18U))
+      let mut flags = 0U
+      if target_nullable {
+        flags = flags | 0x01U
+      }
+      if source_nullable {
+        flags = flags | 0x02U
+      }
+      payload.push(flags.to_byte())
+      append_bytes(payload, encode_u32_leb128(label))
+      append_bytes(payload, encode_heap_type(target_type))
+      append_bytes(payload, encode_heap_type(source_type))
+    }
+    BrOnCastFail(
+      label,
+      target_type,
+      target_nullable,
+      source_type,
+      source_nullable,
+    ) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x19U))
+      let mut flags = 0U
+      if target_nullable {
+        flags = flags | 0x01U
+      }
+      if source_nullable {
+        flags = flags | 0x02U
+      }
+      payload.push(flags.to_byte())
+      append_bytes(payload, encode_u32_leb128(label))
+      append_bytes(payload, encode_heap_type(target_type))
+      append_bytes(payload, encode_heap_type(source_type))
+    }
+    AnyConvertExtern => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x1AU))
+    }
+    ExternConvertAny => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x1BU))
+    }
+    RefI31 => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x1CU))
+    }
+    I31GetS => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x1DU))
+    }
+    I31GetU => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x1EU))
+    }
     MemoryInit(data_idx, mem_idx) => {
       payload.push(0xFCU.to_byte())
       append_bytes(payload, encode_u32_leb128(8U))
@@ -1174,6 +1371,19 @@ fn encode_valtype(val_type : @core.ValType) -> Array[Byte] raise EncodeError {
     Ref(ref_type, nullable) =>
       append_bytes(payload, encode_reftype(ref_type, nullable))
     _ => raise EncodeError::Unsupported("valtype \{val_type}")
+  }
+  payload
+}
+
+///|
+fn encode_storage_type(
+  storage_type : @core.StorageType,
+) -> Array[Byte] raise EncodeError {
+  let payload : Array[Byte] = []
+  match storage_type {
+    I8 => payload.push(0x78U.to_byte())
+    I16 => payload.push(0x77U.to_byte())
+    Val(val_type) => append_bytes(payload, encode_valtype(val_type))
   }
   payload
 }
