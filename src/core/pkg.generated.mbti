@@ -2,6 +2,13 @@
 package "moonbitlang/wasm5/src/core"
 
 // Values
+pub fn simd_spec_by_name(Bytes) -> SimdSpec?
+
+pub fn simd_spec_by_opcode(UInt) -> SimdSpec?
+
+pub let simd_specs : Array[SimdSpec]
+
+pub fn simd_stack_effect(Bytes) -> SimdStackEffect
 
 // Errors
 
@@ -109,6 +116,7 @@ pub(all) enum Instr {
   ReturnCallRef(UInt)
   Throw(UInt)
   Rethrow(UInt)
+  Simd(SimdInstr)
   Drop
   Select
   SelectTyped(Array[ValType])
@@ -343,6 +351,56 @@ pub(all) enum RefType {
 }
 pub impl Eq for RefType
 pub impl Show for RefType
+
+pub(all) enum SimdImmKind {
+  None
+  MemArg
+  Lane
+  MemArgLane
+  Shuffle
+  V128Const
+}
+pub impl Eq for SimdImmKind
+pub impl Show for SimdImmKind
+
+pub(all) enum SimdImmediate {
+  None
+  MemArg(UInt, UInt)
+  Lane(UInt)
+  MemArgLane(UInt, UInt, UInt)
+  Shuffle(Array[Byte])
+  V128Const(Array[Byte])
+}
+pub impl Show for SimdImmediate
+
+pub(all) struct SimdInstr {
+  opcode : UInt
+  imm : SimdImmediate
+}
+pub impl Show for SimdInstr
+
+pub(all) struct SimdSpec {
+  name : Bytes
+  opcode : UInt
+  imm : SimdImmKind
+}
+
+pub(all) enum SimdStackEffect {
+  Const
+  Load
+  Store
+  LoadLane
+  StoreLane
+  Unary
+  Binary
+  Ternary
+  Shift
+  ToI32
+  Splat(ValType)
+  Extract(ValType)
+  Replace(ValType)
+}
+pub impl Show for SimdStackEffect
 
 pub(all) struct TableType {
   elem_type : RefType

@@ -816,6 +816,12 @@ fn op_rethrow(rt : Runtime) -> RetCode {
   rt.error_detail = "rethrow not implemented for label \{label_idx}"
   InvalidType
 }
+
+///|
+fn op_simd_unimplemented(rt : Runtime) -> RetCode {
+  rt.error_detail = "simd instruction not implemented"
+  InvalidType
+}
 // =============================================================================
 // Table bulk operations (stub implementations)
 // =============================================================================

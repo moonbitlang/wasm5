@@ -622,6 +622,58 @@ fn Runtime::compile_wasm_instr(
       self.emit(WasmInstr(op_rethrow))
       self.emit(ImmediateIdx(label_idx.reinterpret_as_int()))
     }
+    Simd(simd) => {
+      match @core.simd_spec_by_opcode(simd.opcode) {
+        Some(spec) =>
+          match @core.simd_stack_effect(spec.name) {
+            Const => ctx.push_type(V128)
+            Load => {
+              ctx.pop_type()
+              ctx.push_type(V128)
+            }
+            Store => ctx.pop_types(2)
+            LoadLane => {
+              ctx.pop_types(2)
+              ctx.push_type(V128)
+            }
+            StoreLane => ctx.pop_types(2)
+            Unary => {
+              ctx.pop_type()
+              ctx.push_type(V128)
+            }
+            Binary => {
+              ctx.pop_types(2)
+              ctx.push_type(V128)
+            }
+            Ternary => {
+              ctx.pop_types(3)
+              ctx.push_type(V128)
+            }
+            Shift => {
+              ctx.pop_types(2)
+              ctx.push_type(V128)
+            }
+            ToI32 => {
+              ctx.pop_type()
+              ctx.push_type(I32)
+            }
+            Splat(_t) => {
+              ctx.pop_type()
+              ctx.push_type(V128)
+            }
+            Extract(t) => {
+              ctx.pop_type()
+              ctx.push_type(t)
+            }
+            Replace(_t) => {
+              ctx.pop_types(2)
+              ctx.push_type(V128)
+            }
+          }
+        None => ()
+      }
+      self.emit(WasmInstr(op_simd_unimplemented))
+    }
     // Control flow
     Block(block_type, instrs) => {
       let (params, results) = get_compile_block_type(self.module_, block_type)

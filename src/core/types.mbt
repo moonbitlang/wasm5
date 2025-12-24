@@ -194,6 +194,22 @@ pub(all) struct Data {
 // Instructions
 
 ///|
+pub(all) enum SimdImmediate {
+  None
+  MemArg(UInt, UInt) // align, offset
+  Lane(UInt) // lane index
+  MemArgLane(UInt, UInt, UInt) // align, offset, lane
+  Shuffle(Array[Byte]) // 16 bytes
+  V128Const(Array[Byte]) // 16 bytes
+} derive(Show)
+
+///|
+pub(all) struct SimdInstr {
+  opcode : UInt
+  imm : SimdImmediate
+} derive(Show)
+
+///|
 pub(all) enum Instr {
   // Control instructions
   Unreachable
@@ -216,6 +232,7 @@ pub(all) enum Instr {
   ReturnCallRef(UInt) // typed function references
   Throw(UInt) // exception handling
   Rethrow(UInt) // exception handling
+  Simd(SimdInstr) // SIMD instructions
 
   // Parametric instructions
   Drop

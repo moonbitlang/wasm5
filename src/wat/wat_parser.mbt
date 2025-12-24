@@ -1935,6 +1935,10 @@ fn parse_instr_from_atom(
   labels : Array[Bytes?],
   type_map : Map[Bytes, UInt],
 ) -> (WatInstr, Int) raise WatError {
+  match parse_simd_instr_from_atom(items, idx, op) {
+    Some(result) => return result
+    None => ()
+  }
   match op {
     b"i32.const" => {
       let imm = expect_atom_at(items, idx + 1)
@@ -2187,6 +2191,10 @@ fn parse_instr_from_list(
   labels : Array[Bytes?],
   type_map : Map[Bytes, UInt],
 ) -> WatInstr raise WatError {
+  match parse_simd_instr_from_list(list_items) {
+    Some(result) => return result
+    None => ()
+  }
   guard list_items.length() > 0 else {
     raise WatError::InvalidSyntax("empty instruction list")
   }
@@ -2634,6 +2642,299 @@ fn memarg_default_align(op : Bytes) -> UInt? {
     | b"i64.store16" => Some(1U)
     b"i64.load32_s" | b"i64.load32_u" | b"i64.store32" => Some(2U)
     _ => None
+  }
+}
+
+///|
+fn simd_memarg_default_align(op : Bytes) -> UInt? {
+  match op {
+    b"v128.load" | b"v128.store" => Some(4U)
+    b"v128.load8x8_s"
+    | b"v128.load8x8_u"
+    | b"v128.load16x4_s"
+    | b"v128.load16x4_u"
+    | b"v128.load32x2_s"
+    | b"v128.load32x2_u"
+    | b"v128.load64_splat" => Some(3U)
+    b"v128.load8_splat" | b"v128.load8_lane" | b"v128.store8_lane" => Some(0U)
+    b"v128.load16_splat" | b"v128.load16_lane" | b"v128.store16_lane" =>
+      Some(1U)
+    b"v128.load32_splat"
+    | b"v128.load32_lane"
+    | b"v128.store32_lane"
+    | b"v128.load32_zero" => Some(2U)
+    b"v128.load64_lane" | b"v128.store64_lane" | b"v128.load64_zero" => Some(3U)
+    _ => None
+  }
+}
+
+///|
+fn simd_lane_count(op : Bytes) -> UInt? {
+  if bytes_starts_with(op, b"i8x16.") {
+    return Some(16U)
+  }
+  if bytes_starts_with(op, b"i16x8.") {
+    return Some(8U)
+  }
+  if bytes_starts_with(op, b"i32x4.") || bytes_starts_with(op, b"f32x4.") {
+    return Some(4U)
+  }
+  if bytes_starts_with(op, b"i64x2.") || bytes_starts_with(op, b"f64x2.") {
+    return Some(2U)
+  }
+  match op {
+    b"v128.load8_lane" | b"v128.store8_lane" => Some(16U)
+    b"v128.load16_lane" | b"v128.store16_lane" => Some(8U)
+    b"v128.load32_lane" | b"v128.store32_lane" => Some(4U)
+    b"v128.load64_lane" | b"v128.store64_lane" => Some(2U)
+    _ => None
+  }
+}
+
+///|
+fn parse_simd_lane(op : Bytes, atom : Bytes) -> UInt raise WatError {
+  let lane = parse_uint(atom)
+  match simd_lane_count(op) {
+    Some(limit) =>
+      if lane >= limit {
+        raise WatError::InvalidSyntax("lane out of range")
+      }
+    None => ()
+  }
+  lane
+}
+
+///|
+fn append_u16_le(bytes : Array[Byte], value : UInt) -> Unit {
+  bytes.push((value & 0xFFU).to_byte())
+  bytes.push(((value >> 8) & 0xFFU).to_byte())
+}
+
+///|
+fn append_u32_le(bytes : Array[Byte], value : UInt) -> Unit {
+  bytes.push((value & 0xFFU).to_byte())
+  bytes.push(((value >> 8) & 0xFFU).to_byte())
+  bytes.push(((value >> 16) & 0xFFU).to_byte())
+  bytes.push(((value >> 24) & 0xFFU).to_byte())
+}
+
+///|
+fn append_u64_le(bytes : Array[Byte], value : UInt64) -> Unit {
+  bytes.push((value & 0xFFUL).to_byte())
+  bytes.push(((value >> 8) & 0xFFUL).to_byte())
+  bytes.push(((value >> 16) & 0xFFUL).to_byte())
+  bytes.push(((value >> 24) & 0xFFUL).to_byte())
+  bytes.push(((value >> 32) & 0xFFUL).to_byte())
+  bytes.push(((value >> 40) & 0xFFUL).to_byte())
+  bytes.push(((value >> 48) & 0xFFUL).to_byte())
+  bytes.push(((value >> 56) & 0xFFUL).to_byte())
+}
+
+///|
+fn parse_v128_const_from_items(
+  items : Array[SExpr],
+  start : Int,
+) -> (Array[Byte], Int) raise WatError {
+  let lane_type = expect_atom_at(items, start)
+  let mut idx = start + 1
+  let bytes : Array[Byte] = []
+  match lane_type {
+    b"i8x16" =>
+      for _ in 0..<16 {
+        let atom = expect_atom_at(items, idx)
+        let val = parse_int(atom).reinterpret_as_uint()
+        bytes.push((val & 0xFFU).to_byte())
+        idx = idx + 1
+      }
+    b"i16x8" =>
+      for _ in 0..<8 {
+        let atom = expect_atom_at(items, idx)
+        let val = parse_int(atom).reinterpret_as_uint()
+        append_u16_le(bytes, val)
+        idx = idx + 1
+      }
+    b"i32x4" =>
+      for _ in 0..<4 {
+        let atom = expect_atom_at(items, idx)
+        let val = parse_int(atom).reinterpret_as_uint()
+        append_u32_le(bytes, val)
+        idx = idx + 1
+      }
+    b"i64x2" =>
+      for _ in 0..<2 {
+        let atom = expect_atom_at(items, idx)
+        let val = parse_int64(atom).reinterpret_as_uint64()
+        append_u64_le(bytes, val)
+        idx = idx + 1
+      }
+    b"f32x4" =>
+      for _ in 0..<4 {
+        let atom = expect_atom_at(items, idx)
+        let val = parse_float(atom)
+        append_u32_le(bytes, val.reinterpret_as_uint())
+        idx = idx + 1
+      }
+    b"f64x2" =>
+      for _ in 0..<2 {
+        let atom = expect_atom_at(items, idx)
+        let val = parse_double(atom)
+        append_u64_le(bytes, val.reinterpret_as_uint64())
+        idx = idx + 1
+      }
+    _ => raise WatError::InvalidSyntax("v128.const expects lane type")
+  }
+  (bytes, idx)
+}
+
+///|
+fn parse_simd_shuffle_from_items(
+  items : Array[SExpr],
+  start : Int,
+) -> (Array[Byte], Int) raise WatError {
+  let bytes : Array[Byte] = []
+  let mut idx = start
+  for _ in 0..<16 {
+    let atom = expect_atom_at(items, idx)
+    let lane = parse_uint(atom)
+    guard lane <= 31U else {
+      raise WatError::InvalidSyntax("shuffle lane out of range")
+    }
+    bytes.push(lane.to_byte())
+    idx = idx + 1
+  }
+  (bytes, idx)
+}
+
+///|
+fn parse_simd_instr_from_atom(
+  items : Array[SExpr],
+  idx : Int,
+  op : Bytes,
+) -> (WatInstr, Int)? raise WatError {
+  match @core.simd_spec_by_name(op) {
+    None => None
+    Some(spec) => {
+      let (imm, next_idx) = match spec.imm {
+        None => (@core.SimdImmediate::None, idx + 1)
+        Lane => {
+          let lane_atom = expect_atom_at(items, idx + 1)
+          let lane = parse_simd_lane(op, lane_atom)
+          (@core.SimdImmediate::Lane(lane), idx + 2)
+        }
+        MemArg => {
+          let default_align = match simd_memarg_default_align(op) {
+            Some(value) => value
+            None => raise WatError::Unsupported("instruction \{op}")
+          }
+          let (align, offset, next_idx) = parse_memarg_from_items(
+            items,
+            idx + 1,
+            default_align,
+          )
+          (@core.SimdImmediate::MemArg(align, offset), next_idx)
+        }
+        MemArgLane => {
+          let default_align = match simd_memarg_default_align(op) {
+            Some(value) => value
+            None => raise WatError::Unsupported("instruction \{op}")
+          }
+          let (align, offset, next_idx) = parse_memarg_from_items(
+            items,
+            idx + 1,
+            default_align,
+          )
+          let lane_atom = expect_atom_at(items, next_idx)
+          let lane = parse_simd_lane(op, lane_atom)
+          (@core.SimdImmediate::MemArgLane(align, offset, lane), next_idx + 1)
+        }
+        Shuffle => {
+          let (bytes, next_idx) = parse_simd_shuffle_from_items(items, idx + 1)
+          (@core.SimdImmediate::Shuffle(bytes), next_idx)
+        }
+        V128Const => {
+          let (bytes, next_idx) = parse_v128_const_from_items(items, idx + 1)
+          (@core.SimdImmediate::V128Const(bytes), next_idx)
+        }
+      }
+      let simd = @core.SimdInstr::{ opcode: spec.opcode, imm }
+      Some((WatInstr::Core(@core.Instr::Simd(simd)), next_idx))
+    }
+  }
+}
+
+///|
+fn parse_simd_instr_from_list(
+  list_items : Array[SExpr],
+) -> WatInstr? raise WatError {
+  guard list_items.length() > 0 && list_items[0] is Atom(op) else {
+    return None
+  }
+  match @core.simd_spec_by_name(op) {
+    None => None
+    Some(spec) => {
+      let imm = match spec.imm {
+        None => {
+          guard list_items.length() == 1 else {
+            raise WatError::InvalidSyntax("unexpected operands for \{op}")
+          }
+          @core.SimdImmediate::None
+        }
+        Lane => {
+          guard list_items.length() == 2 else {
+            raise WatError::InvalidSyntax("lane expects one operand")
+          }
+          let lane_atom = expect_atom(list_items[1])
+          @core.SimdImmediate::Lane(parse_simd_lane(op, lane_atom))
+        }
+        MemArg => {
+          let default_align = match simd_memarg_default_align(op) {
+            Some(value) => value
+            None => raise WatError::Unsupported("instruction \{op}")
+          }
+          let (align, offset, next_idx) = parse_memarg_from_items(
+            list_items, 1, default_align,
+          )
+          guard next_idx == list_items.length() else {
+            raise WatError::InvalidSyntax("unexpected operands for \{op}")
+          }
+          @core.SimdImmediate::MemArg(align, offset)
+        }
+        MemArgLane => {
+          let default_align = match simd_memarg_default_align(op) {
+            Some(value) => value
+            None => raise WatError::Unsupported("instruction \{op}")
+          }
+          let (align, offset, next_idx) = parse_memarg_from_items(
+            list_items, 1, default_align,
+          )
+          guard next_idx + 1 == list_items.length() else {
+            raise WatError::InvalidSyntax("lane expects one operand")
+          }
+          let lane_atom = expect_atom(list_items[next_idx])
+          let lane = parse_simd_lane(op, lane_atom)
+          @core.SimdImmediate::MemArgLane(align, offset, lane)
+        }
+        Shuffle => {
+          guard list_items.length() == 17 else {
+            raise WatError::InvalidSyntax("shuffle expects 16 lanes")
+          }
+          let (bytes, next_idx) = parse_simd_shuffle_from_items(list_items, 1)
+          guard next_idx == list_items.length() else {
+            raise WatError::InvalidSyntax("shuffle expects 16 lanes")
+          }
+          @core.SimdImmediate::Shuffle(bytes)
+        }
+        V128Const => {
+          let (bytes, next_idx) = parse_v128_const_from_items(list_items, 1)
+          guard next_idx == list_items.length() else {
+            raise WatError::InvalidSyntax("v128.const operand count mismatch")
+          }
+          @core.SimdImmediate::V128Const(bytes)
+        }
+      }
+      let simd = @core.SimdInstr::{ opcode: spec.opcode, imm }
+      Some(WatInstr::Core(@core.Instr::Simd(simd)))
+    }
   }
 }
 

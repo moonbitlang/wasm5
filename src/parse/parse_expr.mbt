@@ -43,6 +43,9 @@ fn parse_instr(parser : Parser, opcode : Byte) -> @core.Instr raise {
   if opcode == 0xFC {
     return parse_instr_prefix_fc(parser)
   }
+  if opcode == 0xFD {
+    return parse_instr_prefix_fd(parser)
+  }
   let instr = parse_instr_control(parser, opcode)
   match instr {
     Some(value) => return value

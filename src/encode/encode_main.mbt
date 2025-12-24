@@ -537,6 +537,33 @@ fn encode_table_type(
 }
 
 ///|
+fn encode_simd_immediate(
+  imm : @core.SimdImmediate,
+) -> Array[Byte] raise EncodeError {
+  let payload : Array[Byte] = []
+  match imm {
+    None => ()
+    MemArg(align, offset) => append_bytes(payload, encode_memarg(align, offset))
+    Lane(lane) => payload.push(lane.to_byte())
+    MemArgLane(align, offset, lane) => {
+      append_bytes(payload, encode_memarg(align, offset))
+      payload.push(lane.to_byte())
+    }
+    Shuffle(bytes) | V128Const(bytes) => {
+      guard bytes.length() == 16 else {
+        raise EncodeError::Unsupported(
+          "simd immediate length \{bytes.length()}",
+        )
+      }
+      for b in bytes {
+        payload.push(b)
+      }
+    }
+  }
+  payload
+}
+
+///|
 fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
   let payload : Array[Byte] = []
   match instr {
@@ -679,6 +706,11 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
     ReturnCallRef(type_idx) => {
       payload.push(0x15U.to_byte())
       append_bytes(payload, encode_u32_leb128(type_idx))
+    }
+    Simd(simd) => {
+      payload.push(0xFDU.to_byte())
+      append_bytes(payload, encode_u32_leb128(simd.opcode))
+      append_bytes(payload, encode_simd_immediate(simd.imm))
     }
     RefNull(ref_type) => {
       payload.push(0xD0U.to_byte())

@@ -326,3 +326,9 @@ async test "wat encoder matches wasm-tools for try_table" {
   let wat = "(module (type $t (func (param i32))) (tag $e (export \"e\") (type $t)) (func (export \"try\") (param i32) (result i32) (block $out (result i32) (try_table (result i32) (catch $e $out) local.get 0 throw $e i32.const 7))))"
   assert_wat_matches("try_table", wat)
 }
+
+///|
+async test "wat encoder matches wasm-tools for simd ops" {
+  let wat = "(module (memory 1) (func (export \"simd\") (param i32) (result i32) (local v128) v128.const i8x16 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 local.set 1 local.get 0 v128.load local.get 1 i8x16.shuffle 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 local.set 1 local.get 1 local.get 1 i16x8.add drop local.get 1 i32x4.extract_lane 2 drop i32.const 0))"
+  assert_wat_matches("simd_ops", wat)
+}
