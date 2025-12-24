@@ -5241,14 +5241,141 @@ fn parse_int64(atom : Bytes) -> Int64 raise WatError {
 }
 
 ///|
+fn strip_underscores(bytes : Bytes) -> Bytes {
+  let out : Array[Byte] = []
+  for b in bytes {
+    if b != b'_' {
+      out.push(b)
+    }
+  }
+  Bytes::from_array(out)
+}
+
+///|
+fn slice_bytes(bytes : Bytes, start : Int) -> Bytes {
+  let out : Array[Byte] = []
+  for i in start..<bytes.length() {
+    out.push(bytes[i])
+  }
+  Bytes::from_array(out)
+}
+
+///|
+fn bytes_to_lower(bytes : Bytes) -> Bytes {
+  let out : Array[Byte] = []
+  for b in bytes {
+    if b >= b'A' && b <= b'Z' {
+      out.push((b.to_uint() + 32U).to_byte())
+    } else {
+      out.push(b)
+    }
+  }
+  Bytes::from_array(out)
+}
+
+///|
+fn split_sign(bytes : Bytes) -> (Bool, Bytes) {
+  if bytes.length() > 0 {
+    match bytes[0] {
+      b'-' => (true, slice_bytes(bytes, 1))
+      b'+' => (false, slice_bytes(bytes, 1))
+      _ => (false, bytes)
+    }
+  } else {
+    (false, bytes)
+  }
+}
+
+///|
+fn parse_hex_payload(
+  bytes : Bytes,
+  max_value : UInt64,
+  atom : Bytes,
+) -> UInt64 raise WatError {
+  guard bytes.length() > 0 else {
+    raise WatError::InvalidNumber("invalid float \{atom}")
+  }
+  let mut value = 0UL
+  for b in bytes {
+    let digit = if b >= b'0' && b <= b'9' {
+      (b.to_uint() - b'0'.to_uint()).to_uint64()
+    } else if b >= b'a' && b <= b'f' {
+      (b.to_uint() - b'a'.to_uint() + 10U).to_uint64()
+    } else if b >= b'A' && b <= b'F' {
+      (b.to_uint() - b'A'.to_uint() + 10U).to_uint64()
+    } else {
+      raise WatError::InvalidNumber("invalid float \{atom}")
+    }
+    value = value * 16UL + digit
+    guard value <= max_value else {
+      raise WatError::InvalidNumber("invalid float \{atom}")
+    }
+  }
+  guard value != 0UL else {
+    raise WatError::InvalidNumber("invalid float \{atom}")
+  }
+  value
+}
+
+///|
 fn parse_float(atom : Bytes) -> Float raise WatError {
+  let cleaned = strip_underscores(atom)
+  let (neg, rest) = split_sign(cleaned)
+  let lower = bytes_to_lower(rest)
+  if lower == b"inf" {
+    let bits = if neg { 0xFF80_0000U } else { 0x7F80_0000U }
+    return Float::reinterpret_from_uint(bits)
+  }
+  if lower == b"nan" {
+    let bits = if neg { 0xFFC0_0000U } else { 0x7FC0_0000U }
+    return Float::reinterpret_from_uint(bits)
+  }
+  if bytes_starts_with(lower, b"nan:0x") {
+    let payload = parse_hex_payload(slice_bytes(lower, 6), 0x007F_FFFFUL, atom)
+    let mut bits = 0x7F80_0000U | payload.to_uint()
+    if neg {
+      bits = bits | 0x8000_0000U
+    }
+    return Float::reinterpret_from_uint(bits)
+  }
   let value = parse_double(atom)
   Float::from_double(value)
 }
 
 ///|
 fn parse_double(atom : Bytes) -> Double raise WatError {
-  let text = bytes_to_string(atom)
+  let cleaned = strip_underscores(atom)
+  let (neg, rest) = split_sign(cleaned)
+  let lower = bytes_to_lower(rest)
+  if lower == b"inf" {
+    let bits = if neg {
+      0xFFF0_0000_0000_0000UL
+    } else {
+      0x7FF0_0000_0000_0000UL
+    }
+    return bits.reinterpret_as_double()
+  }
+  if lower == b"nan" {
+    let bits = if neg {
+      0xFFF8_0000_0000_0000UL
+    } else {
+      0x7FF8_0000_0000_0000UL
+    }
+    return bits.reinterpret_as_double()
+  }
+  if bytes_starts_with(lower, b"nan:0x") {
+    let payload = parse_hex_payload(
+      slice_bytes(lower, 6),
+      0x000F_FFFF_FFFF_FFFFUL,
+      atom,
+    )
+    let mut bits = 0x7FF0_0000_0000_0000UL | payload
+    if neg {
+      bits = bits | 0x8000_0000_0000_0000UL
+    }
+    return bits.reinterpret_as_double()
+  }
+  let text = bytes_to_string(cleaned)
   @strconv.parse_double(text) catch {
     _ => raise WatError::InvalidNumber("invalid float \{atom}")
   }
