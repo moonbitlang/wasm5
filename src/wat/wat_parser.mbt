@@ -88,6 +88,20 @@ priv struct WatCallIndirect {
 priv struct WatTypeDef {
   name : Bytes?
   type_def : @core.TypeDef
+  supertypes : Array[WatTypeRef]
+  is_final : Bool
+}
+
+///|
+priv struct WatTypeGroup {
+  type_indices : Array[Int]
+  explicit : Bool
+}
+
+///|
+priv enum WatTypeItem {
+  Single(Array[SExpr])
+  Rec(Array[Array[SExpr]])
 }
 
 ///|
@@ -227,6 +241,7 @@ priv struct WatExport {
 ///|
 priv struct WatModule {
   type_defs : Array[WatTypeDef]
+  type_groups : Array[WatTypeGroup]
   func_imports : Array[WatImportFunc]
   mem_imports : Array[WatImportMem]
   table_imports : Array[WatImportTable]
@@ -776,6 +791,7 @@ pub fn wat_to_module(text : String) -> @core.Module raise WatError {
 fn parse_module(expr : SExpr) -> WatModule raise WatError {
   let module_ = WatModule::{
     type_defs: [],
+    type_groups: [],
     func_imports: [],
     mem_imports: [],
     table_imports: [],
@@ -803,7 +819,7 @@ fn parse_module(expr : SExpr) -> WatModule raise WatError {
       if idx < items.length() && items[idx] is Atom(name) && is_name(name) {
         idx = idx + 1
       }
-      let type_items : Array[Array[SExpr]] = []
+      let type_items : Array[WatTypeItem] = []
       for i in idx..<items.length() {
         match items[i] {
           List(field_items) => {
@@ -811,7 +827,26 @@ fn parse_module(expr : SExpr) -> WatModule raise WatError {
               raise WatError::InvalidSyntax("field head must be atom")
             }
             if head == b"type" {
-              type_items.push(field_items)
+              type_items.push(WatTypeItem::Single(field_items))
+            } else if head == b"rec" {
+              let rec_items : Array[Array[SExpr]] = []
+              for j in 1..<field_items.length() {
+                match field_items[j] {
+                  List(rec_item) => {
+                    guard rec_item.length() > 0 &&
+                      rec_item[0] is Atom(rec_head) &&
+                      rec_head == b"type" else {
+                      raise WatError::InvalidSyntax("rec expects type fields")
+                    }
+                    rec_items.push(rec_item)
+                  }
+                  _ => raise WatError::InvalidSyntax("rec expects type fields")
+                }
+              }
+              guard rec_items.length() > 0 else {
+                raise WatError::InvalidSyntax("rec expects type fields")
+              }
+              type_items.push(WatTypeItem::Rec(rec_items))
             }
           }
           Atom(_) | StringLit(_) =>
@@ -819,15 +854,52 @@ fn parse_module(expr : SExpr) -> WatModule raise WatError {
         }
       }
       let type_map = Map::new()
-      for i in 0..<type_items.length() {
-        let type_item = type_items[i]
-        if type_item.length() > 1 && type_item[1] is Atom(name) && is_name(name) {
-          ensure_unique_name(type_map, name, "type")
-          type_map[name] = i.reinterpret_as_uint()
+      let mut type_index = 0
+      for type_item in type_items {
+        match type_item {
+          WatTypeItem::Single(items) => {
+            if items.length() > 1 && items[1] is Atom(name) && is_name(name) {
+              ensure_unique_name(type_map, name, "type")
+              type_map[name] = type_index.reinterpret_as_uint()
+            }
+            type_index = type_index + 1
+          }
+          WatTypeItem::Rec(items) =>
+            for rec_item in items {
+              if rec_item.length() > 1 &&
+                rec_item[1] is Atom(name) &&
+                is_name(name) {
+                ensure_unique_name(type_map, name, "type")
+                type_map[name] = type_index.reinterpret_as_uint()
+              }
+              type_index = type_index + 1
+            }
         }
       }
+      type_index = 0
       for type_item in type_items {
-        module_.type_defs.push(parse_type_def(type_item, type_map))
+        match type_item {
+          WatTypeItem::Single(items) => {
+            module_.type_defs.push(parse_type_def(items, type_map))
+            module_.type_groups.push(WatTypeGroup::{
+              type_indices: [type_index],
+              explicit: false,
+            })
+            type_index = type_index + 1
+          }
+          WatTypeItem::Rec(items) => {
+            let indices : Array[Int] = []
+            for rec_item in items {
+              module_.type_defs.push(parse_type_def(rec_item, type_map))
+              indices.push(type_index)
+              type_index = type_index + 1
+            }
+            module_.type_groups.push(WatTypeGroup::{
+              type_indices: indices,
+              explicit: true,
+            })
+          }
+        }
       }
       for i in idx..<items.length() {
         match items[i] {
@@ -835,7 +907,7 @@ fn parse_module(expr : SExpr) -> WatModule raise WatError {
             guard field_items.length() > 0 && field_items[0] is Atom(head) else {
               raise WatError::InvalidSyntax("field head must be atom")
             }
-            if head == b"type" {
+            if head == b"type" || head == b"rec" {
               continue
             }
             parse_module_field(module_, field_items, type_map)
@@ -1863,23 +1935,14 @@ fn parse_field_type(
 }
 
 ///|
-fn parse_type_def(
-  items : Array[SExpr],
+fn parse_type_def_body(
+  list_items : Array[SExpr],
   type_map : Map[Bytes, UInt],
-) -> WatTypeDef raise WatError {
-  let mut idx = 1
-  let mut name : Bytes? = None
-  if idx < items.length() && items[idx] is Atom(atom) && is_name(atom) {
-    name = Some(atom)
-    idx = idx + 1
-  }
-  guard idx < items.length() && items[idx] is List(list_items) else {
-    raise WatError::InvalidSyntax("type expects definition list")
-  }
+) -> @core.TypeDef raise WatError {
   guard list_items.length() > 0 && list_items[0] is Atom(tag) else {
     raise WatError::InvalidSyntax("type head must be atom")
   }
-  let type_def = match tag {
+  match tag {
     b"func" => {
       let params : Array[@core.ValType] = []
       let results : Array[@core.ValType] = []
@@ -1928,7 +1991,62 @@ fn parse_type_def(
     }
     _ => raise WatError::InvalidSyntax("type expects func, struct, or array")
   }
-  WatTypeDef::{ name, type_def }
+}
+
+///|
+fn parse_subtype_def(
+  list_items : Array[SExpr],
+  type_map : Map[Bytes, UInt],
+) -> (@core.TypeDef, Array[WatTypeRef], Bool) raise WatError {
+  let mut idx = 1
+  let mut is_final = false
+  if idx < list_items.length() &&
+    list_items[idx] is Atom(atom) &&
+    atom == b"final" {
+    is_final = true
+    idx = idx + 1
+  }
+  let supertypes : Array[WatTypeRef] = []
+  while idx < list_items.length() {
+    match list_items[idx] {
+      Atom(atom) => {
+        supertypes.push(parse_type_ref_atom(atom))
+        idx = idx + 1
+      }
+      List(_) => break
+      _ => raise WatError::InvalidSyntax("sub expects supertypes or type")
+    }
+  }
+  guard idx < list_items.length() && list_items[idx] is List(type_items) else {
+    raise WatError::InvalidSyntax("sub expects type")
+  }
+  guard idx == list_items.length() - 1 else {
+    raise WatError::InvalidSyntax("sub expects single type")
+  }
+  (parse_type_def_body(type_items, type_map), supertypes, is_final)
+}
+
+///|
+fn parse_type_def(
+  items : Array[SExpr],
+  type_map : Map[Bytes, UInt],
+) -> WatTypeDef raise WatError {
+  let mut idx = 1
+  let mut name : Bytes? = None
+  if idx < items.length() && items[idx] is Atom(atom) && is_name(atom) {
+    name = Some(atom)
+    idx = idx + 1
+  }
+  guard idx < items.length() && items[idx] is List(list_items) else {
+    raise WatError::InvalidSyntax("type expects definition list")
+  }
+  let (type_def, supertypes, is_final) = if list_items[0] is Atom(tag) &&
+    tag == b"sub" {
+    parse_subtype_def(list_items, type_map)
+  } else {
+    (parse_type_def_body(list_items, type_map), [], true)
+  }
+  WatTypeDef::{ name, type_def, supertypes, is_final }
 }
 
 ///|
@@ -4368,6 +4486,27 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
       type_map[name] = i.reinterpret_as_uint()
     }
   }
+  let type_groups : Array[@core.TypeGroup] = []
+  for group in wat.type_groups {
+    let subtypes : Array[@core.SubTypeDef] = []
+    for idx in group.type_indices {
+      guard idx >= 0 && idx < wat.type_defs.length() else {
+        raise WatError::UnknownIdentifier("type \{idx}")
+      }
+      let def = wat.type_defs[idx]
+      let supertypes : Array[UInt] = []
+      for super_ref in def.supertypes {
+        supertypes.push(resolve_type_ref(super_ref, type_map))
+      }
+      subtypes.push(@core.SubTypeDef::{
+        type_idx: idx.reinterpret_as_uint(),
+        supertypes,
+        is_final: def.is_final,
+      })
+    }
+    type_groups.push(@core.TypeGroup::{ subtypes, explicit: group.explicit })
+  }
+  let initial_type_count = types.length()
   let imports : Array[@core.Import] = []
   for imp in wat.func_imports {
     let type_idx = match imp.type_idx {
@@ -4461,6 +4600,18 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
     }
     tags.push(@core.Tag::{ type_idx, })
   }
+  for i in initial_type_count..<types.length() {
+    type_groups.push(@core.TypeGroup::{
+      subtypes: [
+        @core.SubTypeDef::{
+          type_idx: i.reinterpret_as_uint(),
+          supertypes: [],
+          is_final: true,
+        },
+      ],
+      explicit: false,
+    })
+  }
   let mems : Array[@core.MemType] = []
   for mem in wat.mems {
     mems.push({ limits: mem.limits, shared: mem.shared })
@@ -4542,6 +4693,7 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
   }
   @core.Module::{
     types,
+    type_groups,
     funcs,
     tables,
     mems,

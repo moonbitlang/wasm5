@@ -53,6 +53,7 @@ test "validate helper counts and type lookup" {
   ]
   let module_ : @core.Module = {
     types: [Func(func_type0), Func(func_type1)],
+    type_groups: [],
     funcs: [0U],
     tables: [],
     mems: [],
@@ -95,6 +96,7 @@ test "validate helper import scan in func lookup" {
   }
   let module_ : @core.Module = {
     types: [Func(func_type)],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -151,6 +153,7 @@ test "validate const expr checks" {
   assert_eq(saw_error, true)
   let module_imported : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -183,6 +186,7 @@ test "validate const expr checks" {
   assert_eq(saw_error, true)
   let module_scan : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -218,6 +222,7 @@ test "validate const expr checks" {
   )
   let module_local : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -249,6 +254,7 @@ test "validate const expr checks" {
   assert_eq(saw_error, true)
   let module_import_const : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -274,6 +280,7 @@ test "validate const expr checks" {
   )
   let module_import_scan : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -304,6 +311,7 @@ test "validate const expr checks" {
   )
   let module_missing : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -336,6 +344,7 @@ test "validate valtype and subtype" {
   assert_eq(saw_error, true)
   let module_types : @core.Module = {
     types: [Func({ params: [], results: [] })],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],

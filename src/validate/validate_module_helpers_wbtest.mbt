@@ -2,6 +2,7 @@
 test "validate module type index errors" {
   let module_table : @core.Module = {
     types: [Func({ params: [], results: [] })],
+    type_groups: [],
     funcs: [],
     tables: [
       {
@@ -31,6 +32,7 @@ test "validate module type index errors" {
   assert_eq(saw_error, true)
   let module_elem : @core.Module = {
     types: [Func({ params: [], results: [] })],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -64,6 +66,7 @@ test "validate module type index errors" {
   assert_eq(saw_error, true)
   let module_import : @core.Module = {
     types: [Func({ params: [], results: [] })],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -92,6 +95,7 @@ test "validate module type index errors" {
   assert_eq(saw_error, true)
   let module_funcs : @core.Module = {
     types: [Func({ params: [], results: [] })],
+    type_groups: [],
     funcs: [1U],
     tables: [],
     mems: [],
@@ -114,6 +118,7 @@ test "validate module type index errors" {
   assert_eq(saw_error, true)
   let module_globals : @core.Module = {
     types: [Func({ params: [], results: [] })],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -145,6 +150,7 @@ test "validate module type index errors" {
 test "validate module type results" {
   let module_results : @core.Module = {
     types: [Func({ params: [], results: [I32] })],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -164,6 +170,7 @@ test "validate module type results" {
 test "validate module start function errors" {
   let module_empty : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -189,6 +196,7 @@ test "validate module start function errors" {
   assert_eq(saw_error, true)
   let module_params : @core.Module = {
     types: [Func({ params: [I32], results: [] })],
+    type_groups: [],
     funcs: [0U],
     tables: [],
     mems: [],
@@ -214,6 +222,7 @@ test "validate module start function errors" {
   assert_eq(saw_error, true)
   let module_results : @core.Module = {
     types: [Func({ params: [], results: [I32] })],
+    type_groups: [],
     funcs: [0U],
     tables: [],
     mems: [],
@@ -243,6 +252,7 @@ test "validate module start function errors" {
 test "validate module memory limit errors" {
   let module_min_max : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [{ limits: { min: 10U, max: Some(5U) }, shared: false }],
@@ -265,6 +275,7 @@ test "validate module memory limit errors" {
   assert_eq(saw_error, true)
   let module_max : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [{ limits: { min: 0U, max: Some(70000U) }, shared: false }],
@@ -287,6 +298,7 @@ test "validate module memory limit errors" {
   assert_eq(saw_error, true)
   let module_none : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [{ limits: { min: 70000U, max: None }, shared: false }],
@@ -313,6 +325,7 @@ test "validate module memory limit errors" {
 test "validate module imported memory limit errors" {
   let module_min_max : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -341,6 +354,7 @@ test "validate module imported memory limit errors" {
   assert_eq(saw_error, true)
   let module_max : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -369,6 +383,7 @@ test "validate module imported memory limit errors" {
   assert_eq(saw_error, true)
   let module_none : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -401,6 +416,7 @@ test "validate module imported memory limit errors" {
 test "validate module table errors" {
   let module_no_init : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [
       {
@@ -433,6 +449,7 @@ test "validate module table errors" {
   assert_eq(saw_error, true)
   let module_bad_limits : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [
       {
@@ -465,6 +482,7 @@ test "validate module table errors" {
   assert_eq(saw_error, true)
   let module_bad_init_len : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [
       {
@@ -497,6 +515,7 @@ test "validate module table errors" {
   assert_eq(saw_error, true)
   let module_null : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [
       {
@@ -526,6 +545,7 @@ test "validate module table errors" {
   assert_eq(saw_error, true)
   let module_non_ref : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [
       {
@@ -558,6 +578,7 @@ test "validate module table errors" {
   assert_eq(saw_error, true)
   let module_nullable_empty : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [
       {
@@ -590,6 +611,7 @@ test "validate module table errors" {
   assert_eq(saw_error, true)
   let module_nullable_numeric : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [
       {
@@ -622,6 +644,7 @@ test "validate module table errors" {
   assert_eq(saw_error, true)
   let module_nullable_typed : @core.Module = {
     types: [Func({ params: [], results: [] })],
+    type_groups: [],
     funcs: [],
     tables: [
       {
@@ -647,6 +670,7 @@ test "validate module table errors" {
   )
   let module_typed_init : @core.Module = {
     types: [Func({ params: [], results: [] })],
+    type_groups: [],
     funcs: [0U],
     tables: [
       {
@@ -672,6 +696,7 @@ test "validate module table errors" {
   )
   let module_nullable_extern_ok : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [
       {
@@ -697,6 +722,7 @@ test "validate module table errors" {
   )
   let module_nullable_extern_bad : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [
       {
@@ -729,6 +755,7 @@ test "validate module table errors" {
   assert_eq(saw_error, true)
   let module_nullable : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [
       {
@@ -761,6 +788,7 @@ test "validate module table errors" {
   assert_eq(saw_error, true)
   let module_import_table : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -801,6 +829,7 @@ test "validate module table errors" {
 test "validate module element segment errors" {
   let module_table : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -837,6 +866,7 @@ test "validate module element segment errors" {
   assert_eq(saw_error, true)
   let module_func : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -877,6 +907,7 @@ test "validate module element segment errors" {
 test "validate module data segment errors" {
   let module_mem : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -909,6 +940,7 @@ test "validate module data segment errors" {
   assert_eq(saw_error, true)
   let module_offset : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [{ limits: { min: 0U, max: None }, shared: false }],
@@ -951,6 +983,7 @@ test "validate module exports errors" {
   let dup_name = Bytes::from_array([b'x'])
   let module_dup : @core.Module = {
     types: [Func({ params: [], results: [] })],
+    type_groups: [],
     funcs: [0U],
     tables: [],
     mems: [],
@@ -981,6 +1014,7 @@ test "validate module exports errors" {
   let mut saw_error = false
   let module_mem : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -1003,6 +1037,7 @@ test "validate module exports errors" {
   assert_eq(saw_error, true)
   let module_table_export : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -1028,6 +1063,7 @@ test "validate module exports errors" {
   assert_eq(saw_error, true)
   let module_global_export : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -1053,6 +1089,7 @@ test "validate module exports errors" {
   assert_eq(saw_error, true)
   let module_func_export : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -1086,6 +1123,7 @@ test "validate module exports errors" {
 test "validate module global initializers" {
   let module_ok : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -1106,6 +1144,7 @@ test "validate module global initializers" {
   validate_module_global_initializers(module_ok, get_import_counts(module_ok))
   let module_empty_init : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -1133,6 +1172,7 @@ test "validate module global initializers" {
   assert_eq(saw_error, true)
   let module_mismatch : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -1169,6 +1209,7 @@ test "validate module function bodies" {
   let code = test_make_code([], [])
   let module_funcs : @core.Module = {
     types: [func_type],
+    type_groups: [],
     funcs: [0U],
     tables: [],
     mems: [],

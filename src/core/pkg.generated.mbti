@@ -417,6 +417,7 @@ pub(all) struct MemType {
 
 pub(all) struct Module {
   types : Array[TypeDef]
+  type_groups : Array[TypeGroup]
   funcs : Array[UInt]
   tables : Array[TableType]
   mems : Array[MemType]
@@ -512,6 +513,14 @@ pub(all) struct StructType {
 pub impl Eq for StructType
 pub impl Show for StructType
 
+pub(all) struct SubTypeDef {
+  type_idx : UInt
+  supertypes : Array[UInt]
+  is_final : Bool
+}
+pub impl Eq for SubTypeDef
+pub impl Show for SubTypeDef
+
 pub(all) struct TableType {
   elem_type : RefType
   limits : Limits
@@ -530,6 +539,13 @@ pub(all) enum TypeDef {
 }
 pub impl Eq for TypeDef
 pub impl Show for TypeDef
+
+pub(all) struct TypeGroup {
+  subtypes : Array[SubTypeDef]
+  explicit : Bool
+}
+pub impl Eq for TypeGroup
+pub impl Show for TypeGroup
 
 pub(all) enum ValType {
   I32

@@ -18,7 +18,7 @@ pub fn encode(module_ : @core.Module) -> Bytes raise EncodeError {
     0x00U.to_byte(),
     0x00U.to_byte(),
   ])
-  let type_payload = encode_type_section(module_.types)
+  let type_payload = encode_type_section(module_.types, module_.type_groups)
   push_section(out, 1U, type_payload)
   let import_payload = encode_import_section(module_.imports)
   push_section(out, 2U, import_payload)
@@ -92,51 +92,108 @@ fn append_u64_le(dst : Array[Byte], value : UInt64) -> Unit {
 ///|
 fn encode_type_section(
   types : Array[@core.TypeDef],
+  type_groups : Array[@core.TypeGroup],
 ) -> Array[Byte] raise EncodeError {
   guard types.length() > 0 else { return [] }
+  let groups : Array[@core.TypeGroup] = []
+  if type_groups.length() > 0 {
+    for group in type_groups {
+      groups.push(group)
+    }
+  } else {
+    for i in 0..<types.length() {
+      groups.push(@core.TypeGroup::{
+        subtypes: [
+          @core.SubTypeDef::{
+            type_idx: i.reinterpret_as_uint(),
+            supertypes: [],
+            is_final: true,
+          },
+        ],
+        explicit: false,
+      })
+    }
+  }
   let payload : Array[Byte] = []
-  append_bytes(payload, encode_u32_leb128(types.length().reinterpret_as_uint()))
-  for type_def in types {
-    match type_def {
-      Func(func_type) => {
-        payload.push(0x60U.to_byte())
-        append_bytes(
-          payload,
-          encode_u32_leb128(func_type.params.length().reinterpret_as_uint()),
-        )
-        for param in func_type.params {
-          append_bytes(payload, encode_valtype(param))
-        }
-        append_bytes(
-          payload,
-          encode_u32_leb128(func_type.results.length().reinterpret_as_uint()),
-        )
-        for result in func_type.results {
-          append_bytes(payload, encode_valtype(result))
-        }
+  append_bytes(
+    payload,
+    encode_u32_leb128(groups.length().reinterpret_as_uint()),
+  )
+  for group in groups {
+    if group.explicit || group.subtypes.length() > 1 {
+      payload.push(0x4EU.to_byte())
+      append_bytes(
+        payload,
+        encode_u32_leb128(group.subtypes.length().reinterpret_as_uint()),
+      )
+      for subtype in group.subtypes {
+        encode_subtype(payload, subtype, types)
       }
-      Struct(struct_type) => {
-        payload.push(0x5FU.to_byte())
-        append_bytes(
-          payload,
-          encode_u32_leb128(struct_type.fields.length().reinterpret_as_uint()),
-        )
-        for field in struct_type.fields {
-          append_bytes(payload, encode_storage_type(field.storage))
-          payload.push(
-            if field.mutable {
-              0x01U.to_byte()
-            } else {
-              0x00U.to_byte()
-            },
-          )
-        }
+    } else {
+      let subtype = group.subtypes[0]
+      encode_subtype(payload, subtype, types)
+    }
+  }
+  payload
+}
+
+///|
+fn encode_subtype(
+  payload : Array[Byte],
+  subtype : @core.SubTypeDef,
+  types : Array[@core.TypeDef],
+) -> Unit raise EncodeError {
+  if subtype.supertypes.length() > 0 || not(subtype.is_final) {
+    let tag = if subtype.is_final { 0x4FU } else { 0x50U }
+    payload.push(tag.to_byte())
+    append_bytes(
+      payload,
+      encode_u32_leb128(subtype.supertypes.length().reinterpret_as_uint()),
+    )
+    for supertype in subtype.supertypes {
+      append_bytes(payload, encode_u32_leb128(supertype))
+    }
+  }
+  let idx = subtype.type_idx.reinterpret_as_int()
+  if idx < 0 || idx >= types.length() {
+    raise EncodeError::Unsupported("invalid subtype index \{subtype.type_idx}")
+  }
+  encode_type_def(payload, types[idx])
+}
+
+///|
+fn encode_type_def(
+  payload : Array[Byte],
+  type_def : @core.TypeDef,
+) -> Unit raise EncodeError {
+  match type_def {
+    Func(func_type) => {
+      payload.push(0x60U.to_byte())
+      append_bytes(
+        payload,
+        encode_u32_leb128(func_type.params.length().reinterpret_as_uint()),
+      )
+      for param in func_type.params {
+        append_bytes(payload, encode_valtype(param))
       }
-      Array(array_type) => {
-        payload.push(0x5EU.to_byte())
-        append_bytes(payload, encode_storage_type(array_type.element.storage))
+      append_bytes(
+        payload,
+        encode_u32_leb128(func_type.results.length().reinterpret_as_uint()),
+      )
+      for result in func_type.results {
+        append_bytes(payload, encode_valtype(result))
+      }
+    }
+    Struct(struct_type) => {
+      payload.push(0x5FU.to_byte())
+      append_bytes(
+        payload,
+        encode_u32_leb128(struct_type.fields.length().reinterpret_as_uint()),
+      )
+      for field in struct_type.fields {
+        append_bytes(payload, encode_storage_type(field.storage))
         payload.push(
-          if array_type.element.mutable {
+          if field.mutable {
             0x01U.to_byte()
           } else {
             0x00U.to_byte()
@@ -144,8 +201,18 @@ fn encode_type_section(
         )
       }
     }
+    Array(array_type) => {
+      payload.push(0x5EU.to_byte())
+      append_bytes(payload, encode_storage_type(array_type.element.storage))
+      payload.push(
+        if array_type.element.mutable {
+          0x01U.to_byte()
+        } else {
+          0x00U.to_byte()
+        },
+      )
+    }
   }
-  payload
 }
 
 ///|

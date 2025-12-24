@@ -39,6 +39,7 @@ test "compile helpers type signature mismatch" {
 test "compile helpers func type lookup with non func imports" {
   let module_ : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],

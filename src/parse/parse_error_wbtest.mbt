@@ -561,6 +561,7 @@ test "parse main header errors" {
       saw_error = true
       {
         types: [],
+        type_groups: [],
         funcs: [],
         tables: [],
         mems: [],
@@ -586,6 +587,7 @@ test "parse main header errors" {
       saw_error = true
       {
         types: [],
+        type_groups: [],
         funcs: [],
         tables: [],
         mems: [],
@@ -621,6 +623,7 @@ test "parse main section skips" {
       saw_error = true
       {
         types: [],
+        type_groups: [],
         funcs: [],
         tables: [],
         mems: [],
@@ -647,7 +650,7 @@ test "parse type section invalid tag" {
   let _ = parse_type_section(make_parser(bytes)) catch {
     _ => {
       saw_error = true
-      []
+      ([], [])
     }
   }
   assert_eq(saw_error, true)
@@ -666,7 +669,7 @@ test "parse type section subtypes" {
   push_u32_leb(bytes, 1U)
   push_u32_leb(bytes, 0U)
   append_bytes(bytes, encode_func_type(empty_sig, empty_sig))
-  let types = parse_type_section(make_parser(bytes))
+  let (types, _groups) = parse_type_section(make_parser(bytes))
   assert_eq(types.length(), 2)
 }
 
@@ -681,7 +684,7 @@ test "parse type section invalid composite tag" {
   let _ = parse_type_section(make_parser(bytes)) catch {
     _ => {
       saw_error = true
-      []
+      ([], [])
     }
   }
   assert_eq(saw_error, true)
@@ -700,7 +703,7 @@ test "parse type section results and struct" {
   push_u32_leb(bytes, 1U)
   bytes.push(b'\x7f')
   bytes.push(b'\x00')
-  let types = parse_type_section(make_parser(bytes))
+  let (types, _groups) = parse_type_section(make_parser(bytes))
   assert_eq(types.length(), 2)
 }
 

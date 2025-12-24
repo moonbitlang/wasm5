@@ -2,6 +2,7 @@
 fn empty_module() -> @core.Module {
   {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -837,6 +838,7 @@ test "compile helpers canonicalize and counts" {
   assert_eq(f64_bits(canonicalize_f64(nan_f64)), f64_bits(canonical_nan_f64))
   let module_ : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -861,6 +863,7 @@ test "compile helpers canonicalize and counts" {
   assert_eq(get_func_type_idx(module_, 2, 1), -1)
   let module_funcs : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [0U, 1U],
     tables: [],
     mems: [],

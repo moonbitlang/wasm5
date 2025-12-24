@@ -2,6 +2,7 @@
 fn test_module_with_memory() -> @core.Module {
   {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [{ limits: { min: 0U, max: None }, shared: false }],
@@ -20,6 +21,7 @@ fn test_module_with_memory() -> @core.Module {
 fn test_module_with_table(elem_type : @core.RefType) -> @core.Module {
   {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [
       { elem_type, limits: { min: 0U, max: None }, init: None, nullable: true },
@@ -92,6 +94,7 @@ test "validate variable instruction errors" {
   assert_eq(saw_error, true)
   let module_global : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -198,6 +201,7 @@ test "validate variable instruction errors" {
   assert_eq(ctx_tee_local.initialized_locals.length() > 0, true)
   let module_imported : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -229,6 +233,7 @@ test "validate variable instruction errors" {
   assert_eq(ctx_import_get.stack[0], I64)
   let module_imported_mut : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -260,6 +265,7 @@ test "validate variable instruction errors" {
   assert_eq(ok, true)
   let module_import_scan : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -775,6 +781,7 @@ test "validate control instruction branches" {
   let func_type : @core.FuncType = { params: [I32], results: [I32] }
   let module_funcs : @core.Module = {
     types: [Func(func_type)],
+    type_groups: [],
     funcs: [0U],
     tables: [
       {
@@ -1025,6 +1032,7 @@ test "validate control block loop if branches" {
   let block_type : @core.FuncType = { params: [I32], results: [I64] }
   let module_block : @core.Module = {
     types: [Func(block_type)],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -1378,6 +1386,7 @@ test "validate control if branch coverage" {
   let block_type : @core.FuncType = { params: [I32], results: [I32] }
   let module_if : @core.Module = {
     types: [Func(block_type)],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -1617,6 +1626,7 @@ test "validate control call errors" {
   assert_eq(saw_error, true)
   let module_import_table : @core.Module = {
     types: [Func({ params: [], results: [] })],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -1654,6 +1664,7 @@ test "validate control call errors" {
   assert_eq(ok, true)
   let module_import_scan : @core.Module = {
     types: [Func({ params: [], results: [] })],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -1708,6 +1719,7 @@ test "validate control call errors" {
   saw_error = false
   let module_table_bad : @core.Module = {
     types: [Func({ params: [], results: [] })],
+    type_groups: [],
     funcs: [],
     tables: [
       {
@@ -1745,6 +1757,7 @@ test "validate control call errors" {
   saw_error = false
   let module_table_no_types : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [
       {
@@ -1782,6 +1795,7 @@ test "validate control call errors" {
   saw_error = false
   let module_return_call : @core.Module = {
     types: [Func({ params: [], results: [] })],
+    type_groups: [],
     funcs: [1U],
     tables: [],
     mems: [],
@@ -1922,6 +1936,7 @@ test "validate function stack mismatch" {
   assert_eq(saw_error, true)
   let module_types : @core.Module = {
     types: [Func({ params: [], results: [] })],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],

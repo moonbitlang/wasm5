@@ -7,6 +7,7 @@ fn base_module(
 ) -> @core.Module {
   {
     types,
+    type_groups: [],
     funcs,
     tables: [],
     mems: [],

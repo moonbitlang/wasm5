@@ -106,6 +106,19 @@ pub(all) enum TypeDef {
   Array(ArrayType)
 } derive(Show, Eq)
 
+///|
+pub(all) struct SubTypeDef {
+  type_idx : UInt
+  supertypes : Array[UInt]
+  is_final : Bool
+} derive(Show, Eq)
+
+///|
+pub(all) struct TypeGroup {
+  subtypes : Array[SubTypeDef]
+  explicit : Bool
+} derive(Show, Eq)
+
 // Block type (can be empty, single value, or type index to function type)
 
 ///|
@@ -561,6 +574,7 @@ pub(all) struct Code {
 /// Module structure according to WASM specification
 pub(all) struct Module {
   types : Array[TypeDef] // type section
+  type_groups : Array[TypeGroup] // recursive type groups
   funcs : Array[UInt] // function section (type indices)
   tables : Array[TableType] // table section
   mems : Array[MemType] // memory section

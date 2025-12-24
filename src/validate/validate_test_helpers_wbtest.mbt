@@ -7,6 +7,7 @@ fn test_empty_expr() -> @core.Expr {
 fn test_empty_module() -> @core.Module {
   {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [],

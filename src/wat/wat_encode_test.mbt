@@ -304,6 +304,30 @@ async test "wat encoder matches wasm-tools for data segments and memory.init" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for rec type groups" {
+  let wat = "(module (rec (type $a (struct (field i32))) (type $b (struct (field (ref $a))))))"
+  assert_wat_matches("rec_type_group", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for rec single type" {
+  let wat = "(module (rec (type $a (struct (field i32)))))"
+  assert_wat_matches("rec_single_type", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for sub types" {
+  let wat = "(module (type $a (struct)) (type $b (sub $a (struct))) (type $c (sub final $a (struct))))"
+  assert_wat_matches("sub_types", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for sub types without supertypes" {
+  let wat = "(module (type $a (sub (struct))) (type $b (sub final (struct))))"
+  assert_wat_matches("sub_types_no_super", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for gc struct/array ops" {
   let wat = "(module (type $s (struct (field i32) (field (mut i32)))) (type $sp (struct (field i8) (field (mut i16)))) (type $a16 (array (mut i16))) (type $a32 (array (mut i32))) (func (export \"gc_ops\") (param i32 i32 i32) (result i32) struct.new_default $s drop local.get 0 local.get 1 struct.new $s struct.get $s 0 drop local.get 0 local.get 1 struct.new $s local.get 2 struct.set $s 1 struct.new_default $sp struct.get_s $sp 0 drop struct.new_default $sp struct.get_u $sp 1 drop local.get 0 array.new_default $a16 array.len drop local.get 1 local.get 2 array.new_fixed $a16 2 drop local.get 1 local.get 0 array.new $a16 local.get 0 array.get_u $a16 drop local.get 1 local.get 0 array.new $a16 local.get 0 array.get_s $a16 drop local.get 1 local.get 0 array.new $a32 local.get 0 array.get $a32 drop local.get 1 local.get 0 array.new $a16 local.get 0 local.get 2 array.set $a16 local.get 1 local.get 0 array.new $a16 local.get 0 local.get 2 local.get 1 array.fill $a16 local.get 1 local.get 0 array.new $a16 local.get 0 local.get 1 local.get 0 array.new $a16 local.get 0 local.get 2 array.copy $a16 $a16 i32.const 0))"
   assert_wat_matches("gc_struct_array_ops", wat)

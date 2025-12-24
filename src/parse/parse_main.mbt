@@ -22,6 +22,7 @@ pub fn parse(b : Bytes) -> @core.Module raise {
 
   // Parse sections
   let mut types : Array[@core.TypeDef] = []
+  let mut type_groups : Array[@core.TypeGroup] = []
   let mut funcs : Array[UInt] = []
   let mut tables : Array[@core.TableType] = []
   let mut mems : Array[@core.MemType] = []
@@ -38,7 +39,11 @@ pub fn parse(b : Bytes) -> @core.Module raise {
     let section_size = parser.read_u32_leb128()
     let section_start = parser.pos
     match section_id {
-      1 => types = parse_type_section(parser)
+      1 => {
+        let (parsed_types, parsed_groups) = parse_type_section(parser)
+        types = parsed_types
+        type_groups = parsed_groups
+      }
       2 => imports = parse_import_section(parser)
       3 => funcs = parse_function_section(parser)
       4 => tables = parse_table_section(parser)
@@ -60,6 +65,7 @@ pub fn parse(b : Bytes) -> @core.Module raise {
   }
   let module_ = @core.Module::{
     types,
+    type_groups,
     funcs,
     tables,
     mems,

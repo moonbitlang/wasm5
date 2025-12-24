@@ -9,6 +9,7 @@ fn module_with(
 ) -> @core.Module {
   {
     types,
+    type_groups: [],
     funcs,
     tables: [],
     mems: [],
@@ -86,6 +87,7 @@ test "runtime call compiled non func export" {
   }
   let module_ : @core.Module = {
     types: [],
+    type_groups: [],
     funcs: [],
     tables: [],
     mems: [mem_type],
