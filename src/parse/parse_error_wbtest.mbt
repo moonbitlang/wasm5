@@ -562,6 +562,7 @@ test "parse main header errors" {
       {
         types: [],
         type_groups: [],
+        customs: [],
         funcs: [],
         tables: [],
         mems: [],
@@ -588,6 +589,7 @@ test "parse main header errors" {
       {
         types: [],
         type_groups: [],
+        customs: [],
         funcs: [],
         tables: [],
         mems: [],
@@ -624,6 +626,7 @@ test "parse main section skips" {
       {
         types: [],
         type_groups: [],
+        customs: [],
         funcs: [],
         tables: [],
         mems: [],

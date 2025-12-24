@@ -239,9 +239,17 @@ priv struct WatExport {
 }
 
 ///|
+priv struct WatCustom {
+  name : Bytes
+  data : Bytes
+  placement : @core.CustomPlacement
+}
+
+///|
 priv struct WatModule {
   type_defs : Array[WatTypeDef]
   type_groups : Array[WatTypeGroup]
+  customs : Array[WatCustom]
   func_imports : Array[WatImportFunc]
   mem_imports : Array[WatImportMem]
   table_imports : Array[WatImportTable]
@@ -792,6 +800,7 @@ fn parse_module(expr : SExpr) -> WatModule raise WatError {
   let module_ = WatModule::{
     type_defs: [],
     type_groups: [],
+    customs: [],
     func_imports: [],
     mem_imports: [],
     table_imports: [],
@@ -1056,6 +1065,7 @@ fn parse_module_field(
     b"data" => module_.datas.push(parse_data(items, type_map))
     b"export" => module_.exports.push(parse_export(items))
     b"start" => module_.start = Some(parse_start(items))
+    b"@custom" => module_.customs.push(parse_custom(items))
     b"type" => ()
     _ => raise WatError::Unsupported("module field \{head}")
   }
@@ -1863,6 +1873,68 @@ fn parse_inline_export(items : Array[SExpr]) -> Bytes raise WatError {
     raise WatError::InvalidSyntax("export expects single name")
   }
   expect_string(items[1])
+}
+
+///|
+fn parse_custom(items : Array[SExpr]) -> WatCustom raise WatError {
+  guard items.length() >= 2 else {
+    raise WatError::InvalidSyntax("custom expects name")
+  }
+  let name = expect_string(items[1])
+  let mut idx = 2
+  let mut placement = @core.CustomPlacement::End
+  if idx < items.length() && items[idx] is List(list_items) {
+    placement = parse_custom_placement(list_items)
+    idx = idx + 1
+  }
+  let data_bytes : Array[Byte] = []
+  for i in idx..<items.length() {
+    match items[i] {
+      StringLit(bytes) =>
+        for b in bytes {
+          data_bytes.push(b)
+        }
+      _ => raise WatError::InvalidSyntax("custom expects string literals")
+    }
+  }
+  WatCustom::{ name, data: Bytes::from_array(data_bytes), placement }
+}
+
+///|
+fn parse_custom_placement(
+  items : Array[SExpr],
+) -> @core.CustomPlacement raise WatError {
+  guard items.length() == 2 else {
+    raise WatError::InvalidSyntax("custom expects before/after section")
+  }
+  guard items[0] is Atom(tag) && items[1] is Atom(section) else {
+    raise WatError::InvalidSyntax("custom expects before/after section")
+  }
+  let section_id = parse_custom_section_id(section)
+  match tag {
+    b"before" => @core.CustomPlacement::Before(section_id)
+    b"after" => @core.CustomPlacement::After(section_id)
+    _ => raise WatError::InvalidSyntax("custom expects before/after section")
+  }
+}
+
+///|
+fn parse_custom_section_id(atom : Bytes) -> @core.SectionId raise WatError {
+  match atom {
+    b"type" => @core.SectionId::Type
+    b"import" => @core.SectionId::Import
+    b"func" => @core.SectionId::Func
+    b"table" => @core.SectionId::Table
+    b"memory" => @core.SectionId::Memory
+    b"global" => @core.SectionId::Global
+    b"tag" => @core.SectionId::Tag
+    b"export" => @core.SectionId::Export
+    b"start" => @core.SectionId::Start
+    b"elem" => @core.SectionId::Elem
+    b"code" => @core.SectionId::Code
+    b"data" => @core.SectionId::Data
+    _ => raise WatError::InvalidSyntax("custom expects valid section name")
+  }
 }
 
 ///|
@@ -4506,6 +4578,14 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
     }
     type_groups.push(@core.TypeGroup::{ subtypes, explicit: group.explicit })
   }
+  let customs : Array[@core.CustomSection] = []
+  for custom in wat.customs {
+    customs.push(@core.CustomSection::{
+      name: custom.name,
+      data: custom.data,
+      placement: custom.placement,
+    })
+  }
   let initial_type_count = types.length()
   let imports : Array[@core.Import] = []
   for imp in wat.func_imports {
@@ -4694,6 +4774,7 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
   @core.Module::{
     types,
     type_groups,
+    customs,
     funcs,
     tables,
     mems,

@@ -8,6 +8,7 @@ fn test_empty_module() -> @core.Module {
   {
     types: [],
     type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],

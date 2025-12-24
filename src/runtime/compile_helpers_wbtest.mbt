@@ -40,6 +40,7 @@ test "compile helpers func type lookup with non func imports" {
   let module_ : @core.Module = {
     types: [],
     type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],

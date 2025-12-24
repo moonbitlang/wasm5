@@ -246,6 +246,7 @@ fn make_compile_module(instrs : Array[@core.Instr]) -> @core.Module {
   @core.Module::{
     types,
     type_groups: [],
+    customs: [],
     funcs: [0U],
     tables: [],
     mems: [],

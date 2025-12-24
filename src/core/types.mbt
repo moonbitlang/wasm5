@@ -119,6 +119,38 @@ pub(all) struct TypeGroup {
   explicit : Bool
 } derive(Show, Eq)
 
+///|
+pub(all) enum SectionId {
+  Type
+  Import
+  Func
+  Table
+  Memory
+  Global
+  Tag
+  Export
+  Start
+  Elem
+  DataCount
+  Code
+  Data
+} derive(Show, Eq)
+
+///|
+pub(all) enum CustomPlacement {
+  Start
+  Before(SectionId)
+  After(SectionId)
+  End
+} derive(Show, Eq)
+
+///|
+pub(all) struct CustomSection {
+  name : Bytes
+  data : Bytes
+  placement : CustomPlacement
+} derive(Show, Eq)
+
 // Block type (can be empty, single value, or type index to function type)
 
 ///|
@@ -575,6 +607,7 @@ pub(all) struct Code {
 pub(all) struct Module {
   types : Array[TypeDef] // type section
   type_groups : Array[TypeGroup] // recursive type groups
+  customs : Array[CustomSection] // custom sections
   funcs : Array[UInt] // function section (type indices)
   tables : Array[TableType] // table section
   mems : Array[MemType] // memory section

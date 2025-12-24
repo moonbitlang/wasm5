@@ -3,6 +3,7 @@ fn empty_module() -> @core.Module {
   {
     types: [],
     type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -839,6 +840,7 @@ test "compile helpers canonicalize and counts" {
   let module_ : @core.Module = {
     types: [],
     type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -864,6 +866,7 @@ test "compile helpers canonicalize and counts" {
   let module_funcs : @core.Module = {
     types: [],
     type_groups: [],
+    customs: [],
     funcs: [0U, 1U],
     tables: [],
     mems: [],

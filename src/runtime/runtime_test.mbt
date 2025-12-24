@@ -9,6 +9,7 @@ fn make_const_module(value : UInt, name : Bytes) -> @core.Module {
   @core.Module::{
     types: [func_type],
     type_groups: [],
+    customs: [],
     funcs: [0U],
     tables: [],
     mems: [],
@@ -36,6 +37,7 @@ fn make_import_call_module() -> @core.Module {
   @core.Module::{
     types: [func_type],
     type_groups: [],
+    customs: [],
     funcs: [0U],
     tables: [],
     mems: [],
@@ -83,6 +85,7 @@ test "runtime evaluates global init expr" {
   let module_ : @core.Module = {
     types: [],
     type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],

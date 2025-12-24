@@ -20,6 +20,7 @@ test "runtime load with resolver" {
   let module_ : @core.Module = {
     types: [func_type],
     type_groups: [],
+    customs: [],
     funcs: [0U],
     tables: [table_type],
     mems: [],
@@ -110,6 +111,7 @@ test "runtime load fallback memory" {
   let module_ : @core.Module = {
     types: [],
     type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -136,6 +138,7 @@ test "runtime load local memory" {
   let module_ : @core.Module = {
     types: [],
     type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [mem_type],
@@ -159,6 +162,7 @@ test "runtime load missing imported function" {
   let module_ : @core.Module = {
     types: [func_type],
     type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],

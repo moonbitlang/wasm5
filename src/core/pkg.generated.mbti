@@ -87,6 +87,23 @@ pub(all) struct Code {
   mut compiled : Int?
 }
 
+pub(all) enum CustomPlacement {
+  Start
+  Before(SectionId)
+  After(SectionId)
+  End
+}
+pub impl Eq for CustomPlacement
+pub impl Show for CustomPlacement
+
+pub(all) struct CustomSection {
+  name : Bytes
+  data : Bytes
+  placement : CustomPlacement
+}
+pub impl Eq for CustomSection
+pub impl Show for CustomSection
+
 pub(all) struct Data {
   mem_idx : UInt
   offset : Expr
@@ -418,6 +435,7 @@ pub(all) struct MemType {
 pub(all) struct Module {
   types : Array[TypeDef]
   type_groups : Array[TypeGroup]
+  customs : Array[CustomSection]
   funcs : Array[UInt]
   tables : Array[TableType]
   mems : Array[MemType]
@@ -448,6 +466,24 @@ pub(all) enum RefType {
 }
 pub impl Eq for RefType
 pub impl Show for RefType
+
+pub(all) enum SectionId {
+  Type
+  Import
+  Func
+  Table
+  Memory
+  Global
+  Tag
+  Export
+  Start
+  Elem
+  DataCount
+  Code
+  Data
+}
+pub impl Eq for SectionId
+pub impl Show for SectionId
 
 pub(all) enum SimdImmKind {
   None

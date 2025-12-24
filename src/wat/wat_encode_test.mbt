@@ -64,6 +64,36 @@ async fn assert_wat_matches(name : String, wat : String) -> Unit {
 }
 
 ///|
+async fn assert_wat_matches_custom(name : String, wat : String) -> Unit {
+  guard wasm_tools_available() else { return }
+  let base_dir = "target/wat_tests"
+  ensure_dir(base_dir)
+  let dir = base_dir + "/" + name + "/"
+  ensure_dir(dir)
+  let wat_path = dir + "input.wat"
+  let ours_path = dir + "ours.wasm"
+  let ref_path = dir + "ref.wasm"
+  let ref_stripped_path = dir + "ref_stripped.wasm"
+  let wat_file = @fs.create(wat_path, permission=0o644)
+  defer wat_file.close()
+  wat_file.write(wat)
+  let ours = wat_to_wasm(wat)
+  let ours_file = @fs.create(ours_path, permission=0o644)
+  defer ours_file.close()
+  ours_file.write(ours)
+  let exit_code = @process.run("wasm-tools", ["parse", wat_path, "-o", ref_path])
+  assert_eq(exit_code, 0)
+  let strip_code = @process.run("wasm-tools", [
+    "strip", "--delete", "^name$", ref_path, "-o", ref_stripped_path,
+  ])
+  assert_eq(strip_code, 0)
+  let ref_file = @fs.open(ref_stripped_path, mode=ReadOnly)
+  defer ref_file.close()
+  let ref_bytes = ref_file.read_all().binary()
+  assert_eq(ours, ref_bytes)
+}
+
+///|
 async test "wat encoder matches wasm-tools for add" {
   let wat = "(module (func (export \"add\") (param i32 i32) (result i32) local.get 0 local.get 1 i32.add))"
   assert_wat_matches("add", wat)
@@ -301,6 +331,24 @@ async test "wat encoder matches wasm-tools for elem exprs reftype" {
 async test "wat encoder matches wasm-tools for data segments and memory.init" {
   let wat = "(module (memory 1) (data $p \"hi\") (data (i32.const 0) \"ok\") (func (export \"init\") (param i32 i32 i32) local.get 0 local.get 1 local.get 2 memory.init $p data.drop $p))"
   assert_wat_matches("data_memory_init", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for custom section end" {
+  let wat = "(module (@custom \"foo\" \"a\" \"b\"))"
+  assert_wat_matches_custom("custom_end", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for custom section after type" {
+  let wat = "(module (type (func)) (@custom \"foo\" (after type) \"data\") (func (type 0)))"
+  assert_wat_matches_custom("custom_after_type", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for custom section before code" {
+  let wat = "(module (memory 1) (data \"hi\") (@custom \"foo\" (before code) \"data\") (func (param i32 i32 i32) local.get 0 local.get 1 local.get 2 memory.init 0))"
+  assert_wat_matches_custom("custom_before_code", wat)
 }
 
 ///|

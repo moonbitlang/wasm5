@@ -8,6 +8,7 @@ fn base_module(
   {
     types,
     type_groups: [],
+    customs: [],
     funcs,
     tables: [],
     mems: [],

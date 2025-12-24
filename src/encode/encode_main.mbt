@@ -18,32 +18,86 @@ pub fn encode(module_ : @core.Module) -> Bytes raise EncodeError {
     0x00U.to_byte(),
     0x00U.to_byte(),
   ])
-  let type_payload = encode_type_section(module_.types, module_.type_groups)
-  push_section(out, 1U, type_payload)
-  let import_payload = encode_import_section(module_.imports)
-  push_section(out, 2U, import_payload)
-  let func_payload = encode_function_section(module_.funcs)
-  push_section(out, 3U, func_payload)
-  let table_payload = encode_table_section(module_.tables)
-  push_section(out, 4U, table_payload)
-  let mem_payload = encode_memory_section(module_.mems)
-  push_section(out, 5U, mem_payload)
-  let global_payload = encode_global_section(module_.globals)
-  push_section(out, 6U, global_payload)
-  let tag_payload = encode_tag_section(module_.tags)
-  push_section(out, 13U, tag_payload)
-  let export_payload = encode_export_section(module_.exports)
-  push_section(out, 7U, export_payload)
-  let start_payload = encode_start_section(module_.start)
-  push_section(out, 8U, start_payload)
-  let elem_payload = encode_element_section(module_.elems)
-  push_section(out, 9U, elem_payload)
-  let data_count_payload = encode_data_count_section(module_)
-  push_section(out, 12U, data_count_payload)
-  let code_payload = encode_code_section(module_.codes)
-  push_section(out, 10U, code_payload)
-  let data_payload = encode_data_section(module_.datas)
-  push_section(out, 11U, data_payload)
+  let sections : Array[SectionEntry] = []
+  add_section(
+    sections,
+    @core.SectionId::Type,
+    1U,
+    encode_type_section(module_.types, module_.type_groups),
+  )
+  add_section(
+    sections,
+    @core.SectionId::Import,
+    2U,
+    encode_import_section(module_.imports),
+  )
+  add_section(
+    sections,
+    @core.SectionId::Func,
+    3U,
+    encode_function_section(module_.funcs),
+  )
+  add_section(
+    sections,
+    @core.SectionId::Table,
+    4U,
+    encode_table_section(module_.tables),
+  )
+  add_section(
+    sections,
+    @core.SectionId::Memory,
+    5U,
+    encode_memory_section(module_.mems),
+  )
+  add_section(
+    sections,
+    @core.SectionId::Global,
+    6U,
+    encode_global_section(module_.globals),
+  )
+  add_section(
+    sections,
+    @core.SectionId::Tag,
+    13U,
+    encode_tag_section(module_.tags),
+  )
+  add_section(
+    sections,
+    @core.SectionId::Export,
+    7U,
+    encode_export_section(module_.exports),
+  )
+  add_section(
+    sections,
+    @core.SectionId::Start,
+    8U,
+    encode_start_section(module_.start),
+  )
+  add_section(
+    sections,
+    @core.SectionId::Elem,
+    9U,
+    encode_element_section(module_.elems),
+  )
+  add_section(
+    sections,
+    @core.SectionId::DataCount,
+    12U,
+    encode_data_count_section(module_),
+  )
+  add_section(
+    sections,
+    @core.SectionId::Code,
+    10U,
+    encode_code_section(module_.codes),
+  )
+  add_section(
+    sections,
+    @core.SectionId::Data,
+    11U,
+    encode_data_section(module_.datas),
+  )
+  emit_sections_with_customs(out, sections, module_.customs)
   Bytes::from_array(out)
 }
 
@@ -53,6 +107,149 @@ fn push_section(out : Array[Byte], id : UInt, payload : Array[Byte]) -> Unit {
   out.push(id.to_byte())
   append_bytes(out, encode_u32_leb128(payload.length().reinterpret_as_uint()))
   append_bytes(out, payload)
+}
+
+///|
+priv struct SectionEntry {
+  kind : @core.SectionId
+  id : UInt
+  payload : Array[Byte]
+}
+
+///|
+fn add_section(
+  sections : Array[SectionEntry],
+  kind : @core.SectionId,
+  id : UInt,
+  payload : Array[Byte],
+) -> Unit {
+  if payload.length() > 0 {
+    sections.push({ kind, id, payload })
+  }
+}
+
+///|
+fn emit_sections_with_customs(
+  out : Array[Byte],
+  sections : Array[SectionEntry],
+  customs : Array[@core.CustomSection],
+) -> Unit {
+  let order = section_order()
+  let present_positions : Array[Int?] = Array::make(order.length(), None)
+  for i in 0..<sections.length() {
+    let kind = sections[i].kind
+    let order_index = section_index(kind, order)
+    present_positions[order_index] = Some(i)
+  }
+  let slots : Array[Array[@core.CustomSection]] = []
+  for _ in 0..<(sections.length() + 1) {
+    slots.push([])
+  }
+  for custom in customs {
+    let slot = custom_slot(
+      custom.placement,
+      present_positions,
+      order,
+      sections.length(),
+    )
+    slots[slot].push(custom)
+  }
+  for i in 0..<slots.length() {
+    for custom in slots[i] {
+      push_section(out, 0U, encode_custom_payload(custom))
+    }
+    if i < sections.length() {
+      let section = sections[i]
+      push_section(out, section.id, section.payload)
+    }
+  }
+}
+
+///|
+fn section_order() -> Array[@core.SectionId] {
+  [
+    @core.SectionId::Type,
+    @core.SectionId::Import,
+    @core.SectionId::Func,
+    @core.SectionId::Table,
+    @core.SectionId::Memory,
+    @core.SectionId::Global,
+    @core.SectionId::Tag,
+    @core.SectionId::Export,
+    @core.SectionId::Start,
+    @core.SectionId::Elem,
+    @core.SectionId::DataCount,
+    @core.SectionId::Code,
+    @core.SectionId::Data,
+  ]
+}
+
+///|
+fn section_index(kind : @core.SectionId, order : Array[@core.SectionId]) -> Int {
+  for i in 0..<order.length() {
+    if order[i] == kind {
+      return i
+    }
+  }
+  0
+}
+
+///|
+fn custom_slot(
+  placement : @core.CustomPlacement,
+  present_positions : Array[Int?],
+  order : Array[@core.SectionId],
+  section_count : Int,
+) -> Int {
+  match placement {
+    @core.CustomPlacement::Start => 0
+    @core.CustomPlacement::End => section_count
+    @core.CustomPlacement::Before(target) =>
+      slot_before_after(target, false, present_positions, order)
+    @core.CustomPlacement::After(target) =>
+      slot_before_after(target, true, present_positions, order)
+  }
+}
+
+///|
+fn slot_before_after(
+  target : @core.SectionId,
+  after : Bool,
+  present_positions : Array[Int?],
+  order : Array[@core.SectionId],
+) -> Int {
+  let target_index = section_index(target, order)
+  match present_positions[target_index] {
+    Some(pos) => if after { pos + 1 } else { pos }
+    None => slot_after_last_before(target_index, present_positions)
+  }
+}
+
+///|
+fn slot_after_last_before(
+  target_index : Int,
+  present_positions : Array[Int?],
+) -> Int {
+  let mut slot = 0
+  for i in 0..<target_index {
+    match present_positions[i] {
+      Some(pos) => slot = pos + 1
+      None => ()
+    }
+  }
+  slot
+}
+
+///|
+fn encode_custom_payload(custom : @core.CustomSection) -> Array[Byte] {
+  let payload : Array[Byte] = []
+  append_bytes(
+    payload,
+    encode_u32_leb128(custom.name.length().reinterpret_as_uint()),
+  )
+  append_bytesview(payload, custom.name.sub())
+  append_bytesview(payload, custom.data.sub())
+  payload
 }
 
 ///|

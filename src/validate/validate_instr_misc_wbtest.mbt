@@ -3,6 +3,7 @@ fn test_module_with_memory() -> @core.Module {
   {
     types: [],
     type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [{ limits: { min: 0U, max: None }, shared: false }],
@@ -22,6 +23,7 @@ fn test_module_with_table(elem_type : @core.RefType) -> @core.Module {
   {
     types: [],
     type_groups: [],
+    customs: [],
     funcs: [],
     tables: [
       { elem_type, limits: { min: 0U, max: None }, init: None, nullable: true },
@@ -95,6 +97,7 @@ test "validate variable instruction errors" {
   let module_global : @core.Module = {
     types: [],
     type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -202,6 +205,7 @@ test "validate variable instruction errors" {
   let module_imported : @core.Module = {
     types: [],
     type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -234,6 +238,7 @@ test "validate variable instruction errors" {
   let module_imported_mut : @core.Module = {
     types: [],
     type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -266,6 +271,7 @@ test "validate variable instruction errors" {
   let module_import_scan : @core.Module = {
     types: [],
     type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -782,6 +788,7 @@ test "validate control instruction branches" {
   let module_funcs : @core.Module = {
     types: [Func(func_type)],
     type_groups: [],
+    customs: [],
     funcs: [0U],
     tables: [
       {
@@ -1033,6 +1040,7 @@ test "validate control block loop if branches" {
   let module_block : @core.Module = {
     types: [Func(block_type)],
     type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -1387,6 +1395,7 @@ test "validate control if branch coverage" {
   let module_if : @core.Module = {
     types: [Func(block_type)],
     type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -1627,6 +1636,7 @@ test "validate control call errors" {
   let module_import_table : @core.Module = {
     types: [Func({ params: [], results: [] })],
     type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -1665,6 +1675,7 @@ test "validate control call errors" {
   let module_import_scan : @core.Module = {
     types: [Func({ params: [], results: [] })],
     type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -1720,6 +1731,7 @@ test "validate control call errors" {
   let module_table_bad : @core.Module = {
     types: [Func({ params: [], results: [] })],
     type_groups: [],
+    customs: [],
     funcs: [],
     tables: [
       {
@@ -1758,6 +1770,7 @@ test "validate control call errors" {
   let module_table_no_types : @core.Module = {
     types: [],
     type_groups: [],
+    customs: [],
     funcs: [],
     tables: [
       {
@@ -1796,6 +1809,7 @@ test "validate control call errors" {
   let module_return_call : @core.Module = {
     types: [Func({ params: [], results: [] })],
     type_groups: [],
+    customs: [],
     funcs: [1U],
     tables: [],
     mems: [],
@@ -1937,6 +1951,7 @@ test "validate function stack mismatch" {
   let module_types : @core.Module = {
     types: [Func({ params: [], results: [] })],
     type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
