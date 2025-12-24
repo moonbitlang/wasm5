@@ -2,21 +2,21 @@
 package "moonbitlang/wasm5/test"
 
 // Values
+pub async fn process_wast_file(String, String) -> (Array[TestFailure], Int)
 
 // Errors
-type TestUnsupported
 
 // Types and methods
 type ExpectedValue
 pub impl Show for ExpectedValue
 
-type ModuleRegistry
-
-type RegisteredModule
-
-type TestContext
-
-type TestFailure
+pub struct TestFailure {
+  line : Int
+  test_type : String
+  message : String
+  source_file : String
+}
+pub impl Show for TestFailure
 
 // Type aliases
 

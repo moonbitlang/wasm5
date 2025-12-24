@@ -10,9 +10,13 @@ pub struct TestFailure {
 ///|
 pub impl Show for TestFailure with output(self, logger) {
   if self.line >= 0 {
-    logger.write_string("[\{self.test_type}] \{self.source_file}:\{self.line}: \{self.message}")
+    logger.write_string(
+      "[\{self.test_type}] \{self.source_file}:\{self.line}: \{self.message}",
+    )
   } else {
-    logger.write_string("[\{self.test_type}] \{self.source_file}: \{self.message}")
+    logger.write_string(
+      "[\{self.test_type}] \{self.source_file}: \{self.message}",
+    )
   }
 }
 
@@ -1010,7 +1014,6 @@ pub async fn process_wast_file(
   (test_result, skipped)
 }
 
-
 ///|
 /// Whitelist of individual tests to skip (file, line)
 /// These are known failing tests that won't be fixed soon
@@ -1076,4 +1079,3 @@ let whitelisted_tests : Array[(String, Set[Int])] = [
   ("table_grow.wast", Set::from_array([124, 130])), // cross-module imports not implemented
   ("func_ptrs.wast", Set::from_array([49])),
 ]
-

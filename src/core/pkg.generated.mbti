@@ -137,6 +137,7 @@ pub(all) enum Instr {
   TableGrow(UInt)
   TableInit(UInt, UInt)
   TableCopy(UInt, UInt)
+  TableFill(UInt)
   ElemDrop(UInt)
   MemoryInit(UInt)
   DataDrop(UInt)

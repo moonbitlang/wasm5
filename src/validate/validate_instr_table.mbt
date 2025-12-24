@@ -17,6 +17,29 @@ fn validate_instruction_table(
       ctx.poly_pop_expect(module_, I32, "table.copy src")
       ctx.poly_pop_expect(module_, I32, "table.copy dest")
     }
+    TableFill(table_idx) => {
+      ctx.poly_pop_expect(module_, I32, "table.fill n")
+      let table_elem_type = if table_idx.reinterpret_as_int() <
+        module_.tables.length() {
+        module_.tables[table_idx.reinterpret_as_int()].elem_type
+      } else {
+        Func
+      }
+      let expected_type : @core.ValType = reftype_to_valtype(table_elem_type)
+      if ctx.is_unreachable && stack.length() == 0 {
+        // Polymorphic - allow
+      } else if stack.length() < 1 {
+        raise ValidationError::TypeMismatch("table.fill expects value on stack")
+      } else {
+        let actual_type = stack.unsafe_pop()
+        if not(is_subtype(module_, actual_type, expected_type)) {
+          raise ValidationError::TypeMismatch(
+            "table.fill value type mismatch: expected \{expected_type}, got \{actual_type}",
+          )
+        }
+      }
+      ctx.poly_pop_expect(module_, I32, "table.fill dest")
+    }
     ElemDrop(_) => ()
 
     // Table instructions

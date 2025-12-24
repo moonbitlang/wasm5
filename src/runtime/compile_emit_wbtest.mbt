@@ -65,6 +65,7 @@ fn build_compile_instrs() -> Array[@core.Instr] {
   instrs.push(TableGrow(0U))
   instrs.push(TableInit(0U, 0U))
   instrs.push(TableCopy(0U, 0U))
+  instrs.push(TableFill(0U))
   instrs.push(ElemDrop(0U))
   instrs.push(MemoryInit(0U))
   instrs.push(DataDrop(0U))

@@ -71,7 +71,6 @@ pub fn Runtime::compile(self : Runtime) -> Unit raise RuntimeError {
         if init_result != OK {
           raise init_result.to_error(self.error_detail)
         }
-
         self.pc = start_pc
 
         // Execute start function, ignoring runtime errors
@@ -153,7 +152,6 @@ pub fn Runtime::call_compiled(
   if init_result != OK {
     raise init_result.to_error(self.error_detail)
   }
-
   self.pc = start_pc
   self.execute()
 

@@ -655,6 +655,11 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
       append_bytes(payload, encode_u32_leb128(dst_idx))
       append_bytes(payload, encode_u32_leb128(src_idx))
     }
+    TableFill(idx) => {
+      payload.push(0xFCU.to_byte())
+      append_bytes(payload, encode_u32_leb128(17U))
+      append_bytes(payload, encode_u32_leb128(idx))
+    }
     ElemDrop(idx) => {
       payload.push(0xFCU.to_byte())
       append_bytes(payload, encode_u32_leb128(13U))

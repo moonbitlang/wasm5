@@ -45,7 +45,9 @@ fn make_runtime(
 ///|
 fn assert_stack_eq(stack : Array[UInt64], expected : Array[Value]) -> Unit {
   if stack.length() != expected.length() {
-    abort("stack length mismatch: got \{stack.length()}, expected \{expected.length()}")
+    abort(
+      "stack length mismatch: got \{stack.length()}, expected \{expected.length()}",
+    )
   }
   for i in 0..<stack.length() {
     let got = stack[i]
@@ -372,7 +374,10 @@ test "ops i64 compare and unary" {
   let rt_popcnt = make_runtime([Value::I64(0xF0F0UL)], [], 0)
   let ret_popcnt = op_i64_popcnt(rt_popcnt)
   assert_ok(ret_popcnt)
-  assert_stack_elem_eq(rt_popcnt.stack[0], Value::I64(popcnt64(0xF0F0UL).to_uint64()))
+  assert_stack_elem_eq(
+    rt_popcnt.stack[0],
+    Value::I64(popcnt64(0xF0F0UL).to_uint64()),
+  )
   let rt_extend8 = make_runtime([Value::I64(0x00000000000000FFUL)], [], 0)
   let ret_extend8 = op_i64_extend8_s(rt_extend8)
   assert_ok(ret_extend8)
@@ -388,11 +393,17 @@ test "ops i64 compare and unary" {
   let rt_extend_i32_s = make_runtime([Value::I32(0xFFFFFFFFU)], [], 0)
   let ret_extend_i32_s = op_i64_extend_i32_s(rt_extend_i32_s)
   assert_ok(ret_extend_i32_s)
-  assert_stack_elem_eq(rt_extend_i32_s.stack[0], Value::I64(0xFFFFFFFFFFFFFFFFUL))
+  assert_stack_elem_eq(
+    rt_extend_i32_s.stack[0],
+    Value::I64(0xFFFFFFFFFFFFFFFFUL),
+  )
   let rt_extend_i32_u = make_runtime([Value::I32(0xFFFFFFFFU)], [], 0)
   let ret_extend_i32_u = op_i64_extend_i32_u(rt_extend_i32_u)
   assert_ok(ret_extend_i32_u)
-  assert_stack_elem_eq(rt_extend_i32_u.stack[0], Value::I64(0x00000000FFFFFFFFUL))
+  assert_stack_elem_eq(
+    rt_extend_i32_u.stack[0],
+    Value::I64(0x00000000FFFFFFFFUL),
+  )
 }
 
 ///|

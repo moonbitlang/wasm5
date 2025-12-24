@@ -981,6 +981,11 @@ fn Runtime::compile_wasm_instr(
       self.emit(ImmediateIdx(dst_table_idx.reinterpret_as_int()))
       self.emit(ImmediateIdx(src_table_idx.reinterpret_as_int()))
     }
+    TableFill(table_idx) => {
+      ctx.pop_types(3) // pop dest, val, n
+      self.emit(WasmInstr(op_table_fill))
+      self.emit(ImmediateIdx(table_idx.reinterpret_as_int()))
+    }
     ElemDrop(elem_idx) => {
       self.emit(WasmInstr(op_elem_drop))
       self.emit(ImmediateIdx(elem_idx.reinterpret_as_int()))

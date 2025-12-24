@@ -76,6 +76,11 @@ fn parse_instr_prefix_fc(parser : Parser) -> @core.Instr raise {
       let table_idx = parser.read_u32_leb128()
       TableSize(table_idx)
     }
+    // table.fill
+    0x11 => {
+      let table_idx = parser.read_u32_leb128()
+      TableFill(table_idx)
+    }
     _ =>
       raise @validate.ValidationError::TypeMismatch(
         "unknown 0xFC sub-opcode: \{sub_opcode}",

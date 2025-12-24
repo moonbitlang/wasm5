@@ -255,6 +255,7 @@ pub(all) enum Instr {
   TableGrow(UInt) // table index
   TableInit(UInt, UInt) // table index, elem segment index
   TableCopy(UInt, UInt) // dest table index, src table index
+  TableFill(UInt) // table index
   ElemDrop(UInt) // elem segment index
 
   // Bulk memory instructions

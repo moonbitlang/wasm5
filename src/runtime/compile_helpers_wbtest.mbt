@@ -91,7 +91,11 @@ test "compile helpers tail call return branches" {
   rt.running = true
   rt.sp = 5
   rt.num_locals = 3
-  rt.call_stack.push(CallFrame::{ return_pc: 3, caller_sp: 10, caller_num_locals: 2 })
+  rt.call_stack.push(CallFrame::{
+    return_pc: 3,
+    caller_sp: 10,
+    caller_num_locals: 2,
+  })
   assert_ok(rt.handle_tail_call_return())
   assert_eq(rt.pc, 4)
   assert_eq(rt.sp, 10)

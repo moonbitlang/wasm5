@@ -28,6 +28,7 @@ priv enum WatInstr {
   TableGrow(IndexRef)
   TableInit(IndexRef, IndexRef)
   TableCopy(IndexRef, IndexRef)
+  TableFill(IndexRef)
   ElemDrop(IndexRef)
   MemorySize(IndexRef)
   MemoryGrow(IndexRef)
@@ -1881,6 +1882,10 @@ fn parse_instr_from_atom(
       )
       (WatInstr::TableCopy(dst_ref, src_ref), next_idx)
     }
+    b"table.fill" => {
+      let (table_ref, next_idx) = parse_table_index_from_items(items, idx + 1)
+      (WatInstr::TableFill(table_ref), next_idx)
+    }
     b"elem.drop" => {
       let imm = expect_atom_at(items, idx + 1)
       (WatInstr::ElemDrop(parse_index_ref(imm)), idx + 2)
@@ -2039,6 +2044,10 @@ fn parse_instr_from_list(
     b"table.copy" => {
       let (dst_ref, src_ref) = parse_table_copy_from_list(list_items)
       WatInstr::TableCopy(dst_ref, src_ref)
+    }
+    b"table.fill" => {
+      let table_ref = parse_table_index_from_list(list_items, 1)
+      WatInstr::TableFill(table_ref)
     }
     b"elem.drop" => {
       guard list_items.length() == 2 else {
@@ -3285,6 +3294,8 @@ fn resolve_instr(
         resolve_index_ref(dst_ref, table_map, "table"),
         resolve_index_ref(src_ref, table_map, "table"),
       )
+    WatInstr::TableFill(table_ref) =>
+      @core.Instr::TableFill(resolve_index_ref(table_ref, table_map, "table"))
     WatInstr::ElemDrop(elem_ref) =>
       @core.Instr::ElemDrop(resolve_index_ref(elem_ref, elem_map, "elem"))
     WatInstr::MemorySize(mem_ref) =>

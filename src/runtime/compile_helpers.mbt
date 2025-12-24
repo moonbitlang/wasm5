@@ -138,9 +138,19 @@ fn Runtime::init_declared_locals(self : Runtime, code : @core.Code) -> RetCode {
   for local_type in code.locals {
     match local_type {
       I32 | I64 | F32 | F64 => self.stack.push(0UL)
-      FuncRef | ExternRef | AnyRef | ExnRef | NullRef | NullFuncRef |
-      NullExnRef | NullExternRef | EqRef | I31Ref | StructRef | ArrayRef |
-      Ref(_, _) => self.stack.push((-1L).reinterpret_as_uint64()) // null ref
+      FuncRef
+      | ExternRef
+      | AnyRef
+      | ExnRef
+      | NullRef
+      | NullFuncRef
+      | NullExnRef
+      | NullExternRef
+      | EqRef
+      | I31Ref
+      | StructRef
+      | ArrayRef
+      | Ref(_, _) => self.stack.push((-1L).reinterpret_as_uint64()) // null ref
       _ => {
         self.error_detail = "Unsupported local type: \{local_type}"
         return UnsupportedLocalType
@@ -395,10 +405,22 @@ fn stack_to_value(raw : UInt64, val_type : @core.ValType) -> Value {
   match val_type {
     I32 => Value::I32((raw & 0xFFFFFFFFUL).to_uint())
     I64 => Value::I64(raw)
-    F32 => Value::F32(Float::reinterpret_from_uint((raw & 0xFFFFFFFFUL).to_uint()))
+    F32 =>
+      Value::F32(Float::reinterpret_from_uint((raw & 0xFFFFFFFFUL).to_uint()))
     F64 => Value::F64(raw.reinterpret_as_double())
-    FuncRef | ExternRef | AnyRef | NullRef | NullFuncRef | NullExternRef |
-    EqRef | I31Ref | StructRef | ArrayRef | ExnRef | NullExnRef | Ref(_, _) => {
+    FuncRef
+    | ExternRef
+    | AnyRef
+    | NullRef
+    | NullFuncRef
+    | NullExternRef
+    | EqRef
+    | I31Ref
+    | StructRef
+    | ArrayRef
+    | ExnRef
+    | NullExnRef
+    | Ref(_, _) => {
       let idx = raw.reinterpret_as_int64().to_int()
       if idx == -1 {
         Value::Ref(None)
