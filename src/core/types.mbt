@@ -210,6 +210,19 @@ pub(all) struct SimdInstr {
 } derive(Show)
 
 ///|
+pub(all) enum AtomicImmediate {
+  None
+  MemArg(UInt, UInt, UInt) // align, offset, memory index
+  Fence(UInt) // reserved byte (must be 0)
+} derive(Show)
+
+///|
+pub(all) struct AtomicInstr {
+  opcode : UInt
+  imm : AtomicImmediate
+} derive(Show)
+
+///|
 pub(all) enum Instr {
   // Control instructions
   Unreachable
@@ -233,6 +246,7 @@ pub(all) enum Instr {
   Throw(UInt) // exception handling
   Rethrow(UInt) // exception handling
   Simd(SimdInstr) // SIMD instructions
+  Atomic(AtomicInstr) // Atomic instructions (threads)
 
   // Parametric instructions
   Drop

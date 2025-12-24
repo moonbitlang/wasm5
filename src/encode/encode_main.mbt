@@ -569,6 +569,20 @@ fn encode_simd_immediate(
 }
 
 ///|
+fn encode_atomic_immediate(
+  imm : @core.AtomicImmediate,
+) -> Array[Byte] raise EncodeError {
+  let payload : Array[Byte] = []
+  match imm {
+    None => ()
+    MemArg(align, offset, memory_idx) =>
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
+    Fence(flags) => payload.push(flags.to_byte())
+  }
+  payload
+}
+
+///|
 fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
   let payload : Array[Byte] = []
   match instr {
@@ -716,6 +730,11 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
       payload.push(0xFDU.to_byte())
       append_bytes(payload, encode_u32_leb128(simd.opcode))
       append_bytes(payload, encode_simd_immediate(simd.imm))
+    }
+    Atomic(atomic_instr) => {
+      payload.push(0xFEU.to_byte())
+      append_bytes(payload, encode_u32_leb128(atomic_instr.opcode))
+      append_bytes(payload, encode_atomic_immediate(atomic_instr.imm))
     }
     RefNull(ref_type) => {
       payload.push(0xD0U.to_byte())

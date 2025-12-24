@@ -338,3 +338,9 @@ async test "wat encoder matches wasm-tools for simd ops" {
   let wat = "(module (memory 1) (func (export \"simd\") (param i32) (result i32) (local v128) v128.const i8x16 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 local.set 1 local.get 0 v128.load local.get 1 i8x16.shuffle 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 local.set 1 local.get 1 local.get 1 i16x8.add drop local.get 1 i32x4.extract_lane 2 drop i32.const 0))"
   assert_wat_matches("simd_ops", wat)
 }
+
+///|
+async test "wat encoder matches wasm-tools for atomic ops" {
+  let wat = "(module (memory 1) (func (export \"atomic\") (param i32 i32 i64) (result i32) atomic.fence local.get 0 i32.atomic.load drop local.get 0 local.get 1 i32.atomic.store local.get 0 local.get 1 i32.atomic.rmw.add drop local.get 0 local.get 1 local.get 1 i32.atomic.rmw.cmpxchg drop local.get 0 local.get 1 memory.atomic.notify drop local.get 0 local.get 1 local.get 2 memory.atomic.wait32 drop local.get 0 i64.atomic.load drop local.get 0 local.get 2 i64.atomic.store local.get 0 i64.const 0 local.get 2 memory.atomic.wait64 drop i32.const 0))"
+  assert_wat_matches("atomic_ops", wat)
+}

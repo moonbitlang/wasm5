@@ -2,6 +2,14 @@
 package "moonbitlang/wasm5/src/core"
 
 // Values
+pub fn atomic_spec_by_name(Bytes) -> AtomicSpec?
+
+pub fn atomic_spec_by_opcode(UInt) -> AtomicSpec?
+
+pub let atomic_specs : Array[AtomicSpec]
+
+pub fn atomic_stack_effect(Bytes) -> AtomicStackEffect
+
 pub fn simd_spec_by_name(Bytes) -> SimdSpec?
 
 pub fn simd_spec_by_opcode(UInt) -> SimdSpec?
@@ -13,6 +21,45 @@ pub fn simd_stack_effect(Bytes) -> SimdStackEffect
 // Errors
 
 // Types and methods
+pub(all) enum AtomicImmKind {
+  None
+  MemArg
+  Fence
+}
+pub impl Eq for AtomicImmKind
+pub impl Show for AtomicImmKind
+
+pub(all) enum AtomicImmediate {
+  None
+  MemArg(UInt, UInt, UInt)
+  Fence(UInt)
+}
+pub impl Show for AtomicImmediate
+
+pub(all) struct AtomicInstr {
+  opcode : UInt
+  imm : AtomicImmediate
+}
+pub impl Show for AtomicInstr
+
+pub(all) struct AtomicSpec {
+  name : Bytes
+  opcode : UInt
+  imm : AtomicImmKind
+}
+
+pub(all) enum AtomicStackEffect {
+  Fence
+  Notify
+  Wait32
+  Wait64
+  Load(ValType, Int)
+  Store(ValType, Int)
+  Rmw(ValType, Int)
+  Cmpxchg(ValType, Int)
+}
+pub impl Show for AtomicStackEffect
+
 pub(all) enum BlockType {
   Empty
   Value(ValType)
@@ -117,6 +164,7 @@ pub(all) enum Instr {
   Throw(UInt)
   Rethrow(UInt)
   Simd(SimdInstr)
+  Atomic(AtomicInstr)
   Drop
   Select
   SelectTyped(Array[ValType])

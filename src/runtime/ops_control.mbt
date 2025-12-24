@@ -822,6 +822,12 @@ fn op_simd_unimplemented(rt : Runtime) -> RetCode {
   rt.error_detail = "simd instruction not implemented"
   InvalidType
 }
+
+///|
+fn op_atomic_unimplemented(rt : Runtime) -> RetCode {
+  rt.error_detail = "atomic instruction not implemented"
+  InvalidType
+}
 // =============================================================================
 // Table bulk operations (stub implementations)
 // =============================================================================

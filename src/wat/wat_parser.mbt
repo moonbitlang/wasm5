@@ -1940,6 +1940,10 @@ fn parse_instr_from_atom(
     Some(result) => return result
     None => ()
   }
+  match parse_atomic_instr_from_atom(items, idx, op) {
+    Some(result) => return result
+    None => ()
+  }
   match op {
     b"i32.const" => {
       let imm = expect_atom_at(items, idx + 1)
@@ -2193,6 +2197,10 @@ fn parse_instr_from_list(
   type_map : Map[Bytes, UInt],
 ) -> WatInstr raise WatError {
   match parse_simd_instr_from_list(list_items) {
+    Some(result) => return result
+    None => ()
+  }
+  match parse_atomic_instr_from_list(list_items) {
     Some(result) => return result
     None => ()
   }
@@ -2695,6 +2703,25 @@ fn simd_memarg_default_align(op : Bytes) -> UInt? {
 }
 
 ///|
+fn atomic_memarg_default_align(op : Bytes) -> UInt? {
+  match @core.atomic_stack_effect(op) {
+    Fence => None
+    Notify | Wait32 => Some(2U)
+    Wait64 => Some(3U)
+    Load(_, size) | Store(_, size) | Rmw(_, size) | Cmpxchg(_, size) => {
+      let align = match size {
+        1 => 0U
+        2 => 1U
+        4 => 2U
+        8 => 3U
+        _ => 0U
+      }
+      Some(align)
+    }
+  }
+}
+
+///|
 fn simd_lane_count(op : Bytes) -> UInt? {
   if bytes_starts_with(op, b"i8x16.") {
     return Some(16U)
@@ -2963,6 +2990,80 @@ fn parse_simd_instr_from_list(
       }
       let simd = @core.SimdInstr::{ opcode: spec.opcode, imm }
       Some(WatInstr::Core(@core.Instr::Simd(simd)))
+    }
+  }
+}
+
+///|
+fn parse_atomic_instr_from_atom(
+  items : Array[SExpr],
+  idx : Int,
+  op : Bytes,
+) -> (WatInstr, Int)? raise WatError {
+  match @core.atomic_spec_by_name(op) {
+    None => None
+    Some(spec) => {
+      let (imm, next_idx) = match spec.imm {
+        None => (@core.AtomicImmediate::None, idx + 1)
+        Fence => (@core.AtomicImmediate::Fence(0U), idx + 1)
+        MemArg => {
+          let default_align = match atomic_memarg_default_align(op) {
+            Some(value) => value
+            None => raise WatError::Unsupported("instruction \{op}")
+          }
+          let (align, offset, memory_idx, next_idx) = parse_memarg_from_items(
+            items,
+            idx + 1,
+            default_align,
+          )
+          (@core.AtomicImmediate::MemArg(align, offset, memory_idx), next_idx)
+        }
+      }
+      let atomic_instr = @core.AtomicInstr::{ opcode: spec.opcode, imm }
+      Some((WatInstr::Core(@core.Instr::Atomic(atomic_instr)), next_idx))
+    }
+  }
+}
+
+///|
+fn parse_atomic_instr_from_list(
+  list_items : Array[SExpr],
+) -> WatInstr? raise WatError {
+  guard list_items.length() > 0 && list_items[0] is Atom(op) else {
+    return None
+  }
+  match @core.atomic_spec_by_name(op) {
+    None => None
+    Some(spec) => {
+      let imm = match spec.imm {
+        None => {
+          guard list_items.length() == 1 else {
+            raise WatError::InvalidSyntax("unexpected operands for \{op}")
+          }
+          @core.AtomicImmediate::None
+        }
+        Fence => {
+          guard list_items.length() == 1 else {
+            raise WatError::InvalidSyntax("atomic.fence takes no operands")
+          }
+          @core.AtomicImmediate::Fence(0U)
+        }
+        MemArg => {
+          let default_align = match atomic_memarg_default_align(op) {
+            Some(value) => value
+            None => raise WatError::Unsupported("instruction \{op}")
+          }
+          let (align, offset, memory_idx, next_idx) = parse_memarg_from_items(
+            list_items, 1, default_align,
+          )
+          guard next_idx == list_items.length() else {
+            raise WatError::InvalidSyntax("unexpected operands for \{op}")
+          }
+          @core.AtomicImmediate::MemArg(align, offset, memory_idx)
+        }
+      }
+      let atomic_instr = @core.AtomicInstr::{ opcode: spec.opcode, imm }
+      Some(WatInstr::Core(@core.Instr::Atomic(atomic_instr)))
     }
   }
 }

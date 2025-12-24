@@ -14,6 +14,9 @@ fn validate_instruction(
   if validate_instruction_simd(module_, ctx, instr, import_counts) {
     return
   }
+  if validate_instruction_atomic(module_, ctx, instr, import_counts) {
+    return
+  }
   if validate_instruction_variable(
       module_, func_type, code, ctx, import_counts, instr,
     ) {

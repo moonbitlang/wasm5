@@ -674,6 +674,41 @@ fn Runtime::compile_wasm_instr(
       }
       self.emit(WasmInstr(op_simd_unimplemented))
     }
+    Atomic(atomic_instr) => {
+      match @core.atomic_spec_by_opcode(atomic_instr.opcode) {
+        Some(spec) =>
+          match @core.atomic_stack_effect(spec.name) {
+            Fence => ()
+            Notify => {
+              ctx.pop_types(2)
+              ctx.push_type(I32)
+            }
+            Wait32 => {
+              ctx.pop_types(3)
+              ctx.push_type(I32)
+            }
+            Wait64 => {
+              ctx.pop_types(3)
+              ctx.push_type(I32)
+            }
+            Load(t, _size) => {
+              ctx.pop_type()
+              ctx.push_type(t)
+            }
+            Store(_t, _size) => ctx.pop_types(2)
+            Rmw(t, _size) => {
+              ctx.pop_types(2)
+              ctx.push_type(t)
+            }
+            Cmpxchg(t, _size) => {
+              ctx.pop_types(3)
+              ctx.push_type(t)
+            }
+          }
+        None => ()
+      }
+      self.emit(WasmInstr(op_atomic_unimplemented))
+    }
     // Control flow
     Block(block_type, instrs) => {
       let (params, results) = get_compile_block_type(self.module_, block_type)
