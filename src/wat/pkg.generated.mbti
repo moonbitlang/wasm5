@@ -6,6 +6,10 @@ import(
 )
 
 // Values
+pub fn wast_to_modules(String) -> Array[@core.Module] raise WatError
+
+pub fn wast_to_wasm(String) -> Array[Bytes] raise WatError
+
 pub fn wat_to_module(String) -> @core.Module raise WatError
 
 pub fn wat_to_wasm(String) -> Bytes raise WatError

@@ -275,6 +275,19 @@ pub fn wat_to_wasm(text : String) -> Bytes raise WatError {
 }
 
 ///|
+pub fn wast_to_wasm(text : String) -> Array[Bytes] raise WatError {
+  let modules = wast_to_modules(text)
+  let out : Array[Bytes] = []
+  for module_ in modules {
+    let bytes = @encode.encode(module_) catch {
+      e => raise WatError::Encode("\{e}")
+    }
+    out.push(bytes)
+  }
+  out
+}
+
+///|
 fn parse_block_instr(
   list_items : Array[SExpr],
   local_map : Map[Bytes, UInt],
@@ -793,6 +806,160 @@ pub fn wat_to_module(text : String) -> @core.Module raise WatError {
   let module_expr = exprs[0]
   let wat_module = parse_module(module_expr)
   build_module(wat_module)
+}
+
+///|
+pub fn wast_to_modules(text : String) -> Array[@core.Module] raise WatError {
+  let exprs = parse_sexprs(text)
+  let modules : Array[@core.Module] = []
+  append_wast_modules(exprs, modules)
+  modules
+}
+
+///|
+fn append_wast_modules(
+  exprs : Array[SExpr],
+  modules : Array[@core.Module],
+) -> Unit raise WatError {
+  for expr in exprs {
+    append_wast_module(expr, modules)
+  }
+}
+
+///|
+fn append_wast_module(
+  expr : SExpr,
+  modules : Array[@core.Module],
+) -> Unit raise WatError {
+  match expr {
+    List(items) => {
+      guard items.length() > 0 && items[0] is Atom(tag) else {
+        raise WatError::InvalidSyntax("wast command head must be atom")
+      }
+      if tag == b"module" {
+        modules.push(parse_wast_module(items))
+        return
+      }
+      if tag == b"script" {
+        let nested = slice_sexprs(items, 1)
+        append_wast_modules(nested, modules)
+        return
+      }
+      if is_known_wast_command(tag) {
+        return
+      }
+      raise WatError::Unsupported("unsupported wast command \{tag}")
+    }
+    _ => raise WatError::InvalidSyntax("wast command must be list")
+  }
+}
+
+///|
+fn is_known_wast_command(tag : Bytes) -> Bool {
+  tag == b"register" ||
+  tag == b"invoke" ||
+  tag == b"get" ||
+  bytes_starts_with(tag, b"assert_")
+}
+
+///|
+fn parse_wast_module(items : Array[SExpr]) -> @core.Module raise WatError {
+  let module_expr = List(items)
+  guard items.length() > 0 && items[0] is Atom(tag) && tag == b"module" else {
+    raise WatError::InvalidSyntax("expected module command")
+  }
+  let mut idx = 1
+  if idx < items.length() {
+    match items[idx] {
+      Atom(atom) if is_name(atom) => idx = idx + 1
+      _ => ()
+    }
+  }
+  if idx < items.length() {
+    match items[idx] {
+      Atom(tag) if tag == b"binary" =>
+        return parse_wast_binary_module(
+          collect_string_payload(items, idx + 1, "binary"),
+        )
+      Atom(tag) if tag == b"quote" =>
+        return parse_wast_quote_module(
+          collect_string_payload(items, idx + 1, "quote"),
+        )
+      List(inner) => {
+        guard inner.length() > 0 && inner[0] is Atom(inner_tag) else {
+          raise WatError::InvalidSyntax("module directive must be atom")
+        }
+        if inner_tag == b"binary" {
+          guard idx + 1 == items.length() else {
+            raise WatError::InvalidSyntax("module binary cannot have fields")
+          }
+          return parse_wast_binary_module(
+            collect_string_payload(inner, 1, "binary"),
+          )
+        }
+        if inner_tag == b"quote" {
+          guard idx + 1 == items.length() else {
+            raise WatError::InvalidSyntax("module quote cannot have fields")
+          }
+          return parse_wast_quote_module(
+            collect_string_payload(inner, 1, "quote"),
+          )
+        }
+      }
+      _ => ()
+    }
+  }
+  build_module(parse_module(module_expr))
+}
+
+///|
+fn collect_string_payload(
+  items : Array[SExpr],
+  start : Int,
+  context : String,
+) -> Bytes raise WatError {
+  guard start < items.length() else {
+    raise WatError::InvalidSyntax("\{context} expects string literals")
+  }
+  let out : Array[Byte] = []
+  for i in start..<items.length() {
+    match items[i] {
+      StringLit(bytes) =>
+        for b in bytes {
+          out.push(b)
+        }
+      _ => raise WatError::InvalidSyntax("\{context} expects string literals")
+    }
+  }
+  Bytes::from_array(out)
+}
+
+///|
+fn parse_wast_binary_module(bytes : Bytes) -> @core.Module raise WatError {
+  @parse.parse(bytes) catch {
+    e => raise WatError::InvalidSyntax("invalid binary module: \{e}")
+  }
+}
+
+///|
+fn parse_wast_quote_module(bytes : Bytes) -> @core.Module raise WatError {
+  let text = bytes_to_string(bytes)
+  let exprs = parse_sexprs(text)
+  if exprs.length() == 1 {
+    match exprs[0] {
+      List(items) =>
+        if items.length() > 0 && items[0] is Atom(tag) && tag == b"module" {
+          return build_module(parse_module(exprs[0]))
+        }
+      _ => ()
+    }
+  }
+  let items : Array[SExpr] = []
+  items.push(Atom(b"module"))
+  for expr in exprs {
+    items.push(expr)
+  }
+  build_module(parse_module(List(items)))
 }
 
 ///|
