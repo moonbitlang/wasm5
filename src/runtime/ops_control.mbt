@@ -828,6 +828,12 @@ fn op_atomic_unimplemented(rt : Runtime) -> RetCode {
   rt.error_detail = "atomic instruction not implemented"
   InvalidType
 }
+
+///|
+fn op_gc_unimplemented(rt : Runtime) -> RetCode {
+  rt.error_detail = "gc instruction not implemented"
+  InvalidType
+}
 // =============================================================================
 // Table bulk operations (stub implementations)
 // =============================================================================

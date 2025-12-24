@@ -2096,6 +2096,20 @@ fn parse_instr_from_atom(
       let imm = expect_atom_at(items, idx + 1)
       (WatInstr::RefFunc(parse_func_ref(imm)), idx + 2)
     }
+    b"ref.test" => {
+      guard idx + 1 < items.length() else {
+        raise WatError::InvalidSyntax("ref.test expects one operand")
+      }
+      let (ref_type, nullable) = parse_reftype_expr(items[idx + 1], type_map)
+      (WatInstr::Core(@core.Instr::RefTest(ref_type, nullable)), idx + 2)
+    }
+    b"ref.cast" => {
+      guard idx + 1 < items.length() else {
+        raise WatError::InvalidSyntax("ref.cast expects one operand")
+      }
+      let (ref_type, nullable) = parse_reftype_expr(items[idx + 1], type_map)
+      (WatInstr::Core(@core.Instr::RefCast(ref_type, nullable)), idx + 2)
+    }
     b"table.get" => {
       let (table_ref, next_idx) = parse_table_index_from_items(items, idx + 1)
       (WatInstr::TableGet(table_ref), next_idx)
@@ -2276,6 +2290,20 @@ fn parse_instr_from_list(
           parse_heaptype_atom(expect_atom(list_items[1]), type_map),
         ),
       )
+    }
+    b"ref.test" => {
+      guard list_items.length() == 2 else {
+        raise WatError::InvalidSyntax("ref.test expects one operand")
+      }
+      let (ref_type, nullable) = parse_reftype_expr(list_items[1], type_map)
+      WatInstr::Core(@core.Instr::RefTest(ref_type, nullable))
+    }
+    b"ref.cast" => {
+      guard list_items.length() == 2 else {
+        raise WatError::InvalidSyntax("ref.cast expects one operand")
+      }
+      let (ref_type, nullable) = parse_reftype_expr(list_items[1], type_map)
+      WatInstr::Core(@core.Instr::RefCast(ref_type, nullable))
     }
     b"ref.func" => {
       guard list_items.length() == 2 else {

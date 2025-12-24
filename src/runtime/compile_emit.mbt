@@ -1181,6 +1181,22 @@ fn Runtime::compile_wasm_instr(
       }
       self.emit(WasmInstr(op_ref_as_non_null))
     }
+    RefTest(_ref_type, _nullable) => {
+      ctx.pop_type()
+      ctx.push_type(I32)
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    RefCast(ref_type, nullable) => {
+      let target = reftype_to_valtype(ref_type)
+      let result_type = if nullable {
+        target
+      } else {
+        non_null_ref_type(target)
+      }
+      ctx.pop_type()
+      ctx.push_type(result_type)
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
     // Indirect call
     CallIndirect(type_idx, table_idx) => {
       // Pop table index (i32)

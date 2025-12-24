@@ -310,6 +310,8 @@ pub(all) enum Instr {
   RefIsNull // ref.is_null - check if reference is null
   RefEq // ref.eq - reference equality
   RefAsNonNull // ref.as_non_null - trap if reference is null
+  RefTest(RefType, Bool) // ref.test (heap type, nullable)
+  RefCast(RefType, Bool) // ref.cast (heap type, nullable)
 
   // Numeric instructions - constants
   I32Const(UInt)

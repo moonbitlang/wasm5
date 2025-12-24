@@ -951,6 +951,18 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
     RefIsNull => payload.push(0xD1U.to_byte())
     RefEq => payload.push(0xD3U.to_byte())
     RefAsNonNull => payload.push(0xD4U.to_byte())
+    RefTest(ref_type, nullable) => {
+      payload.push(0xFBU.to_byte())
+      let opcode = if nullable { 0x15U } else { 0x14U }
+      append_bytes(payload, encode_u32_leb128(opcode))
+      append_bytes(payload, encode_heap_type(ref_type))
+    }
+    RefCast(ref_type, nullable) => {
+      payload.push(0xFBU.to_byte())
+      let opcode = if nullable { 0x17U } else { 0x16U }
+      append_bytes(payload, encode_u32_leb128(opcode))
+      append_bytes(payload, encode_heap_type(ref_type))
+    }
     MemoryInit(data_idx, mem_idx) => {
       payload.push(0xFCU.to_byte())
       append_bytes(payload, encode_u32_leb128(8U))

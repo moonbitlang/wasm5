@@ -238,6 +238,12 @@ async test "wat encoder matches wasm-tools for ref eq ops" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for ref.test and ref.cast" {
+  let wat = "(module (func (export \"ref_test\") (param anyref) (result i32) local.get 0 ref.test anyref) (func (export \"ref_cast\") (param anyref) (result anyref) local.get 0 ref.cast anyref))"
+  assert_wat_matches("ref_test_cast", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for block typeuse params" {
   let wat = "(module (type $t (func (param i32 i64) (result i32))) (func (export \"block_params\") (param i32 i64) (result i32) local.get 0 local.get 1 (block (type $t) (param i32 i64) (result i32) drop drop i32.const 7)))"
   assert_wat_matches("block_typeuse_params", wat)
