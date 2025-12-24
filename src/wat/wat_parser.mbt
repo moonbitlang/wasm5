@@ -4293,6 +4293,7 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
       global_.init,
       global_map,
       wat.global_imports,
+      func_map,
     )
     globals.push({
       type_: global_.type_,
@@ -4407,16 +4408,23 @@ fn resolve_const_instrs(
   instrs : Array[WatInstr],
   global_map : Map[Bytes, UInt],
   imported_globals : Array[WatImportGlobal],
+  func_map : Map[Bytes, UInt],
 ) -> Array[@core.Instr] raise WatError {
   let out : Array[@core.Instr] = []
   for instr in instrs {
     match instr {
       WatInstr::Core(core_instr) =>
         match core_instr {
-          I32Const(_) | I64Const(_) | F32Const(_) | F64Const(_) =>
+          I32Const(_)
+          | I64Const(_)
+          | F32Const(_)
+          | F64Const(_)
+          | RefNull(_) =>
             out.push(core_instr)
           _ => raise WatError::Unsupported("non-const init expression")
         }
+      WatInstr::RefFunc(func_ref) =>
+        out.push(@core.Instr::RefFunc(resolve_func_ref(func_ref, func_map)))
       WatInstr::GlobalGet(global_ref) => {
         let idx = resolve_global_ref(global_ref, global_map)
         guard idx < imported_globals.length().reinterpret_as_uint() else {

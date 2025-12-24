@@ -106,6 +106,12 @@ async test "wat encoder matches wasm-tools for global init get" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for ref globals" {
+  let wat = "(module (func $f (result i32) i32.const 0) (global (export \"gnull\") funcref (ref.null func)) (global (export \"gfunc\") funcref (ref.func $f)))"
+  assert_wat_matches("global_ref_init", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for mutable globals" {
   let wat = "(module (global $g (mut i64) (i64.const 1)) (func (export \"set\") (param i64) local.get 0 global.set $g))"
   assert_wat_matches("global_mut", wat)
