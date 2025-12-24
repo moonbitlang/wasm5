@@ -88,6 +88,18 @@ async test "wat encoder matches wasm-tools for data" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for inline memory data" {
+  let wat = "(module (memory (data \"hi\")))"
+  assert_wat_matches("inline_memory_data", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for inline memory data export" {
+  let wat = "(module (memory (export \"mem\") (data \"hi\")))"
+  assert_wat_matches("inline_memory_data_export", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for data concat" {
   let wat = "(module (memory 1) (data (i32.const 0) \"hi\" \" \" \"there\"))"
   assert_wat_matches("data_concat", wat)

@@ -880,7 +880,7 @@ fn parse_module_field(
     }
     b"import" => parse_import(module_, items, type_map)
     b"memory" => {
-      let mem = parse_memory(items)
+      let (mem, inline_data) = parse_memory(items)
       let mem_index = (module_.mem_imports.length() + module_.mems.length()).reinterpret_as_uint()
       for name in mem.exports {
         module_.exports.push({
@@ -894,6 +894,17 @@ fn parse_module_field(
         shared: mem.shared,
         exports: [],
       })
+      match inline_data {
+        Some(data_bytes) =>
+          module_.datas.push({
+            name: None,
+            mem_ref: IndexRef::Index(mem_index),
+            offset: [WatInstr::Core(@core.Instr::I32Const(0U))],
+            init: data_bytes,
+            is_active: true,
+          })
+        None => ()
+      }
     }
     b"table" => {
       let table = parse_table(items, type_map)
@@ -1164,7 +1175,7 @@ fn parse_import(
 }
 
 ///|
-fn parse_memory(items : Array[SExpr]) -> WatMemory raise WatError {
+fn parse_memory(items : Array[SExpr]) -> (WatMemory, Bytes?) raise WatError {
   let mut idx = 1
   let mut name : Bytes? = None
   if idx < items.length() && items[idx] is Atom(atom) && is_name(atom) {
@@ -1173,6 +1184,7 @@ fn parse_memory(items : Array[SExpr]) -> WatMemory raise WatError {
   }
   let exports : Array[Bytes] = []
   let limit_atoms : Array[Bytes] = []
+  let mut inline_data : Bytes? = None
   for i in idx..<items.length() {
     match items[i] {
       List(list_items) => {
@@ -1181,6 +1193,26 @@ fn parse_memory(items : Array[SExpr]) -> WatMemory raise WatError {
         }
         match tag {
           b"export" => exports.push(parse_inline_export(list_items))
+          b"data" => {
+            guard inline_data is None else {
+              raise WatError::InvalidSyntax("duplicate inline data")
+            }
+            guard list_items.length() >= 2 else {
+              raise WatError::InvalidSyntax("data expects string literals")
+            }
+            let data_bytes : Array[Byte] = []
+            for j in 1..<list_items.length() {
+              match list_items[j] {
+                StringLit(bytes) =>
+                  for b in bytes {
+                    data_bytes.push(b)
+                  }
+                _ =>
+                  raise WatError::InvalidSyntax("data expects string literals")
+              }
+            }
+            inline_data = Some(Bytes::from_array(data_bytes))
+          }
           _ => raise WatError::Unsupported("memory field \{tag}")
         }
       }
@@ -1189,8 +1221,25 @@ fn parse_memory(items : Array[SExpr]) -> WatMemory raise WatError {
         raise WatError::InvalidSyntax("unexpected string in memory")
     }
   }
-  let (limits, shared) = parse_memory_limits_from_atoms(limit_atoms)
-  WatMemory::{ name, limits, shared, exports }
+  let (limits, shared) = match inline_data {
+    Some(bytes) => {
+      guard limit_atoms.length() == 0 else {
+        raise WatError::InvalidSyntax("inline data cannot specify limits")
+      }
+      let page_size = 65536
+      let len = bytes.length()
+      let pages = (len + page_size - 1) / page_size
+      (
+        @core.Limits::{
+          min: pages.reinterpret_as_uint(),
+          max: Some(pages.reinterpret_as_uint()),
+        },
+        false,
+      )
+    }
+    None => parse_memory_limits_from_atoms(limit_atoms)
+  }
+  (WatMemory::{ name, limits, shared, exports }, inline_data)
 }
 
 ///|
