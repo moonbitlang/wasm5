@@ -892,122 +892,122 @@ fn Runtime::compile_wasm_instr(
       self.emit(ImmediateIdx(ctx.func_result_count))
     }
     // Memory instructions (load: pop addr, push value; store: pop addr+value)
-    I32Load(_align, offset) => {
+    I32Load(_align, offset, _mem_idx) => {
       // pop i32 addr, push i32 value
       self.emit(WasmInstr(op_i32_load))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I32Store(_align, offset) => {
+    I32Store(_align, offset, _mem_idx) => {
       ctx.pop_types(2) // pop addr and value
       self.emit(WasmInstr(op_i32_store))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I32Load8S(_align, offset) => {
+    I32Load8S(_align, offset, _mem_idx) => {
       self.emit(WasmInstr(op_i32_load8_s))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I32Load8U(_align, offset) => {
+    I32Load8U(_align, offset, _mem_idx) => {
       self.emit(WasmInstr(op_i32_load8_u))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I32Load16S(_align, offset) => {
+    I32Load16S(_align, offset, _mem_idx) => {
       self.emit(WasmInstr(op_i32_load16_s))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I32Load16U(_align, offset) => {
+    I32Load16U(_align, offset, _mem_idx) => {
       self.emit(WasmInstr(op_i32_load16_u))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I32Store8(_align, offset) => {
+    I32Store8(_align, offset, _mem_idx) => {
       ctx.pop_types(2)
       self.emit(WasmInstr(op_i32_store8))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I32Store16(_align, offset) => {
+    I32Store16(_align, offset, _mem_idx) => {
       ctx.pop_types(2)
       self.emit(WasmInstr(op_i32_store16))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Load(_align, offset) => {
+    I64Load(_align, offset, _mem_idx) => {
       ctx.pop_type()
       ctx.push_type(I64)
       self.emit(WasmInstr(op_i64_load))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Store(_align, offset) => {
+    I64Store(_align, offset, _mem_idx) => {
       ctx.pop_types(2)
       self.emit(WasmInstr(op_i64_store))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Load8S(_align, offset) => {
+    I64Load8S(_align, offset, _mem_idx) => {
       ctx.pop_type()
       ctx.push_type(I64)
       self.emit(WasmInstr(op_i64_load8_s))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Load8U(_align, offset) => {
+    I64Load8U(_align, offset, _mem_idx) => {
       ctx.pop_type()
       ctx.push_type(I64)
       self.emit(WasmInstr(op_i64_load8_u))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Load16S(_align, offset) => {
+    I64Load16S(_align, offset, _mem_idx) => {
       ctx.pop_type()
       ctx.push_type(I64)
       self.emit(WasmInstr(op_i64_load16_s))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Load16U(_align, offset) => {
+    I64Load16U(_align, offset, _mem_idx) => {
       ctx.pop_type()
       ctx.push_type(I64)
       self.emit(WasmInstr(op_i64_load16_u))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Load32S(_align, offset) => {
+    I64Load32S(_align, offset, _mem_idx) => {
       ctx.pop_type()
       ctx.push_type(I64)
       self.emit(WasmInstr(op_i64_load32_s))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Load32U(_align, offset) => {
+    I64Load32U(_align, offset, _mem_idx) => {
       ctx.pop_type()
       ctx.push_type(I64)
       self.emit(WasmInstr(op_i64_load32_u))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Store8(_align, offset) => {
+    I64Store8(_align, offset, _mem_idx) => {
       ctx.pop_types(2)
       self.emit(WasmInstr(op_i64_store8))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Store16(_align, offset) => {
+    I64Store16(_align, offset, _mem_idx) => {
       ctx.pop_types(2)
       self.emit(WasmInstr(op_i64_store16))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Store32(_align, offset) => {
+    I64Store32(_align, offset, _mem_idx) => {
       ctx.pop_types(2)
       self.emit(WasmInstr(op_i64_store32))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    F32Load(_align, offset) => {
+    F32Load(_align, offset, _mem_idx) => {
       ctx.pop_type()
       ctx.push_type(F32)
       self.emit(WasmInstr(op_f32_load))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    F32Store(_align, offset) => {
+    F32Store(_align, offset, _mem_idx) => {
       ctx.pop_types(2)
       self.emit(WasmInstr(op_f32_store))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    F64Load(_align, offset) => {
+    F64Load(_align, offset, _mem_idx) => {
       ctx.pop_type()
       ctx.push_type(F64)
       self.emit(WasmInstr(op_f64_load))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    F64Store(_align, offset) => {
+    F64Store(_align, offset, _mem_idx) => {
       ctx.pop_types(2)
       self.emit(WasmInstr(op_f64_store))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
@@ -1024,22 +1024,22 @@ fn Runtime::compile_wasm_instr(
       self.emit(ImmediateIdx(_idx.reinterpret_as_int()))
     }
     // Memory size and grow
-    MemorySize(_) => {
+    MemorySize(_mem_idx) => {
       ctx.push_type(I32)
       self.emit(WasmInstr(op_memory_size))
     }
-    MemoryGrow(_) => self.emit(WasmInstr(op_memory_grow)) // i32 -> i32
+    MemoryGrow(_mem_idx) => self.emit(WasmInstr(op_memory_grow)) // i32 -> i32
 
     // Bulk memory instructions
-    MemoryCopy => {
+    MemoryCopy(_dst_idx, _src_idx) => {
       ctx.pop_types(3) // pop dest, src, n
       self.emit(WasmInstr(op_memory_copy))
     }
-    MemoryFill => {
+    MemoryFill(_mem_idx) => {
       ctx.pop_types(3) // pop dest, val, n
       self.emit(WasmInstr(op_memory_fill))
     }
-    MemoryInit(data_idx) => {
+    MemoryInit(data_idx, _mem_idx) => {
       ctx.pop_types(3) // pop dest, src, n
       self.emit(WasmInstr(op_memory_init))
       self.emit(ImmediateIdx(data_idx.reinterpret_as_int()))

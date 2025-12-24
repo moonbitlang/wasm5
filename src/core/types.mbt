@@ -196,9 +196,9 @@ pub(all) struct Data {
 ///|
 pub(all) enum SimdImmediate {
   None
-  MemArg(UInt, UInt) // align, offset
+  MemArg(UInt, UInt, UInt) // align, offset, memory index
   Lane(UInt) // lane index
-  MemArgLane(UInt, UInt, UInt) // align, offset, lane
+  MemArgLane(UInt, UInt, UInt, UInt) // align, offset, memory index, lane
   Shuffle(Array[Byte]) // 16 bytes
   V128Const(Array[Byte]) // 16 bytes
 } derive(Show)
@@ -247,29 +247,29 @@ pub(all) enum Instr {
   GlobalSet(UInt)
 
   // Memory instructions
-  I32Load(UInt, UInt) // align, offset
-  I64Load(UInt, UInt)
-  F32Load(UInt, UInt)
-  F64Load(UInt, UInt)
-  I32Load8S(UInt, UInt)
-  I32Load8U(UInt, UInt)
-  I32Load16S(UInt, UInt)
-  I32Load16U(UInt, UInt)
-  I64Load8S(UInt, UInt)
-  I64Load8U(UInt, UInt)
-  I64Load16S(UInt, UInt)
-  I64Load16U(UInt, UInt)
-  I64Load32S(UInt, UInt)
-  I64Load32U(UInt, UInt)
-  I32Store(UInt, UInt)
-  I64Store(UInt, UInt)
-  F32Store(UInt, UInt)
-  F64Store(UInt, UInt)
-  I32Store8(UInt, UInt)
-  I32Store16(UInt, UInt)
-  I64Store8(UInt, UInt)
-  I64Store16(UInt, UInt)
-  I64Store32(UInt, UInt)
+  I32Load(UInt, UInt, UInt) // align, offset, memory index
+  I64Load(UInt, UInt, UInt)
+  F32Load(UInt, UInt, UInt)
+  F64Load(UInt, UInt, UInt)
+  I32Load8S(UInt, UInt, UInt)
+  I32Load8U(UInt, UInt, UInt)
+  I32Load16S(UInt, UInt, UInt)
+  I32Load16U(UInt, UInt, UInt)
+  I64Load8S(UInt, UInt, UInt)
+  I64Load8U(UInt, UInt, UInt)
+  I64Load16S(UInt, UInt, UInt)
+  I64Load16U(UInt, UInt, UInt)
+  I64Load32S(UInt, UInt, UInt)
+  I64Load32U(UInt, UInt, UInt)
+  I32Store(UInt, UInt, UInt)
+  I64Store(UInt, UInt, UInt)
+  F32Store(UInt, UInt, UInt)
+  F64Store(UInt, UInt, UInt)
+  I32Store8(UInt, UInt, UInt)
+  I32Store16(UInt, UInt, UInt)
+  I64Store8(UInt, UInt, UInt)
+  I64Store16(UInt, UInt, UInt)
+  I64Store32(UInt, UInt, UInt)
   MemorySize(UInt) // memory index (usually 0)
   MemoryGrow(UInt) // memory index (usually 0)
 
@@ -284,10 +284,10 @@ pub(all) enum Instr {
   ElemDrop(UInt) // elem segment index
 
   // Bulk memory instructions
-  MemoryInit(UInt) // data segment index (memory index always 0)
+  MemoryInit(UInt, UInt) // data segment index, memory index
   DataDrop(UInt) // data segment index
-  MemoryCopy // memory.copy (src and dest memory indices always 0)
-  MemoryFill // memory.fill (memory index always 0)
+  MemoryCopy(UInt, UInt) // memory.copy (dst memory, src memory)
+  MemoryFill(UInt) // memory.fill (memory index)
 
   // Reference instructions
   RefNull(RefType) // ref.null with heap type

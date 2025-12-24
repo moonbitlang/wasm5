@@ -142,11 +142,12 @@ fn validate_load(
   module_ : @core.Module,
   import_counts : ImportCounts,
   align : UInt,
+  mem_idx : UInt,
   natural_align : Int,
   result_type : @core.ValType,
   op_name : String,
 ) -> Unit raise ValidationError {
-  validate_memory_exists(module_, import_counts)
+  validate_memory_index(module_, import_counts, mem_idx)
   validate_alignment(align, natural_align)
   ctx.poly_pop_expect(module_, I32, "\{op_name} address")
   ctx.stack.push(result_type)
@@ -159,11 +160,12 @@ fn validate_store(
   module_ : @core.Module,
   import_counts : ImportCounts,
   align : UInt,
+  mem_idx : UInt,
   natural_align : Int,
   value_type : @core.ValType,
   op_name : String,
 ) -> Unit raise ValidationError {
-  validate_memory_exists(module_, import_counts)
+  validate_memory_index(module_, import_counts, mem_idx)
   validate_alignment(align, natural_align)
   ctx.poly_pop_expect(module_, value_type, "\{op_name} value")
   ctx.poly_pop_expect(module_, I32, "\{op_name} address")
@@ -208,9 +210,19 @@ fn validate_memory_exists(
   module_ : @core.Module,
   import_counts : ImportCounts,
 ) -> Unit raise ValidationError {
+  validate_memory_index(module_, import_counts, 0U)
+}
+
+///|
+fn validate_memory_index(
+  module_ : @core.Module,
+  import_counts : ImportCounts,
+  mem_idx : UInt,
+) -> Unit raise ValidationError {
   let total_mems = import_counts.mems + module_.mems.length()
-  if total_mems == 0 {
-    raise ValidationError::UnknownMemory(0)
+  let idx = mem_idx.reinterpret_as_int()
+  if idx < 0 || idx >= total_mems {
+    raise ValidationError::UnknownMemory(idx)
   }
 }
 

@@ -6,17 +6,17 @@ fn parse_instr_prefix_fd(parser : Parser) -> @core.Instr raise {
       let imm = match spec.imm {
         None => @core.SimdImmediate::None
         MemArg => {
-          let (align, offset, _memory_idx) = parser.read_memarg()
-          @core.SimdImmediate::MemArg(align, offset)
+          let (align, offset, memory_idx) = parser.read_memarg()
+          @core.SimdImmediate::MemArg(align, offset, memory_idx)
         }
         Lane => {
           let lane = parser.read_byte().to_uint()
           @core.SimdImmediate::Lane(lane)
         }
         MemArgLane => {
-          let (align, offset, _memory_idx) = parser.read_memarg()
+          let (align, offset, memory_idx) = parser.read_memarg()
           let lane = parser.read_byte().to_uint()
-          @core.SimdImmediate::MemArgLane(align, offset, lane)
+          @core.SimdImmediate::MemArgLane(align, offset, memory_idx, lane)
         }
         Shuffle => {
           let raw = parser.read_bytes(16U)

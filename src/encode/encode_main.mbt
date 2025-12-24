@@ -427,7 +427,7 @@ fn instrs_use_bulk_memory(instrs : Array[@core.Instr]) -> Bool {
 ///|
 fn instr_uses_bulk_memory(instr : @core.Instr) -> Bool {
   match instr {
-    MemoryInit(_) | DataDrop(_) => true
+    MemoryInit(_, _) | DataDrop(_) => true
     Block(_, body) => instrs_use_bulk_memory(body)
     Loop(_, body) => instrs_use_bulk_memory(body)
     If(_, then_body, else_body) =>
@@ -513,9 +513,13 @@ fn encode_block_type(
 }
 
 ///|
-fn encode_memarg(align : UInt, offset : UInt) -> Array[Byte] {
+fn encode_memarg(align : UInt, offset : UInt, memory_idx : UInt) -> Array[Byte] {
   let payload : Array[Byte] = []
-  append_bytes(payload, encode_u32_leb128(align))
+  let flags = if memory_idx == 0U { align } else { align | 0x40U }
+  append_bytes(payload, encode_u32_leb128(flags))
+  if memory_idx != 0U {
+    append_bytes(payload, encode_u32_leb128(memory_idx))
+  }
   append_bytes(payload, encode_u32_leb128(offset))
   payload
 }
@@ -543,10 +547,11 @@ fn encode_simd_immediate(
   let payload : Array[Byte] = []
   match imm {
     None => ()
-    MemArg(align, offset) => append_bytes(payload, encode_memarg(align, offset))
+    MemArg(align, offset, memory_idx) =>
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     Lane(lane) => payload.push(lane.to_byte())
-    MemArgLane(align, offset, lane) => {
-      append_bytes(payload, encode_memarg(align, offset))
+    MemArgLane(align, offset, memory_idx, lane) => {
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
       payload.push(lane.to_byte())
     }
     Shuffle(bytes) | V128Const(bytes) => {
@@ -796,97 +801,97 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
       payload.push(0x44U.to_byte())
       append_u64_le(payload, value.reinterpret_as_uint64())
     }
-    I32Load(align, offset) => {
+    I32Load(align, offset, memory_idx) => {
       payload.push(0x28U.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I64Load(align, offset) => {
+    I64Load(align, offset, memory_idx) => {
       payload.push(0x29U.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    F32Load(align, offset) => {
+    F32Load(align, offset, memory_idx) => {
       payload.push(0x2AU.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    F64Load(align, offset) => {
+    F64Load(align, offset, memory_idx) => {
       payload.push(0x2BU.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I32Load8S(align, offset) => {
+    I32Load8S(align, offset, memory_idx) => {
       payload.push(0x2CU.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I32Load8U(align, offset) => {
+    I32Load8U(align, offset, memory_idx) => {
       payload.push(0x2DU.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I32Load16S(align, offset) => {
+    I32Load16S(align, offset, memory_idx) => {
       payload.push(0x2EU.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I32Load16U(align, offset) => {
+    I32Load16U(align, offset, memory_idx) => {
       payload.push(0x2FU.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I64Load8S(align, offset) => {
+    I64Load8S(align, offset, memory_idx) => {
       payload.push(0x30U.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I64Load8U(align, offset) => {
+    I64Load8U(align, offset, memory_idx) => {
       payload.push(0x31U.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I64Load16S(align, offset) => {
+    I64Load16S(align, offset, memory_idx) => {
       payload.push(0x32U.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I64Load16U(align, offset) => {
+    I64Load16U(align, offset, memory_idx) => {
       payload.push(0x33U.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I64Load32S(align, offset) => {
+    I64Load32S(align, offset, memory_idx) => {
       payload.push(0x34U.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I64Load32U(align, offset) => {
+    I64Load32U(align, offset, memory_idx) => {
       payload.push(0x35U.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I32Store(align, offset) => {
+    I32Store(align, offset, memory_idx) => {
       payload.push(0x36U.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I64Store(align, offset) => {
+    I64Store(align, offset, memory_idx) => {
       payload.push(0x37U.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    F32Store(align, offset) => {
+    F32Store(align, offset, memory_idx) => {
       payload.push(0x38U.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    F64Store(align, offset) => {
+    F64Store(align, offset, memory_idx) => {
       payload.push(0x39U.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I32Store8(align, offset) => {
+    I32Store8(align, offset, memory_idx) => {
       payload.push(0x3AU.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I32Store16(align, offset) => {
+    I32Store16(align, offset, memory_idx) => {
       payload.push(0x3BU.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I64Store8(align, offset) => {
+    I64Store8(align, offset, memory_idx) => {
       payload.push(0x3CU.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I64Store16(align, offset) => {
+    I64Store16(align, offset, memory_idx) => {
       payload.push(0x3DU.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I64Store32(align, offset) => {
+    I64Store32(align, offset, memory_idx) => {
       payload.push(0x3EU.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
     MemorySize(idx) => {
       payload.push(0x3FU.to_byte())
@@ -899,27 +904,27 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
     RefIsNull => payload.push(0xD1U.to_byte())
     RefEq => payload.push(0xD3U.to_byte())
     RefAsNonNull => payload.push(0xD4U.to_byte())
-    MemoryInit(data_idx) => {
+    MemoryInit(data_idx, mem_idx) => {
       payload.push(0xFCU.to_byte())
       append_bytes(payload, encode_u32_leb128(8U))
       append_bytes(payload, encode_u32_leb128(data_idx))
-      append_bytes(payload, encode_u32_leb128(0U))
+      append_bytes(payload, encode_u32_leb128(mem_idx))
     }
     DataDrop(data_idx) => {
       payload.push(0xFCU.to_byte())
       append_bytes(payload, encode_u32_leb128(9U))
       append_bytes(payload, encode_u32_leb128(data_idx))
     }
-    MemoryCopy => {
+    MemoryCopy(dst_idx, src_idx) => {
       payload.push(0xFCU.to_byte())
       append_bytes(payload, encode_u32_leb128(10U))
-      append_bytes(payload, encode_u32_leb128(0U))
-      append_bytes(payload, encode_u32_leb128(0U))
+      append_bytes(payload, encode_u32_leb128(dst_idx))
+      append_bytes(payload, encode_u32_leb128(src_idx))
     }
-    MemoryFill => {
+    MemoryFill(mem_idx) => {
       payload.push(0xFCU.to_byte())
       append_bytes(payload, encode_u32_leb128(11U))
-      append_bytes(payload, encode_u32_leb128(0U))
+      append_bytes(payload, encode_u32_leb128(mem_idx))
     }
     I32Eqz => payload.push(0x45U.to_byte())
     I32Eq => payload.push(0x46U.to_byte())

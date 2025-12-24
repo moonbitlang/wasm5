@@ -15,26 +15,31 @@ fn validate_instruction_simd(
             "unknown simd opcode: \{simd.opcode}",
           )
       }
+      let mem_idx = match simd.imm {
+        MemArg(_, _, idx) => idx
+        MemArgLane(_, _, idx, _) => idx
+        _ => 0U
+      }
       match @core.simd_stack_effect(spec.name) {
         Const => stack.push(V128)
         Load => {
-          validate_memory_exists(module_, import_counts)
+          validate_memory_index(module_, import_counts, mem_idx)
           ctx.poly_pop_expect(module_, I32, "v128.load address")
           stack.push(V128)
         }
         Store => {
-          validate_memory_exists(module_, import_counts)
+          validate_memory_index(module_, import_counts, mem_idx)
           ctx.poly_pop_expect(module_, V128, "v128.store value")
           ctx.poly_pop_expect(module_, I32, "v128.store address")
         }
         LoadLane => {
-          validate_memory_exists(module_, import_counts)
+          validate_memory_index(module_, import_counts, mem_idx)
           ctx.poly_pop_expect(module_, V128, "v128.load_lane vector")
           ctx.poly_pop_expect(module_, I32, "v128.load_lane address")
           stack.push(V128)
         }
         StoreLane => {
-          validate_memory_exists(module_, import_counts)
+          validate_memory_index(module_, import_counts, mem_idx)
           ctx.poly_pop_expect(module_, V128, "v128.store_lane vector")
           ctx.poly_pop_expect(module_, I32, "v128.store_lane address")
         }

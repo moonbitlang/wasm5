@@ -91,6 +91,7 @@ priv struct WatTypeDef {
 priv enum MemArg {
   Align(UInt)
   Offset(UInt)
+  Memory(UInt)
 }
 
 ///|
@@ -2498,12 +2499,12 @@ fn parse_mem_instr_from_atom(
 ) -> (WatInstr, Int)? raise WatError {
   match memarg_default_align(op) {
     Some(default_align) => {
-      let (align, offset, next_idx) = parse_memarg_from_items(
+      let (align, offset, memory_idx, next_idx) = parse_memarg_from_items(
         items,
         idx + 1,
         default_align,
       )
-      let instr = match make_mem_instr(op, align, offset) {
+      let instr = match make_mem_instr(op, align, offset, memory_idx) {
         Some(mem_instr) => mem_instr
         None => raise WatError::Unsupported("instruction \{op}")
       }
@@ -2520,8 +2521,10 @@ fn parse_mem_instr_from_list(
 ) -> WatInstr? raise WatError {
   match memarg_default_align(op) {
     Some(default_align) => {
-      let (align, offset) = parse_memarg_from_list(list_items, 1, default_align)
-      let instr = match make_mem_instr(op, align, offset) {
+      let (align, offset, memory_idx) = parse_memarg_from_list(
+        list_items, 1, default_align,
+      )
+      let instr = match make_mem_instr(op, align, offset, memory_idx) {
         Some(mem_instr) => mem_instr
         None => raise WatError::Unsupported("instruction \{op}")
       }
@@ -2536,11 +2539,13 @@ fn parse_memarg_from_items(
   items : Array[SExpr],
   start : Int,
   default_align : UInt,
-) -> (UInt, UInt, Int) raise WatError {
+) -> (UInt, UInt, UInt, Int) raise WatError {
   let mut align = default_align
   let mut offset = 0U
+  let mut memory_idx = 0U
   let mut seen_align = false
   let mut seen_offset = false
+  let mut seen_memory = false
   let mut idx = start
   while idx < items.length() {
     match items[idx] {
@@ -2562,12 +2567,20 @@ fn parse_memarg_from_items(
             seen_offset = true
             idx = idx + 1
           }
+          Some(Memory(value)) => {
+            guard not(seen_memory) else {
+              raise WatError::InvalidSyntax("duplicate memory")
+            }
+            memory_idx = value
+            seen_memory = true
+            idx = idx + 1
+          }
           None => break
         }
       _ => break
     }
   }
-  (align, offset, idx)
+  (align, offset, memory_idx, idx)
 }
 
 ///|
@@ -2575,11 +2588,13 @@ fn parse_memarg_from_list(
   list_items : Array[SExpr],
   start : Int,
   default_align : UInt,
-) -> (UInt, UInt) raise WatError {
+) -> (UInt, UInt, UInt) raise WatError {
   let mut align = default_align
   let mut offset = 0U
+  let mut memory_idx = 0U
   let mut seen_align = false
   let mut seen_offset = false
+  let mut seen_memory = false
   for i in start..<list_items.length() {
     match list_items[i] {
       Atom(atom) =>
@@ -2598,15 +2613,22 @@ fn parse_memarg_from_list(
             offset = value
             seen_offset = true
           }
+          Some(Memory(value)) => {
+            guard not(seen_memory) else {
+              raise WatError::InvalidSyntax("duplicate memory")
+            }
+            memory_idx = value
+            seen_memory = true
+          }
           None =>
             raise WatError::InvalidSyntax(
-              "memory operands must be offset= or align=",
+              "memory operands must be offset=, align=, or memory=",
             )
         }
       _ => raise WatError::InvalidSyntax("memory operands must be atoms")
     }
   }
-  (align, offset)
+  (align, offset, memory_idx)
 }
 
 ///|
@@ -2619,6 +2641,10 @@ fn parse_memarg_atom(atom : Bytes) -> MemArg? raise WatError {
     let align_bytes = parse_uint_from_bytes(atom, b"align=".length())
     let align = align_bytes_to_log2(align_bytes)
     return Some(Align(align))
+  }
+  if bytes_starts_with(atom, b"memory=") {
+    let value = parse_uint_from_bytes(atom, b"memory=".length())
+    return Some(Memory(value))
   }
   None
 }
@@ -2826,26 +2852,29 @@ fn parse_simd_instr_from_atom(
             Some(value) => value
             None => raise WatError::Unsupported("instruction \{op}")
           }
-          let (align, offset, next_idx) = parse_memarg_from_items(
+          let (align, offset, memory_idx, next_idx) = parse_memarg_from_items(
             items,
             idx + 1,
             default_align,
           )
-          (@core.SimdImmediate::MemArg(align, offset), next_idx)
+          (@core.SimdImmediate::MemArg(align, offset, memory_idx), next_idx)
         }
         MemArgLane => {
           let default_align = match simd_memarg_default_align(op) {
             Some(value) => value
             None => raise WatError::Unsupported("instruction \{op}")
           }
-          let (align, offset, next_idx) = parse_memarg_from_items(
+          let (align, offset, memory_idx, next_idx) = parse_memarg_from_items(
             items,
             idx + 1,
             default_align,
           )
           let lane_atom = expect_atom_at(items, next_idx)
           let lane = parse_simd_lane(op, lane_atom)
-          (@core.SimdImmediate::MemArgLane(align, offset, lane), next_idx + 1)
+          (
+            @core.SimdImmediate::MemArgLane(align, offset, memory_idx, lane),
+            next_idx + 1,
+          )
         }
         Shuffle => {
           let (bytes, next_idx) = parse_simd_shuffle_from_items(items, idx + 1)
@@ -2891,20 +2920,20 @@ fn parse_simd_instr_from_list(
             Some(value) => value
             None => raise WatError::Unsupported("instruction \{op}")
           }
-          let (align, offset, next_idx) = parse_memarg_from_items(
+          let (align, offset, memory_idx, next_idx) = parse_memarg_from_items(
             list_items, 1, default_align,
           )
           guard next_idx == list_items.length() else {
             raise WatError::InvalidSyntax("unexpected operands for \{op}")
           }
-          @core.SimdImmediate::MemArg(align, offset)
+          @core.SimdImmediate::MemArg(align, offset, memory_idx)
         }
         MemArgLane => {
           let default_align = match simd_memarg_default_align(op) {
             Some(value) => value
             None => raise WatError::Unsupported("instruction \{op}")
           }
-          let (align, offset, next_idx) = parse_memarg_from_items(
+          let (align, offset, memory_idx, next_idx) = parse_memarg_from_items(
             list_items, 1, default_align,
           )
           guard next_idx + 1 == list_items.length() else {
@@ -2912,7 +2941,7 @@ fn parse_simd_instr_from_list(
           }
           let lane_atom = expect_atom(list_items[next_idx])
           let lane = parse_simd_lane(op, lane_atom)
-          @core.SimdImmediate::MemArgLane(align, offset, lane)
+          @core.SimdImmediate::MemArgLane(align, offset, memory_idx, lane)
         }
         Shuffle => {
           guard list_items.length() == 17 else {
@@ -2939,31 +2968,36 @@ fn parse_simd_instr_from_list(
 }
 
 ///|
-fn make_mem_instr(op : Bytes, align : UInt, offset : UInt) -> @core.Instr? {
+fn make_mem_instr(
+  op : Bytes,
+  align : UInt,
+  offset : UInt,
+  memory_idx : UInt,
+) -> @core.Instr? {
   match op {
-    b"i32.load" => Some(@core.Instr::I32Load(align, offset))
-    b"i64.load" => Some(@core.Instr::I64Load(align, offset))
-    b"f32.load" => Some(@core.Instr::F32Load(align, offset))
-    b"f64.load" => Some(@core.Instr::F64Load(align, offset))
-    b"i32.load8_s" => Some(@core.Instr::I32Load8S(align, offset))
-    b"i32.load8_u" => Some(@core.Instr::I32Load8U(align, offset))
-    b"i32.load16_s" => Some(@core.Instr::I32Load16S(align, offset))
-    b"i32.load16_u" => Some(@core.Instr::I32Load16U(align, offset))
-    b"i64.load8_s" => Some(@core.Instr::I64Load8S(align, offset))
-    b"i64.load8_u" => Some(@core.Instr::I64Load8U(align, offset))
-    b"i64.load16_s" => Some(@core.Instr::I64Load16S(align, offset))
-    b"i64.load16_u" => Some(@core.Instr::I64Load16U(align, offset))
-    b"i64.load32_s" => Some(@core.Instr::I64Load32S(align, offset))
-    b"i64.load32_u" => Some(@core.Instr::I64Load32U(align, offset))
-    b"i32.store" => Some(@core.Instr::I32Store(align, offset))
-    b"i64.store" => Some(@core.Instr::I64Store(align, offset))
-    b"f32.store" => Some(@core.Instr::F32Store(align, offset))
-    b"f64.store" => Some(@core.Instr::F64Store(align, offset))
-    b"i32.store8" => Some(@core.Instr::I32Store8(align, offset))
-    b"i32.store16" => Some(@core.Instr::I32Store16(align, offset))
-    b"i64.store8" => Some(@core.Instr::I64Store8(align, offset))
-    b"i64.store16" => Some(@core.Instr::I64Store16(align, offset))
-    b"i64.store32" => Some(@core.Instr::I64Store32(align, offset))
+    b"i32.load" => Some(@core.Instr::I32Load(align, offset, memory_idx))
+    b"i64.load" => Some(@core.Instr::I64Load(align, offset, memory_idx))
+    b"f32.load" => Some(@core.Instr::F32Load(align, offset, memory_idx))
+    b"f64.load" => Some(@core.Instr::F64Load(align, offset, memory_idx))
+    b"i32.load8_s" => Some(@core.Instr::I32Load8S(align, offset, memory_idx))
+    b"i32.load8_u" => Some(@core.Instr::I32Load8U(align, offset, memory_idx))
+    b"i32.load16_s" => Some(@core.Instr::I32Load16S(align, offset, memory_idx))
+    b"i32.load16_u" => Some(@core.Instr::I32Load16U(align, offset, memory_idx))
+    b"i64.load8_s" => Some(@core.Instr::I64Load8S(align, offset, memory_idx))
+    b"i64.load8_u" => Some(@core.Instr::I64Load8U(align, offset, memory_idx))
+    b"i64.load16_s" => Some(@core.Instr::I64Load16S(align, offset, memory_idx))
+    b"i64.load16_u" => Some(@core.Instr::I64Load16U(align, offset, memory_idx))
+    b"i64.load32_s" => Some(@core.Instr::I64Load32S(align, offset, memory_idx))
+    b"i64.load32_u" => Some(@core.Instr::I64Load32U(align, offset, memory_idx))
+    b"i32.store" => Some(@core.Instr::I32Store(align, offset, memory_idx))
+    b"i64.store" => Some(@core.Instr::I64Store(align, offset, memory_idx))
+    b"f32.store" => Some(@core.Instr::F32Store(align, offset, memory_idx))
+    b"f64.store" => Some(@core.Instr::F64Store(align, offset, memory_idx))
+    b"i32.store8" => Some(@core.Instr::I32Store8(align, offset, memory_idx))
+    b"i32.store16" => Some(@core.Instr::I32Store16(align, offset, memory_idx))
+    b"i64.store8" => Some(@core.Instr::I64Store8(align, offset, memory_idx))
+    b"i64.store16" => Some(@core.Instr::I64Store16(align, offset, memory_idx))
+    b"i64.store32" => Some(@core.Instr::I64Store32(align, offset, memory_idx))
     _ => None
   }
 }
@@ -3142,20 +3176,22 @@ fn parse_memory_init_from_items(
   guard start < items.length() else {
     raise WatError::InvalidSyntax("memory.init expects operands")
   }
-  let data_atom = expect_atom_at(items, start)
-  guard is_name(data_atom) || is_uint_atom(data_atom) else {
-    raise WatError::InvalidSyntax("memory.init expects data index")
+  let first_atom = expect_atom_at(items, start)
+  guard is_name(first_atom) || is_uint_atom(first_atom) else {
+    raise WatError::InvalidSyntax("memory.init expects indices")
   }
-  let data_ref = parse_index_ref(data_atom)
   if start + 1 < items.length() {
     match items[start + 1] {
       Atom(atom) =>
         if is_name(atom) || is_uint_atom(atom) {
-          return (data_ref, parse_index_ref(atom), start + 2)
+          let mem_ref = parse_index_ref(first_atom)
+          let data_ref = parse_index_ref(atom)
+          return (data_ref, mem_ref, start + 2)
         }
       _ => ()
     }
   }
+  let data_ref = parse_index_ref(first_atom)
   (data_ref, IndexRef::Index(0U), start + 1)
 }
 
@@ -3169,8 +3205,8 @@ fn parse_memory_init_from_list(
   guard list_items.length() == 3 else {
     raise WatError::InvalidSyntax("memory.init expects one or two operands")
   }
-  let data_ref = parse_index_ref(expect_atom(list_items[1]))
-  let mem_ref = parse_index_ref(expect_atom(list_items[2]))
+  let mem_ref = parse_index_ref(expect_atom(list_items[1]))
+  let data_ref = parse_index_ref(expect_atom(list_items[2]))
   (data_ref, mem_ref)
 }
 
@@ -3856,27 +3892,18 @@ fn resolve_instr(
     WatInstr::MemoryInit(data_ref, mem_ref) => {
       let data_idx = resolve_index_ref(data_ref, data_map, "data")
       let mem_idx = resolve_index_ref(mem_ref, mem_map, "memory")
-      guard mem_idx == 0U else {
-        raise WatError::Unsupported("memory.init only supports memory 0")
-      }
-      @core.Instr::MemoryInit(data_idx)
+      @core.Instr::MemoryInit(data_idx, mem_idx)
     }
     WatInstr::DataDrop(data_ref) =>
       @core.Instr::DataDrop(resolve_index_ref(data_ref, data_map, "data"))
     WatInstr::MemoryCopy(dst_ref, src_ref) => {
       let dst_idx = resolve_index_ref(dst_ref, mem_map, "memory")
       let src_idx = resolve_index_ref(src_ref, mem_map, "memory")
-      guard dst_idx == 0U && src_idx == 0U else {
-        raise WatError::Unsupported("memory.copy only supports memory 0")
-      }
-      @core.Instr::MemoryCopy
+      @core.Instr::MemoryCopy(dst_idx, src_idx)
     }
     WatInstr::MemoryFill(mem_ref) => {
       let mem_idx = resolve_index_ref(mem_ref, mem_map, "memory")
-      guard mem_idx == 0U else {
-        raise WatError::Unsupported("memory.fill only supports memory 0")
-      }
-      @core.Instr::MemoryFill
+      @core.Instr::MemoryFill(mem_idx)
     }
     WatInstr::Throw(tag_ref) =>
       @core.Instr::Throw(resolve_index_ref(tag_ref, tag_map, "tag"))

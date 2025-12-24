@@ -561,7 +561,7 @@ test "validate memory instruction errors" {
     module_mem,
     ctx_init,
     counts,
-    MemoryInit(0U),
+    MemoryInit(0U, 0U),
   ) catch {
     _ => {
       saw_error = true
@@ -590,7 +590,7 @@ test "validate memory instruction errors" {
     module_mem,
     ctx_align,
     counts,
-    I32Load(3U, 0U),
+    I32Load(3U, 0U, 0U),
   ) catch {
     _ => {
       saw_error = true
@@ -604,7 +604,7 @@ test "validate memory instruction errors" {
     module_mem,
     ctx_load,
     counts,
-    I32Load(0U, 0U),
+    I32Load(0U, 0U, 0U),
   )
   assert_eq(ok, true)
   assert_eq(ctx_load.stack.length(), 1)
