@@ -116,8 +116,10 @@ priv struct WatFunc {
   name : Bytes?
   type_idx : UInt?
   params : Array[@core.ValType]
+  param_names : Array[Bytes?]
   results : Array[@core.ValType]
   locals : Array[@core.ValType]
+  local_names : Array[Bytes?]
   body : Array[WatInstr]
   exports : Array[Bytes]
 }
@@ -247,6 +249,7 @@ priv struct WatCustom {
 
 ///|
 priv struct WatModule {
+  mut name : Bytes?
   type_defs : Array[WatTypeDef]
   type_groups : Array[WatTypeGroup]
   customs : Array[WatCustom]
@@ -965,6 +968,7 @@ fn parse_wast_quote_module(bytes : Bytes) -> @core.Module raise WatError {
 ///|
 fn parse_module(expr : SExpr) -> WatModule raise WatError {
   let module_ = WatModule::{
+    name: None,
     type_defs: [],
     type_groups: [],
     customs: [],
@@ -993,6 +997,7 @@ fn parse_module(expr : SExpr) -> WatModule raise WatError {
       }
       let mut idx = 1
       if idx < items.length() && items[idx] is Atom(name) && is_name(name) {
+        module_.name = Some(name)
         idx = idx + 1
       }
       let type_items : Array[WatTypeItem] = []
@@ -1122,8 +1127,10 @@ fn parse_module_field(
         name: func.name,
         type_idx: func.type_idx,
         params: func.params,
+        param_names: func.param_names,
         results: func.results,
         locals: func.locals,
+        local_names: func.local_names,
         body: func.body,
         exports: [],
       })
@@ -1301,6 +1308,14 @@ fn parse_func(
   let (type_idx, resolved_params, resolved_results) = resolve_type_use(
     type_ref, params, results, type_defs, type_map,
   )
+  let resolved_param_names : Array[Bytes?] = []
+  for i in 0..<resolved_params.length() {
+    if i < param_names.length() {
+      resolved_param_names.push(param_names[i])
+    } else {
+      resolved_param_names.push(None)
+    }
+  }
   let local_map = Map::new()
   for i in 0..<param_names.length() {
     match param_names[i] {
@@ -1326,8 +1341,10 @@ fn parse_func(
     name,
     type_idx,
     params: resolved_params,
+    param_names: resolved_param_names,
     results: resolved_results,
     locals,
+    local_names,
     body,
     exports,
   }
@@ -4615,6 +4632,252 @@ fn parse_simple_op(op : Bytes) -> @core.Instr? {
 }
 
 ///|
+priv struct NameEntry {
+  idx : UInt
+  name : Bytes
+}
+
+///|
+priv struct LocalNameEntry {
+  func_idx : UInt
+  locals : Array[NameEntry]
+}
+
+///|
+fn build_name_custom(wat : WatModule) -> @core.CustomSection? {
+  if has_name_custom(wat.customs) {
+    return None
+  }
+  let func_names : Array[NameEntry] = []
+  let local_names : Array[LocalNameEntry] = []
+  let mut func_index = 0U
+  for imp in wat.func_imports {
+    if imp.func_name is Some(name) {
+      func_names.push({ idx: func_index, name: strip_name_prefix(name) })
+    }
+    func_index = func_index + 1U
+  }
+  for func in wat.funcs {
+    if func.name is Some(name) {
+      func_names.push({ idx: func_index, name: strip_name_prefix(name) })
+    }
+    let local_entries : Array[NameEntry] = []
+    for i in 0..<func.param_names.length() {
+      match func.param_names[i] {
+        Some(name) =>
+          local_entries.push({
+            idx: i.reinterpret_as_uint(),
+            name: strip_name_prefix(name),
+          })
+        None => ()
+      }
+    }
+    let base = func.params.length()
+    for i in 0..<func.local_names.length() {
+      match func.local_names[i] {
+        Some(name) =>
+          local_entries.push({
+            idx: (base + i).reinterpret_as_uint(),
+            name: strip_name_prefix(name),
+          })
+        None => ()
+      }
+    }
+    if local_entries.length() > 0 {
+      local_names.push({ func_idx: func_index, locals: local_entries })
+    }
+    func_index = func_index + 1U
+  }
+  let type_names : Array[NameEntry] = []
+  for i in 0..<wat.type_defs.length() {
+    let type_def = wat.type_defs[i]
+    if type_def.name is Some(name) {
+      type_names.push({
+        idx: i.reinterpret_as_uint(),
+        name: strip_name_prefix(name),
+      })
+    }
+  }
+  let table_names : Array[NameEntry] = []
+  let mut table_index = 0U
+  for imp in wat.table_imports {
+    if imp.table_name is Some(name) {
+      table_names.push({ idx: table_index, name: strip_name_prefix(name) })
+    }
+    table_index = table_index + 1U
+  }
+  for table in wat.tables {
+    if table.name is Some(name) {
+      table_names.push({ idx: table_index, name: strip_name_prefix(name) })
+    }
+    table_index = table_index + 1U
+  }
+  let mem_names : Array[NameEntry] = []
+  let mut mem_index = 0U
+  for imp in wat.mem_imports {
+    if imp.mem_name is Some(name) {
+      mem_names.push({ idx: mem_index, name: strip_name_prefix(name) })
+    }
+    mem_index = mem_index + 1U
+  }
+  for mem in wat.mems {
+    if mem.name is Some(name) {
+      mem_names.push({ idx: mem_index, name: strip_name_prefix(name) })
+    }
+    mem_index = mem_index + 1U
+  }
+  let global_names : Array[NameEntry] = []
+  let mut global_index = 0U
+  for imp in wat.global_imports {
+    if imp.global_name is Some(name) {
+      global_names.push({ idx: global_index, name: strip_name_prefix(name) })
+    }
+    global_index = global_index + 1U
+  }
+  for global_ in wat.globals {
+    if global_.name is Some(name) {
+      global_names.push({ idx: global_index, name: strip_name_prefix(name) })
+    }
+    global_index = global_index + 1U
+  }
+  let tag_names : Array[NameEntry] = []
+  let mut tag_index = 0U
+  for imp in wat.tag_imports {
+    if imp.tag_name is Some(name) {
+      tag_names.push({ idx: tag_index, name: strip_name_prefix(name) })
+    }
+    tag_index = tag_index + 1U
+  }
+  for tag in wat.tags {
+    if tag.name is Some(name) {
+      tag_names.push({ idx: tag_index, name: strip_name_prefix(name) })
+    }
+    tag_index = tag_index + 1U
+  }
+  let elem_names : Array[NameEntry] = []
+  for i in 0..<wat.elems.length() {
+    let elem = wat.elems[i]
+    if elem.name is Some(name) {
+      elem_names.push({
+        idx: i.reinterpret_as_uint(),
+        name: strip_name_prefix(name),
+      })
+    }
+  }
+  let data_names : Array[NameEntry] = []
+  for i in 0..<wat.datas.length() {
+    let data = wat.datas[i]
+    if data.name is Some(name) {
+      data_names.push({
+        idx: i.reinterpret_as_uint(),
+        name: strip_name_prefix(name),
+      })
+    }
+  }
+  let module_name = wat.name
+  let has_names = module_name is Some(_) ||
+    func_names.length() > 0 ||
+    local_names.length() > 0 ||
+    type_names.length() > 0 ||
+    table_names.length() > 0 ||
+    mem_names.length() > 0 ||
+    global_names.length() > 0 ||
+    elem_names.length() > 0 ||
+    data_names.length() > 0 ||
+    tag_names.length() > 0
+  if not(has_names) {
+    return None
+  }
+  let payload : Array[Byte] = []
+  match module_name {
+    Some(name) => append_name_subsection(payload, 0U, encode_module_name(name))
+    None => ()
+  }
+  if func_names.length() > 0 {
+    append_name_subsection(payload, 1U, encode_name_map(func_names))
+  }
+  if local_names.length() > 0 {
+    append_name_subsection(payload, 2U, encode_local_name_map(local_names))
+  }
+  if type_names.length() > 0 {
+    append_name_subsection(payload, 4U, encode_name_map(type_names))
+  }
+  if table_names.length() > 0 {
+    append_name_subsection(payload, 5U, encode_name_map(table_names))
+  }
+  if mem_names.length() > 0 {
+    append_name_subsection(payload, 6U, encode_name_map(mem_names))
+  }
+  if global_names.length() > 0 {
+    append_name_subsection(payload, 7U, encode_name_map(global_names))
+  }
+  if elem_names.length() > 0 {
+    append_name_subsection(payload, 8U, encode_name_map(elem_names))
+  }
+  if data_names.length() > 0 {
+    append_name_subsection(payload, 9U, encode_name_map(data_names))
+  }
+  if tag_names.length() > 0 {
+    append_name_subsection(payload, 11U, encode_name_map(tag_names))
+  }
+  Some(@core.CustomSection::{
+    name: b"name",
+    data: Bytes::from_array(payload),
+    placement: @core.CustomPlacement::End,
+  })
+}
+
+///|
+fn has_name_custom(customs : Array[WatCustom]) -> Bool {
+  for custom in customs {
+    if custom.name == b"name" {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn encode_module_name(name : Bytes) -> Array[Byte] {
+  let payload : Array[Byte] = []
+  append_name(payload, strip_name_prefix(name))
+  payload
+}
+
+///|
+fn encode_name_map(entries : Array[NameEntry]) -> Array[Byte] {
+  let payload : Array[Byte] = []
+  append_u32(payload, entries.length().reinterpret_as_uint())
+  for entry in entries {
+    append_u32(payload, entry.idx)
+    append_name(payload, entry.name)
+  }
+  payload
+}
+
+///|
+fn encode_local_name_map(entries : Array[LocalNameEntry]) -> Array[Byte] {
+  let payload : Array[Byte] = []
+  append_u32(payload, entries.length().reinterpret_as_uint())
+  for entry in entries {
+    append_u32(payload, entry.func_idx)
+    append_bytes(payload, encode_name_map(entry.locals))
+  }
+  payload
+}
+
+///|
+fn append_name_subsection(
+  out : Array[Byte],
+  id : UInt,
+  payload : Array[Byte],
+) -> Unit {
+  out.push(id.to_byte())
+  append_u32(out, payload.length().reinterpret_as_uint())
+  append_bytes(out, payload)
+}
+
+///|
 fn build_module(wat : WatModule) -> @core.Module raise WatError {
   let func_map = Map::new()
   let mem_map = Map::new()
@@ -4752,6 +5015,10 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
       data: custom.data,
       placement: custom.placement,
     })
+  }
+  match build_name_custom(wat) {
+    Some(custom) => customs.push(custom)
+    None => ()
   }
   let initial_type_count = types.length()
   let imports : Array[@core.Import] = []
@@ -5918,6 +6185,52 @@ fn parse_double(atom : Bytes) -> Double raise WatError {
   @strconv.parse_double(text) catch {
     _ => raise WatError::InvalidNumber("invalid float \{atom}")
   }
+}
+
+///|
+fn strip_name_prefix(name : Bytes) -> Bytes {
+  if name.length() > 0 && name[0] == b'$' {
+    return slice_bytes(name, 1)
+  }
+  name
+}
+
+///|
+fn append_bytes(dst : Array[Byte], src : Array[Byte]) -> Unit {
+  for b in src {
+    dst.push(b)
+  }
+}
+
+///|
+fn append_u32(dst : Array[Byte], value : UInt) -> Unit {
+  append_bytes(dst, encode_u32_leb128(value))
+}
+
+///|
+fn append_name(dst : Array[Byte], name : Bytes) -> Unit {
+  append_u32(dst, name.length().reinterpret_as_uint())
+  for b in name {
+    dst.push(b)
+  }
+}
+
+///|
+fn encode_u32_leb128(value : UInt) -> Array[Byte] {
+  let mut v = value
+  let out : Array[Byte] = []
+  while true {
+    let mut byte = (v & 0x7FU).to_byte()
+    v = v >> 7
+    if v != 0U {
+      byte = (byte.to_uint() | 0x80U).to_byte()
+      out.push(byte)
+    } else {
+      out.push(byte)
+      break
+    }
+  }
+  out
 }
 
 ///|

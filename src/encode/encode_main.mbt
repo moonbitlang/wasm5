@@ -51,15 +51,15 @@ pub fn encode(module_ : @core.Module) -> Bytes raise EncodeError {
   )
   add_section(
     sections,
-    @core.SectionId::Global,
-    6U,
-    encode_global_section(module_.globals),
-  )
-  add_section(
-    sections,
     @core.SectionId::Tag,
     13U,
     encode_tag_section(module_.tags),
+  )
+  add_section(
+    sections,
+    @core.SectionId::Global,
+    6U,
+    encode_global_section(module_.globals),
   )
   add_section(
     sections,
@@ -173,8 +173,8 @@ fn section_order() -> Array[@core.SectionId] {
     @core.SectionId::Func,
     @core.SectionId::Table,
     @core.SectionId::Memory,
-    @core.SectionId::Global,
     @core.SectionId::Tag,
+    @core.SectionId::Global,
     @core.SectionId::Export,
     @core.SectionId::Start,
     @core.SectionId::Elem,

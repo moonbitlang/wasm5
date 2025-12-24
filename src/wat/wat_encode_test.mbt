@@ -42,6 +42,7 @@ async fn assert_wat_matches(name : String, wat : String) -> Unit {
   ensure_dir(dir)
   let wat_path = dir + "input.wat"
   let ours_path = dir + "ours.wasm"
+  let ours_stripped_path = dir + "ours_stripped.wasm"
   let ref_path = dir + "ref.wasm"
   let ref_stripped_path = dir + "ref_stripped.wasm"
   let wat_file = @fs.create(wat_path, permission=0o644)
@@ -51,16 +52,23 @@ async fn assert_wat_matches(name : String, wat : String) -> Unit {
   let ours_file = @fs.create(ours_path, permission=0o644)
   defer ours_file.close()
   ours_file.write(ours)
+  let ours_strip = @process.run("wasm-tools", [
+    "strip", "--all", ours_path, "-o", ours_stripped_path,
+  ])
+  assert_eq(ours_strip, 0)
   let exit_code = @process.run("wasm-tools", ["parse", wat_path, "-o", ref_path])
   assert_eq(exit_code, 0)
   let strip_code = @process.run("wasm-tools", [
     "strip", "--all", ref_path, "-o", ref_stripped_path,
   ])
   assert_eq(strip_code, 0)
+  let ours_stripped_file = @fs.open(ours_stripped_path, mode=ReadOnly)
+  defer ours_stripped_file.close()
+  let ours_bytes = ours_stripped_file.read_all().binary()
   let ref_file = @fs.open(ref_stripped_path, mode=ReadOnly)
   defer ref_file.close()
   let ref_bytes = ref_file.read_all().binary()
-  assert_eq(ours, ref_bytes)
+  assert_eq(ours_bytes, ref_bytes)
 }
 
 ///|
@@ -72,6 +80,7 @@ async fn assert_wat_matches_custom(name : String, wat : String) -> Unit {
   ensure_dir(dir)
   let wat_path = dir + "input.wat"
   let ours_path = dir + "ours.wasm"
+  let ours_stripped_path = dir + "ours_stripped.wasm"
   let ref_path = dir + "ref.wasm"
   let ref_stripped_path = dir + "ref_stripped.wasm"
   let wat_file = @fs.create(wat_path, permission=0o644)
@@ -81,13 +90,45 @@ async fn assert_wat_matches_custom(name : String, wat : String) -> Unit {
   let ours_file = @fs.create(ours_path, permission=0o644)
   defer ours_file.close()
   ours_file.write(ours)
+  let ours_strip = @process.run("wasm-tools", [
+    "strip", "--delete", "^name$", ours_path, "-o", ours_stripped_path,
+  ])
+  assert_eq(ours_strip, 0)
   let exit_code = @process.run("wasm-tools", ["parse", wat_path, "-o", ref_path])
   assert_eq(exit_code, 0)
   let strip_code = @process.run("wasm-tools", [
     "strip", "--delete", "^name$", ref_path, "-o", ref_stripped_path,
   ])
   assert_eq(strip_code, 0)
+  let ours_stripped_file = @fs.open(ours_stripped_path, mode=ReadOnly)
+  defer ours_stripped_file.close()
+  let ours_bytes = ours_stripped_file.read_all().binary()
   let ref_file = @fs.open(ref_stripped_path, mode=ReadOnly)
+  defer ref_file.close()
+  let ref_bytes = ref_file.read_all().binary()
+  assert_eq(ours_bytes, ref_bytes)
+}
+
+///|
+async fn assert_wat_matches_with_names(name : String, wat : String) -> Unit {
+  guard wasm_tools_available() else { return }
+  let base_dir = "target/wat_tests"
+  ensure_dir(base_dir)
+  let dir = base_dir + "/" + name + "/"
+  ensure_dir(dir)
+  let wat_path = dir + "input.wat"
+  let ours_path = dir + "ours.wasm"
+  let ref_path = dir + "ref.wasm"
+  let wat_file = @fs.create(wat_path, permission=0o644)
+  defer wat_file.close()
+  wat_file.write(wat)
+  let ours = wat_to_wasm(wat)
+  let ours_file = @fs.create(ours_path, permission=0o644)
+  defer ours_file.close()
+  ours_file.write(ours)
+  let exit_code = @process.run("wasm-tools", ["parse", wat_path, "-o", ref_path])
+  assert_eq(exit_code, 0)
+  let ref_file = @fs.open(ref_path, mode=ReadOnly)
   defer ref_file.close()
   let ref_bytes = ref_file.read_all().binary()
   assert_eq(ours, ref_bytes)
@@ -106,6 +147,7 @@ async fn assert_wasm_matches_wat(
   ensure_dir(dir)
   let wat_path = dir + "input.wat"
   let ours_path = dir + "ours.wasm"
+  let ours_stripped_path = dir + "ours_stripped.wasm"
   let ref_path = dir + "ref.wasm"
   let ref_stripped_path = dir + "ref_stripped.wasm"
   let wat_file = @fs.create(wat_path, permission=0o644)
@@ -114,16 +156,23 @@ async fn assert_wasm_matches_wat(
   let ours_file = @fs.create(ours_path, permission=0o644)
   defer ours_file.close()
   ours_file.write(wasm)
+  let ours_strip = @process.run("wasm-tools", [
+    "strip", "--all", ours_path, "-o", ours_stripped_path,
+  ])
+  assert_eq(ours_strip, 0)
   let exit_code = @process.run("wasm-tools", ["parse", wat_path, "-o", ref_path])
   assert_eq(exit_code, 0)
   let strip_code = @process.run("wasm-tools", [
     "strip", "--all", ref_path, "-o", ref_stripped_path,
   ])
   assert_eq(strip_code, 0)
+  let ours_stripped_file = @fs.open(ours_stripped_path, mode=ReadOnly)
+  defer ours_stripped_file.close()
+  let ours_bytes = ours_stripped_file.read_all().binary()
   let ref_file = @fs.open(ref_stripped_path, mode=ReadOnly)
   defer ref_file.close()
   let ref_bytes = ref_file.read_all().binary()
-  assert_eq(wasm, ref_bytes)
+  assert_eq(ours_bytes, ref_bytes)
 }
 
 ///|
@@ -382,6 +431,40 @@ async test "wat encoder matches wasm-tools for custom section after type" {
 async test "wat encoder matches wasm-tools for custom section before code" {
   let wat = "(module (memory 1) (data \"hi\") (@custom \"foo\" (before code) \"data\") (func (param i32 i32 i32) local.get 0 local.get 1 local.get 2 memory.init 0))"
   assert_wat_matches_custom("custom_before_code", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for name section" {
+  let q = "\""
+  let wat = "(module $m " +
+    "(type $t (func (param i32) (result i32))) " +
+    "(import " +
+    q +
+    "env" +
+    q +
+    " " +
+    q +
+    "f" +
+    q +
+    " (func $imp (type $t))) " +
+    "(func $f (type $t) (param $x i32) (result i32) (local $y i32) local.get $x) " +
+    "(table $tab 1 funcref) " +
+    "(memory $mem 1) " +
+    "(global $g i32 (i32.const 0)) " +
+    "(tag $tag (param i32)) " +
+    "(elem $e (i32.const 0) $f) " +
+    "(data $d (i32.const 0) " +
+    q +
+    "hi" +
+    q +
+    ") " +
+    "(export " +
+    q +
+    "f" +
+    q +
+    " (func $f))" +
+    ")"
+  assert_wat_matches_with_names("name_section", wat)
 }
 
 ///|
