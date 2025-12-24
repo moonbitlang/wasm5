@@ -74,7 +74,7 @@ pub fn ValType::is_defaultable(self : ValType) -> Bool {
 pub(all) struct FuncType {
   params : Array[ValType]
   results : Array[ValType]
-}
+} derive(Show, Eq)
 
 ///|
 pub(all) enum StorageType {
@@ -87,17 +87,17 @@ pub(all) enum StorageType {
 pub(all) struct FieldType {
   storage : StorageType
   mutable : Bool
-}
+} derive(Show, Eq)
 
 ///|
 pub(all) struct StructType {
   fields : Array[FieldType]
-}
+} derive(Show, Eq)
 
 ///|
 pub(all) struct ArrayType {
   element : FieldType
-}
+} derive(Show, Eq)
 
 ///|
 pub(all) enum TypeDef {
@@ -207,9 +207,11 @@ pub(all) struct Tag {
 pub(all) struct Elem {
   table_idx : UInt
   offset : Expr
-  init : Array[UInt] // function indices
+  init : Array[Expr] // element init expressions
   is_active : Bool // True for active segments (flags 0,2,4,6), false for passive/declarative
-  elem_type : RefType // Element type (funcref, externref, or typed reference)
+  is_declarative : Bool // True for declarative segments (flags 3,7)
+  elem_type : RefType // Element heap type
+  elem_nullable : Bool // Whether element type is nullable
 }
 
 // Data segment (for memory initialization)

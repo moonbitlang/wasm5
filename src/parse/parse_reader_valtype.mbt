@@ -86,7 +86,7 @@ fn Parser::read_storage_type(self : Parser) -> @core.StorageType raise {
     0x77 => I16
     _ => {
       self.pos = self.pos - 1
-      StorageType::Val(self.read_valtype())
+      @core.StorageType::Val(self.read_valtype())
     }
   }
 }

@@ -199,9 +199,11 @@ priv struct WatElem {
   name : Bytes?
   table_ref : IndexRef
   offset : Array[WatInstr]
-  init : Array[FuncRef]
+  init : Array[Array[WatInstr]]
   is_active : Bool
+  is_declarative : Bool
   elem_type : @core.RefType
+  elem_nullable : Bool
 }
 
 ///|
@@ -418,7 +420,7 @@ fn parse_call_indirect_items_from_items(
   let list_items : Array[SExpr] = []
   list_items.push(Atom(op_tag))
   let mut idx = start
-  if idx < items.length() {
+  if idx < items.length() && not(is_reftype_expr(items[idx])) {
     match items[idx] {
       Atom(atom) if is_name(atom) || is_uint_atom(atom) => {
         list_items.push(items[idx])
@@ -522,7 +524,7 @@ fn parse_call_ref_typeuse_from_items(
   let list_items : Array[SExpr] = []
   list_items.push(Atom(op_tag))
   let mut idx = start
-  if idx < items.length() {
+  if idx < items.length() && not(is_reftype_expr(items[idx])) {
     match items[idx] {
       Atom(atom) if is_name(atom) || is_uint_atom(atom) => {
         list_items.push(items[idx])
@@ -1423,7 +1425,7 @@ fn parse_data(
   let mut mem_ref = IndexRef::Index(0U)
   let mut offset_expr : Array[WatInstr] = []
   let mut is_active = false
-  if idx < items.length() {
+  if idx < items.length() && not(is_reftype_expr(items[idx])) {
     match items[idx] {
       List(list_items) =>
         if list_items.length() > 0 &&
@@ -1438,7 +1440,7 @@ fn parse_data(
       _ => ()
     }
   }
-  if idx < items.length() {
+  if idx < items.length() && not(is_reftype_expr(items[idx])) {
     match items[idx] {
       List(list_items) =>
         if list_items.length() > 0 &&
@@ -1481,6 +1483,35 @@ fn parse_data(
 }
 
 ///|
+fn is_reftype_atom(atom : Bytes) -> Bool {
+  match atom {
+    b"funcref"
+    | b"externref"
+    | b"anyref"
+    | b"eqref"
+    | b"i31ref"
+    | b"structref"
+    | b"arrayref"
+    | b"exnref"
+    | b"nullref"
+    | b"nullfuncref"
+    | b"nullexternref"
+    | b"nullexnref" => true
+    _ => false
+  }
+}
+
+///|
+fn is_reftype_expr(expr : SExpr) -> Bool {
+  match expr {
+    Atom(atom) => is_reftype_atom(atom)
+    List(list_items) =>
+      list_items.length() > 0 && list_items[0] is Atom(tag) && tag == b"ref"
+    _ => false
+  }
+}
+
+///|
 fn parse_elem(
   items : Array[SExpr],
   type_map : Map[Bytes, UInt],
@@ -1491,11 +1522,17 @@ fn parse_elem(
     name = Some(atom)
     idx = idx + 1
   }
+  let mut is_declarative = false
+  if idx < items.length() && items[idx] is Atom(atom) && atom == b"declare" {
+    is_declarative = true
+    idx = idx + 1
+  }
   let mut table_ref = IndexRef::Index(0U)
   let mut offset_instrs : Array[WatInstr] = []
   let mut is_active = false
-  let elem_type = @core.RefType::Func
-  if idx < items.length() {
+  let mut elem_type = @core.RefType::Func
+  let mut elem_nullable = true
+  if idx < items.length() && not(is_reftype_expr(items[idx])) {
     match items[idx] {
       List(list_items) =>
         if list_items.length() > 0 &&
@@ -1510,7 +1547,7 @@ fn parse_elem(
       _ => ()
     }
   }
-  if idx < items.length() {
+  if idx < items.length() && not(is_reftype_expr(items[idx])) {
     match items[idx] {
       List(list_items) =>
         if list_items.length() > 0 &&
@@ -1540,23 +1577,34 @@ fn parse_elem(
       _ => ()
     }
   }
+  if is_declarative && is_active {
+    raise WatError::InvalidSyntax("declarative elem must be passive")
+  }
+  if idx < items.length() && is_reftype_expr(items[idx]) {
+    let (ref_type, nullable) = parse_reftype_expr(items[idx], type_map)
+    elem_type = ref_type
+    elem_nullable = nullable
+    idx = idx + 1
+  }
   if idx < items.length() && items[idx] is Atom(atom) && atom == b"func" {
     idx = idx + 1
   }
-  let init : Array[FuncRef] = []
+  let init : Array[Array[WatInstr]] = []
   for i in idx..<items.length() {
     match items[i] {
-      Atom(atom) => init.push(parse_func_ref(atom))
-      List(list_items) => {
-        guard list_items.length() == 2 && list_items[0] is Atom(tag) else {
-          raise WatError::InvalidSyntax("elem expects func indices")
+      Atom(atom) => init.push([WatInstr::RefFunc(parse_func_ref(atom))])
+      List(list_items) =>
+        if list_items.length() == 2 &&
+          list_items[0] is Atom(tag) &&
+          tag == b"func" {
+          init.push([
+            WatInstr::RefFunc(parse_func_ref(expect_atom(list_items[1]))),
+          ])
+        } else {
+          let instrs = parse_instrs([items[i]], Map::new(), [], type_map)
+          init.push(instrs)
         }
-        guard tag == b"func" else {
-          raise WatError::InvalidSyntax("elem expects func indices")
-        }
-        init.push(parse_func_ref(expect_atom(list_items[1])))
-      }
-      _ => raise WatError::InvalidSyntax("elem expects func indices")
+      _ => raise WatError::InvalidSyntax("elem expects init expressions")
     }
   }
   WatElem::{
@@ -1565,7 +1613,9 @@ fn parse_elem(
     offset: offset_instrs,
     init,
     is_active,
+    is_declarative,
     elem_type,
+    elem_nullable,
   }
 }
 
@@ -1618,7 +1668,7 @@ fn parse_storage_type_atom(
   match atom {
     b"i8" => I8
     b"i16" => I16
-    _ => StorageType::Val(parse_valtype_atom(atom, type_map))
+    _ => @core.StorageType::Val(parse_valtype_atom(atom, type_map))
   }
 }
 
@@ -1629,7 +1679,7 @@ fn parse_storage_type_expr(
 ) -> @core.StorageType raise WatError {
   match expr {
     Atom(atom) => parse_storage_type_atom(atom, type_map)
-    List(_) => StorageType::Val(parse_valtype_expr(expr, type_map))
+    List(_) => @core.StorageType::Val(parse_valtype_expr(expr, type_map))
     _ => raise WatError::InvalidSyntax("expected storage type")
   }
 }
@@ -1641,9 +1691,7 @@ fn parse_field_type_expr(
 ) -> @core.FieldType raise WatError {
   match expr {
     List(list_items) =>
-      if list_items.length() > 0 &&
-        list_items[0] is Atom(tag) &&
-        tag == b"mut" {
+      if list_items.length() > 0 && list_items[0] is Atom(tag) && tag == b"mut" {
         guard list_items.length() == 2 else {
           raise WatError::InvalidSyntax("mut expects one type")
         }
@@ -1709,15 +1757,17 @@ fn parse_type_def(
               raise WatError::InvalidSyntax("func type item tag must be atom")
             }
             match inner_tag {
-              b"param" => append_types(params, inner, type_map, allow_names=true)
-              b"result" => append_types(results, inner, type_map, allow_names=false)
+              b"param" =>
+                append_types(params, inner, type_map, allow_names=true)
+              b"result" =>
+                append_types(results, inner, type_map, allow_names=false)
               _ => raise WatError::Unsupported("func type item \{inner_tag}")
             }
           }
           _ => raise WatError::InvalidSyntax("unexpected item in type")
         }
       }
-      @core.TypeDef::Func({ params, results })
+      @core.TypeDef::Func(@core.FuncType::{ params, results })
     }
     b"struct" => {
       let fields : Array[@core.FieldType] = []
@@ -1734,14 +1784,14 @@ fn parse_type_def(
           _ => raise WatError::InvalidSyntax("struct expects field lists")
         }
       }
-      @core.TypeDef::Struct({ fields })
+      @core.TypeDef::Struct(@core.StructType::{ fields, })
     }
     b"array" => {
       guard list_items.length() == 2 else {
         raise WatError::InvalidSyntax("array expects element type")
       }
       let element = parse_field_type_expr(list_items[1], type_map)
-      @core.TypeDef::Array({ element })
+      @core.TypeDef::Array(@core.ArrayType::{ element, })
     }
     _ => raise WatError::InvalidSyntax("type expects func, struct, or array")
   }
@@ -2252,40 +2302,28 @@ fn parse_instr_from_atom(
       let field_atom = expect_atom_at(items, idx + 2)
       let type_idx = parse_type_index_atom(type_atom, type_map)
       let field_idx = parse_uint(field_atom)
-      (
-        WatInstr::Core(@core.Instr::StructGet(type_idx, field_idx)),
-        idx + 3,
-      )
+      (WatInstr::Core(@core.Instr::StructGet(type_idx, field_idx)), idx + 3)
     }
     b"struct.get_s" => {
       let type_atom = expect_atom_at(items, idx + 1)
       let field_atom = expect_atom_at(items, idx + 2)
       let type_idx = parse_type_index_atom(type_atom, type_map)
       let field_idx = parse_uint(field_atom)
-      (
-        WatInstr::Core(@core.Instr::StructGetS(type_idx, field_idx)),
-        idx + 3,
-      )
+      (WatInstr::Core(@core.Instr::StructGetS(type_idx, field_idx)), idx + 3)
     }
     b"struct.get_u" => {
       let type_atom = expect_atom_at(items, idx + 1)
       let field_atom = expect_atom_at(items, idx + 2)
       let type_idx = parse_type_index_atom(type_atom, type_map)
       let field_idx = parse_uint(field_atom)
-      (
-        WatInstr::Core(@core.Instr::StructGetU(type_idx, field_idx)),
-        idx + 3,
-      )
+      (WatInstr::Core(@core.Instr::StructGetU(type_idx, field_idx)), idx + 3)
     }
     b"struct.set" => {
       let type_atom = expect_atom_at(items, idx + 1)
       let field_atom = expect_atom_at(items, idx + 2)
       let type_idx = parse_type_index_atom(type_atom, type_map)
       let field_idx = parse_uint(field_atom)
-      (
-        WatInstr::Core(@core.Instr::StructSet(type_idx, field_idx)),
-        idx + 3,
-      )
+      (WatInstr::Core(@core.Instr::StructSet(type_idx, field_idx)), idx + 3)
     }
     b"array.new" => {
       let imm = expect_atom_at(items, idx + 1)
@@ -2302,10 +2340,7 @@ fn parse_instr_from_atom(
       let len_atom = expect_atom_at(items, idx + 2)
       let type_idx = parse_type_index_atom(type_atom, type_map)
       let len = parse_uint(len_atom)
-      (
-        WatInstr::Core(@core.Instr::ArrayNewFixed(type_idx, len)),
-        idx + 3,
-      )
+      (WatInstr::Core(@core.Instr::ArrayNewFixed(type_idx, len)), idx + 3)
     }
     b"array.new_data" => {
       let type_atom = expect_atom_at(items, idx + 1)
@@ -2350,28 +2385,19 @@ fn parse_instr_from_atom(
       let src_atom = expect_atom_at(items, idx + 2)
       let dst_idx = parse_type_index_atom(dst_atom, type_map)
       let src_idx = parse_type_index_atom(src_atom, type_map)
-      (
-        WatInstr::Core(@core.Instr::ArrayCopy(dst_idx, src_idx)),
-        idx + 3,
-      )
+      (WatInstr::Core(@core.Instr::ArrayCopy(dst_idx, src_idx)), idx + 3)
     }
     b"array.init_data" => {
       let type_atom = expect_atom_at(items, idx + 1)
       let data_atom = expect_atom_at(items, idx + 2)
       let type_idx = parse_type_index_atom(type_atom, type_map)
-      (
-        WatInstr::ArrayInitData(type_idx, parse_index_ref(data_atom)),
-        idx + 3,
-      )
+      (WatInstr::ArrayInitData(type_idx, parse_index_ref(data_atom)), idx + 3)
     }
     b"array.init_elem" => {
       let type_atom = expect_atom_at(items, idx + 1)
       let elem_atom = expect_atom_at(items, idx + 2)
       let type_idx = parse_type_index_atom(type_atom, type_map)
-      (
-        WatInstr::ArrayInitElem(type_idx, parse_index_ref(elem_atom)),
-        idx + 3,
-      )
+      (WatInstr::ArrayInitElem(type_idx, parse_index_ref(elem_atom)), idx + 3)
     }
     b"br_on_cast" => {
       let label_atom = expect_atom_at(items, idx + 1)
@@ -2390,11 +2416,7 @@ fn parse_instr_from_atom(
       (
         WatInstr::Core(
           @core.Instr::BrOnCast(
-            label,
-            target_type,
-            target_nullable,
-            source_type,
-            source_nullable,
+            label, target_type, target_nullable, source_type, source_nullable,
           ),
         ),
         idx + 4,
@@ -2417,11 +2439,7 @@ fn parse_instr_from_atom(
       (
         WatInstr::Core(
           @core.Instr::BrOnCastFail(
-            label,
-            target_type,
-            target_nullable,
-            source_type,
-            source_nullable,
+            label, target_type, target_nullable, source_type, source_nullable,
           ),
         ),
         idx + 4,
@@ -2702,14 +2720,20 @@ fn parse_instr_from_list(
         raise WatError::InvalidSyntax("array.new_data expects type and data")
       }
       let type_idx = parse_type_index_atom(expect_atom(list_items[1]), type_map)
-      WatInstr::ArrayNewData(type_idx, parse_index_ref(expect_atom(list_items[2])))
+      WatInstr::ArrayNewData(
+        type_idx,
+        parse_index_ref(expect_atom(list_items[2])),
+      )
     }
     b"array.new_elem" => {
       guard list_items.length() == 3 else {
         raise WatError::InvalidSyntax("array.new_elem expects type and elem")
       }
       let type_idx = parse_type_index_atom(expect_atom(list_items[1]), type_map)
-      WatInstr::ArrayNewElem(type_idx, parse_index_ref(expect_atom(list_items[2])))
+      WatInstr::ArrayNewElem(
+        type_idx,
+        parse_index_ref(expect_atom(list_items[2])),
+      )
     }
     b"array.get" => {
       guard list_items.length() == 2 else {
@@ -2765,14 +2789,20 @@ fn parse_instr_from_list(
         raise WatError::InvalidSyntax("array.init_data expects type and data")
       }
       let type_idx = parse_type_index_atom(expect_atom(list_items[1]), type_map)
-      WatInstr::ArrayInitData(type_idx, parse_index_ref(expect_atom(list_items[2])))
+      WatInstr::ArrayInitData(
+        type_idx,
+        parse_index_ref(expect_atom(list_items[2])),
+      )
     }
     b"array.init_elem" => {
       guard list_items.length() == 3 else {
         raise WatError::InvalidSyntax("array.init_elem expects type and elem")
       }
       let type_idx = parse_type_index_atom(expect_atom(list_items[1]), type_map)
-      WatInstr::ArrayInitElem(type_idx, parse_index_ref(expect_atom(list_items[2])))
+      WatInstr::ArrayInitElem(
+        type_idx,
+        parse_index_ref(expect_atom(list_items[2])),
+      )
     }
     b"br_on_cast" => {
       guard list_items.length() == 4 else {
@@ -2789,11 +2819,7 @@ fn parse_instr_from_list(
       )
       WatInstr::Core(
         @core.Instr::BrOnCast(
-          label,
-          target_type,
-          target_nullable,
-          source_type,
-          source_nullable,
+          label, target_type, target_nullable, source_type, source_nullable,
         ),
       )
     }
@@ -2812,18 +2838,12 @@ fn parse_instr_from_list(
       )
       WatInstr::Core(
         @core.Instr::BrOnCastFail(
-          label,
-          target_type,
-          target_nullable,
-          source_type,
-          source_nullable,
+          label, target_type, target_nullable, source_type, source_nullable,
         ),
       )
     }
-    b"any.convert_extern" =>
-      WatInstr::Core(@core.Instr::AnyConvertExtern)
-    b"extern.convert_any" =>
-      WatInstr::Core(@core.Instr::ExternConvertAny)
+    b"any.convert_extern" => WatInstr::Core(@core.Instr::AnyConvertExtern)
+    b"extern.convert_any" => WatInstr::Core(@core.Instr::ExternConvertAny)
     b"ref.i31" => WatInstr::Core(@core.Instr::RefI31)
     b"i31.get_s" => WatInstr::Core(@core.Instr::I31GetS)
     b"i31.get_u" => WatInstr::Core(@core.Instr::I31GetU)
@@ -4324,16 +4344,24 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
     } else {
       []
     }
-    let init_indices : Array[UInt] = []
-    for func_ref in elem.init {
-      init_indices.push(resolve_func_ref(func_ref, func_map))
+    let init_exprs : Array[@core.Expr] = []
+    for elem_init in elem.init {
+      let init_instrs = resolve_const_instrs(
+        elem_init,
+        global_map,
+        wat.global_imports,
+        func_map,
+      )
+      init_exprs.push(@core.Expr::{ instrs: init_instrs })
     }
     elems.push({
       table_idx,
       offset: @core.Expr::{ instrs: offset_instrs },
-      init: init_indices,
+      init: init_exprs,
       is_active: elem.is_active,
+      is_declarative: elem.is_declarative,
       elem_type: elem.elem_type,
+      elem_nullable: elem.elem_nullable,
     })
   }
   let exports : Array[@core.Export] = []
@@ -4415,11 +4443,7 @@ fn resolve_const_instrs(
     match instr {
       WatInstr::Core(core_instr) =>
         match core_instr {
-          I32Const(_)
-          | I64Const(_)
-          | F32Const(_)
-          | F64Const(_)
-          | RefNull(_) =>
+          I32Const(_) | I64Const(_) | F32Const(_) | F64Const(_) | RefNull(_) =>
             out.push(core_instr)
           _ => raise WatError::Unsupported("non-const init expression")
         }

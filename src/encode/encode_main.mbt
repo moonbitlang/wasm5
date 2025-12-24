@@ -325,41 +325,86 @@ fn encode_element_section(
   let payload : Array[Byte] = []
   append_bytes(payload, encode_u32_leb128(elems.length().reinterpret_as_uint()))
   for elem in elems {
-    guard elem.elem_type == @core.RefType::Func else {
-      raise EncodeError::Unsupported("elem type \{elem.elem_type}")
-    }
-    if elem.is_active {
-      if elem.table_idx == 0U {
-        payload.push(0x00U.to_byte())
-        append_bytes(payload, encode_expr(elem.offset))
-        append_bytes(
-          payload,
-          encode_u32_leb128(elem.init.length().reinterpret_as_uint()),
-        )
-        for idx in elem.init {
-          append_bytes(payload, encode_u32_leb128(idx))
+    let init_indices : Array[UInt] = []
+    let mut can_use_indices = elem.elem_type == @core.RefType::Func &&
+      elem.elem_nullable
+    if can_use_indices {
+      for expr in elem.init {
+        match expr.instrs.get(0) {
+          Some(RefFunc(idx)) =>
+            if expr.instrs.length() == 1 {
+              init_indices.push(idx)
+            } else {
+              can_use_indices = false
+            }
+          _ => can_use_indices = false
         }
-      } else {
-        payload.push(0x02U.to_byte())
-        append_bytes(payload, encode_u32_leb128(elem.table_idx))
-        append_bytes(payload, encode_expr(elem.offset))
-        payload.push(0x00U.to_byte())
-        append_bytes(
-          payload,
-          encode_u32_leb128(elem.init.length().reinterpret_as_uint()),
-        )
-        for idx in elem.init {
-          append_bytes(payload, encode_u32_leb128(idx))
+        if not(can_use_indices) {
+          break
         }
       }
+    }
+    let uses_exprs = not(can_use_indices)
+    let mut flag = 0U
+    let mut emit_table_idx = false
+    let mut emit_elemkind = false
+    let mut emit_reftype = false
+    if uses_exprs {
+      if elem.is_active {
+        if elem.elem_type == @core.RefType::Func &&
+          elem.elem_nullable &&
+          elem.table_idx == 0U {
+          flag = 0x04U
+        } else {
+          flag = 0x06U
+          emit_table_idx = true
+          emit_reftype = true
+        }
+      } else if elem.is_declarative {
+        flag = 0x07U
+        emit_reftype = true
+      } else {
+        flag = 0x05U
+        emit_reftype = true
+      }
+    } else if elem.is_active {
+      if elem.table_idx == 0U {
+        flag = 0x00U
+      } else {
+        flag = 0x02U
+        emit_table_idx = true
+        emit_elemkind = true
+      }
+    } else if elem.is_declarative {
+      flag = 0x03U
+      emit_elemkind = true
     } else {
-      payload.push(0x01U.to_byte())
+      flag = 0x01U
+      emit_elemkind = true
+    }
+    payload.push(flag.to_byte())
+    if emit_table_idx {
+      append_bytes(payload, encode_u32_leb128(elem.table_idx))
+    }
+    if elem.is_active {
+      append_bytes(payload, encode_expr(elem.offset))
+    }
+    if emit_elemkind {
       payload.push(0x00U.to_byte())
-      append_bytes(
-        payload,
-        encode_u32_leb128(elem.init.length().reinterpret_as_uint()),
-      )
-      for idx in elem.init {
+    }
+    if emit_reftype {
+      append_bytes(payload, encode_reftype(elem.elem_type, elem.elem_nullable))
+    }
+    append_bytes(
+      payload,
+      encode_u32_leb128(elem.init.length().reinterpret_as_uint()),
+    )
+    if uses_exprs {
+      for expr in elem.init {
+        append_bytes(payload, encode_expr(expr))
+      }
+    } else {
+      for idx in init_indices {
         append_bytes(payload, encode_u32_leb128(idx))
       }
     }
@@ -1124,7 +1169,7 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
       target_type,
       target_nullable,
       source_type,
-      source_nullable,
+      source_nullable
     ) => {
       payload.push(0xFBU.to_byte())
       append_bytes(payload, encode_u32_leb128(0x19U))

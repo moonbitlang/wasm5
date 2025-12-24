@@ -141,8 +141,11 @@ fn register_module(
             match imp.desc {
               @wasm5_core.ImportDesc::Func(type_idx) => {
                 if import_idx == func_idx_int {
-                  let func_type = module_.types[type_idx.reinterpret_as_int()]
-                  found_arity = func_type.params.length().reinterpret_as_uint()
+                  match module_.types[type_idx.reinterpret_as_int()] {
+                    @wasm5_core.TypeDef::Func(ft) =>
+                      found_arity = ft.params.length().reinterpret_as_uint()
+                    _ => ()
+                  }
                   break
                 }
                 import_idx += 1
@@ -155,8 +158,11 @@ fn register_module(
           // It's a local function
           let local_idx = func_idx_int - num_imported_funcs
           let type_idx = module_.funcs[local_idx].reinterpret_as_int()
-          let func_type = module_.types[type_idx]
-          func_type.params.length().reinterpret_as_uint()
+          match module_.types[type_idx] {
+            @wasm5_core.TypeDef::Func(ft) =>
+              ft.params.length().reinterpret_as_uint()
+            _ => 0U
+          }
         }
 
         // Create wrapper and add to resolver

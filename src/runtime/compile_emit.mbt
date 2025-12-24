@@ -1298,33 +1298,21 @@ fn Runtime::compile_wasm_instr(
     }
     ArrayNewFixed(type_idx, len) => {
       let type_idx_int = type_idx.reinterpret_as_int()
-      let _ = require_array_type(
-        self.module_,
-        type_idx_int,
-        "array.new_fixed",
-      )
+      let _ = require_array_type(self.module_, type_idx_int, "array.new_fixed")
       ctx.pop_types(len.reinterpret_as_int())
       ctx.push_type(Ref(TypeIndex(type_idx_int), false))
       self.emit(WasmInstr(op_gc_unimplemented))
     }
     ArrayNewData(type_idx, _data_idx) => {
       let type_idx_int = type_idx.reinterpret_as_int()
-      let _ = require_array_type(
-        self.module_,
-        type_idx_int,
-        "array.new_data",
-      )
+      let _ = require_array_type(self.module_, type_idx_int, "array.new_data")
       ctx.pop_types(2)
       ctx.push_type(Ref(TypeIndex(type_idx_int), false))
       self.emit(WasmInstr(op_gc_unimplemented))
     }
     ArrayNewElem(type_idx, _elem_idx) => {
       let type_idx_int = type_idx.reinterpret_as_int()
-      let _ = require_array_type(
-        self.module_,
-        type_idx_int,
-        "array.new_elem",
-      )
+      let _ = require_array_type(self.module_, type_idx_int, "array.new_elem")
       ctx.pop_types(2)
       ctx.push_type(Ref(TypeIndex(type_idx_int), false))
       self.emit(WasmInstr(op_gc_unimplemented))
@@ -1342,33 +1330,21 @@ fn Runtime::compile_wasm_instr(
     }
     ArrayGetS(type_idx) => {
       let type_idx_int = type_idx.reinterpret_as_int()
-      let _ = require_array_type(
-        self.module_,
-        type_idx_int,
-        "array.get_s",
-      )
+      let _ = require_array_type(self.module_, type_idx_int, "array.get_s")
       ctx.pop_types(2)
       ctx.push_type(I32)
       self.emit(WasmInstr(op_gc_unimplemented))
     }
     ArrayGetU(type_idx) => {
       let type_idx_int = type_idx.reinterpret_as_int()
-      let _ = require_array_type(
-        self.module_,
-        type_idx_int,
-        "array.get_u",
-      )
+      let _ = require_array_type(self.module_, type_idx_int, "array.get_u")
       ctx.pop_types(2)
       ctx.push_type(I32)
       self.emit(WasmInstr(op_gc_unimplemented))
     }
     ArraySet(type_idx) => {
       let type_idx_int = type_idx.reinterpret_as_int()
-      let _ = require_array_type(
-        self.module_,
-        type_idx_int,
-        "array.set",
-      )
+      let _ = require_array_type(self.module_, type_idx_int, "array.set")
       ctx.pop_types(3)
       self.emit(WasmInstr(op_gc_unimplemented))
     }
@@ -1379,11 +1355,7 @@ fn Runtime::compile_wasm_instr(
     }
     ArrayFill(type_idx) => {
       let type_idx_int = type_idx.reinterpret_as_int()
-      let _ = require_array_type(
-        self.module_,
-        type_idx_int,
-        "array.fill",
-      )
+      let _ = require_array_type(self.module_, type_idx_int, "array.fill")
       ctx.pop_types(4)
       self.emit(WasmInstr(op_gc_unimplemented))
     }
@@ -1397,21 +1369,13 @@ fn Runtime::compile_wasm_instr(
     }
     ArrayInitData(type_idx, _data_idx) => {
       let type_idx_int = type_idx.reinterpret_as_int()
-      let _ = require_array_type(
-        self.module_,
-        type_idx_int,
-        "array.init_data",
-      )
+      let _ = require_array_type(self.module_, type_idx_int, "array.init_data")
       ctx.pop_types(4)
       self.emit(WasmInstr(op_gc_unimplemented))
     }
     ArrayInitElem(type_idx, _elem_idx) => {
       let type_idx_int = type_idx.reinterpret_as_int()
-      let _ = require_array_type(
-        self.module_,
-        type_idx_int,
-        "array.init_elem",
-      )
+      let _ = require_array_type(self.module_, type_idx_int, "array.init_elem")
       ctx.pop_types(4)
       self.emit(WasmInstr(op_gc_unimplemented))
     }

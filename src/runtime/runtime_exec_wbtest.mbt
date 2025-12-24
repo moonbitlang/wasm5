@@ -118,7 +118,7 @@ test "runtime call compiled local errors" {
     compiled: None,
   }
   let module_not_compiled = module_with(
-    [func_type],
+    [Func(func_type)],
     [0U],
     [code],
     [],
@@ -143,7 +143,7 @@ test "runtime call compiled local errors" {
     compiled: Some(0),
   }
   let module_bad = module_with(
-    [func_type],
+    [Func(func_type)],
     [0U],
     [code_bad],
     [],

@@ -378,11 +378,8 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
   let num_imported_funcs = count_imported_funcs(rt.module_)
 
   // Get the expected type
-  let expected_type = match get_func_type_or_error(
-    rt,
-    type_idx,
-    "call_indirect",
-  ) {
+  let expected_type = match
+    get_func_type_or_error(rt, type_idx, "call_indirect") {
     Some(found) => found
     None => return InvalidType
   }
@@ -399,11 +396,8 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
       rt.error_detail = "call_indirect: invalid imported function index"
       return InvalidType
     }
-    let actual_type = match get_func_type_or_error(
-      rt,
-      actual_type_idx,
-      "call_indirect",
-    ) {
+    let actual_type = match
+      get_func_type_or_error(rt, actual_type_idx, "call_indirect") {
       Some(found) => found
       None => return InvalidType
     }
@@ -432,11 +426,8 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
 
   // Get the actual function type
   let actual_type_idx = rt.module_.funcs[local_func_idx].reinterpret_as_int()
-  let actual_type = match get_func_type_or_error(
-    rt,
-    actual_type_idx,
-    "call_indirect",
-  ) {
+  let actual_type = match
+    get_func_type_or_error(rt, actual_type_idx, "call_indirect") {
     Some(found) => found
     None => return InvalidType
   }
@@ -573,11 +564,8 @@ fn op_return_call_indirect(rt : Runtime) -> RetCode {
   let num_imported_funcs = count_imported_funcs(rt.module_)
 
   // Get the expected type
-  let expected_type = match get_func_type_or_error(
-    rt,
-    type_idx,
-    "return_call_indirect",
-  ) {
+  let expected_type = match
+    get_func_type_or_error(rt, type_idx, "return_call_indirect") {
     Some(found) => found
     None => return InvalidType
   }
@@ -594,11 +582,8 @@ fn op_return_call_indirect(rt : Runtime) -> RetCode {
       rt.error_detail = "return_call_indirect: invalid imported function index"
       return InvalidType
     }
-    let actual_type = match get_func_type_or_error(
-      rt,
-      actual_type_idx,
-      "return_call_indirect",
-    ) {
+    let actual_type = match
+      get_func_type_or_error(rt, actual_type_idx, "return_call_indirect") {
       Some(found) => found
       None => return InvalidType
     }
@@ -626,11 +611,8 @@ fn op_return_call_indirect(rt : Runtime) -> RetCode {
 
   // Get the actual function type
   let actual_type_idx = rt.module_.funcs[local_func_idx].reinterpret_as_int()
-  let actual_type = match get_func_type_or_error(
-    rt,
-    actual_type_idx,
-    "return_call_indirect",
-  ) {
+  let actual_type = match
+    get_func_type_or_error(rt, actual_type_idx, "return_call_indirect") {
     Some(found) => found
     None => return InvalidType
   }
@@ -711,7 +693,8 @@ fn op_call_ref(rt : Runtime) -> RetCode {
       rt.error_detail = "call_ref: invalid imported function index"
       return InvalidType
     }
-    let actual_type = match get_func_type_or_error(rt, actual_type_idx, "call_ref") {
+    let actual_type = match
+      get_func_type_or_error(rt, actual_type_idx, "call_ref") {
       Some(found) => found
       None => return InvalidType
     }
@@ -736,7 +719,8 @@ fn op_call_ref(rt : Runtime) -> RetCode {
     return InvalidType
   }
   let actual_type_idx = rt.module_.funcs[local_func_idx].reinterpret_as_int()
-  let actual_type = match get_func_type_or_error(rt, actual_type_idx, "call_ref") {
+  let actual_type = match
+    get_func_type_or_error(rt, actual_type_idx, "call_ref") {
     Some(found) => found
     None => return InvalidType
   }
@@ -792,7 +776,8 @@ fn op_return_call_ref(rt : Runtime) -> RetCode {
   let num_imported_funcs = count_imported_funcs(rt.module_)
 
   // Get the expected function type
-  let func_type = match get_func_type_or_error(rt, type_idx, "return_call_ref") {
+  let func_type = match
+    get_func_type_or_error(rt, type_idx, "return_call_ref") {
     Some(found) => found
     None => return InvalidType
   }
@@ -809,11 +794,8 @@ fn op_return_call_ref(rt : Runtime) -> RetCode {
       rt.error_detail = "return_call_ref: invalid imported function index"
       return InvalidType
     }
-    let actual_type = match get_func_type_or_error(
-      rt,
-      actual_type_idx,
-      "return_call_ref",
-    ) {
+    let actual_type = match
+      get_func_type_or_error(rt, actual_type_idx, "return_call_ref") {
       Some(found) => found
       None => return InvalidType
     }
@@ -837,11 +819,8 @@ fn op_return_call_ref(rt : Runtime) -> RetCode {
     return InvalidType
   }
   let actual_type_idx = rt.module_.funcs[local_func_idx].reinterpret_as_int()
-  let actual_type = match get_func_type_or_error(
-    rt,
-    actual_type_idx,
-    "return_call_ref",
-  ) {
+  let actual_type = match
+    get_func_type_or_error(rt, actual_type_idx, "return_call_ref") {
     Some(found) => found
     None => return InvalidType
   }

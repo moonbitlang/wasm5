@@ -17,7 +17,7 @@ fn parse_single_type(parser : Parser) -> @core.TypeDef raise {
       for _ in 0U..<result_count {
         results.push(parser.read_valtype())
       }
-      TypeDef::Func({ params, results })
+      @core.TypeDef::Func(@core.FuncType::{ params, results })
     }
     // struct type (GC proposal)
     0x5F => {
@@ -36,7 +36,7 @@ fn parse_single_type(parser : Parser) -> @core.TypeDef raise {
         }
         fields.push({ storage, mutable })
       }
-      TypeDef::Struct({ fields })
+      @core.TypeDef::Struct(@core.StructType::{ fields, })
     }
     // array type (GC proposal)
     0x5E => {
@@ -50,7 +50,9 @@ fn parse_single_type(parser : Parser) -> @core.TypeDef raise {
             "invalid mutability byte: 0x\{mut_byte.to_string()}",
           )
       }
-      TypeDef::Array({ element: { storage, mutable } })
+      @core.TypeDef::Array(@core.ArrayType::{
+        element: @core.FieldType::{ storage, mutable },
+      })
     }
     _ =>
       raise @validate.ValidationError::TypeMismatch(

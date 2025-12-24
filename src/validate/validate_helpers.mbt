@@ -493,8 +493,7 @@ fn is_subtype(
       is_struct_type_index(module_, n)
     (Ref(TypeIndex(n), false), Ref(Array, false)) =>
       is_array_type_index(module_, n)
-    (Ref(TypeIndex(n), _), Ref(Array, true)) =>
-      is_array_type_index(module_, n)
+    (Ref(TypeIndex(n), _), Ref(Array, true)) => is_array_type_index(module_, n)
     // NOTE: FuncRef is NOT a subtype of typed function references
     // General funcref cannot be used where specific typed reference is required
     // (FuncRef, Ref(TypeIndex(n), true)) => false

@@ -106,10 +106,7 @@ fn require_func_type(
   }
   match module_.types[type_idx] {
     Func(func_type) => func_type
-    _ =>
-      raise RuntimeError::InvalidType(
-        "\{context}: expected func type",
-      )
+    _ => raise RuntimeError::InvalidType("\{context}: expected func type")
   }
 }
 
@@ -126,10 +123,7 @@ fn require_struct_type(
   }
   match module_.types[type_idx] {
     Struct(struct_type) => struct_type
-    _ =>
-      raise RuntimeError::InvalidType(
-        "\{context}: expected struct type",
-      )
+    _ => raise RuntimeError::InvalidType("\{context}: expected struct type")
   }
 }
 
@@ -146,10 +140,7 @@ fn require_array_type(
   }
   match module_.types[type_idx] {
     Array(array_type) => array_type
-    _ =>
-      raise RuntimeError::InvalidType(
-        "\{context}: expected array type",
-      )
+    _ => raise RuntimeError::InvalidType("\{context}: expected array type")
   }
 }
 

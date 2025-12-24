@@ -220,6 +220,24 @@ async test "wat encoder matches wasm-tools for table and ref ops" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for elem exprs active" {
+  let wat = "(module (table 2 funcref) (func $f (result i32) i32.const 0) (elem (i32.const 0) (ref null func) (ref.func $f) (ref.null func)))"
+  assert_wat_matches("elem_expr_active", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for elem exprs declarative" {
+  let wat = "(module (func $f (result i32) i32.const 0) (elem declare (ref null func) (ref.func $f) (ref.null func)))"
+  assert_wat_matches("elem_expr_decl", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for elem exprs reftype" {
+  let wat = "(module (table 1 externref) (elem (ref null extern) (ref.null extern)))"
+  assert_wat_matches("elem_expr_reftype", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for data segments and memory.init" {
   let wat = "(module (memory 1) (data $p \"hi\") (data (i32.const 0) \"ok\") (func (export \"init\") (param i32 i32 i32) local.get 0 local.get 1 local.get 2 memory.init $p data.drop $p))"
   assert_wat_matches("data_memory_init", wat)

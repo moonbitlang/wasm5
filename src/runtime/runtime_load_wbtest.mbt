@@ -33,9 +33,11 @@ test "runtime load with resolver" {
       {
         table_idx: 0U,
         offset: make_expr([I32Const(0U)]),
-        init: [0U],
+        init: [make_expr([RefFunc(0U)])],
         is_active: true,
+        is_declarative: false,
         elem_type: Func,
+        elem_nullable: true,
       },
     ],
     datas: [

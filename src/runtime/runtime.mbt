@@ -437,12 +437,19 @@ pub fn Runtime::load_with_resolver(
               "elem segment offset must be i32",
             )
         }
-        // Copy function indices into table
+        // Copy element expressions into table
         let table = tables[table_idx]
         for i in 0..<elem.init.length() {
           let addr = offset + i
           if addr >= 0 && addr < table.data.length() {
-            table.data[addr] = Some(elem.init[i].reinterpret_as_int())
+            let value = eval_const_expr(elem.init[i], globals)
+            match value {
+              Ref(ref_idx) => table.data[addr] = ref_idx
+              _ =>
+                raise RuntimeError::UnsupportedInitExpression(
+                  "elem segment init must produce a reference",
+                )
+            }
           }
         }
       }

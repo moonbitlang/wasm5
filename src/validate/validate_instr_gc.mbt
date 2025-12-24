@@ -49,9 +49,7 @@ fn validate_instruction_gc(
       )
       let field = get_field(struct_type, field_idx, "struct.get_s")
       guard is_packed_storage(field.storage) else {
-        raise ValidationError::TypeMismatch(
-          "struct.get_s expects packed field",
-        )
+        raise ValidationError::TypeMismatch("struct.get_s expects packed field")
       }
       ctx.poly_pop_expect(
         module_,
@@ -68,9 +66,7 @@ fn validate_instruction_gc(
       )
       let field = get_field(struct_type, field_idx, "struct.get_u")
       guard is_packed_storage(field.storage) else {
-        raise ValidationError::TypeMismatch(
-          "struct.get_u expects packed field",
-        )
+        raise ValidationError::TypeMismatch("struct.get_u expects packed field")
       }
       ctx.poly_pop_expect(
         module_,
@@ -295,7 +291,13 @@ fn validate_instruction_gc(
         "array.init_elem ref",
       )
     }
-    BrOnCast(_label, _target_type, _target_nullable, source_type, source_nullable) => {
+    BrOnCast(
+      _label,
+      _target_type,
+      _target_nullable,
+      source_type,
+      source_nullable
+    ) => {
       let source_val = heap_type_valtype(source_type, source_nullable)
       ctx.poly_pop_expect(module_, source_val, "br_on_cast ref")
       stack.push(source_val)
@@ -305,7 +307,7 @@ fn validate_instruction_gc(
       target_type,
       target_nullable,
       source_type,
-      source_nullable,
+      source_nullable
     ) => {
       let source_val = heap_type_valtype(source_type, source_nullable)
       let target_val = heap_type_valtype(target_type, target_nullable)
@@ -410,25 +412,6 @@ fn heap_type_valtype(
 }
 
 ///|
-fn non_null_ref_type(val_type : @core.ValType) -> @core.ValType {
-  match val_type {
-    Ref(heap_type, true) => Ref(heap_type, false)
-    Ref(heap_type, false) => Ref(heap_type, false)
-    FuncRef => Ref(Func, false)
-    ExternRef => Ref(Extern, false)
-    AnyRef => Ref(Any, false)
-    EqRef => Ref(Eq, false)
-    I31Ref => Ref(I31, false)
-    StructRef => Ref(Struct, false)
-    ArrayRef => Ref(Array, false)
-    ExnRef => Ref(Exn, false)
-    NullRef => Ref(Any, false)
-    NullFuncRef => Ref(Func, false)
-    NullExternRef => Ref(Extern, false)
-    NullExnRef => Ref(Exn, false)
-    _ => val_type
-  }
-}
 
 ///|
 fn validate_data_index(

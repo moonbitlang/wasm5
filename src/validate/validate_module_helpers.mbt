@@ -15,8 +15,7 @@ fn validate_module_type_indices(m : @core.Module) -> Unit raise ValidationError 
         for field in struct_type.fields {
           validate_storage_type(m, field.storage)
         }
-      Array(array_type) =>
-        validate_storage_type(m, array_type.element.storage)
+      Array(array_type) => validate_storage_type(m, array_type.element.storage)
     }
   }
 
@@ -446,6 +445,35 @@ fn validate_module_tables(
 }
 
 ///|
+fn get_global_type_and_mutable(
+  m : @core.Module,
+  global_idx : Int,
+  import_counts : ImportCounts,
+) -> (@core.ValType, Bool) raise ValidationError {
+  if global_idx < import_counts.globals {
+    let mut import_global_idx = 0
+    for imp in m.imports {
+      match imp.desc {
+        Global(gt) => {
+          if import_global_idx == global_idx {
+            return (gt.val_type, gt.mutable)
+          }
+          import_global_idx += 1
+        }
+        _ => ()
+      }
+    }
+    raise ValidationError::UnknownGlobal(global_idx)
+  }
+  let local_idx = global_idx - import_counts.globals
+  if local_idx < 0 || local_idx >= m.globals.length() {
+    raise ValidationError::UnknownGlobal(global_idx)
+  }
+  let gt = m.globals[local_idx].type_
+  (gt.val_type, gt.mutable)
+}
+
+///|
 fn validate_module_element_segments(
   m : @core.Module,
   import_counts : ImportCounts,
@@ -454,7 +482,6 @@ fn validate_module_element_segments(
   // Only active segments reference tables; passive/declarative segments don't
   // Count total tables (imported + local)
   let total_tables = import_counts.tables + m.tables.length()
-  let total_funcs = import_counts.funcs + m.funcs.length()
   for elem in m.elems {
     // Only validate table index for active segments
     if elem.is_active {
@@ -464,11 +491,64 @@ fn validate_module_element_segments(
       }
     }
 
-    // Validate that all function indices in the element segment are valid
-    for func_idx in elem.init {
-      let func_idx_int = func_idx.reinterpret_as_int()
-      if func_idx_int < 0 || func_idx_int >= total_funcs {
-        raise ValidationError::InvalidFunctionIndex(func_idx_int)
+    // Validate element init expressions are constant references
+    let expected_type = @core.ValType::Ref(elem.elem_type, elem.elem_nullable)
+    for expr in elem.init {
+      let instrs = expr.instrs
+      guard instrs.length() == 1 else {
+        raise ValidationError::ConstantExpressionRequired(
+          "elem init must be a single const expression",
+        )
+      }
+      let instr = instrs[0]
+      let expr_type = match instr {
+        RefNull(ref_type) => {
+          guard elem.elem_nullable else {
+            raise ValidationError::TypeMismatch(
+              "non-nullable elem cannot be initialized with ref.null",
+            )
+          }
+          @core.ValType::Ref(ref_type, true)
+        }
+        RefFunc(func_idx) => {
+          let idx = func_idx.reinterpret_as_int()
+          let total_funcs = import_counts.funcs + m.funcs.length()
+          if idx < 0 || idx >= total_funcs {
+            raise ValidationError::InvalidFunctionIndex(idx)
+          }
+          let type_idx = get_func_type_index(m, idx, import_counts)
+          match elem.elem_type {
+            @core.RefType::TypeIndex(_) =>
+              @core.ValType::Ref(@core.RefType::TypeIndex(type_idx), false)
+            _ => @core.ValType::Ref(@core.RefType::Func, false)
+          }
+        }
+        GlobalGet(global_idx) => {
+          let gidx = global_idx.reinterpret_as_int()
+          let (gtype, mutable) = get_global_type_and_mutable(
+            m, gidx, import_counts,
+          )
+          guard not(mutable) else {
+            raise ValidationError::ConstantExpressionRequired(
+              "elem init global.get must reference immutable global",
+            )
+          }
+          guard is_ref_valtype(gtype) else {
+            raise ValidationError::TypeMismatch(
+              "elem init global.get must reference a reference type",
+            )
+          }
+          gtype
+        }
+        _ =>
+          raise ValidationError::ConstantExpressionRequired(
+            "elem init must be ref.null/ref.func/global.get",
+          )
+      }
+      guard is_subtype(m, expr_type, expected_type) else {
+        raise ValidationError::TypeMismatch(
+          "elem init type mismatch: \{expr_type} vs \{expected_type}",
+        )
       }
     }
   }
@@ -504,7 +584,13 @@ fn validate_module_function_bodies(
   // Validate function bodies against their types
   for i in 0..<m.codes.length() {
     let type_idx = m.funcs[i].reinterpret_as_int()
-    let func_type = m.types[type_idx]
+    let func_type = match m.types[type_idx] {
+      Func(ft) => ft
+      _ =>
+        raise ValidationError::TypeMismatch(
+          "function type index must refer to func type",
+        )
+    }
     let code = m.codes[i]
 
     // Validate the function body

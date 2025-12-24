@@ -21,6 +21,12 @@ pub fn simd_stack_effect(Bytes) -> SimdStackEffect
 // Errors
 
 // Types and methods
+pub(all) struct ArrayType {
+  element : FieldType
+}
+pub impl Eq for ArrayType
+pub impl Show for ArrayType
+
 pub(all) enum AtomicImmKind {
   None
   MemArg
@@ -91,9 +97,11 @@ pub(all) struct Data {
 pub(all) struct Elem {
   table_idx : UInt
   offset : Expr
-  init : Array[UInt]
+  init : Array[Expr]
   is_active : Bool
+  is_declarative : Bool
   elem_type : RefType
+  elem_nullable : Bool
 }
 
 pub(all) struct Export {
@@ -113,10 +121,19 @@ pub(all) struct Expr {
   instrs : Array[Instr]
 }
 
+pub(all) struct FieldType {
+  storage : StorageType
+  mutable : Bool
+}
+pub impl Eq for FieldType
+pub impl Show for FieldType
+
 pub(all) struct FuncType {
   params : Array[ValType]
   results : Array[ValType]
 }
+pub impl Eq for FuncType
+pub impl Show for FuncType
 
 pub(all) struct Global {
   type_ : GlobalType
@@ -217,6 +234,33 @@ pub(all) enum Instr {
   RefAsNonNull
   RefTest(RefType, Bool)
   RefCast(RefType, Bool)
+  StructNew(UInt)
+  StructNewDefault(UInt)
+  StructGet(UInt, UInt)
+  StructGetS(UInt, UInt)
+  StructGetU(UInt, UInt)
+  StructSet(UInt, UInt)
+  ArrayNew(UInt)
+  ArrayNewDefault(UInt)
+  ArrayNewFixed(UInt, UInt)
+  ArrayNewData(UInt, UInt)
+  ArrayNewElem(UInt, UInt)
+  ArrayGet(UInt)
+  ArrayGetS(UInt)
+  ArrayGetU(UInt)
+  ArraySet(UInt)
+  ArrayLen
+  ArrayFill(UInt)
+  ArrayCopy(UInt, UInt)
+  ArrayInitData(UInt, UInt)
+  ArrayInitElem(UInt, UInt)
+  BrOnCast(UInt, RefType, Bool, RefType, Bool)
+  BrOnCastFail(UInt, RefType, Bool, RefType, Bool)
+  AnyConvertExtern
+  ExternConvertAny
+  RefI31
+  I31GetS
+  I31GetU
   I32Const(UInt)
   I64Const(UInt64)
   F32Const(Float)
@@ -371,7 +415,7 @@ pub(all) struct MemType {
 }
 
 pub(all) struct Module {
-  types : Array[FuncType]
+  types : Array[TypeDef]
   funcs : Array[UInt]
   tables : Array[TableType]
   mems : Array[MemType]
@@ -453,6 +497,20 @@ pub(all) enum SimdStackEffect {
 }
 pub impl Show for SimdStackEffect
 
+pub(all) enum StorageType {
+  Val(ValType)
+  I8
+  I16
+}
+pub impl Eq for StorageType
+pub impl Show for StorageType
+
+pub(all) struct StructType {
+  fields : Array[FieldType]
+}
+pub impl Eq for StructType
+pub impl Show for StructType
+
 pub(all) struct TableType {
   elem_type : RefType
   limits : Limits
@@ -463,6 +521,14 @@ pub(all) struct TableType {
 pub(all) struct Tag {
   type_idx : UInt
 }
+
+pub(all) enum TypeDef {
+  Func(FuncType)
+  Struct(StructType)
+  Array(ArrayType)
+}
+pub impl Eq for TypeDef
+pub impl Show for TypeDef
 
 pub(all) enum ValType {
   I32
