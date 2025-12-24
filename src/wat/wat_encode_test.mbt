@@ -673,3 +673,12 @@ async test "wast parser extracts modules from script" {
     wasms[2],
   )
 }
+
+///|
+async test "wast parser extracts modules from asserts" {
+  let q = "\""
+  let wast = "(assert_invalid (module (func)) " + q + "msg" + q + ")"
+  let wasms = wast_to_wasm(wast)
+  assert_eq(wasms.length(), 1)
+  assert_wasm_matches_wat("wast_assert_module", "(module (func))", wasms[0])
+}

@@ -830,6 +830,28 @@ fn append_wast_modules(
 }
 
 ///|
+fn append_wast_nested(
+  exprs : Array[SExpr],
+  modules : Array[@core.Module],
+) -> Unit raise WatError {
+  for expr in exprs {
+    match expr {
+      List(items) =>
+        if items.length() > 0 &&
+          items[0] is Atom(tag) &&
+          (
+            tag == b"module" ||
+            tag == b"script" ||
+            bytes_starts_with(tag, b"assert_")
+          ) {
+          append_wast_module(expr, modules)
+        }
+      _ => ()
+    }
+  }
+}
+
+///|
 fn append_wast_module(
   expr : SExpr,
   modules : Array[@core.Module],
@@ -846,6 +868,11 @@ fn append_wast_module(
       if tag == b"script" {
         let nested = slice_sexprs(items, 1)
         append_wast_modules(nested, modules)
+        return
+      }
+      if bytes_starts_with(tag, b"assert_") {
+        let nested = slice_sexprs(items, 1)
+        append_wast_nested(nested, modules)
         return
       }
       if is_known_wast_command(tag) {
