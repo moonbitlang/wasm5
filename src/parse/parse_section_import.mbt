@@ -15,7 +15,7 @@ fn parse_import_section(parser : Parser) -> Array[@core.Import] raise {
         let limits = parser.read_limits()
         Table(@core.TableType::{ elem_type, limits, init: None, nullable })
       }
-      0x02 => Mem(@core.MemType::{ limits: parser.read_limits() })
+      0x02 => Mem(parser.read_memtype())
       0x03 => {
         let val_type = parser.read_valtype()
         let mutable = parser.read_byte() == 0x01

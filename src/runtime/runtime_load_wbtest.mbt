@@ -6,7 +6,10 @@ fn make_expr(instrs : Array[@core.Instr]) -> @core.Expr {
 ///|
 test "runtime load with resolver" {
   let func_type : @core.FuncType = { params: [], results: [] }
-  let mem_type : @core.MemType = { limits: { min: 1U, max: Some(2U) } }
+  let mem_type : @core.MemType = {
+    limits: { min: 1U, max: Some(2U) },
+    shared: false,
+  }
   let table_type : @core.TableType = {
     elem_type: Func,
     limits: { min: 1U, max: Some(2U) },
@@ -96,7 +99,10 @@ test "runtime load with resolver" {
 
 ///|
 test "runtime load fallback memory" {
-  let mem_type : @core.MemType = { limits: { min: 1U, max: Some(2U) } }
+  let mem_type : @core.MemType = {
+    limits: { min: 1U, max: Some(2U) },
+    shared: false,
+  }
   let module_ : @core.Module = {
     types: [],
     funcs: [],
@@ -118,7 +124,10 @@ test "runtime load fallback memory" {
 
 ///|
 test "runtime load local memory" {
-  let mem_type : @core.MemType = { limits: { min: 1U, max: None } }
+  let mem_type : @core.MemType = {
+    limits: { min: 1U, max: None },
+    shared: false,
+  }
   let module_ : @core.Module = {
     types: [],
     funcs: [],

@@ -51,7 +51,7 @@ test "compile helpers func type lookup with non func imports" {
       {
         module_: b"m",
         name: b"mem",
-        desc: Mem({ limits: { min: 1U, max: None } }),
+        desc: Mem({ limits: { min: 1U, max: None }, shared: false }),
       },
       { module_: b"m", name: b"f", desc: Func(0U) },
     ],

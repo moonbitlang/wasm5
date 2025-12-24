@@ -140,7 +140,7 @@ fn encode_import_section(
       }
       Mem(mem_type) => {
         payload.push(0x02U.to_byte())
-        append_bytes(payload, encode_limits(mem_type.limits))
+        append_bytes(payload, encode_memory_limits(mem_type))
       }
       Global(global_type) => {
         payload.push(0x03U.to_byte())
@@ -191,12 +191,14 @@ fn encode_table_section(
 }
 
 ///|
-fn encode_memory_section(mems : Array[@core.MemType]) -> Array[Byte] {
+fn encode_memory_section(
+  mems : Array[@core.MemType],
+) -> Array[Byte] raise EncodeError {
   guard mems.length() > 0 else { return [] }
   let payload : Array[Byte] = []
   append_bytes(payload, encode_u32_leb128(mems.length().reinterpret_as_uint()))
   for mem_type in mems {
-    append_bytes(payload, encode_limits(mem_type.limits))
+    append_bytes(payload, encode_memory_limits(mem_type))
   }
   payload
 }
@@ -448,6 +450,32 @@ fn encode_limits(limits : @core.Limits) -> Array[Byte] {
     None => {
       payload.push(0x00U.to_byte())
       append_bytes(payload, encode_u32_leb128(limits.min))
+    }
+  }
+  payload
+}
+
+///|
+fn encode_memory_limits(
+  mem_type : @core.MemType,
+) -> Array[Byte] raise EncodeError {
+  let payload : Array[Byte] = []
+  match (mem_type.shared, mem_type.limits.max) {
+    (true, Some(max)) => {
+      payload.push(0x03U.to_byte())
+      append_bytes(payload, encode_u32_leb128(mem_type.limits.min))
+      append_bytes(payload, encode_u32_leb128(max))
+    }
+    (true, None) =>
+      raise EncodeError::Unsupported("shared memory requires maximum")
+    (false, Some(max)) => {
+      payload.push(0x01U.to_byte())
+      append_bytes(payload, encode_u32_leb128(mem_type.limits.min))
+      append_bytes(payload, encode_u32_leb128(max))
+    }
+    (false, None) => {
+      payload.push(0x00U.to_byte())
+      append_bytes(payload, encode_u32_leb128(mem_type.limits.min))
     }
   }
   payload

@@ -98,6 +98,7 @@ pub(all) struct Limits {
 ///|
 pub(all) struct MemType {
   limits : Limits
+  shared : Bool
 }
 
 // Table type

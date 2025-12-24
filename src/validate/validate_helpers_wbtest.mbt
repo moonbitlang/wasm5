@@ -24,7 +24,10 @@ test "validate helper counts and type lookup" {
     init: None,
     nullable: true,
   }
-  let mem_type : @core.MemType = { limits: { min: 0U, max: None } }
+  let mem_type : @core.MemType = {
+    limits: { min: 0U, max: None },
+    shared: false,
+  }
   let global_type : @core.GlobalType = { val_type: I32, mutable: false }
   let imports : Array[@core.Import] = [
     {

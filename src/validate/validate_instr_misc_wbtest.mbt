@@ -4,7 +4,7 @@ fn test_module_with_memory() -> @core.Module {
     types: [],
     funcs: [],
     tables: [],
-    mems: [{ limits: { min: 0U, max: None } }],
+    mems: [{ limits: { min: 0U, max: None }, shared: false }],
     globals: [],
     tags: [],
     elems: [],

@@ -242,7 +242,7 @@ test "validate module memory limit errors" {
     types: [],
     funcs: [],
     tables: [],
-    mems: [{ limits: { min: 10U, max: Some(5U) } }],
+    mems: [{ limits: { min: 10U, max: Some(5U) }, shared: false }],
     globals: [],
     tags: [],
     elems: [],
@@ -264,7 +264,7 @@ test "validate module memory limit errors" {
     types: [],
     funcs: [],
     tables: [],
-    mems: [{ limits: { min: 0U, max: Some(70000U) } }],
+    mems: [{ limits: { min: 0U, max: Some(70000U) }, shared: false }],
     globals: [],
     tags: [],
     elems: [],
@@ -286,7 +286,7 @@ test "validate module memory limit errors" {
     types: [],
     funcs: [],
     tables: [],
-    mems: [{ limits: { min: 70000U, max: None } }],
+    mems: [{ limits: { min: 70000U, max: None }, shared: false }],
     globals: [],
     tags: [],
     elems: [],
@@ -322,7 +322,7 @@ test "validate module imported memory limit errors" {
       {
         module_: Bytes::from_array([b'i']),
         name: Bytes::from_array([b'm']),
-        desc: Mem({ limits: { min: 10U, max: Some(5U) } }),
+        desc: Mem({ limits: { min: 10U, max: Some(5U) }, shared: false }),
       },
     ],
     exports: [],
@@ -350,7 +350,7 @@ test "validate module imported memory limit errors" {
       {
         module_: Bytes::from_array([b'i']),
         name: Bytes::from_array([b'm']),
-        desc: Mem({ limits: { min: 0U, max: Some(70000U) } }),
+        desc: Mem({ limits: { min: 0U, max: Some(70000U) }, shared: false }),
       },
     ],
     exports: [],
@@ -378,7 +378,7 @@ test "validate module imported memory limit errors" {
       {
         module_: Bytes::from_array([b'i']),
         name: Bytes::from_array([b'm']),
-        desc: Mem({ limits: { min: 70000U, max: None } }),
+        desc: Mem({ limits: { min: 70000U, max: None }, shared: false }),
       },
     ],
     exports: [],
@@ -902,7 +902,7 @@ test "validate module data segment errors" {
     types: [],
     funcs: [],
     tables: [],
-    mems: [{ limits: { min: 0U, max: None } }],
+    mems: [{ limits: { min: 0U, max: None }, shared: false }],
     globals: [
       {
         type_: { val_type: I32, mutable: true },

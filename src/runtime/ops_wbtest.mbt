@@ -850,7 +850,7 @@ test "compile helpers canonicalize and counts" {
       {
         module_: b"m",
         name: b"mem",
-        desc: Mem({ limits: { min: 1U, max: None } }),
+        desc: Mem({ limits: { min: 1U, max: None }, shared: false }),
       },
     ],
     exports: [],

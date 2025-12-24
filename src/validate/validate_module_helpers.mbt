@@ -168,6 +168,9 @@ fn validate_module_memory_limits(
 ) -> Unit raise ValidationError {
   // Validate memory limits
   for mem in m.mems {
+    if mem.shared && mem.limits.max is None {
+      raise ValidationError::InvalidMemorySize("shared memory requires maximum")
+    }
     match mem.limits.max {
       Some(max_val) => {
         let min = mem.limits.min.reinterpret_as_int()
@@ -200,7 +203,12 @@ fn validate_module_imported_memory_limits(
   // Validate memory limits for imported memories
   for imp in m.imports {
     match imp.desc {
-      Mem(mem_type) =>
+      Mem(mem_type) => {
+        if mem_type.shared && mem_type.limits.max is None {
+          raise ValidationError::InvalidMemorySize(
+            "shared memory requires maximum",
+          )
+        }
         match mem_type.limits.max {
           Some(max_val) => {
             let min = mem_type.limits.min.reinterpret_as_int()
@@ -223,6 +231,7 @@ fn validate_module_imported_memory_limits(
               )
             }
         }
+      }
       _ => ()
     }
   }

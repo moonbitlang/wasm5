@@ -121,6 +121,7 @@ priv struct WatImportMem {
   name : Bytes
   mem_name : Bytes?
   limits : @core.Limits
+  shared : Bool
 }
 
 ///|
@@ -153,6 +154,7 @@ priv struct WatImportTag {
 priv struct WatMemory {
   name : Bytes?
   limits : @core.Limits
+  shared : Bool
   exports : Array[Bytes]
 }
 
@@ -880,7 +882,12 @@ fn parse_module_field(
           desc: WatExportDesc::Mem(IndexRef::Index(mem_index)),
         })
       }
-      module_.mems.push({ name: mem.name, limits: mem.limits, exports: [] })
+      module_.mems.push({
+        name: mem.name,
+        limits: mem.limits,
+        shared: mem.shared,
+        exports: [],
+      })
     }
     b"table" => {
       let table = parse_table(items, type_map)
@@ -1078,12 +1085,13 @@ fn parse_import(
         mem_name = Some(atom)
         idx = idx + 1
       }
-      let limits = parse_limits(desc_items, start=idx)
+      let (limits, shared) = parse_memory_limits(desc_items, start=idx)
       module_.mem_imports.push({
         module_: module_name,
         name: field_name,
         mem_name,
         limits,
+        shared,
       })
     }
     b"table" => {
@@ -1174,8 +1182,8 @@ fn parse_memory(items : Array[SExpr]) -> WatMemory raise WatError {
         raise WatError::InvalidSyntax("unexpected string in memory")
     }
   }
-  let limits = parse_limits_from_atoms(limit_atoms)
-  WatMemory::{ name, limits, exports }
+  let (limits, shared) = parse_memory_limits_from_atoms(limit_atoms)
+  WatMemory::{ name, limits, shared, exports }
 }
 
 ///|
@@ -1894,6 +1902,44 @@ fn parse_limits_from_atoms(atoms : Array[Bytes]) -> @core.Limits raise WatError 
   let min = parse_uint(atoms[0])
   let max = if atoms.length() == 2 { Some(parse_uint(atoms[1])) } else { None }
   { min, max }
+}
+
+///|
+fn parse_memory_limits(
+  items : Array[SExpr],
+  start~ : Int,
+) -> (@core.Limits, Bool) raise WatError {
+  let atoms : Array[Bytes] = []
+  for i in start..<items.length() {
+    match items[i] {
+      Atom(atom) => atoms.push(atom)
+      _ => raise WatError::InvalidSyntax("limits must be atoms")
+    }
+  }
+  parse_memory_limits_from_atoms(atoms)
+}
+
+///|
+fn parse_memory_limits_from_atoms(
+  atoms : Array[Bytes],
+) -> (@core.Limits, Bool) raise WatError {
+  let limit_atoms : Array[Bytes] = []
+  let mut shared = false
+  for atom in atoms {
+    if atom == b"shared" {
+      guard not(shared) else {
+        raise WatError::InvalidSyntax("duplicate shared")
+      }
+      shared = true
+    } else {
+      limit_atoms.push(atom)
+    }
+  }
+  let limits = parse_limits_from_atoms(limit_atoms)
+  if shared && limits.max is None {
+    raise WatError::InvalidSyntax("shared memory requires maximum")
+  }
+  (limits, shared)
 }
 
 ///|
@@ -3642,7 +3688,7 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
     imports.push({
       module_: imp.module_,
       name: imp.name,
-      desc: @core.ImportDesc::Mem({ limits: imp.limits }),
+      desc: @core.ImportDesc::Mem({ limits: imp.limits, shared: imp.shared }),
     })
   }
   for imp in wat.global_imports {
@@ -3713,7 +3759,7 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
   }
   let mems : Array[@core.MemType] = []
   for mem in wat.mems {
-    mems.push({ limits: mem.limits })
+    mems.push({ limits: mem.limits, shared: mem.shared })
   }
   let tables : Array[@core.TableType] = []
   for table in wat.tables {

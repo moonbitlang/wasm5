@@ -142,6 +142,12 @@ async test "wat encoder matches wasm-tools for memory ops" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for shared memory" {
+  let wat = "(module (memory 1 2 shared) (func (export \"size\") (result i32) memory.size))"
+  assert_wat_matches("shared_memory", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for multi-memory bulk ops" {
   let wat = "(module (memory 1) (memory 1) (data \"hi\") (func (export \"multi\") memory.size 1 drop i32.const 0 memory.grow 1 drop i32.const 0 i32.const 0 i32.const 0 memory.copy 1 0 i32.const 0 i32.const 0 i32.const 0 memory.fill 1 i32.const 0 i32.const 0 i32.const 0 memory.init 1 0 data.drop 0 i32.const 0))"
   assert_wat_matches("multi_memory_bulk", wat)
