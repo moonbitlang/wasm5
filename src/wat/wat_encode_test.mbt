@@ -76,9 +76,21 @@ async test "wat encoder matches wasm-tools for imports" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for memory/table imports" {
+  let wat = "(module (import \"env\" \"tab\" (table 1 3 funcref)) (import \"env\" \"mem\" (memory 1 2)) (func (export \"msize\") (result i32) memory.size) (func (export \"tsize\") (result i32) table.size))"
+  assert_wat_matches("import_mem_table", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for data" {
   let wat = "(module (memory (export \"mem\") 1) (data (i32.const 0) \"hi\"))"
   assert_wat_matches("data", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for data concat" {
+  let wat = "(module (memory 1) (data (i32.const 0) \"hi\" \" \" \"there\"))"
+  assert_wat_matches("data_concat", wat)
 }
 
 ///|
@@ -94,9 +106,21 @@ async test "wat encoder matches wasm-tools for global init get" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for mutable globals" {
+  let wat = "(module (global $g (mut i64) (i64.const 1)) (func (export \"set\") (param i64) local.get 0 global.set $g))"
+  assert_wat_matches("global_mut", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for data offset global" {
   let wat = "(module (import \"env\" \"g\" (global $g i32)) (memory 1) (data (global.get $g) \"hi\"))"
   assert_wat_matches("data_global", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for start section" {
+  let wat = "(module (func $start nop) (start $start))"
+  assert_wat_matches("start_section", wat)
 }
 
 ///|
@@ -208,6 +232,12 @@ async test "wat encoder matches wasm-tools for block typeuse params" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for multi-value blocks" {
+  let wat = "(module (func (export \"multi\") (result i64 i32) (block (result i64 i32) i64.const 1 i32.const 2)))"
+  assert_wat_matches("block_multi_value", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for typed select and ref.is_null" {
   let wat = "(module (func (export \"select_typed\") (param i32 i32 i32) (result i32) local.get 0 local.get 1 local.get 2 select (result i32)) (func (export \"ref_is_null\") (param funcref) (result i32) local.get 0 ref.is_null))"
   assert_wat_matches("select_ref_ops", wat)
@@ -253,6 +283,12 @@ async test "wat encoder matches wasm-tools for table indexed ops" {
 async test "wat encoder matches wasm-tools for table init/copy indexed" {
   let wat = "(module (table $dst 2 funcref) (table $src 2 funcref) (func $f) (elem $e func $f) (func (export \"init\") (param i32 i32 i32) local.get 0 local.get 1 local.get 2 table.init $dst $e) (func (export \"copy\") (param i32 i32 i32) local.get 0 local.get 1 local.get 2 table.copy $dst $src))"
   assert_wat_matches("table_init_copy_indexed", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for table.fill" {
+  let wat = "(module (table $t 4 funcref) (func (export \"fill\") (param i32 funcref i32) local.get 0 local.get 1 local.get 2 table.fill $t))"
+  assert_wat_matches("table_fill", wat)
 }
 
 ///|
