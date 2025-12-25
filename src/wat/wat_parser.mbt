@@ -6296,9 +6296,37 @@ fn parse_uint_from_bytes(bytes : Bytes, start : Int) -> UInt raise WatError {
   guard start < bytes.length() else {
     raise WatError::InvalidNumber("missing number")
   }
+  let cleaned = strip_underscores(slice_bytes(bytes, start))
+  guard cleaned.length() > 0 else {
+    raise WatError::InvalidNumber("missing number")
+  }
+  if cleaned[0] == b'+' || cleaned[0] == b'-' {
+    raise WatError::InvalidNumber("invalid number \{bytes}")
+  }
+  if cleaned.length() >= 2 &&
+    cleaned[0] == b'0' &&
+    (cleaned[1] == b'x' || cleaned[1] == b'X') {
+    guard cleaned.length() > 2 else {
+      raise WatError::InvalidNumber("invalid number \{bytes}")
+    }
+    let mut value = 0U
+    for i in 2..<cleaned.length() {
+      let b = cleaned[i]
+      let digit = if b >= b'0' && b <= b'9' {
+        b.to_uint() - b'0'.to_uint()
+      } else if b >= b'a' && b <= b'f' {
+        b.to_uint() - b'a'.to_uint() + 10U
+      } else if b >= b'A' && b <= b'F' {
+        b.to_uint() - b'A'.to_uint() + 10U
+      } else {
+        raise WatError::InvalidNumber("invalid number \{bytes}")
+      }
+      value = value * 16U + digit
+    }
+    return value
+  }
   let mut value = 0U
-  for i in start..<bytes.length() {
-    let b = bytes[i]
+  for b in cleaned {
     guard b >= b'0' && b <= b'9' else {
       raise WatError::InvalidNumber("invalid number \{bytes}")
     }

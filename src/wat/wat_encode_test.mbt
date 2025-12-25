@@ -217,6 +217,17 @@ async test "wat encoder matches wasm-tools for memory/table imports" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for memory/table imports i32" {
+  let wat =
+    #|(module
+    #|  (import "env" "tab" (table i32 1 3 funcref))
+    #|  (import "env" "mem" (memory i32 1 2))
+    #|  (func (export "msize") (result i32) memory.size)
+    #|  (func (export "tsize") (result i32) table.size))
+  assert_wat_matches("import_mem_table_i32", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for memory64/table64 imports" {
   let wat =
     #|(module
@@ -236,6 +247,17 @@ async test "wat encoder matches wasm-tools for memory64/table64 definitions" {
     #|  (func (export "msize") (result i64) memory.size)
     #|  (func (export "tsize") (result i64) table.size))
   assert_wat_matches("mem_table64", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for memory/table definitions i32" {
+  let wat =
+    #|(module
+    #|  (memory i32 1 2)
+    #|  (table i32 1 funcref)
+    #|  (func (export "msize") (result i32) memory.size)
+    #|  (func (export "tsize") (result i32) table.size))
+  assert_wat_matches("mem_table_i32", wat)
 }
 
 ///|
@@ -453,10 +475,34 @@ async test "wat encoder matches wasm-tools for shared memory" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for shared memory i32" {
+  let wat =
+    #|(module
+    #|  (memory i32 1 2 shared)
+    #|  (func (export "size") (result i32) memory.size))
+  assert_wat_matches("shared_memory_i32", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for multi-memory bulk ops" {
   let wat =
     #|(module (memory 1) (memory 1) (data "hi") (func (export "multi") memory.size 1 drop i32.const 0 memory.grow 1 drop i32.const 0 i32.const 0 i32.const 0 memory.copy 1 0 i32.const 0 i32.const 0 i32.const 0 memory.fill 1 i32.const 0 i32.const 0 i32.const 0 memory.init 1 0 data.drop 0 i32.const 0))
   assert_wat_matches("multi_memory_bulk", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for memarg literals" {
+  let wat =
+    #|(module
+    #|  (memory 1)
+    #|  (func (export "memarg")
+    #|    i32.const 0
+    #|    i32.load offset=0x10 align=4
+    #|    drop
+    #|    i32.const 0
+    #|    i32.load offset=1_024 align=0x10
+    #|    drop))
+  assert_wat_matches("memarg_literals", wat)
 }
 
 ///|
