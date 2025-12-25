@@ -536,6 +536,37 @@ async test "wat encoder matches wasm-tools for memarg memory index" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for folded numeric exprs" {
+  let wat =
+    #|(module
+    #|  (func (export "f") (result i32)
+    #|    (i32.add (i32.const 7) (i32.mul (i32.const 2) (i32.const 3)))))
+  assert_wat_matches("folded_numeric", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for folded if" {
+  let wat =
+    #|(module
+    #|  (func (export "f") (result i32)
+    #|    (if (result i32)
+    #|      (i32.const 1)
+    #|      (then (i32.const 2))
+    #|      (else (i32.const 3)))))
+  assert_wat_matches("folded_if", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for folded memarg" {
+  let wat =
+    #|(module
+    #|  (memory 1)
+    #|  (func (export "f") (result i32)
+    #|    (i32.load offset=4 (i32.const 0))))
+  assert_wat_matches("folded_memarg", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for control flow" {
   let wat =
     #|(module (func (export "block_if") (param i32) (result i32) (block $out (result i32) i32.const 7 local.get 0 br_if $out i32.const 42)) (func (export "loop_br") (result i32) (block (result i32) (loop $top i32.const 9 br 1))) (func (export "if_else") (param i32) (result i32) local.get 0 (if (result i32) (then i32.const 1) (else i32.const 2))) (func (export "br_table") (param i32) (block local.get 0 br_table 0 0)))
