@@ -34,6 +34,26 @@ async fn wasm_tools_available() -> Bool {
 }
 
 ///|
+fn empty_module() -> @core.Module {
+  {
+    types: [],
+    type_groups: [],
+    customs: [],
+    funcs: [],
+    tables: [],
+    mems: [],
+    globals: [],
+    tags: [],
+    elems: [],
+    datas: [],
+    start: None,
+    imports: [],
+    exports: [],
+    codes: [],
+  }
+}
+
+///|
 async fn assert_wat_matches(name : String, wat : String) -> Unit {
   guard wasm_tools_available() else { return }
   let base_dir = "target/wat_tests"
@@ -234,6 +254,54 @@ async test "wat encoder matches wasm-tools for table64 elem offset" {
     #|  (table i64 1 funcref)
     #|  (elem (i64.const 0) funcref (ref.null func)))
   assert_wat_matches("table64_elem_offset", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for memory64 data offset global" {
+  let wat =
+    #|(module
+    #|  (import "env" "g" (global $g i64))
+    #|  (memory i64 1)
+    #|  (data (global.get $g) "hi"))
+  assert_wat_matches("mem64_data_offset_global", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for table64 elem offset global" {
+  let wat =
+    #|(module
+    #|  (import "env" "g" (global $g i64))
+    #|  (table i64 1 funcref)
+    #|  (elem (global.get $g) funcref (ref.null func)))
+  assert_wat_matches("table64_elem_offset_global", wat)
+}
+
+///|
+test "wat parser rejects i32 offset for memory64 data" {
+  let wat =
+    #|(module (memory i64 1) (data (i32.const 0) "hi"))
+  let mut saw_error = false
+  let _ = wat_to_module(wat) catch {
+    _ => {
+      saw_error = true
+      empty_module()
+    }
+  }
+  assert_eq(saw_error, true)
+}
+
+///|
+test "wat parser rejects i32 offset for table64 elem" {
+  let wat =
+    #|(module (table i64 1 funcref) (elem (i32.const 0) funcref (ref.null func)))
+  let mut saw_error = false
+  let _ = wat_to_module(wat) catch {
+    _ => {
+      saw_error = true
+      empty_module()
+    }
+  }
+  assert_eq(saw_error, true)
 }
 
 ///|
