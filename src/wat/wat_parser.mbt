@@ -294,6 +294,59 @@ pub fn wast_to_wasm(text : String) -> Array[Bytes] raise WatError {
 }
 
 ///|
+pub enum WastCommand {
+  Module(@core.Module)
+  Raw(SExpr)
+}
+
+///|
+pub fn wast_to_script(text : String) -> Array[WastCommand] raise WatError {
+  let exprs = parse_sexprs(text)
+  let commands : Array[WastCommand] = []
+  append_wast_commands(exprs, commands)
+  commands
+}
+
+///|
+fn append_wast_commands(
+  exprs : Array[SExpr],
+  commands : Array[WastCommand],
+) -> Unit raise WatError {
+  for expr in exprs {
+    append_wast_command(expr, commands)
+  }
+}
+
+///|
+fn append_wast_command(
+  expr : SExpr,
+  commands : Array[WastCommand],
+) -> Unit raise WatError {
+  match expr {
+    List(items) => {
+      guard items.length() > 0 && items[0] is Atom(tag) else {
+        raise WatError::InvalidSyntax("wast command head must be atom")
+      }
+      if tag == b"module" {
+        commands.push(WastCommand::Module(parse_wast_module(items)))
+        return
+      }
+      if tag == b"script" {
+        let nested = slice_sexprs(items, 1)
+        append_wast_commands(nested, commands)
+        return
+      }
+      if is_known_wast_command(tag) {
+        commands.push(WastCommand::Raw(expr))
+        return
+      }
+      raise WatError::Unsupported("unsupported wast command \{tag}")
+    }
+    _ => raise WatError::InvalidSyntax("wast command must be list")
+  }
+}
+
+///|
 fn parse_block_instr(
   list_items : Array[SExpr],
   local_map : Map[Bytes, UInt],

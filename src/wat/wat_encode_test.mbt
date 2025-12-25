@@ -750,6 +750,37 @@ async test "wat encoder matches wasm-tools for atomic ops" {
 }
 
 ///|
+test "wast parser exposes script commands" {
+  let wast =
+    #|(script
+    #|  (module (func (export "f") (result i32) i32.const 1))
+    #|  (register "m")
+    #|  (assert_return (invoke "f") (i32.const 1)))
+  let commands = wast_to_script(wast)
+  assert_eq(commands.length(), 3)
+  match commands[0] {
+    Module(_) => ()
+    _ => abort("expected module command")
+  }
+  match commands[1] {
+    Raw(List(items)) =>
+      match items[0] {
+        Atom(tag) => assert_eq(tag, b"register")
+        _ => abort("expected register atom")
+      }
+    _ => abort("expected register command")
+  }
+  match commands[2] {
+    Raw(List(items)) =>
+      match items[0] {
+        Atom(tag) => assert_eq(tag, b"assert_return")
+        _ => abort("expected assert_return atom")
+      }
+    _ => abort("expected assert_return command")
+  }
+}
+
+///|
 async test "wast parser extracts modules from script" {
   let wast =
     #|(script
