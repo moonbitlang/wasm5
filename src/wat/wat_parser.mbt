@@ -2537,6 +2537,7 @@ fn parse_data(
   let mut mem_ref = IndexRef::Index(0U)
   let mut offset_expr : Array[WatInstr] = []
   let mut is_active = false
+  let mut explicit_memory = false
   if idx < items.length() && not(is_reftype_expr(items[idx])) {
     match items[idx] {
       List(list_items) =>
@@ -2547,6 +2548,7 @@ fn parse_data(
             raise WatError::InvalidSyntax("memory expects one index")
           }
           mem_ref = parse_index_ref(expect_atom(list_items[1]))
+          explicit_memory = true
           idx = idx + 1
         }
       _ => ()
@@ -2574,6 +2576,9 @@ fn parse_data(
       }
       StringLit(_) => ()
     }
+  }
+  if explicit_memory && not(is_active) {
+    raise WatError::InvalidSyntax("memory data requires offset")
   }
   let data_bytes : Array[Byte] = []
   for i in idx..<items.length() {
