@@ -219,6 +219,24 @@ async test "wat encoder matches wasm-tools for memory64/table64 definitions" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for memory64 data offset" {
+  let wat =
+    #|(module
+    #|  (memory i64 1)
+    #|  (data (i64.const 0) "hi"))
+  assert_wat_matches("mem64_data_offset", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for table64 elem offset" {
+  let wat =
+    #|(module
+    #|  (table i64 1 funcref)
+    #|  (elem (i64.const 0) funcref (ref.null func)))
+  assert_wat_matches("table64_elem_offset", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for data" {
   let wat =
     #|(module (memory (export "mem") 1) (data (i32.const 0) "hi"))

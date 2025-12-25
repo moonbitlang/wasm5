@@ -5165,6 +5165,40 @@ fn append_name_subsection(
 }
 
 ///|
+fn wat_mem_type_for_index(
+  wat : WatModule,
+  mem_idx : UInt,
+) -> @core.MemType raise WatError {
+  let import_count = wat.mem_imports.length().reinterpret_as_uint()
+  if mem_idx < import_count {
+    let imp = wat.mem_imports[mem_idx.reinterpret_as_int()]
+    return { limits: imp.limits, shared: imp.shared, memory64: imp.memory64 }
+  }
+  let local_idx = mem_idx - import_count
+  guard local_idx < wat.mems.length().reinterpret_as_uint() else {
+    raise WatError::InvalidSyntax("memory index out of range")
+  }
+  let mem = wat.mems[local_idx.reinterpret_as_int()]
+  { limits: mem.limits, shared: mem.shared, memory64: mem.memory64 }
+}
+
+///|
+fn wat_table_type_for_index(
+  wat : WatModule,
+  table_idx : UInt,
+) -> @core.TableType raise WatError {
+  let import_count = wat.table_imports.length().reinterpret_as_uint()
+  if table_idx < import_count {
+    return wat.table_imports[table_idx.reinterpret_as_int()].table_type
+  }
+  let local_idx = table_idx - import_count
+  guard local_idx < wat.tables.length().reinterpret_as_uint() else {
+    raise WatError::InvalidSyntax("table index out of range")
+  }
+  wat.tables[local_idx.reinterpret_as_int()].table_type
+}
+
+///|
 fn build_module(wat : WatModule) -> @core.Module raise WatError {
   let func_map = Map::new()
   let mem_map = Map::new()
@@ -5447,7 +5481,19 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
   for elem in wat.elems {
     let table_idx = resolve_index_ref(elem.table_ref, table_map, "table")
     let offset_instrs = if elem.is_active {
-      resolve_offset_instrs(elem.offset, global_map, wat.global_imports)
+      let table_type = wat_table_type_for_index(wat, table_idx)
+      let expected_type = if table_type.table64 {
+        @core.ValType::I64
+      } else {
+        @core.ValType::I32
+      }
+      resolve_offset_instrs(
+        elem.offset,
+        global_map,
+        wat.global_imports,
+        expected_type,
+        "elem offset",
+      )
     } else {
       []
     }
@@ -5482,7 +5528,19 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
   for data in wat.datas {
     let mem_idx = resolve_index_ref(data.mem_ref, mem_map, "memory")
     let offset_instrs = if data.is_active {
-      resolve_offset_instrs(data.offset, global_map, wat.global_imports)
+      let mem_type = wat_mem_type_for_index(wat, mem_idx)
+      let expected_type = if mem_type.memory64 {
+        @core.ValType::I64
+      } else {
+        @core.ValType::I32
+      }
+      resolve_offset_instrs(
+        data.offset,
+        global_map,
+        wat.global_imports,
+        expected_type,
+        "data offset",
+      )
     } else {
       []
     }
@@ -5585,16 +5643,24 @@ fn resolve_offset_instrs(
   instrs : Array[WatInstr],
   global_map : Map[Bytes, UInt],
   imported_globals : Array[WatImportGlobal],
+  expected_type : @core.ValType,
+  context : String,
 ) -> Array[@core.Instr] raise WatError {
   let out : Array[@core.Instr] = []
+  let type_name = if expected_type == @core.ValType::I64 {
+    "i64"
+  } else {
+    "i32"
+  }
   for instr in instrs {
     match instr {
       WatInstr::Core(core_instr) =>
-        match core_instr {
-          I32Const(_) => out.push(core_instr)
+        match (core_instr, expected_type) {
+          (I32Const(_), @core.ValType::I32)
+          | (I64Const(_), @core.ValType::I64) => out.push(core_instr)
           _ =>
             raise WatError::Unsupported(
-              "data offset expects i32.const/global.get",
+              "\{context} expects \{type_name}.const/global.get",
             )
         }
       WatInstr::GlobalGet(global_ref) => {
@@ -5610,13 +5676,15 @@ fn resolve_offset_instrs(
             "global.get must reference immutable global",
           )
         }
-        guard imp.type_.val_type == I32 else {
-          raise WatError::Unsupported("data offset global must be i32")
+        guard imp.type_.val_type == expected_type else {
+          raise WatError::Unsupported("\{context} global must be \{type_name}")
         }
         out.push(@core.Instr::GlobalGet(idx))
       }
       _ =>
-        raise WatError::Unsupported("data offset expects i32.const/global.get")
+        raise WatError::Unsupported(
+          "\{context} expects \{type_name}.const/global.get",
+        )
     }
   }
   out
