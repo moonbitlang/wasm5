@@ -3099,22 +3099,23 @@ fn resolve_type_use(
   match type_ref {
     Some(ref_) => {
       let idx = resolve_type_ref(ref_, type_map)
-      guard idx < type_defs.length().reinterpret_as_uint() else {
-        raise WatError::UnknownIdentifier("type \{idx}")
-      }
-      let def = type_defs[idx.reinterpret_as_int()]
-      let func_type = expect_func_type_def(def, "typeuse")
-      if inline_params.length() > 0 || inline_results.length() > 0 {
-        guard same_sig_arrays(
-          inline_params,
-          inline_results,
-          func_type.params,
-          func_type.results,
-        ) else {
-          raise WatError::InvalidSyntax("typeuse does not match type")
+      if idx < type_defs.length().reinterpret_as_uint() {
+        let def = type_defs[idx.reinterpret_as_int()]
+        let func_type = expect_func_type_def(def, "typeuse")
+        if inline_params.length() > 0 || inline_results.length() > 0 {
+          guard same_sig_arrays(
+            inline_params,
+            inline_results,
+            func_type.params,
+            func_type.results,
+          ) else {
+            raise WatError::InvalidSyntax("typeuse does not match type")
+          }
         }
+        (Some(idx), func_type.params, func_type.results)
+      } else {
+        (Some(idx), inline_params, inline_results)
       }
-      (Some(idx), func_type.params, func_type.results)
     }
     None => (None, inline_params, inline_results)
   }
@@ -3126,6 +3127,17 @@ fn expect_func_type_def(
   context : String,
 ) -> @core.FuncType raise WatError {
   match def.type_def {
+    Func(func_type) => func_type
+    _ => raise WatError::InvalidSyntax("\{context} expects func type")
+  }
+}
+
+///|
+fn expect_func_type(
+  def : @core.TypeDef,
+  context : String,
+) -> @core.FuncType raise WatError {
+  match def {
     Func(func_type) => func_type
     _ => raise WatError::InvalidSyntax("\{context} expects func type")
   }
@@ -3151,18 +3163,20 @@ fn resolve_type_use_index(
   type_ref : WatTypeRef?,
   params : Array[@core.ValType],
   results : Array[@core.ValType],
-  type_defs : Array[WatTypeDef],
+  _type_defs : Array[WatTypeDef],
   type_map : Map[Bytes, UInt],
   types : Array[@core.TypeDef],
 ) -> UInt raise WatError {
   match type_ref {
     Some(ref_) => {
       let idx = resolve_type_ref(ref_, type_map)
-      guard idx < type_defs.length().reinterpret_as_uint() else {
+      guard idx < types.length().reinterpret_as_uint() else {
         raise WatError::UnknownIdentifier("type \{idx}")
       }
-      let def = type_defs[idx.reinterpret_as_int()]
-      let func_type = expect_func_type_def(def, "typeuse")
+      let func_type = expect_func_type(
+        types[idx.reinterpret_as_int()],
+        "typeuse",
+      )
       if params.length() > 0 || results.length() > 0 {
         guard same_sig_arrays(
           params,
@@ -6416,7 +6430,15 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
   if wat.import_order.length() == 0 {
     for imp in wat.func_imports {
       let type_idx = match imp.type_idx {
-        Some(idx) => idx
+        Some(idx) =>
+          resolve_type_use_index(
+            Some(WatTypeRef::Index(idx)),
+            imp.params,
+            imp.results,
+            wat.type_defs,
+            type_map,
+            types,
+          )
         None => type_index(types, imp.params, imp.results)
       }
       imports.push({
@@ -6452,7 +6474,15 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
     }
     for imp in wat.tag_imports {
       let type_idx = match imp.type_idx {
-        Some(idx) => idx
+        Some(idx) =>
+          resolve_type_use_index(
+            Some(WatTypeRef::Index(idx)),
+            imp.params,
+            imp.results,
+            wat.type_defs,
+            type_map,
+            types,
+          )
         None => type_index(types, imp.params, imp.results)
       }
       imports.push({
@@ -6467,7 +6497,15 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
         Func(idx) => {
           let imp = wat.func_imports[idx]
           let type_idx = match imp.type_idx {
-            Some(value) => value
+            Some(value) =>
+              resolve_type_use_index(
+                Some(WatTypeRef::Index(value)),
+                imp.params,
+                imp.results,
+                wat.type_defs,
+                type_map,
+                types,
+              )
             None => type_index(types, imp.params, imp.results)
           }
           imports.push({
@@ -6507,7 +6545,15 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
         Tag(idx) => {
           let imp = wat.tag_imports[idx]
           let type_idx = match imp.type_idx {
-            Some(value) => value
+            Some(value) =>
+              resolve_type_use_index(
+                Some(WatTypeRef::Index(value)),
+                imp.params,
+                imp.results,
+                wat.type_defs,
+                type_map,
+                types,
+              )
             None => type_index(types, imp.params, imp.results)
           }
           imports.push({
@@ -6523,7 +6569,15 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
   let codes : Array[@core.Code] = []
   for func in wat.funcs {
     let type_idx = match func.type_idx {
-      Some(idx) => idx
+      Some(idx) =>
+        resolve_type_use_index(
+          Some(WatTypeRef::Index(idx)),
+          func.params,
+          func.results,
+          wat.type_defs,
+          type_map,
+          types,
+        )
       None => type_index(types, func.params, func.results)
     }
     funcs.push(type_idx)
@@ -6563,7 +6617,15 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
   let tags : Array[@core.Tag] = []
   for tag in wat.tags {
     let type_idx = match tag.type_idx {
-      Some(idx) => idx
+      Some(idx) =>
+        resolve_type_use_index(
+          Some(WatTypeRef::Index(idx)),
+          tag.params,
+          tag.results,
+          wat.type_defs,
+          type_map,
+          types,
+        )
       None => type_index(types, tag.params, tag.results)
     }
     tags.push(@core.Tag::{ type_idx, })
