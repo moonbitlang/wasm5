@@ -2694,6 +2694,9 @@ fn parse_elem(
   if is_declarative && is_active {
     raise WatError::InvalidSyntax("declarative elem must be passive")
   }
+  if explicit_table && not(is_active) {
+    raise WatError::InvalidSyntax("table elem requires offset")
+  }
   if idx < items.length() && is_reftype_expr(items[idx]) {
     let (ref_type, nullable) = parse_reftype_expr(items[idx], type_map)
     elem_type = ref_type
