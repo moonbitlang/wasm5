@@ -385,6 +385,22 @@ test "wat parser rejects table elem without offset" {
 }
 
 ///|
+test "wat parser rejects data without offset for explicit memory" {
+  let wat =
+    #|(module
+    #|  (memory 1)
+    #|  (data (memory 0) "hi"))
+  let mut saw_error = false
+  let _ = wat_to_module(wat) catch {
+    _ => {
+      saw_error = true
+      empty_module()
+    }
+  }
+  assert_eq(saw_error, true)
+}
+
+///|
 async test "wat encoder matches wasm-tools for data" {
   let wat =
     #|(module (memory (export "mem") 1) (data (i32.const 0) "hi"))
