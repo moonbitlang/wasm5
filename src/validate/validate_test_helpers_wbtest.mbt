@@ -28,5 +28,5 @@ fn test_make_code(
   locals : Array[@core.ValType],
   instrs : Array[@core.Instr],
 ) -> @core.Code {
-  { locals, body: { instrs, }, compiled: None }
+  { locals, body: { instrs, }, compiled: None, max_stack_height: 0 }
 }

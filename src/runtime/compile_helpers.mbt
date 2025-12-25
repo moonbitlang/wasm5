@@ -231,7 +231,8 @@ fn Runtime::pop_arguments(
   let num_params = func_type.params.length()
   let args : Array[Value] = Array::make(num_params, Value::I32(0U))
   for i = num_params - 1; i >= 0; i = i - 1 {
-    let raw = self.stack.unsafe_pop()
+    self.stack_top -= 1
+    let raw = self.stack.unsafe_get(self.stack_top)
     args[i] = stack_to_value(raw, func_type.params[i])
   }
   args
@@ -243,7 +244,10 @@ fn Runtime::pop_arguments(
 fn Runtime::init_declared_locals(self : Runtime, code : @core.Code) -> RetCode {
   for local_type in code.locals {
     match local_type {
-      I32 | I64 | F32 | F64 => self.stack.push(0UL)
+      I32 | I64 | F32 | F64 => {
+        self.stack.unsafe_set(self.stack_top, 0UL)
+        self.stack_top += 1
+      }
       FuncRef
       | ExternRef
       | AnyRef
@@ -256,7 +260,10 @@ fn Runtime::init_declared_locals(self : Runtime, code : @core.Code) -> RetCode {
       | I31Ref
       | StructRef
       | ArrayRef
-      | Ref(_, _) => self.stack.push((-1L).reinterpret_as_uint64()) // null ref
+      | Ref(_, _) => {
+        self.stack.unsafe_set(self.stack_top, (-1L).reinterpret_as_uint64()) // null ref
+        self.stack_top += 1
+      }
       _ => {
         self.error_detail = "Unsupported local type: \{local_type}"
         return UnsupportedLocalType
@@ -275,11 +282,12 @@ fn Runtime::initialize_entry_locals(
   code : @core.Code,
 ) -> RetCode {
   // sp points to start of locals (current stack position)
-  self.sp = self.stack.length()
+  self.sp = self.stack_top
 
   // Push arguments as first locals
   for arg in args {
-    self.stack.push(value_to_stack(arg))
+    self.stack.unsafe_set(self.stack_top, value_to_stack(arg))
+    self.stack_top += 1
   }
 
   // Push default values for declared locals
@@ -337,7 +345,8 @@ fn Runtime::call_imported_function(
     results.length()
   }
   for i in 0..<count {
-    self.stack.push(value_to_stack(results[i]))
+    self.stack.unsafe_set(self.stack_top, value_to_stack(results[i]))
+    self.stack_top += 1
   }
 }
 
@@ -411,89 +420,101 @@ priv struct TwoF64(Double, Double)
 
 // ============================================================================
 // Stack pop operations (UInt64 -> typed value)
+// Uses indexed access with stack_top for O(1) operations on FixedArray
 // ============================================================================
 
 ///|
-fn pop_i32(stack : Array[UInt64]) -> UInt {
-  (stack.unsafe_pop() & 0xFFFFFFFFUL).to_uint()
+fn pop_i32(rt : Runtime) -> UInt {
+  rt.stack_top -= 1
+  (rt.stack.unsafe_get(rt.stack_top) & 0xFFFFFFFFUL).to_uint()
 }
 
 ///|
-fn pop_two_i32(stack : Array[UInt64]) -> TwoI32 {
-  let b = pop_i32(stack)
-  let a = pop_i32(stack)
+fn pop_two_i32(rt : Runtime) -> TwoI32 {
+  let b = pop_i32(rt)
+  let a = pop_i32(rt)
   TwoI32(a, b)
 }
 
 ///|
-fn pop_i64(stack : Array[UInt64]) -> UInt64 {
-  stack.unsafe_pop()
+fn pop_i64(rt : Runtime) -> UInt64 {
+  rt.stack_top -= 1
+  rt.stack.unsafe_get(rt.stack_top)
 }
 
 ///|
-fn pop_two_i64(stack : Array[UInt64]) -> TwoI64 {
-  let b = pop_i64(stack)
-  let a = pop_i64(stack)
+fn pop_two_i64(rt : Runtime) -> TwoI64 {
+  let b = pop_i64(rt)
+  let a = pop_i64(rt)
   TwoI64(a, b)
 }
 
 ///|
-fn pop_f32(stack : Array[UInt64]) -> Float {
-  let bits = (stack.unsafe_pop() & 0xFFFFFFFFUL).to_uint()
+fn pop_f32(rt : Runtime) -> Float {
+  rt.stack_top -= 1
+  let bits = (rt.stack.unsafe_get(rt.stack_top) & 0xFFFFFFFFUL).to_uint()
   Float::reinterpret_from_uint(bits)
 }
 
 ///|
-fn pop_two_f32(stack : Array[UInt64]) -> TwoF32 {
-  let b = pop_f32(stack)
-  let a = pop_f32(stack)
+fn pop_two_f32(rt : Runtime) -> TwoF32 {
+  let b = pop_f32(rt)
+  let a = pop_f32(rt)
   TwoF32(a, b)
 }
 
 ///|
-fn pop_f64(stack : Array[UInt64]) -> Double {
-  stack.unsafe_pop().reinterpret_as_double()
+fn pop_f64(rt : Runtime) -> Double {
+  rt.stack_top -= 1
+  rt.stack.unsafe_get(rt.stack_top).reinterpret_as_double()
 }
 
 ///|
-fn pop_two_f64(stack : Array[UInt64]) -> TwoF64 {
-  let b = pop_f64(stack)
-  let a = pop_f64(stack)
+fn pop_two_f64(rt : Runtime) -> TwoF64 {
+  let b = pop_f64(rt)
+  let a = pop_f64(rt)
   TwoF64(a, b)
 }
 
 ///|
-fn pop_ref(stack : Array[UInt64]) -> Int {
-  stack.unsafe_pop().reinterpret_as_int64().to_int()
+fn pop_ref(rt : Runtime) -> Int {
+  rt.stack_top -= 1
+  rt.stack.unsafe_get(rt.stack_top).reinterpret_as_int64().to_int()
 }
 
 // ============================================================================
 // Stack push operations (typed value -> UInt64)
+// Uses indexed access with stack_top for O(1) operations on FixedArray
 // ============================================================================
 
 ///|
-fn push_i32(stack : Array[UInt64], v : UInt) -> Unit {
-  stack.push(v.to_uint64())
+fn push_i32(rt : Runtime, v : UInt) -> Unit {
+  rt.stack.unsafe_set(rt.stack_top, v.to_uint64())
+  rt.stack_top += 1
 }
 
 ///|
-fn push_i64(stack : Array[UInt64], v : UInt64) -> Unit {
-  stack.push(v)
+fn push_i64(rt : Runtime, v : UInt64) -> Unit {
+  rt.stack.unsafe_set(rt.stack_top, v)
+  rt.stack_top += 1
 }
 
 ///|
-fn push_f32(stack : Array[UInt64], v : Float) -> Unit {
-  stack.push(v.reinterpret_as_uint().to_uint64())
+fn push_f32(rt : Runtime, v : Float) -> Unit {
+  rt.stack.unsafe_set(rt.stack_top, v.reinterpret_as_uint().to_uint64())
+  rt.stack_top += 1
 }
 
 ///|
-fn push_f64(stack : Array[UInt64], v : Double) -> Unit {
-  stack.push(v.reinterpret_as_uint64())
+fn push_f64(rt : Runtime, v : Double) -> Unit {
+  rt.stack.unsafe_set(rt.stack_top, v.reinterpret_as_uint64())
+  rt.stack_top += 1
 }
 
 ///|
-fn push_ref(stack : Array[UInt64], v : Int) -> Unit {
-  stack.push(v.to_int64().reinterpret_as_uint64())
+fn push_ref(rt : Runtime, v : Int) -> Unit {
+  rt.stack.unsafe_set(rt.stack_top, v.to_int64().reinterpret_as_uint64())
+  rt.stack_top += 1
 }
 
 // ============================================================================
@@ -547,49 +568,49 @@ fn value_to_stack(v : Value) -> UInt64 {
 }
 
 // ============================================================================
-// Runtime stack helpers (for compatibility during transition)
+// Runtime stack helpers
 // ============================================================================
 
 ///|
 fn Runtime::pop_two_i32(self : Runtime) -> (UInt, UInt) {
-  let TwoI32(a, b) = pop_two_i32(self.stack)
+  let TwoI32(a, b) = pop_two_i32(self)
   (a, b)
 }
 
 ///|
 fn Runtime::pop_i32(self : Runtime) -> UInt {
-  pop_i32(self.stack)
+  pop_i32(self)
 }
 
 ///|
 fn Runtime::pop_two_i64(self : Runtime) -> (UInt64, UInt64) {
-  let TwoI64(a, b) = pop_two_i64(self.stack)
+  let TwoI64(a, b) = pop_two_i64(self)
   (a, b)
 }
 
 ///|
 fn Runtime::pop_i64(self : Runtime) -> UInt64 {
-  pop_i64(self.stack)
+  pop_i64(self)
 }
 
 ///|
 fn Runtime::pop_f32(self : Runtime) -> Float {
-  pop_f32(self.stack)
+  pop_f32(self)
 }
 
 ///|
 fn Runtime::pop_two_f32(self : Runtime) -> (Float, Float) {
-  let TwoF32(a, b) = pop_two_f32(self.stack)
+  let TwoF32(a, b) = pop_two_f32(self)
   (a, b)
 }
 
 ///|
 fn Runtime::pop_f64(self : Runtime) -> Double {
-  pop_f64(self.stack)
+  pop_f64(self)
 }
 
 ///|
 fn Runtime::pop_two_f64(self : Runtime) -> (Double, Double) {
-  let TwoF64(a, b) = pop_two_f64(self.stack)
+  let TwoF64(a, b) = pop_two_f64(self)
   (a, b)
 }

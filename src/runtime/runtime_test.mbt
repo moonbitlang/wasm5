@@ -5,6 +5,7 @@ fn make_const_module(value : UInt, name : Bytes) -> @core.Module {
     locals: [],
     body: @core.Expr::{ instrs: [I32Const(value)] },
     compiled: None,
+    max_stack_height: 0,
   }
   @core.Module::{
     types: [func_type],
@@ -31,6 +32,7 @@ fn make_import_call_module() -> @core.Module {
     locals: [],
     body: @core.Expr::{ instrs: [Call(0U)] },
     compiled: None,
+    max_stack_height: 0,
   }
   let import_ : @core.Import = { module_: b"m", name: b"f", desc: Func(0U) }
   let export_ : @core.Export = { name: b"call_imported", desc: Func(1U) }

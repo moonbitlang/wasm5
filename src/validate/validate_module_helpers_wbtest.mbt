@@ -814,7 +814,7 @@ test "validate module table errors" {
     start: None,
     imports: [],
     exports: [],
-    codes: [{ locals: [], body: test_empty_expr(), compiled: None }],
+    codes: [{ locals: [], body: test_empty_expr(), compiled: None, max_stack_height: 0 }],
   }
   validate_module_tables(
     module_typed_init,

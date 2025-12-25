@@ -20,7 +20,7 @@ fn op_i32_load(rt : Runtime) -> RetCode {
   let b1 = rt.memory[addr + 1].to_uint()
   let b2 = rt.memory[addr + 2].to_uint()
   let b3 = rt.memory[addr + 3].to_uint()
-  push_i32(rt.stack, b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
+  push_i32(rt, b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
   rt.pc += 1
   OK
 }
@@ -57,7 +57,7 @@ fn op_i32_load8_s(rt : Runtime) -> RetCode {
   let b = rt.memory[addr].to_int()
   // Sign extend from 8 bits
   let value = if b >= 128 { b - 256 } else { b }
-  push_i32(rt.stack, value.reinterpret_as_uint())
+  push_i32(rt, value.reinterpret_as_uint())
   rt.pc += 1
   OK
 }
@@ -71,7 +71,7 @@ fn op_i32_load8_u(rt : Runtime) -> RetCode {
     return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
-  push_i32(rt.stack, rt.memory[addr].to_uint())
+  push_i32(rt, rt.memory[addr].to_uint())
   rt.pc += 1
   OK
 }
@@ -90,7 +90,7 @@ fn op_i32_load16_s(rt : Runtime) -> RetCode {
   let value16 = b0 | (b1 << 8)
   // Sign extend from 16 bits
   let value = if value16 >= 32768 { value16 - 65536 } else { value16 }
-  push_i32(rt.stack, value.reinterpret_as_uint())
+  push_i32(rt, value.reinterpret_as_uint())
   rt.pc += 1
   OK
 }
@@ -106,7 +106,7 @@ fn op_i32_load16_u(rt : Runtime) -> RetCode {
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_uint()
   let b1 = rt.memory[addr + 1].to_uint()
-  push_i32(rt.stack, b0 | (b1 << 8))
+  push_i32(rt, b0 | (b1 << 8))
   rt.pc += 1
   OK
 }
@@ -129,7 +129,7 @@ fn op_i64_load(rt : Runtime) -> RetCode {
   let b6 = rt.memory[addr + 6].to_uint64()
   let b7 = rt.memory[addr + 7].to_uint64()
   push_i64(
-    rt.stack,
+    rt,
     b0 |
     (b1 << 8) |
     (b2 << 16) |
@@ -177,7 +177,7 @@ fn op_i64_load8_s(rt : Runtime) -> RetCode {
   let b = rt.memory[addr].to_int64()
   // Sign extend from 8 bits
   let value = if b >= 128L { b - 256L } else { b }
-  push_i64(rt.stack, value.reinterpret_as_uint64())
+  push_i64(rt, value.reinterpret_as_uint64())
   rt.pc += 1
   OK
 }
@@ -191,7 +191,7 @@ fn op_i64_load8_u(rt : Runtime) -> RetCode {
     return MemoryOutOfBounds
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
-  push_i64(rt.stack, rt.memory[addr].to_uint64())
+  push_i64(rt, rt.memory[addr].to_uint64())
   rt.pc += 1
   OK
 }
@@ -210,7 +210,7 @@ fn op_i64_load16_s(rt : Runtime) -> RetCode {
   let value16 = b0 | (b1 << 8)
   // Sign extend from 16 bits
   let value = if value16 >= 32768L { value16 - 65536L } else { value16 }
-  push_i64(rt.stack, value.reinterpret_as_uint64())
+  push_i64(rt, value.reinterpret_as_uint64())
   rt.pc += 1
   OK
 }
@@ -226,7 +226,7 @@ fn op_i64_load16_u(rt : Runtime) -> RetCode {
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_uint64()
   let b1 = rt.memory[addr + 1].to_uint64()
-  push_i64(rt.stack, b0 | (b1 << 8))
+  push_i64(rt, b0 | (b1 << 8))
   rt.pc += 1
   OK
 }
@@ -251,7 +251,7 @@ fn op_i64_load32_s(rt : Runtime) -> RetCode {
   } else {
     value32
   }
-  push_i64(rt.stack, value.reinterpret_as_uint64())
+  push_i64(rt, value.reinterpret_as_uint64())
   rt.pc += 1
   OK
 }
@@ -269,7 +269,7 @@ fn op_i64_load32_u(rt : Runtime) -> RetCode {
   let b1 = rt.memory[addr + 1].to_uint64()
   let b2 = rt.memory[addr + 2].to_uint64()
   let b3 = rt.memory[addr + 3].to_uint64()
-  push_i64(rt.stack, b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
+  push_i64(rt, b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
   rt.pc += 1
   OK
 }
@@ -288,7 +288,7 @@ fn op_f32_load(rt : Runtime) -> RetCode {
   let b2 = rt.memory[addr + 2].to_uint()
   let b3 = rt.memory[addr + 3].to_uint()
   let bits = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
-  push_f32(rt.stack, Float::reinterpret_from_uint(bits))
+  push_f32(rt, Float::reinterpret_from_uint(bits))
   rt.pc += 1
   OK
 }
@@ -318,7 +318,7 @@ fn op_f64_load(rt : Runtime) -> RetCode {
     (b5 << 40) |
     (b6 << 48) |
     (b7 << 56)
-  push_f64(rt.stack, bits.reinterpret_as_double())
+  push_f64(rt, bits.reinterpret_as_double())
   rt.pc += 1
   OK
 }
@@ -455,7 +455,7 @@ let wasm_page_size : Int = 65536
 fn op_memory_size(rt : Runtime) -> RetCode {
   // Return current memory size in pages
   let size_in_pages = rt.memory.length() / wasm_page_size
-  push_i32(rt.stack, size_in_pages.reinterpret_as_uint())
+  push_i32(rt, size_in_pages.reinterpret_as_uint())
   rt.pc += 1
   OK
 }
@@ -467,7 +467,7 @@ fn op_memory_grow(rt : Runtime) -> RetCode {
 
   // Check for overflow or negative delta
   if delta_pages < 0 {
-    push_i32(rt.stack, 0xFFFFFFFFU) // -1 indicates failure
+    push_i32(rt, 0xFFFFFFFFU) // -1 indicates failure
     rt.pc += 1
     return OK
   }
@@ -480,7 +480,7 @@ fn op_memory_grow(rt : Runtime) -> RetCode {
     None => 65536 // No limit specified in module
   }
   if new_size_pages > max_pages {
-    push_i32(rt.stack, 0xFFFFFFFFU) // -1 indicates failure
+    push_i32(rt, 0xFFFFFFFFU) // -1 indicates failure
     rt.pc += 1
     return OK
   }
@@ -492,7 +492,7 @@ fn op_memory_grow(rt : Runtime) -> RetCode {
   }
 
   // Return old size in pages (success)
-  push_i32(rt.stack, old_size_pages.reinterpret_as_uint())
+  push_i32(rt, old_size_pages.reinterpret_as_uint())
   rt.pc += 1
   OK
 }

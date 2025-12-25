@@ -20,7 +20,7 @@ fn parse_code_section(parser : Parser) -> Array[@core.Code] raise {
 
     // Parse body
     let body = parse_expr(parser)
-    codes.push(@core.Code::{ locals, body, compiled: None })
+    codes.push(@core.Code::{ locals, body, compiled: None, max_stack_height: 0 })
   }
   codes
 }

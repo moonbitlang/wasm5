@@ -600,6 +600,7 @@ pub(all) struct Code {
   locals : Array[ValType]
   body : Expr
   mut compiled : Int?
+  mut max_stack_height : Int // Max stack usage from sp: num_locals + max_operand_depth
 }
 
 // Function (combines type index with code)

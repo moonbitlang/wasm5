@@ -20,7 +20,7 @@ pub fn Runtime::compile(self : Runtime) -> Unit raise RuntimeError {
         }
 
         // Clear stack and call_stack before setting up locals
-        self.stack.clear()
+        self.stack_top = 0
         self.call_stack.clear()
 
         // Initialize entry locals (start function has no parameters)
@@ -37,7 +37,7 @@ pub fn Runtime::compile(self : Runtime) -> Unit raise RuntimeError {
         }
 
         // Clear state after start function execution
-        self.stack.clear()
+        self.stack_top = 0
       }
     }
     None => ()
@@ -101,7 +101,7 @@ pub fn Runtime::call_compiled(
   }
 
   // Clear stack and call_stack before setting up entry frame
-  self.stack.clear()
+  self.stack_top = 0
   self.call_stack.clear()
 
   // Initialize entry locals (pushes args and locals onto stack, sets sp/num_locals)
@@ -117,8 +117,8 @@ pub fn Runtime::call_compiled(
   let results : Array[Value] = []
   let result_types = func_type.results
   for i in 0..<result_types.length() {
-    if i < self.stack.length() {
-      results.push(stack_to_value(self.stack[i], result_types[i]))
+    if i < self.stack_top {
+      results.push(stack_to_value(self.stack.unsafe_get(i), result_types[i]))
     }
   }
   results

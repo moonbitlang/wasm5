@@ -242,6 +242,7 @@ fn make_compile_module(instrs : Array[@core.Instr]) -> @core.Module {
     locals: [I32],
     body: @core.Expr::{ instrs, },
     compiled: None,
+    max_stack_height: 0,
   }
   @core.Module::{
     types,
