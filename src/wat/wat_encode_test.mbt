@@ -722,6 +722,19 @@ async test "wat encoder matches wasm-tools for call_indirect table inline" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for call_indirect type order" {
+  let wat =
+    #|(module
+    #|  (table 1 funcref)
+    #|  (func (export "f") (param i32) (result i32)
+    #|    i64.const 1
+    #|    local.get 0
+    #|    call_indirect (param i64) (result i32))
+    #|  (func (export "g") (param i32 i32) (result i32) local.get 0))
+  assert_wat_matches("call_indirect_type_order", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for call_indirect implicit typeuse" {
   let wat =
     #|(module
