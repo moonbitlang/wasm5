@@ -6373,6 +6373,7 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
 
           }
         }
+        seed_typeuses_from_instrs(func.body, wat.type_defs, type_map, types)
       }
       TagImport(idx) => {
         let imp = wat.tag_imports[idx]
@@ -6711,6 +6712,109 @@ fn resolve_instrs(
     )
   }
   out
+}
+
+///|
+fn seed_typeuses_from_block_type(
+  block_type : WatBlockType,
+  type_defs : Array[WatTypeDef],
+  type_map : Map[Bytes, UInt],
+  types : Array[@core.TypeDef],
+) -> Unit raise WatError {
+  match block_type {
+    Results(results) =>
+      if results.length() > 1 {
+        let _ = type_index(types, [], results)
+
+      }
+    TypeUse(typeuse) => {
+      let _ = resolve_type_use_index(
+        typeuse.type_ref,
+        typeuse.params,
+        typeuse.results,
+        type_defs,
+        type_map,
+        types,
+      )
+
+    }
+    _ => ()
+  }
+}
+
+///|
+fn seed_typeuses_from_instrs(
+  instrs : Array[WatInstr],
+  type_defs : Array[WatTypeDef],
+  type_map : Map[Bytes, UInt],
+  types : Array[@core.TypeDef],
+) -> Unit raise WatError {
+  for instr in instrs {
+    match instr {
+      WatInstr::Block(_, block_type, body) => {
+        seed_typeuses_from_block_type(block_type, type_defs, type_map, types)
+        seed_typeuses_from_instrs(body, type_defs, type_map, types)
+      }
+      WatInstr::Loop(_, block_type, body) => {
+        seed_typeuses_from_block_type(block_type, type_defs, type_map, types)
+        seed_typeuses_from_instrs(body, type_defs, type_map, types)
+      }
+      WatInstr::If(_, block_type, then_body, else_body) => {
+        seed_typeuses_from_block_type(block_type, type_defs, type_map, types)
+        seed_typeuses_from_instrs(then_body, type_defs, type_map, types)
+        seed_typeuses_from_instrs(else_body, type_defs, type_map, types)
+      }
+      WatInstr::TryTable(_, block_type, _, body) => {
+        seed_typeuses_from_block_type(block_type, type_defs, type_map, types)
+        seed_typeuses_from_instrs(body, type_defs, type_map, types)
+      }
+      WatInstr::CallIndirect(call_indirect) => {
+        let _ = resolve_type_use_index(
+          call_indirect.type_ref,
+          call_indirect.params,
+          call_indirect.results,
+          type_defs,
+          type_map,
+          types,
+        )
+
+      }
+      WatInstr::ReturnCallIndirect(call_indirect) => {
+        let _ = resolve_type_use_index(
+          call_indirect.type_ref,
+          call_indirect.params,
+          call_indirect.results,
+          type_defs,
+          type_map,
+          types,
+        )
+
+      }
+      WatInstr::CallRef(typeuse) => {
+        let _ = resolve_type_use_index(
+          typeuse.type_ref,
+          typeuse.params,
+          typeuse.results,
+          type_defs,
+          type_map,
+          types,
+        )
+
+      }
+      WatInstr::ReturnCallRef(typeuse) => {
+        let _ = resolve_type_use_index(
+          typeuse.type_ref,
+          typeuse.params,
+          typeuse.results,
+          type_defs,
+          type_map,
+          types,
+        )
+
+      }
+      _ => ()
+    }
+  }
 }
 
 ///|

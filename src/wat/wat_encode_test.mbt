@@ -1031,6 +1031,21 @@ async test "wat encoder matches wasm-tools for multi-value blocks" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for block type order" {
+  let wat =
+    #|(module
+    #|  (func (export "f") (result i32)
+    #|    (block (result i64 i32)
+    #|      i64.const 1
+    #|      i32.const 2)
+    #|    drop
+    #|    drop
+    #|    i32.const 0)
+    #|  (func (export "g") (param i32) (result i32) local.get 0))
+  assert_wat_matches("block_type_order", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for typed select and ref.is_null" {
   let wat =
     #|(module (func (export "select_typed") (param i32 i32 i32) (result i32) local.get 0 local.get 1 local.get 2 select (result i32)) (func (export "ref_is_null") (param funcref) (result i32) local.get 0 ref.is_null))
