@@ -277,6 +277,35 @@ async test "wat encoder matches wasm-tools for table64 elem offset global" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for memory64 shared" {
+  let wat =
+    #|(module
+    #|  (memory i64 1 2 shared)
+    #|  (func (export "grow") (param i64) (result i64) local.get 0 memory.grow))
+  assert_wat_matches("mem64_shared", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for memory64 inline data" {
+  let wat =
+    #|(module
+    #|  (memory i64 (data "hi"))
+    #|  (func (export "size") (result i64) memory.size))
+  assert_wat_matches("mem64_inline_data", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for table64 inline elem" {
+  let wat =
+    #|(module
+    #|  (func $f)
+    #|  (func $g)
+    #|  (table i64 funcref (elem $f $g))
+    #|  (func (export "tsize") (result i64) table.size))
+  assert_wat_matches("table64_inline_elem", wat)
+}
+
+///|
 test "wat parser rejects i32 offset for memory64 data" {
   let wat =
     #|(module (memory i64 1) (data (i32.const 0) "hi"))

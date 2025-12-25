@@ -1238,14 +1238,20 @@ fn parse_module_field(
         exports: [],
       })
       match inline_data {
-        Some(data_bytes) =>
+        Some(data_bytes) => {
+          let offset = if mem.memory64 {
+            WatInstr::Core(@core.Instr::I64Const(0UL))
+          } else {
+            WatInstr::Core(@core.Instr::I32Const(0U))
+          }
           module_.datas.push({
             name: None,
             mem_ref: IndexRef::Index(mem_index),
-            offset: [WatInstr::Core(@core.Instr::I32Const(0U))],
+            offset: [offset],
             init: data_bytes,
             is_active: true,
           })
+        }
         None => ()
       }
     }
@@ -1272,10 +1278,15 @@ fn parse_module_field(
           for func_ref in funcs {
             init.push([WatInstr::RefFunc(func_ref)])
           }
+          let offset = if table.table_type.table64 {
+            WatInstr::Core(@core.Instr::I64Const(0UL))
+          } else {
+            WatInstr::Core(@core.Instr::I32Const(0U))
+          }
           module_.elems.push({
             name: None,
             table_ref: IndexRef::Index(table_index),
-            offset: [WatInstr::Core(@core.Instr::I32Const(0U))],
+            offset: [offset],
             init,
             is_active: true,
             is_declarative: false,
