@@ -368,6 +368,23 @@ test "wat parser rejects i32 offset for table64 elem" {
 }
 
 ///|
+test "wat parser rejects table elem without offset" {
+  let wat =
+    #|(module
+    #|  (func $f)
+    #|  (table 1 funcref)
+    #|  (elem (table 0) funcref (ref.func $f)))
+  let mut saw_error = false
+  let _ = wat_to_module(wat) catch {
+    _ => {
+      saw_error = true
+      empty_module()
+    }
+  }
+  assert_eq(saw_error, true)
+}
+
+///|
 async test "wat encoder matches wasm-tools for data" {
   let wat =
     #|(module (memory (export "mem") 1) (data (i32.const 0) "hi"))
