@@ -2809,9 +2809,10 @@ fn parse_instrs(
         i = next_idx
       }
       List(list_items) => {
-        instrs.push(
-          parse_instr_from_list(list_items, local_map, labels, type_map),
-        )
+        let folded = parse_folded_list(list_items, local_map, labels, type_map)
+        for instr in folded {
+          instrs.push(instr)
+        }
         i = i + 1
       }
       StringLit(_) =>
@@ -2819,6 +2820,89 @@ fn parse_instrs(
     }
   }
   instrs
+}
+
+///|
+fn parse_folded_list(
+  list_items : Array[SExpr],
+  local_map : Map[Bytes, UInt],
+  labels : Array[Bytes?],
+  type_map : Map[Bytes, UInt],
+) -> Array[WatInstr] raise WatError {
+  guard list_items.length() > 0 && list_items[0] is Atom(op) else {
+    raise WatError::InvalidSyntax("instruction head must be atom")
+  }
+  let (prefix, reduced) = split_folded_operands(
+    op, list_items, local_map, labels, type_map,
+  )
+  let instr = parse_instr_from_list(reduced, local_map, labels, type_map)
+  prefix.push(instr)
+  prefix
+}
+
+///|
+fn split_folded_operands(
+  op : Bytes,
+  list_items : Array[SExpr],
+  local_map : Map[Bytes, UInt],
+  labels : Array[Bytes?],
+  type_map : Map[Bytes, UInt],
+) -> (Array[WatInstr], Array[SExpr]) raise WatError {
+  let prefix : Array[WatInstr] = []
+  let reduced : Array[SExpr] = []
+  reduced.push(Atom(op))
+  if op == b"block" || op == b"loop" || op == b"try_table" {
+    for i in 1..<list_items.length() {
+      reduced.push(list_items[i])
+    }
+    return (prefix, reduced)
+  }
+  if op == b"if" {
+    let mut i = 1
+    let mut copied_rest = false
+    while i < list_items.length() {
+      match list_items[i] {
+        List(inner) =>
+          if inner.length() > 0 &&
+            inner[0] is Atom(tag) &&
+            (tag == b"then" || tag == b"else") {
+            for j in i..<list_items.length() {
+              reduced.push(list_items[j])
+            }
+            copied_rest = true
+            break
+          } else if is_instruction_list(inner) {
+            let nested = parse_folded_list(inner, local_map, labels, type_map)
+            for instr in nested {
+              prefix.push(instr)
+            }
+          } else {
+            reduced.push(list_items[i])
+          }
+        _ => reduced.push(list_items[i])
+      }
+      i = i + 1
+    }
+    if not(copied_rest) && i >= list_items.length() {
+      return (prefix, reduced)
+    }
+    return (prefix, reduced)
+  }
+  for i in 1..<list_items.length() {
+    match list_items[i] {
+      List(inner) =>
+        if is_instruction_list(inner) {
+          let nested = parse_folded_list(inner, local_map, labels, type_map)
+          for instr in nested {
+            prefix.push(instr)
+          }
+        } else {
+          reduced.push(list_items[i])
+        }
+      _ => reduced.push(list_items[i])
+    }
+  }
+  (prefix, reduced)
 }
 
 ///|
@@ -3783,6 +3867,107 @@ fn parse_instr_from_list(
             None => raise WatError::Unsupported("instruction \{op}")
           }
       }
+  }
+}
+
+///|
+fn is_instruction_list(list_items : Array[SExpr]) -> Bool {
+  if list_items.length() == 0 {
+    return false
+  }
+  match list_items[0] {
+    Atom(op) => is_instruction_op(op)
+    _ => false
+  }
+}
+
+///|
+fn is_instruction_op(op : Bytes) -> Bool {
+  if parse_simple_op(op) is Some(_) {
+    return true
+  }
+  if memarg_default_align(op) is Some(_) {
+    return true
+  }
+  if @core.simd_spec_by_name(op) is Some(_) {
+    return true
+  }
+  if @core.atomic_spec_by_name(op) is Some(_) {
+    return true
+  }
+  match op {
+    b"block"
+    | b"loop"
+    | b"if"
+    | b"try_table"
+    | b"br"
+    | b"br_if"
+    | b"br_table"
+    | b"br_on_null"
+    | b"br_on_non_null"
+    | b"call"
+    | b"call_indirect"
+    | b"return_call"
+    | b"return_call_indirect"
+    | b"call_ref"
+    | b"return_call_ref"
+    | b"ref.null"
+    | b"ref.func"
+    | b"ref.test"
+    | b"ref.cast"
+    | b"struct.new"
+    | b"struct.new_default"
+    | b"struct.get"
+    | b"struct.get_s"
+    | b"struct.get_u"
+    | b"struct.set"
+    | b"array.new"
+    | b"array.new_default"
+    | b"array.new_fixed"
+    | b"array.new_data"
+    | b"array.new_elem"
+    | b"array.get"
+    | b"array.get_s"
+    | b"array.get_u"
+    | b"array.set"
+    | b"array.len"
+    | b"array.fill"
+    | b"array.copy"
+    | b"array.init_data"
+    | b"array.init_elem"
+    | b"br_on_cast"
+    | b"br_on_cast_fail"
+    | b"any.convert_extern"
+    | b"extern.convert_any"
+    | b"ref.i31"
+    | b"i31.get_s"
+    | b"i31.get_u"
+    | b"table.get"
+    | b"table.set"
+    | b"table.size"
+    | b"table.grow"
+    | b"table.init"
+    | b"table.copy"
+    | b"table.fill"
+    | b"elem.drop"
+    | b"memory.size"
+    | b"memory.grow"
+    | b"memory.init"
+    | b"memory.copy"
+    | b"memory.fill"
+    | b"data.drop"
+    | b"throw"
+    | b"rethrow"
+    | b"i32.const"
+    | b"i64.const"
+    | b"f32.const"
+    | b"f64.const"
+    | b"local.get"
+    | b"local.set"
+    | b"local.tee"
+    | b"global.get"
+    | b"global.set" => true
+    _ => false
   }
 }
 
