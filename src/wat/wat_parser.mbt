@@ -186,7 +186,7 @@ priv struct WatTable {
   name : Bytes?
   table_type : @core.TableType
   init : Array[WatInstr]?
-  inline_elem : Array[FuncRef]?
+  inline_elem : Array[Array[WatInstr]]?
   exports : Array[Bytes]
 }
 
@@ -1346,11 +1346,7 @@ fn parse_module_field(
           exports: [],
         })
         match table.inline_elem {
-          Some(funcs) => {
-            let init : Array[Array[WatInstr]] = []
-            for func_ref in funcs {
-              init.push([WatInstr::RefFunc(func_ref)])
-            }
+          Some(init) => {
             let offset = if table.table_type.table64 {
               WatInstr::Core(@core.Instr::I64Const(0UL))
             } else {
@@ -2211,7 +2207,7 @@ fn parse_table(
   let mut elem_type : @core.RefType? = None
   let mut elem_nullable : Bool? = None
   let mut init_item : SExpr? = None
-  let mut inline_elem : Array[FuncRef]? = None
+  let mut inline_elem : Array[Array[WatInstr]]? = None
   for i in idx..<items.length() {
     match items[i] {
       List(list_items) => {
@@ -2234,17 +2230,60 @@ fn parse_table(
                 "table inline elem requires element type",
               )
             }
-            let funcs : Array[FuncRef] = []
+            let exprs : Array[Array[WatInstr]] = []
             for j in 1..<list_items.length() {
               match list_items[j] {
-                Atom(atom) => funcs.push(parse_func_ref(atom))
+                Atom(atom) =>
+                  exprs.push([WatInstr::RefFunc(parse_func_ref(atom))])
+                List(inner) =>
+                  if inner.length() > 0 && inner[0] is Atom(inner_tag) {
+                    if inner_tag == b"func" {
+                      guard inner.length() == 2 else {
+                        raise WatError::InvalidSyntax(
+                          "inline elem func expects one reference",
+                        )
+                      }
+                      exprs.push([
+                        WatInstr::RefFunc(parse_func_ref(expect_atom(inner[1]))),
+                      ])
+                    } else if inner_tag == b"item" {
+                      guard inner.length() == 2 else {
+                        raise WatError::InvalidSyntax(
+                          "inline elem item expects one expression",
+                        )
+                      }
+                      let instrs = parse_instrs(
+                        [inner[1]],
+                        Map::new(),
+                        [],
+                        type_map,
+                      )
+                      exprs.push(instrs)
+                    } else {
+                      let instrs = parse_instrs(
+                        [list_items[j]],
+                        Map::new(),
+                        [],
+                        type_map,
+                      )
+                      exprs.push(instrs)
+                    }
+                  } else {
+                    let instrs = parse_instrs(
+                      [list_items[j]],
+                      Map::new(),
+                      [],
+                      type_map,
+                    )
+                    exprs.push(instrs)
+                  }
                 _ =>
                   raise WatError::InvalidSyntax(
-                    "inline elem expects function references",
+                    "inline elem expects expressions",
                   )
               }
             }
-            inline_elem = Some(funcs)
+            inline_elem = Some(exprs)
           }
           _ =>
             if inline_elem is Some(_) {
@@ -2295,11 +2334,11 @@ fn parse_table(
   }
   let (numeric_atoms, table64) = split_table_limit_atoms(limit_atoms)
   let limits = match inline_elem {
-    Some(funcs) => {
+    Some(exprs) => {
       guard numeric_atoms.length() == 0 else {
         raise WatError::InvalidSyntax("inline elem cannot specify limits")
       }
-      let count = funcs.length().reinterpret_as_uint().to_uint64()
+      let count = exprs.length().reinterpret_as_uint().to_uint64()
       @core.Limits::{ min: count, max: Some(count) }
     }
     None => parse_limits_from_atoms(numeric_atoms)
