@@ -33,7 +33,7 @@ fn base_runtime(
   let stack64 = stack.map(value_to_stack)
   Runtime::{
     module_,
-    ops,
+    ops: FixedArray::from_array(ops),
     stack: stack64,
     sp: 0,
     num_locals: 0,

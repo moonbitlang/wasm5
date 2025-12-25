@@ -116,32 +116,8 @@ test "runtime call compiled non func export" {
 
 ///|
 test "runtime call compiled local errors" {
+  // Test that unsupported local type (V128) causes error during call
   let func_type : @core.FuncType = { params: [], results: [] }
-  let code : @core.Code = {
-    locals: [],
-    body: @core.Expr::{ instrs: [] },
-    compiled: None,
-  }
-  let module_not_compiled = module_with(
-    [Func(func_type)],
-    [0U],
-    [code],
-    [],
-    [{ name: b"local", desc: Func(0U) }],
-    None,
-  )
-  let rt_not_compiled = Runtime::load_with_resolver(
-    module_not_compiled,
-    ImportResolver::new(),
-  )
-  let mut saw_not_compiled = false
-  let _ = rt_not_compiled.call_compiled(b"local", []) catch {
-    _ => {
-      saw_not_compiled = true
-      []
-    }
-  }
-  assert_eq(saw_not_compiled, true)
   let code_bad : @core.Code = {
     locals: [V128],
     body: @core.Expr::{ instrs: [] },

@@ -357,12 +357,6 @@ fn Runtime::handle_tail_call_return(self : Runtime) -> RetCode {
 }
 
 ///|
-/// Emit an instruction to the ops array
-fn Runtime::emit(self : Runtime, instr : MInstr) -> Unit {
-  self.ops.push(instr)
-}
-
-///|
 /// Read immediate i32 value and advance PC
 fn Runtime::read_imm_i32(self : Runtime) -> UInt {
   self.pc += 1
@@ -397,6 +391,7 @@ fn Runtime::read_imm_idx(self : Runtime) -> Int {
 
 ///|
 /// Value pair for binary i32 operations
+#valtype
 priv struct TwoI32(UInt, UInt)
 
 ///|

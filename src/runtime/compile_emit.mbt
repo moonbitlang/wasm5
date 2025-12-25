@@ -3,8 +3,8 @@
 // ============================================================================
 
 ///|
-fn Runtime::compile_wasm_instr(
-  self : Runtime,
+fn Compiler::compile_wasm_instr(
+  self : Compiler,
   ctx : CompileCtx,
   instr : @core.Instr,
 ) -> Unit raise RuntimeError {
