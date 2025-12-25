@@ -513,6 +513,29 @@ async test "wat encoder matches wasm-tools for memarg literals" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for memarg memory index" {
+  let wat =
+    #|(module
+    #|  (memory $m0 1 1 shared)
+    #|  (memory $m1 1 1 shared)
+    #|  (func (export "memidx") (param i32) (result i32)
+    #|    local.get 0
+    #|    i32.load 1
+    #|    drop
+    #|    local.get 0
+    #|    i32.load $m1 offset=4 align=4
+    #|    drop
+    #|    local.get 0
+    #|    v128.load $m1
+    #|    drop
+    #|    local.get 0
+    #|    i32.atomic.load $m1
+    #|    drop
+    #|    i32.const 0))
+  assert_wat_matches("memarg_memidx", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for control flow" {
   let wat =
     #|(module (func (export "block_if") (param i32) (result i32) (block $out (result i32) i32.const 7 local.get 0 br_if $out i32.const 42)) (func (export "loop_br") (result i32) (block (result i32) (loop $top i32.const 9 br 1))) (func (export "if_else") (param i32) (result i32) local.get 0 (if (result i32) (then i32.const 1) (else i32.const 2))) (func (export "br_table") (param i32) (block local.get 0 br_table 0 0)))
