@@ -568,8 +568,8 @@ fn parse_call_indirect_items(
   type_map : Map[Bytes, UInt],
   context : String,
 ) -> WatCallIndirect raise WatError {
-  guard list_items.length() >= 2 else {
-    raise WatError::InvalidSyntax("\{context} expects typeuse")
+  guard list_items.length() > 0 else {
+    raise WatError::InvalidSyntax("\{context} expects operands")
   }
   let mut idx = 1
   let mut type_ref : WatTypeRef? = None
@@ -617,9 +617,6 @@ fn parse_call_indirect_items(
       }
       _ => raise WatError::InvalidSyntax("\{context} expects lists")
     }
-  }
-  guard type_ref is Some(_) || params.length() > 0 || results.length() > 0 else {
-    raise WatError::InvalidSyntax("\{context} missing typeuse")
   }
   { type_ref, params, results, table_ref }
 }
