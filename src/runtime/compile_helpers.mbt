@@ -81,6 +81,78 @@ fn count_imported_funcs(module_ : @core.Module) -> Int {
 }
 
 ///|
+/// Count the number of imported tags in a module
+fn count_imported_tags(module_ : @core.Module) -> Int {
+  let mut count = 0
+  for imp in module_.imports {
+    match imp.desc {
+      Tag(_) => count += 1
+      _ => ()
+    }
+  }
+  count
+}
+
+///|
+fn require_func_type(
+  module_ : @core.Module,
+  type_idx : Int,
+  context : String,
+) -> @core.FuncType raise RuntimeError {
+  if type_idx < 0 || type_idx >= module_.types.length() {
+    raise RuntimeError::InvalidType(
+      "\{context}: invalid type index \{type_idx}",
+    )
+  }
+  match module_.types[type_idx] {
+    Func(func_type) => func_type
+    _ => raise RuntimeError::InvalidType("\{context}: expected func type")
+  }
+}
+
+///|
+fn require_struct_type(
+  module_ : @core.Module,
+  type_idx : Int,
+  context : String,
+) -> @core.StructType raise RuntimeError {
+  if type_idx < 0 || type_idx >= module_.types.length() {
+    raise RuntimeError::InvalidType(
+      "\{context}: invalid type index \{type_idx}",
+    )
+  }
+  match module_.types[type_idx] {
+    Struct(struct_type) => struct_type
+    _ => raise RuntimeError::InvalidType("\{context}: expected struct type")
+  }
+}
+
+///|
+fn require_array_type(
+  module_ : @core.Module,
+  type_idx : Int,
+  context : String,
+) -> @core.ArrayType raise RuntimeError {
+  if type_idx < 0 || type_idx >= module_.types.length() {
+    raise RuntimeError::InvalidType(
+      "\{context}: invalid type index \{type_idx}",
+    )
+  }
+  match module_.types[type_idx] {
+    Array(array_type) => array_type
+    _ => raise RuntimeError::InvalidType("\{context}: expected array type")
+  }
+}
+
+///|
+fn storage_value_type(storage : @core.StorageType) -> @core.ValType {
+  match storage {
+    Val(val_type) => val_type
+    I8 | I16 => I32
+  }
+}
+
+///|
 /// Get the type index for a function (imported or local)
 /// Returns -1 if the function index is invalid
 fn get_func_type_idx(
@@ -117,6 +189,40 @@ fn get_func_type_idx(
 }
 
 ///|
+/// Get the type index for a tag (imported or local)
+/// Returns -1 if the tag index is invalid
+fn get_tag_type_idx(
+  module_ : @core.Module,
+  tag_idx : Int,
+  num_imported : Int,
+) -> Int {
+  if tag_idx < num_imported {
+    let mut import_idx = 0
+    let mut type_idx = -1
+    for imp in module_.imports {
+      match imp.desc {
+        Tag(tidx) => {
+          if import_idx == tag_idx {
+            type_idx = tidx.reinterpret_as_int()
+            break
+          }
+          import_idx += 1
+        }
+        _ => ()
+      }
+    }
+    type_idx
+  } else {
+    let local_idx = tag_idx - num_imported
+    if local_idx >= 0 && local_idx < module_.tags.length() {
+      module_.tags[local_idx].type_idx.reinterpret_as_int()
+    } else {
+      -1
+    }
+  }
+}
+
+///|
 /// Pop function arguments from the stack (converts UInt64 to Value)
 fn Runtime::pop_arguments(
   self : Runtime,
@@ -138,9 +244,19 @@ fn Runtime::init_declared_locals(self : Runtime, code : @core.Code) -> RetCode {
   for local_type in code.locals {
     match local_type {
       I32 | I64 | F32 | F64 => self.stack.push(0UL)
-      FuncRef | ExternRef | AnyRef | ExnRef | NullRef | NullFuncRef |
-      NullExnRef | NullExternRef | EqRef | I31Ref | StructRef | ArrayRef |
-      Ref(_, _) => self.stack.push((-1L).reinterpret_as_uint64()) // null ref
+      FuncRef
+      | ExternRef
+      | AnyRef
+      | ExnRef
+      | NullRef
+      | NullFuncRef
+      | NullExnRef
+      | NullExternRef
+      | EqRef
+      | I31Ref
+      | StructRef
+      | ArrayRef
+      | Ref(_, _) => self.stack.push((-1L).reinterpret_as_uint64()) // null ref
       _ => {
         self.error_detail = "Unsupported local type: \{local_type}"
         return UnsupportedLocalType
@@ -395,10 +511,22 @@ fn stack_to_value(raw : UInt64, val_type : @core.ValType) -> Value {
   match val_type {
     I32 => Value::I32((raw & 0xFFFFFFFFUL).to_uint())
     I64 => Value::I64(raw)
-    F32 => Value::F32(Float::reinterpret_from_uint((raw & 0xFFFFFFFFUL).to_uint()))
+    F32 =>
+      Value::F32(Float::reinterpret_from_uint((raw & 0xFFFFFFFFUL).to_uint()))
     F64 => Value::F64(raw.reinterpret_as_double())
-    FuncRef | ExternRef | AnyRef | NullRef | NullFuncRef | NullExternRef |
-    EqRef | I31Ref | StructRef | ArrayRef | ExnRef | NullExnRef | Ref(_, _) => {
+    FuncRef
+    | ExternRef
+    | AnyRef
+    | NullRef
+    | NullFuncRef
+    | NullExternRef
+    | EqRef
+    | I31Ref
+    | StructRef
+    | ArrayRef
+    | ExnRef
+    | NullExnRef
+    | Ref(_, _) => {
       let idx = raw.reinterpret_as_int64().to_int()
       if idx == -1 {
         Value::Ref(None)

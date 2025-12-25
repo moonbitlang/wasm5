@@ -7,10 +7,13 @@ fn test_empty_expr() -> @core.Expr {
 fn test_empty_module() -> @core.Module {
   {
     types: [],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,

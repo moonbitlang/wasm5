@@ -1,6 +1,6 @@
 ///|
 fn module_with(
-  types : Array[@core.FuncType],
+  types : Array[@core.TypeDef],
   funcs : Array[UInt],
   codes : Array[@core.Code],
   imports : Array[@core.Import],
@@ -9,10 +9,13 @@ fn module_with(
 ) -> @core.Module {
   {
     types,
+    type_groups: [],
+    customs: [],
     funcs,
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start,
@@ -24,7 +27,7 @@ fn module_with(
 
 ///|
 test "runtime compile start function" {
-  let func_type : @core.FuncType = { params: [], results: [] }
+  let func_type : @core.TypeDef = Func({ params: [], results: [] })
   let code : @core.Code = {
     locals: [I32],
     body: @core.Expr::{ instrs: [] },
@@ -57,7 +60,7 @@ test "runtime execute error branches" {
 
 ///|
 test "runtime call compiled imported func" {
-  let func_type : @core.FuncType = { params: [], results: [I32] }
+  let func_type : @core.TypeDef = Func({ params: [], results: [I32] })
   let module_ = module_with(
     [func_type],
     [],
@@ -79,13 +82,20 @@ test "runtime call compiled imported func" {
 
 ///|
 test "runtime call compiled non func export" {
-  let mem_type : @core.MemType = { limits: { min: 1U, max: None } }
+  let mem_type : @core.MemType = {
+    limits: { min: 1UL, max: None },
+    shared: false,
+    memory64: false,
+  }
   let module_ : @core.Module = {
     types: [],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [mem_type],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -113,7 +123,7 @@ test "runtime call compiled local errors" {
     compiled: None,
   }
   let module_not_compiled = module_with(
-    [func_type],
+    [Func(func_type)],
     [0U],
     [code],
     [],
@@ -138,7 +148,7 @@ test "runtime call compiled local errors" {
     compiled: Some(0),
   }
   let module_bad = module_with(
-    [func_type],
+    [Func(func_type)],
     [0U],
     [code_bad],
     [],

@@ -11,6 +11,12 @@ fn validate_instruction(
   if validate_instruction_numeric(module_, ctx, instr) {
     return
   }
+  if validate_instruction_simd(module_, ctx, instr, import_counts) {
+    return
+  }
+  if validate_instruction_atomic(module_, ctx, instr, import_counts) {
+    return
+  }
   if validate_instruction_variable(
       module_, func_type, code, ctx, import_counts, instr,
     ) {
@@ -22,7 +28,10 @@ fn validate_instruction(
   if validate_instruction_memory(module_, ctx, import_counts, instr) {
     return
   }
-  if validate_instruction_table(module_, ctx, instr) {
+  if validate_instruction_table(module_, ctx, import_counts, instr) {
+    return
+  }
+  if validate_instruction_gc(module_, ctx, instr) {
     return
   }
   if validate_instruction_reference(module_, ctx, import_counts, instr) {

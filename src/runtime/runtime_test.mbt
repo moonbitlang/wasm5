@@ -1,6 +1,6 @@
 ///|
 fn make_const_module(value : UInt, name : Bytes) -> @core.Module {
-  let func_type : @core.FuncType = { params: [], results: [I32] }
+  let func_type : @core.TypeDef = Func({ params: [], results: [I32] })
   let code : @core.Code = {
     locals: [],
     body: @core.Expr::{ instrs: [I32Const(value)] },
@@ -8,10 +8,13 @@ fn make_const_module(value : UInt, name : Bytes) -> @core.Module {
   }
   @core.Module::{
     types: [func_type],
+    type_groups: [],
+    customs: [],
     funcs: [0U],
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -23,7 +26,7 @@ fn make_const_module(value : UInt, name : Bytes) -> @core.Module {
 
 ///|
 fn make_import_call_module() -> @core.Module {
-  let func_type : @core.FuncType = { params: [], results: [I32] }
+  let func_type : @core.TypeDef = Func({ params: [], results: [I32] })
   let code : @core.Code = {
     locals: [],
     body: @core.Expr::{ instrs: [Call(0U)] },
@@ -33,10 +36,13 @@ fn make_import_call_module() -> @core.Module {
   let export_ : @core.Export = { name: b"call_imported", desc: Func(1U) }
   @core.Module::{
     types: [func_type],
+    type_groups: [],
+    customs: [],
     funcs: [0U],
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -78,10 +84,13 @@ test "runtime evaluates global init expr" {
   }
   let module_ : @core.Module = {
     types: [],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
     globals: [global_],
+    tags: [],
     elems: [],
     datas: [],
     start: None,

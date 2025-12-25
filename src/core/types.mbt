@@ -74,7 +74,82 @@ pub fn ValType::is_defaultable(self : ValType) -> Bool {
 pub(all) struct FuncType {
   params : Array[ValType]
   results : Array[ValType]
-}
+} derive(Show, Eq)
+
+///|
+pub(all) enum StorageType {
+  Val(ValType)
+  I8
+  I16
+} derive(Show, Eq)
+
+///|
+pub(all) struct FieldType {
+  storage : StorageType
+  mutable : Bool
+} derive(Show, Eq)
+
+///|
+pub(all) struct StructType {
+  fields : Array[FieldType]
+} derive(Show, Eq)
+
+///|
+pub(all) struct ArrayType {
+  element : FieldType
+} derive(Show, Eq)
+
+///|
+pub(all) enum TypeDef {
+  Func(FuncType)
+  Struct(StructType)
+  Array(ArrayType)
+} derive(Show, Eq)
+
+///|
+pub(all) struct SubTypeDef {
+  type_idx : UInt
+  supertypes : Array[UInt]
+  is_final : Bool
+} derive(Show, Eq)
+
+///|
+pub(all) struct TypeGroup {
+  subtypes : Array[SubTypeDef]
+  explicit : Bool
+} derive(Show, Eq)
+
+///|
+pub(all) enum SectionId {
+  Type
+  Import
+  Func
+  Table
+  Memory
+  Global
+  Tag
+  Export
+  Start
+  Elem
+  DataCount
+  Code
+  Data
+} derive(Show, Eq)
+
+///|
+pub(all) enum CustomPlacement {
+  Start
+  Before(SectionId)
+  After(SectionId)
+  End
+} derive(Show, Eq)
+
+///|
+pub(all) struct CustomSection {
+  name : Bytes
+  data : Bytes
+  placement : CustomPlacement
+} derive(Show, Eq)
 
 // Block type (can be empty, single value, or type index to function type)
 
@@ -89,8 +164,8 @@ pub(all) enum BlockType {
 
 ///|
 pub(all) struct Limits {
-  min : UInt
-  max : UInt?
+  min : UInt64
+  max : UInt64?
 }
 
 // Memory type
@@ -98,6 +173,8 @@ pub(all) struct Limits {
 ///|
 pub(all) struct MemType {
   limits : Limits
+  shared : Bool
+  memory64 : Bool
 }
 
 // Table type
@@ -108,6 +185,7 @@ pub(all) struct TableType {
   limits : Limits
   init : Expr? // Optional initializer expression (GC proposal)
   nullable : Bool // Whether the element type is nullable (default true for backward compat)
+  table64 : Bool
 }
 
 // Global type
@@ -165,15 +243,23 @@ pub(all) struct Global {
   init : Expr
 }
 
+///|
+pub(all) struct Tag {
+  type_idx : UInt
+}
+
 // Element segment (for table initialization)
 
 ///|
 pub(all) struct Elem {
   table_idx : UInt
   offset : Expr
-  init : Array[UInt] // function indices
+  init : Array[Expr] // element init expressions
   is_active : Bool // True for active segments (flags 0,2,4,6), false for passive/declarative
-  elem_type : RefType // Element type (funcref, externref, or typed reference)
+  is_declarative : Bool // True for declarative segments (flags 3,7)
+  elem_type : RefType // Element heap type
+  elem_nullable : Bool // Whether element type is nullable
+  explicit_table : Bool // True when table index was explicitly provided in WAT
 }
 
 // Data segment (for memory initialization)
@@ -189,6 +275,35 @@ pub(all) struct Data {
 // Instructions
 
 ///|
+pub(all) enum SimdImmediate {
+  None
+  MemArg(UInt, UInt, UInt) // align, offset, memory index
+  Lane(UInt) // lane index
+  MemArgLane(UInt, UInt, UInt, UInt) // align, offset, memory index, lane
+  Shuffle(Array[Byte]) // 16 bytes
+  V128Const(Array[Byte]) // 16 bytes
+} derive(Show)
+
+///|
+pub(all) struct SimdInstr {
+  opcode : UInt
+  imm : SimdImmediate
+} derive(Show)
+
+///|
+pub(all) enum AtomicImmediate {
+  None
+  MemArg(UInt, UInt, UInt) // align, offset, memory index
+  Fence(UInt) // reserved byte (must be 0)
+} derive(Show)
+
+///|
+pub(all) struct AtomicInstr {
+  opcode : UInt
+  imm : AtomicImmediate
+} derive(Show)
+
+///|
 pub(all) enum Instr {
   // Control instructions
   Unreachable
@@ -196,6 +311,7 @@ pub(all) enum Instr {
   Block(BlockType, Array[Instr])
   Loop(BlockType, Array[Instr])
   If(BlockType, Array[Instr], Array[Instr])
+  TryTable(BlockType, Array[CatchClause], Array[Instr]) // Exception handling
   Br(UInt)
   BrIf(UInt)
   BrTable(Array[UInt], UInt)
@@ -208,6 +324,10 @@ pub(all) enum Instr {
   ReturnCallIndirect(UInt, UInt) // tail call proposal
   CallRef(UInt) // typed function references
   ReturnCallRef(UInt) // typed function references
+  Throw(UInt) // exception handling
+  Rethrow(UInt) // exception handling
+  Simd(SimdInstr) // SIMD instructions
+  Atomic(AtomicInstr) // Atomic instructions (threads)
 
   // Parametric instructions
   Drop
@@ -222,29 +342,29 @@ pub(all) enum Instr {
   GlobalSet(UInt)
 
   // Memory instructions
-  I32Load(UInt, UInt) // align, offset
-  I64Load(UInt, UInt)
-  F32Load(UInt, UInt)
-  F64Load(UInt, UInt)
-  I32Load8S(UInt, UInt)
-  I32Load8U(UInt, UInt)
-  I32Load16S(UInt, UInt)
-  I32Load16U(UInt, UInt)
-  I64Load8S(UInt, UInt)
-  I64Load8U(UInt, UInt)
-  I64Load16S(UInt, UInt)
-  I64Load16U(UInt, UInt)
-  I64Load32S(UInt, UInt)
-  I64Load32U(UInt, UInt)
-  I32Store(UInt, UInt)
-  I64Store(UInt, UInt)
-  F32Store(UInt, UInt)
-  F64Store(UInt, UInt)
-  I32Store8(UInt, UInt)
-  I32Store16(UInt, UInt)
-  I64Store8(UInt, UInt)
-  I64Store16(UInt, UInt)
-  I64Store32(UInt, UInt)
+  I32Load(UInt, UInt, UInt) // align, offset, memory index
+  I64Load(UInt, UInt, UInt)
+  F32Load(UInt, UInt, UInt)
+  F64Load(UInt, UInt, UInt)
+  I32Load8S(UInt, UInt, UInt)
+  I32Load8U(UInt, UInt, UInt)
+  I32Load16S(UInt, UInt, UInt)
+  I32Load16U(UInt, UInt, UInt)
+  I64Load8S(UInt, UInt, UInt)
+  I64Load8U(UInt, UInt, UInt)
+  I64Load16S(UInt, UInt, UInt)
+  I64Load16U(UInt, UInt, UInt)
+  I64Load32S(UInt, UInt, UInt)
+  I64Load32U(UInt, UInt, UInt)
+  I32Store(UInt, UInt, UInt)
+  I64Store(UInt, UInt, UInt)
+  F32Store(UInt, UInt, UInt)
+  F64Store(UInt, UInt, UInt)
+  I32Store8(UInt, UInt, UInt)
+  I32Store16(UInt, UInt, UInt)
+  I64Store8(UInt, UInt, UInt)
+  I64Store16(UInt, UInt, UInt)
+  I64Store32(UInt, UInt, UInt)
   MemorySize(UInt) // memory index (usually 0)
   MemoryGrow(UInt) // memory index (usually 0)
 
@@ -255,13 +375,14 @@ pub(all) enum Instr {
   TableGrow(UInt) // table index
   TableInit(UInt, UInt) // table index, elem segment index
   TableCopy(UInt, UInt) // dest table index, src table index
+  TableFill(UInt) // table index
   ElemDrop(UInt) // elem segment index
 
   // Bulk memory instructions
-  MemoryInit(UInt) // data segment index (memory index always 0)
+  MemoryInit(UInt, UInt) // data segment index, memory index
   DataDrop(UInt) // data segment index
-  MemoryCopy // memory.copy (src and dest memory indices always 0)
-  MemoryFill // memory.fill (memory index always 0)
+  MemoryCopy(UInt, UInt) // memory.copy (dst memory, src memory)
+  MemoryFill(UInt) // memory.fill (memory index)
 
   // Reference instructions
   RefNull(RefType) // ref.null with heap type
@@ -269,6 +390,36 @@ pub(all) enum Instr {
   RefIsNull // ref.is_null - check if reference is null
   RefEq // ref.eq - reference equality
   RefAsNonNull // ref.as_non_null - trap if reference is null
+  RefTest(RefType, Bool) // ref.test (heap type, nullable)
+  RefCast(RefType, Bool) // ref.cast (heap type, nullable)
+  // GC instructions (struct/array, casts, i31)
+  StructNew(UInt)
+  StructNewDefault(UInt)
+  StructGet(UInt, UInt)
+  StructGetS(UInt, UInt)
+  StructGetU(UInt, UInt)
+  StructSet(UInt, UInt)
+  ArrayNew(UInt)
+  ArrayNewDefault(UInt)
+  ArrayNewFixed(UInt, UInt)
+  ArrayNewData(UInt, UInt)
+  ArrayNewElem(UInt, UInt)
+  ArrayGet(UInt)
+  ArrayGetS(UInt)
+  ArrayGetU(UInt)
+  ArraySet(UInt)
+  ArrayLen
+  ArrayFill(UInt)
+  ArrayCopy(UInt, UInt)
+  ArrayInitData(UInt, UInt)
+  ArrayInitElem(UInt, UInt)
+  BrOnCast(UInt, RefType, Bool, RefType, Bool)
+  BrOnCastFail(UInt, RefType, Bool, RefType, Bool)
+  AnyConvertExtern
+  ExternConvertAny
+  RefI31
+  I31GetS
+  I31GetU
 
   // Numeric instructions - constants
   I32Const(UInt)
@@ -427,6 +578,14 @@ pub(all) enum Instr {
   I64TruncSatF64U
 } derive(Show)
 
+///|
+pub(all) enum CatchClause {
+  Catch(UInt, UInt) // tag index, label index
+  CatchRef(UInt, UInt) // tag index, label index
+  CatchAll(UInt) // label index
+  CatchAllRef(UInt) // label index
+} derive(Show)
+
 // Expression (sequence of instructions)
 
 ///|
@@ -448,11 +607,14 @@ pub(all) struct Code {
 ///|
 /// Module structure according to WASM specification
 pub(all) struct Module {
-  types : Array[FuncType] // type section
+  types : Array[TypeDef] // type section
+  type_groups : Array[TypeGroup] // recursive type groups
+  customs : Array[CustomSection] // custom sections
   funcs : Array[UInt] // function section (type indices)
   tables : Array[TableType] // table section
   mems : Array[MemType] // memory section
   globals : Array[Global] // global section
+  tags : Array[Tag] // tag section (exception handling)
   elems : Array[Elem] // element section
   datas : Array[Data] // data section
   start : UInt? // start section (optional function index)

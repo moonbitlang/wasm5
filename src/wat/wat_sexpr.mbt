@@ -1,5 +1,5 @@
 ///|
-priv enum SExpr {
+pub enum SExpr {
   Atom(Bytes)
   StringLit(Bytes)
   List(Array[SExpr])

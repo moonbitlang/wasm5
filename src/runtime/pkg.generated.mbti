@@ -34,7 +34,8 @@ pub impl Show for RuntimeError
 // Types and methods
 pub struct CallFrame {
   return_pc : Int
-  locals : Array[Value]
+  caller_sp : Int
+  caller_num_locals : Int
 }
 
 pub struct CompileBlock {
@@ -56,6 +57,7 @@ pub impl Eq for CompileBlockKind
 pub struct CompileCtx {
   type_stack : Array[@core.ValType]
   control_stack : Array[CompileBlock]
+  func_result_count : Int
 }
 
 pub struct ImportResolver {
@@ -81,7 +83,7 @@ pub fn ImportedFunc::new(UInt, (Array[Value]) -> Array[Value]) -> Self
 
 pub struct ImportedMemory {
   data : Array[Byte]
-  max : UInt?
+  max : UInt64?
 }
 
 pub enum MInstr {
@@ -105,13 +107,14 @@ pub impl Eq for RetCode
 pub struct Runtime {
   module_ : @core.Module
   ops : Array[MInstr]
-  stack : Array[Value]
-  mut locals : Array[Value]
+  stack : Array[UInt64]
+  mut sp : Int
+  mut num_locals : Int
   mut pc : Int
   mut running : Bool
   call_stack : Array[CallFrame]
   memory : Array[Byte]
-  memory_max : UInt?
+  memory_max : UInt64?
   globals : Array[Value]
   tables : Array[RuntimeTable]
   imported_funcs : Array[ImportedFunc]

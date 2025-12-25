@@ -6,6 +6,12 @@ import(
 )
 
 // Values
+pub fn wast_to_modules(String) -> Array[@core.Module] raise WatError
+
+pub fn wast_to_script(String) -> Array[WastCommand] raise WatError
+
+pub fn wast_to_wasm(String) -> Array[Bytes] raise WatError
+
 pub fn wat_to_module(String) -> @core.Module raise WatError
 
 pub fn wat_to_wasm(String) -> Bytes raise WatError
@@ -21,6 +27,16 @@ pub suberror WatError {
 pub impl Show for WatError
 
 // Types and methods
+pub enum SExpr {
+  Atom(Bytes)
+  StringLit(Bytes)
+  List(Array[SExpr])
+}
+
+pub enum WastCommand {
+  Module(@core.Module)
+  Raw(SExpr)
+}
 
 // Type aliases
 

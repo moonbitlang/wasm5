@@ -2,10 +2,13 @@
 fn empty_module() -> @core.Module {
   {
     types: [],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -45,7 +48,9 @@ fn make_runtime(
 ///|
 fn assert_stack_eq(stack : Array[UInt64], expected : Array[Value]) -> Unit {
   if stack.length() != expected.length() {
-    abort("stack length mismatch: got \{stack.length()}, expected \{expected.length()}")
+    abort(
+      "stack length mismatch: got \{stack.length()}, expected \{expected.length()}",
+    )
   }
   for i in 0..<stack.length() {
     let got = stack[i]
@@ -372,7 +377,10 @@ test "ops i64 compare and unary" {
   let rt_popcnt = make_runtime([Value::I64(0xF0F0UL)], [], 0)
   let ret_popcnt = op_i64_popcnt(rt_popcnt)
   assert_ok(ret_popcnt)
-  assert_stack_elem_eq(rt_popcnt.stack[0], Value::I64(popcnt64(0xF0F0UL).to_uint64()))
+  assert_stack_elem_eq(
+    rt_popcnt.stack[0],
+    Value::I64(popcnt64(0xF0F0UL).to_uint64()),
+  )
   let rt_extend8 = make_runtime([Value::I64(0x00000000000000FFUL)], [], 0)
   let ret_extend8 = op_i64_extend8_s(rt_extend8)
   assert_ok(ret_extend8)
@@ -388,11 +396,17 @@ test "ops i64 compare and unary" {
   let rt_extend_i32_s = make_runtime([Value::I32(0xFFFFFFFFU)], [], 0)
   let ret_extend_i32_s = op_i64_extend_i32_s(rt_extend_i32_s)
   assert_ok(ret_extend_i32_s)
-  assert_stack_elem_eq(rt_extend_i32_s.stack[0], Value::I64(0xFFFFFFFFFFFFFFFFUL))
+  assert_stack_elem_eq(
+    rt_extend_i32_s.stack[0],
+    Value::I64(0xFFFFFFFFFFFFFFFFUL),
+  )
   let rt_extend_i32_u = make_runtime([Value::I32(0xFFFFFFFFU)], [], 0)
   let ret_extend_i32_u = op_i64_extend_i32_u(rt_extend_i32_u)
   assert_ok(ret_extend_i32_u)
-  assert_stack_elem_eq(rt_extend_i32_u.stack[0], Value::I64(0x00000000FFFFFFFFUL))
+  assert_stack_elem_eq(
+    rt_extend_i32_u.stack[0],
+    Value::I64(0x00000000FFFFFFFFUL),
+  )
 }
 
 ///|
@@ -730,7 +744,7 @@ test "ops memory load/store and size" {
     running: false,
     call_stack: [],
     memory: Array::make(65536, b'\x00'),
-    memory_max: Some(2U),
+    memory_max: Some(2UL),
     globals: [],
     tables: [],
     imported_funcs: [],
@@ -825,10 +839,13 @@ test "compile helpers canonicalize and counts" {
   assert_eq(f64_bits(canonicalize_f64(nan_f64)), f64_bits(canonical_nan_f64))
   let module_ : @core.Module = {
     types: [],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -837,7 +854,11 @@ test "compile helpers canonicalize and counts" {
       {
         module_: b"m",
         name: b"mem",
-        desc: Mem({ limits: { min: 1U, max: None } }),
+        desc: Mem({
+          limits: { min: 1UL, max: None },
+          shared: false,
+          memory64: false,
+        }),
       },
     ],
     exports: [],
@@ -848,10 +869,13 @@ test "compile helpers canonicalize and counts" {
   assert_eq(get_func_type_idx(module_, 2, 1), -1)
   let module_funcs : @core.Module = {
     types: [],
+    type_groups: [],
+    customs: [],
     funcs: [0U, 1U],
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,

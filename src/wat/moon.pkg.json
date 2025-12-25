@@ -7,6 +7,10 @@
     {
       "path": "moonbitlang/wasm5/src/encode",
       "alias": "encode"
+    },
+    {
+      "path": "moonbitlang/wasm5/src/parse",
+      "alias": "parse"
     }
   ],
   "test-import": [

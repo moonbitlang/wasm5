@@ -39,10 +39,13 @@ test "compile helpers type signature mismatch" {
 test "compile helpers func type lookup with non func imports" {
   let module_ : @core.Module = {
     types: [],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -50,7 +53,11 @@ test "compile helpers func type lookup with non func imports" {
       {
         module_: b"m",
         name: b"mem",
-        desc: Mem({ limits: { min: 1U, max: None } }),
+        desc: Mem({
+          limits: { min: 1UL, max: None },
+          shared: false,
+          memory64: false,
+        }),
       },
       { module_: b"m", name: b"f", desc: Func(0U) },
     ],
@@ -91,7 +98,11 @@ test "compile helpers tail call return branches" {
   rt.running = true
   rt.sp = 5
   rt.num_locals = 3
-  rt.call_stack.push(CallFrame::{ return_pc: 3, caller_sp: 10, caller_num_locals: 2 })
+  rt.call_stack.push(CallFrame::{
+    return_pc: 3,
+    caller_sp: 10,
+    caller_num_locals: 2,
+  })
   assert_ok(rt.handle_tail_call_return())
   assert_eq(rt.pc, 4)
   assert_eq(rt.sp, 10)

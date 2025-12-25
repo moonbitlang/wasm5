@@ -20,11 +20,16 @@ test "validate helper counts and type lookup" {
   let func_type1 : @core.FuncType = { params: [I32], results: [I32] }
   let table_type : @core.TableType = {
     elem_type: Func,
-    limits: { min: 0U, max: None },
+    limits: { min: 0UL, max: None },
     init: None,
     nullable: true,
+    table64: false,
   }
-  let mem_type : @core.MemType = { limits: { min: 0U, max: None } }
+  let mem_type : @core.MemType = {
+    limits: { min: 0UL, max: None },
+    shared: false,
+    memory64: false,
+  }
   let global_type : @core.GlobalType = { val_type: I32, mutable: false }
   let imports : Array[@core.Import] = [
     {
@@ -49,11 +54,14 @@ test "validate helper counts and type lookup" {
     },
   ]
   let module_ : @core.Module = {
-    types: [func_type0, func_type1],
+    types: [Func(func_type0), Func(func_type1)],
+    type_groups: [],
+    customs: [],
     funcs: [0U],
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -85,16 +93,20 @@ test "validate helper import scan in func lookup" {
   let func_type : @core.FuncType = { params: [], results: [] }
   let table_type : @core.TableType = {
     elem_type: Func,
-    limits: { min: 0U, max: None },
+    limits: { min: 0UL, max: None },
     init: None,
     nullable: true,
+    table64: false,
   }
   let module_ : @core.Module = {
-    types: [func_type],
+    types: [Func(func_type)],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -146,10 +158,13 @@ test "validate const expr checks" {
   assert_eq(saw_error, true)
   let module_imported : @core.Module = {
     types: [],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -177,10 +192,13 @@ test "validate const expr checks" {
   assert_eq(saw_error, true)
   let module_scan : @core.Module = {
     types: [],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -190,9 +208,10 @@ test "validate const expr checks" {
         name: Bytes::from_array([b't']),
         desc: Table({
           elem_type: Func,
-          limits: { min: 0U, max: None },
+          limits: { min: 0UL, max: None },
           init: None,
           nullable: true,
+          table64: false,
         }),
       },
       {
@@ -211,6 +230,8 @@ test "validate const expr checks" {
   )
   let module_local : @core.Module = {
     types: [],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -220,6 +241,7 @@ test "validate const expr checks" {
         init: { instrs: [I32Const(0U)] },
       },
     ],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -241,10 +263,13 @@ test "validate const expr checks" {
   assert_eq(saw_error, true)
   let module_import_const : @core.Module = {
     types: [],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -265,10 +290,13 @@ test "validate const expr checks" {
   )
   let module_import_scan : @core.Module = {
     types: [],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -294,10 +322,13 @@ test "validate const expr checks" {
   )
   let module_missing : @core.Module = {
     types: [],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -324,11 +355,14 @@ test "validate valtype and subtype" {
   }
   assert_eq(saw_error, true)
   let module_types : @core.Module = {
-    types: [{ params: [], results: [] }],
+    types: [Func({ params: [], results: [] })],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,

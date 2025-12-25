@@ -18,30 +18,86 @@ pub fn encode(module_ : @core.Module) -> Bytes raise EncodeError {
     0x00U.to_byte(),
     0x00U.to_byte(),
   ])
-  let type_payload = encode_type_section(module_.types)
-  push_section(out, 1U, type_payload)
-  let import_payload = encode_import_section(module_.imports)
-  push_section(out, 2U, import_payload)
-  let func_payload = encode_function_section(module_.funcs)
-  push_section(out, 3U, func_payload)
-  let table_payload = encode_table_section(module_.tables)
-  push_section(out, 4U, table_payload)
-  let mem_payload = encode_memory_section(module_.mems)
-  push_section(out, 5U, mem_payload)
-  let global_payload = encode_global_section(module_.globals)
-  push_section(out, 6U, global_payload)
-  let export_payload = encode_export_section(module_.exports)
-  push_section(out, 7U, export_payload)
-  let start_payload = encode_start_section(module_.start)
-  push_section(out, 8U, start_payload)
-  let elem_payload = encode_element_section(module_.elems)
-  push_section(out, 9U, elem_payload)
-  let data_count_payload = encode_data_count_section(module_)
-  push_section(out, 12U, data_count_payload)
-  let code_payload = encode_code_section(module_.codes)
-  push_section(out, 10U, code_payload)
-  let data_payload = encode_data_section(module_.datas)
-  push_section(out, 11U, data_payload)
+  let sections : Array[SectionEntry] = []
+  add_section(
+    sections,
+    @core.SectionId::Type,
+    1U,
+    encode_type_section(module_.types, module_.type_groups),
+  )
+  add_section(
+    sections,
+    @core.SectionId::Import,
+    2U,
+    encode_import_section(module_.imports),
+  )
+  add_section(
+    sections,
+    @core.SectionId::Func,
+    3U,
+    encode_function_section(module_.funcs),
+  )
+  add_section(
+    sections,
+    @core.SectionId::Table,
+    4U,
+    encode_table_section(module_.tables),
+  )
+  add_section(
+    sections,
+    @core.SectionId::Memory,
+    5U,
+    encode_memory_section(module_.mems),
+  )
+  add_section(
+    sections,
+    @core.SectionId::Tag,
+    13U,
+    encode_tag_section(module_.tags),
+  )
+  add_section(
+    sections,
+    @core.SectionId::Global,
+    6U,
+    encode_global_section(module_.globals),
+  )
+  add_section(
+    sections,
+    @core.SectionId::Export,
+    7U,
+    encode_export_section(module_.exports),
+  )
+  add_section(
+    sections,
+    @core.SectionId::Start,
+    8U,
+    encode_start_section(module_.start),
+  )
+  add_section(
+    sections,
+    @core.SectionId::Elem,
+    9U,
+    encode_element_section(module_.elems),
+  )
+  add_section(
+    sections,
+    @core.SectionId::DataCount,
+    12U,
+    encode_data_count_section(module_),
+  )
+  add_section(
+    sections,
+    @core.SectionId::Code,
+    10U,
+    encode_code_section(module_.codes),
+  )
+  add_section(
+    sections,
+    @core.SectionId::Data,
+    11U,
+    encode_data_section(module_.datas),
+  )
+  emit_sections_with_customs(out, sections, module_.customs)
   Bytes::from_array(out)
 }
 
@@ -51,6 +107,149 @@ fn push_section(out : Array[Byte], id : UInt, payload : Array[Byte]) -> Unit {
   out.push(id.to_byte())
   append_bytes(out, encode_u32_leb128(payload.length().reinterpret_as_uint()))
   append_bytes(out, payload)
+}
+
+///|
+priv struct SectionEntry {
+  kind : @core.SectionId
+  id : UInt
+  payload : Array[Byte]
+}
+
+///|
+fn add_section(
+  sections : Array[SectionEntry],
+  kind : @core.SectionId,
+  id : UInt,
+  payload : Array[Byte],
+) -> Unit {
+  if payload.length() > 0 {
+    sections.push({ kind, id, payload })
+  }
+}
+
+///|
+fn emit_sections_with_customs(
+  out : Array[Byte],
+  sections : Array[SectionEntry],
+  customs : Array[@core.CustomSection],
+) -> Unit {
+  let order = section_order()
+  let present_positions : Array[Int?] = Array::make(order.length(), None)
+  for i in 0..<sections.length() {
+    let kind = sections[i].kind
+    let order_index = section_index(kind, order)
+    present_positions[order_index] = Some(i)
+  }
+  let slots : Array[Array[@core.CustomSection]] = []
+  for _ in 0..<(sections.length() + 1) {
+    slots.push([])
+  }
+  for custom in customs {
+    let slot = custom_slot(
+      custom.placement,
+      present_positions,
+      order,
+      sections.length(),
+    )
+    slots[slot].push(custom)
+  }
+  for i in 0..<slots.length() {
+    for custom in slots[i] {
+      push_section(out, 0U, encode_custom_payload(custom))
+    }
+    if i < sections.length() {
+      let section = sections[i]
+      push_section(out, section.id, section.payload)
+    }
+  }
+}
+
+///|
+fn section_order() -> Array[@core.SectionId] {
+  [
+    @core.SectionId::Type,
+    @core.SectionId::Import,
+    @core.SectionId::Func,
+    @core.SectionId::Table,
+    @core.SectionId::Memory,
+    @core.SectionId::Tag,
+    @core.SectionId::Global,
+    @core.SectionId::Export,
+    @core.SectionId::Start,
+    @core.SectionId::Elem,
+    @core.SectionId::DataCount,
+    @core.SectionId::Code,
+    @core.SectionId::Data,
+  ]
+}
+
+///|
+fn section_index(kind : @core.SectionId, order : Array[@core.SectionId]) -> Int {
+  for i in 0..<order.length() {
+    if order[i] == kind {
+      return i
+    }
+  }
+  0
+}
+
+///|
+fn custom_slot(
+  placement : @core.CustomPlacement,
+  present_positions : Array[Int?],
+  order : Array[@core.SectionId],
+  section_count : Int,
+) -> Int {
+  match placement {
+    @core.CustomPlacement::Start => 0
+    @core.CustomPlacement::End => section_count
+    @core.CustomPlacement::Before(target) =>
+      slot_before_after(target, false, present_positions, order)
+    @core.CustomPlacement::After(target) =>
+      slot_before_after(target, true, present_positions, order)
+  }
+}
+
+///|
+fn slot_before_after(
+  target : @core.SectionId,
+  after : Bool,
+  present_positions : Array[Int?],
+  order : Array[@core.SectionId],
+) -> Int {
+  let target_index = section_index(target, order)
+  match present_positions[target_index] {
+    Some(pos) => if after { pos + 1 } else { pos }
+    None => slot_after_last_before(target_index, present_positions)
+  }
+}
+
+///|
+fn slot_after_last_before(
+  target_index : Int,
+  present_positions : Array[Int?],
+) -> Int {
+  let mut slot = 0
+  for i in 0..<target_index {
+    match present_positions[i] {
+      Some(pos) => slot = pos + 1
+      None => ()
+    }
+  }
+  slot
+}
+
+///|
+fn encode_custom_payload(custom : @core.CustomSection) -> Array[Byte] {
+  let payload : Array[Byte] = []
+  append_bytes(
+    payload,
+    encode_u32_leb128(custom.name.length().reinterpret_as_uint()),
+  )
+  append_bytesview(payload, custom.name.sub())
+  append_bytesview(payload, custom.data.sub())
+  payload
 }
 
 ///|
@@ -89,29 +288,128 @@ fn append_u64_le(dst : Array[Byte], value : UInt64) -> Unit {
 
 ///|
 fn encode_type_section(
-  types : Array[@core.FuncType],
+  types : Array[@core.TypeDef],
+  type_groups : Array[@core.TypeGroup],
 ) -> Array[Byte] raise EncodeError {
   guard types.length() > 0 else { return [] }
-  let payload : Array[Byte] = []
-  append_bytes(payload, encode_u32_leb128(types.length().reinterpret_as_uint()))
-  for func_type in types {
-    payload.push(0x60U.to_byte())
-    append_bytes(
-      payload,
-      encode_u32_leb128(func_type.params.length().reinterpret_as_uint()),
-    )
-    for param in func_type.params {
-      append_bytes(payload, encode_valtype(param))
+  let groups : Array[@core.TypeGroup] = []
+  if type_groups.length() > 0 {
+    for group in type_groups {
+      groups.push(group)
     }
-    append_bytes(
-      payload,
-      encode_u32_leb128(func_type.results.length().reinterpret_as_uint()),
-    )
-    for result in func_type.results {
-      append_bytes(payload, encode_valtype(result))
+  } else {
+    for i in 0..<types.length() {
+      groups.push(@core.TypeGroup::{
+        subtypes: [
+          @core.SubTypeDef::{
+            type_idx: i.reinterpret_as_uint(),
+            supertypes: [],
+            is_final: true,
+          },
+        ],
+        explicit: false,
+      })
+    }
+  }
+  let payload : Array[Byte] = []
+  append_bytes(
+    payload,
+    encode_u32_leb128(groups.length().reinterpret_as_uint()),
+  )
+  for group in groups {
+    if group.explicit || group.subtypes.length() > 1 {
+      payload.push(0x4EU.to_byte())
+      append_bytes(
+        payload,
+        encode_u32_leb128(group.subtypes.length().reinterpret_as_uint()),
+      )
+      for subtype in group.subtypes {
+        encode_subtype(payload, subtype, types)
+      }
+    } else {
+      let subtype = group.subtypes[0]
+      encode_subtype(payload, subtype, types)
     }
   }
   payload
+}
+
+///|
+fn encode_subtype(
+  payload : Array[Byte],
+  subtype : @core.SubTypeDef,
+  types : Array[@core.TypeDef],
+) -> Unit raise EncodeError {
+  if subtype.supertypes.length() > 0 || not(subtype.is_final) {
+    let tag = if subtype.is_final { 0x4FU } else { 0x50U }
+    payload.push(tag.to_byte())
+    append_bytes(
+      payload,
+      encode_u32_leb128(subtype.supertypes.length().reinterpret_as_uint()),
+    )
+    for supertype in subtype.supertypes {
+      append_bytes(payload, encode_u32_leb128(supertype))
+    }
+  }
+  let idx = subtype.type_idx.reinterpret_as_int()
+  if idx < 0 || idx >= types.length() {
+    raise EncodeError::Unsupported("invalid subtype index \{subtype.type_idx}")
+  }
+  encode_type_def(payload, types[idx])
+}
+
+///|
+fn encode_type_def(
+  payload : Array[Byte],
+  type_def : @core.TypeDef,
+) -> Unit raise EncodeError {
+  match type_def {
+    Func(func_type) => {
+      payload.push(0x60U.to_byte())
+      append_bytes(
+        payload,
+        encode_u32_leb128(func_type.params.length().reinterpret_as_uint()),
+      )
+      for param in func_type.params {
+        append_bytes(payload, encode_valtype(param))
+      }
+      append_bytes(
+        payload,
+        encode_u32_leb128(func_type.results.length().reinterpret_as_uint()),
+      )
+      for result in func_type.results {
+        append_bytes(payload, encode_valtype(result))
+      }
+    }
+    Struct(struct_type) => {
+      payload.push(0x5FU.to_byte())
+      append_bytes(
+        payload,
+        encode_u32_leb128(struct_type.fields.length().reinterpret_as_uint()),
+      )
+      for field in struct_type.fields {
+        append_bytes(payload, encode_storage_type(field.storage))
+        payload.push(
+          if field.mutable {
+            0x01U.to_byte()
+          } else {
+            0x00U.to_byte()
+          },
+        )
+      }
+    }
+    Array(array_type) => {
+      payload.push(0x5EU.to_byte())
+      append_bytes(payload, encode_storage_type(array_type.element.storage))
+      payload.push(
+        if array_type.element.mutable {
+          0x01U.to_byte()
+        } else {
+          0x00U.to_byte()
+        },
+      )
+    }
+  }
 }
 
 ///|
@@ -138,7 +436,7 @@ fn encode_import_section(
       }
       Mem(mem_type) => {
         payload.push(0x02U.to_byte())
-        append_bytes(payload, encode_limits(mem_type.limits))
+        append_bytes(payload, encode_memory_limits(mem_type))
       }
       Global(global_type) => {
         payload.push(0x03U.to_byte())
@@ -151,7 +449,11 @@ fn encode_import_section(
           },
         )
       }
-      Tag(_) => raise EncodeError::Unsupported("tag import")
+      Tag(type_idx) => {
+        payload.push(0x04U.to_byte())
+        payload.push(0x00U.to_byte())
+        append_bytes(payload, encode_u32_leb128(type_idx))
+      }
     }
   }
   payload
@@ -185,12 +487,14 @@ fn encode_table_section(
 }
 
 ///|
-fn encode_memory_section(mems : Array[@core.MemType]) -> Array[Byte] {
+fn encode_memory_section(
+  mems : Array[@core.MemType],
+) -> Array[Byte] raise EncodeError {
   guard mems.length() > 0 else { return [] }
   let payload : Array[Byte] = []
   append_bytes(payload, encode_u32_leb128(mems.length().reinterpret_as_uint()))
   for mem_type in mems {
-    append_bytes(payload, encode_limits(mem_type.limits))
+    append_bytes(payload, encode_memory_limits(mem_type))
   }
   payload
 }
@@ -215,6 +519,18 @@ fn encode_global_section(
       },
     )
     append_bytes(payload, encode_expr(global_.init))
+  }
+  payload
+}
+
+///|
+fn encode_tag_section(tags : Array[@core.Tag]) -> Array[Byte] {
+  guard tags.length() > 0 else { return [] }
+  let payload : Array[Byte] = []
+  append_bytes(payload, encode_u32_leb128(tags.length().reinterpret_as_uint()))
+  for tag in tags {
+    payload.push(0x00U.to_byte())
+    append_bytes(payload, encode_u32_leb128(tag.type_idx))
   }
   payload
 }
@@ -248,7 +564,10 @@ fn encode_export_section(
         payload.push(0x03U.to_byte())
         append_bytes(payload, encode_u32_leb128(idx))
       }
-      Tag(_) => raise EncodeError::Unsupported("tag export")
+      Tag(idx) => {
+        payload.push(0x04U.to_byte())
+        append_bytes(payload, encode_u32_leb128(idx))
+      }
     }
   }
   payload
@@ -270,41 +589,87 @@ fn encode_element_section(
   let payload : Array[Byte] = []
   append_bytes(payload, encode_u32_leb128(elems.length().reinterpret_as_uint()))
   for elem in elems {
-    guard elem.elem_type == @core.RefType::Func else {
-      raise EncodeError::Unsupported("elem type \{elem.elem_type}")
-    }
-    if elem.is_active {
-      if elem.table_idx == 0U {
-        payload.push(0x00U.to_byte())
-        append_bytes(payload, encode_expr(elem.offset))
-        append_bytes(
-          payload,
-          encode_u32_leb128(elem.init.length().reinterpret_as_uint()),
-        )
-        for idx in elem.init {
-          append_bytes(payload, encode_u32_leb128(idx))
+    let init_indices : Array[UInt] = []
+    let mut can_use_indices = elem.elem_type == @core.RefType::Func &&
+      elem.elem_nullable
+    if can_use_indices {
+      for expr in elem.init {
+        match expr.instrs.get(0) {
+          Some(RefFunc(idx)) =>
+            if expr.instrs.length() == 1 {
+              init_indices.push(idx)
+            } else {
+              can_use_indices = false
+            }
+          _ => can_use_indices = false
         }
-      } else {
-        payload.push(0x02U.to_byte())
-        append_bytes(payload, encode_u32_leb128(elem.table_idx))
-        append_bytes(payload, encode_expr(elem.offset))
-        payload.push(0x00U.to_byte())
-        append_bytes(
-          payload,
-          encode_u32_leb128(elem.init.length().reinterpret_as_uint()),
-        )
-        for idx in elem.init {
-          append_bytes(payload, encode_u32_leb128(idx))
+        if not(can_use_indices) {
+          break
         }
       }
+    }
+    let uses_exprs = not(can_use_indices)
+    let mut flag = 0U
+    let mut emit_table_idx = false
+    let mut emit_elemkind = false
+    let mut emit_reftype = false
+    if uses_exprs {
+      if elem.is_active {
+        if elem.elem_type == @core.RefType::Func &&
+          elem.elem_nullable &&
+          elem.table_idx == 0U &&
+          not(elem.explicit_table) {
+          flag = 0x04U
+        } else {
+          flag = 0x06U
+          emit_table_idx = true
+          emit_reftype = true
+        }
+      } else if elem.is_declarative {
+        flag = 0x07U
+        emit_reftype = true
+      } else {
+        flag = 0x05U
+        emit_reftype = true
+      }
+    } else if elem.is_active {
+      if elem.table_idx == 0U && not(elem.explicit_table) {
+        flag = 0x00U
+      } else {
+        flag = 0x02U
+        emit_table_idx = true
+        emit_elemkind = true
+      }
+    } else if elem.is_declarative {
+      flag = 0x03U
+      emit_elemkind = true
     } else {
-      payload.push(0x01U.to_byte())
+      flag = 0x01U
+      emit_elemkind = true
+    }
+    payload.push(flag.to_byte())
+    if emit_table_idx {
+      append_bytes(payload, encode_u32_leb128(elem.table_idx))
+    }
+    if elem.is_active {
+      append_bytes(payload, encode_expr(elem.offset))
+    }
+    if emit_elemkind {
       payload.push(0x00U.to_byte())
-      append_bytes(
-        payload,
-        encode_u32_leb128(elem.init.length().reinterpret_as_uint()),
-      )
-      for idx in elem.init {
+    }
+    if emit_reftype {
+      append_bytes(payload, encode_reftype(elem.elem_type, elem.elem_nullable))
+    }
+    append_bytes(
+      payload,
+      encode_u32_leb128(elem.init.length().reinterpret_as_uint()),
+    )
+    if uses_exprs {
+      for expr in elem.init {
+        append_bytes(payload, encode_expr(expr))
+      }
+    } else {
+      for idx in init_indices {
         append_bytes(payload, encode_u32_leb128(idx))
       }
     }
@@ -406,7 +771,7 @@ fn instrs_use_bulk_memory(instrs : Array[@core.Instr]) -> Bool {
 ///|
 fn instr_uses_bulk_memory(instr : @core.Instr) -> Bool {
   match instr {
-    MemoryInit(_) | DataDrop(_) => true
+    MemoryInit(_, _) | DataDrop(_) => true
     Block(_, body) => instrs_use_bulk_memory(body)
     Loop(_, body) => instrs_use_bulk_memory(body)
     If(_, then_body, else_body) =>
@@ -416,17 +781,77 @@ fn instr_uses_bulk_memory(instr : @core.Instr) -> Bool {
 }
 
 ///|
-fn encode_limits(limits : @core.Limits) -> Array[Byte] {
+fn encode_limits(
+  limits : @core.Limits,
+  is_64 : Bool,
+) -> Array[Byte] raise EncodeError {
   let payload : Array[Byte] = []
-  match limits.max {
-    Some(max) => {
-      payload.push(0x01U.to_byte())
-      append_bytes(payload, encode_u32_leb128(limits.min))
-      append_bytes(payload, encode_u32_leb128(max))
+  let mut flags = if limits.max is Some(_) { 0x01U } else { 0x00U }
+  if is_64 {
+    flags = flags | 0x04U
+  }
+  payload.push(flags.to_byte())
+  let max_limit = 0xFFFF_FFFFUL
+  if is_64 {
+    append_bytes(payload, encode_u64_leb128(limits.min))
+    match limits.max {
+      Some(max) => append_bytes(payload, encode_u64_leb128(max))
+      None => ()
     }
-    None => {
-      payload.push(0x00U.to_byte())
-      append_bytes(payload, encode_u32_leb128(limits.min))
+  } else {
+    if limits.min > max_limit {
+      raise EncodeError::Unsupported("limits exceed 32-bit range")
+    }
+    append_bytes(payload, encode_u32_leb128(limits.min.to_uint()))
+    match limits.max {
+      Some(max) => {
+        if max > max_limit {
+          raise EncodeError::Unsupported("limits exceed 32-bit range")
+        }
+        append_bytes(payload, encode_u32_leb128(max.to_uint()))
+      }
+      None => ()
+    }
+  }
+  payload
+}
+
+///|
+fn encode_memory_limits(
+  mem_type : @core.MemType,
+) -> Array[Byte] raise EncodeError {
+  let payload : Array[Byte] = []
+  let mut flags = if mem_type.limits.max is Some(_) { 0x01U } else { 0x00U }
+  if mem_type.shared {
+    flags = flags | 0x02U
+  }
+  if mem_type.memory64 {
+    flags = flags | 0x04U
+  }
+  if mem_type.shared && mem_type.limits.max is None {
+    raise EncodeError::Unsupported("shared memory requires maximum")
+  }
+  payload.push(flags.to_byte())
+  let max_limit = 0xFFFF_FFFFUL
+  if mem_type.memory64 {
+    append_bytes(payload, encode_u64_leb128(mem_type.limits.min))
+    match mem_type.limits.max {
+      Some(max) => append_bytes(payload, encode_u64_leb128(max))
+      None => ()
+    }
+  } else {
+    if mem_type.limits.min > max_limit {
+      raise EncodeError::Unsupported("limits exceed 32-bit range")
+    }
+    append_bytes(payload, encode_u32_leb128(mem_type.limits.min.to_uint()))
+    match mem_type.limits.max {
+      Some(max) => {
+        if max > max_limit {
+          raise EncodeError::Unsupported("limits exceed 32-bit range")
+        }
+        append_bytes(payload, encode_u32_leb128(max.to_uint()))
+      }
+      None => ()
     }
   }
   payload
@@ -492,9 +917,13 @@ fn encode_block_type(
 }
 
 ///|
-fn encode_memarg(align : UInt, offset : UInt) -> Array[Byte] {
+fn encode_memarg(align : UInt, offset : UInt, memory_idx : UInt) -> Array[Byte] {
   let payload : Array[Byte] = []
-  append_bytes(payload, encode_u32_leb128(align))
+  let flags = if memory_idx == 0U { align } else { align | 0x40U }
+  append_bytes(payload, encode_u32_leb128(flags))
+  if memory_idx != 0U {
+    append_bytes(payload, encode_u32_leb128(memory_idx))
+  }
   append_bytes(payload, encode_u32_leb128(offset))
   payload
 }
@@ -503,15 +932,74 @@ fn encode_memarg(align : UInt, offset : UInt) -> Array[Byte] {
 fn encode_table_type(
   table_type : @core.TableType,
 ) -> Array[Byte] raise EncodeError {
-  guard table_type.init is None else {
-    raise EncodeError::Unsupported("table init expr")
-  }
   let payload : Array[Byte] = []
-  append_bytes(
-    payload,
-    encode_reftype(table_type.elem_type, table_type.nullable),
-  )
-  append_bytes(payload, encode_limits(table_type.limits))
+  match table_type.init {
+    Some(init_expr) => {
+      payload.push(0x40U.to_byte())
+      payload.push(0x00U.to_byte())
+      append_bytes(
+        payload,
+        encode_reftype(table_type.elem_type, table_type.nullable),
+      )
+      append_bytes(
+        payload,
+        encode_limits(table_type.limits, table_type.table64),
+      )
+      append_bytes(payload, encode_expr(init_expr))
+    }
+    None => {
+      append_bytes(
+        payload,
+        encode_reftype(table_type.elem_type, table_type.nullable),
+      )
+      append_bytes(
+        payload,
+        encode_limits(table_type.limits, table_type.table64),
+      )
+    }
+  }
+  payload
+}
+
+///|
+fn encode_simd_immediate(
+  imm : @core.SimdImmediate,
+) -> Array[Byte] raise EncodeError {
+  let payload : Array[Byte] = []
+  match imm {
+    None => ()
+    MemArg(align, offset, memory_idx) =>
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
+    Lane(lane) => payload.push(lane.to_byte())
+    MemArgLane(align, offset, memory_idx, lane) => {
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
+      payload.push(lane.to_byte())
+    }
+    Shuffle(bytes) | V128Const(bytes) => {
+      guard bytes.length() == 16 else {
+        raise EncodeError::Unsupported(
+          "simd immediate length \{bytes.length()}",
+        )
+      }
+      for b in bytes {
+        payload.push(b)
+      }
+    }
+  }
+  payload
+}
+
+///|
+fn encode_atomic_immediate(
+  imm : @core.AtomicImmediate,
+) -> Array[Byte] raise EncodeError {
+  let payload : Array[Byte] = []
+  match imm {
+    None => ()
+    MemArg(align, offset, memory_idx) =>
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
+    Fence(flags) => payload.push(flags.to_byte())
+  }
   payload
 }
 
@@ -548,6 +1036,40 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
         for item in else_instrs {
           append_bytes(payload, encode_instr(item))
         }
+      }
+      payload.push(0x0BU.to_byte())
+    }
+    TryTable(block_type, catches, instrs) => {
+      payload.push(0x1FU.to_byte())
+      append_bytes(payload, encode_block_type(block_type))
+      append_bytes(
+        payload,
+        encode_u32_leb128(catches.length().reinterpret_as_uint()),
+      )
+      for clause in catches {
+        match clause {
+          Catch(tag_idx, label_idx) => {
+            payload.push(0x00U.to_byte())
+            append_bytes(payload, encode_u32_leb128(tag_idx))
+            append_bytes(payload, encode_u32_leb128(label_idx))
+          }
+          CatchRef(tag_idx, label_idx) => {
+            payload.push(0x01U.to_byte())
+            append_bytes(payload, encode_u32_leb128(tag_idx))
+            append_bytes(payload, encode_u32_leb128(label_idx))
+          }
+          CatchAll(label_idx) => {
+            payload.push(0x02U.to_byte())
+            append_bytes(payload, encode_u32_leb128(label_idx))
+          }
+          CatchAllRef(label_idx) => {
+            payload.push(0x03U.to_byte())
+            append_bytes(payload, encode_u32_leb128(label_idx))
+          }
+        }
+      }
+      for item in instrs {
+        append_bytes(payload, encode_instr(item))
       }
       payload.push(0x0BU.to_byte())
     }
@@ -591,6 +1113,14 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
       }
     }
     Return => payload.push(0x0FU.to_byte())
+    Throw(idx) => {
+      payload.push(0x08U.to_byte())
+      append_bytes(payload, encode_u32_leb128(idx))
+    }
+    Rethrow(idx) => {
+      payload.push(0x09U.to_byte())
+      append_bytes(payload, encode_u32_leb128(idx))
+    }
     Call(idx) => {
       payload.push(0x10U.to_byte())
       append_bytes(payload, encode_u32_leb128(idx))
@@ -616,6 +1146,16 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
     ReturnCallRef(type_idx) => {
       payload.push(0x15U.to_byte())
       append_bytes(payload, encode_u32_leb128(type_idx))
+    }
+    Simd(simd) => {
+      payload.push(0xFDU.to_byte())
+      append_bytes(payload, encode_u32_leb128(simd.opcode))
+      append_bytes(payload, encode_simd_immediate(simd.imm))
+    }
+    Atomic(atomic_instr) => {
+      payload.push(0xFEU.to_byte())
+      append_bytes(payload, encode_u32_leb128(atomic_instr.opcode))
+      append_bytes(payload, encode_atomic_immediate(atomic_instr.imm))
     }
     RefNull(ref_type) => {
       payload.push(0xD0U.to_byte())
@@ -654,6 +1194,11 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
       append_bytes(payload, encode_u32_leb128(14U))
       append_bytes(payload, encode_u32_leb128(dst_idx))
       append_bytes(payload, encode_u32_leb128(src_idx))
+    }
+    TableFill(idx) => {
+      payload.push(0xFCU.to_byte())
+      append_bytes(payload, encode_u32_leb128(17U))
+      append_bytes(payload, encode_u32_leb128(idx))
     }
     ElemDrop(idx) => {
       payload.push(0xFCU.to_byte())
@@ -696,97 +1241,97 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
       payload.push(0x44U.to_byte())
       append_u64_le(payload, value.reinterpret_as_uint64())
     }
-    I32Load(align, offset) => {
+    I32Load(align, offset, memory_idx) => {
       payload.push(0x28U.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I64Load(align, offset) => {
+    I64Load(align, offset, memory_idx) => {
       payload.push(0x29U.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    F32Load(align, offset) => {
+    F32Load(align, offset, memory_idx) => {
       payload.push(0x2AU.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    F64Load(align, offset) => {
+    F64Load(align, offset, memory_idx) => {
       payload.push(0x2BU.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I32Load8S(align, offset) => {
+    I32Load8S(align, offset, memory_idx) => {
       payload.push(0x2CU.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I32Load8U(align, offset) => {
+    I32Load8U(align, offset, memory_idx) => {
       payload.push(0x2DU.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I32Load16S(align, offset) => {
+    I32Load16S(align, offset, memory_idx) => {
       payload.push(0x2EU.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I32Load16U(align, offset) => {
+    I32Load16U(align, offset, memory_idx) => {
       payload.push(0x2FU.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I64Load8S(align, offset) => {
+    I64Load8S(align, offset, memory_idx) => {
       payload.push(0x30U.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I64Load8U(align, offset) => {
+    I64Load8U(align, offset, memory_idx) => {
       payload.push(0x31U.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I64Load16S(align, offset) => {
+    I64Load16S(align, offset, memory_idx) => {
       payload.push(0x32U.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I64Load16U(align, offset) => {
+    I64Load16U(align, offset, memory_idx) => {
       payload.push(0x33U.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I64Load32S(align, offset) => {
+    I64Load32S(align, offset, memory_idx) => {
       payload.push(0x34U.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I64Load32U(align, offset) => {
+    I64Load32U(align, offset, memory_idx) => {
       payload.push(0x35U.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I32Store(align, offset) => {
+    I32Store(align, offset, memory_idx) => {
       payload.push(0x36U.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I64Store(align, offset) => {
+    I64Store(align, offset, memory_idx) => {
       payload.push(0x37U.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    F32Store(align, offset) => {
+    F32Store(align, offset, memory_idx) => {
       payload.push(0x38U.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    F64Store(align, offset) => {
+    F64Store(align, offset, memory_idx) => {
       payload.push(0x39U.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I32Store8(align, offset) => {
+    I32Store8(align, offset, memory_idx) => {
       payload.push(0x3AU.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I32Store16(align, offset) => {
+    I32Store16(align, offset, memory_idx) => {
       payload.push(0x3BU.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I64Store8(align, offset) => {
+    I64Store8(align, offset, memory_idx) => {
       payload.push(0x3CU.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I64Store16(align, offset) => {
+    I64Store16(align, offset, memory_idx) => {
       payload.push(0x3DU.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
-    I64Store32(align, offset) => {
+    I64Store32(align, offset, memory_idx) => {
       payload.push(0x3EU.to_byte())
-      append_bytes(payload, encode_memarg(align, offset))
+      append_bytes(payload, encode_memarg(align, offset, memory_idx))
     }
     MemorySize(idx) => {
       payload.push(0x3FU.to_byte())
@@ -799,27 +1344,204 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
     RefIsNull => payload.push(0xD1U.to_byte())
     RefEq => payload.push(0xD3U.to_byte())
     RefAsNonNull => payload.push(0xD4U.to_byte())
-    MemoryInit(data_idx) => {
+    RefTest(ref_type, nullable) => {
+      payload.push(0xFBU.to_byte())
+      let opcode = if nullable { 0x15U } else { 0x14U }
+      append_bytes(payload, encode_u32_leb128(opcode))
+      append_bytes(payload, encode_heap_type(ref_type))
+    }
+    RefCast(ref_type, nullable) => {
+      payload.push(0xFBU.to_byte())
+      let opcode = if nullable { 0x17U } else { 0x16U }
+      append_bytes(payload, encode_u32_leb128(opcode))
+      append_bytes(payload, encode_heap_type(ref_type))
+    }
+    StructNew(type_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x00U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+    }
+    StructNewDefault(type_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x01U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+    }
+    StructGet(type_idx, field_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x02U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+      append_bytes(payload, encode_u32_leb128(field_idx))
+    }
+    StructGetS(type_idx, field_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x03U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+      append_bytes(payload, encode_u32_leb128(field_idx))
+    }
+    StructGetU(type_idx, field_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x04U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+      append_bytes(payload, encode_u32_leb128(field_idx))
+    }
+    StructSet(type_idx, field_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x05U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+      append_bytes(payload, encode_u32_leb128(field_idx))
+    }
+    ArrayNew(type_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x06U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+    }
+    ArrayNewDefault(type_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x07U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+    }
+    ArrayNewFixed(type_idx, len) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x08U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+      append_bytes(payload, encode_u32_leb128(len))
+    }
+    ArrayNewData(type_idx, data_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x09U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+      append_bytes(payload, encode_u32_leb128(data_idx))
+    }
+    ArrayNewElem(type_idx, elem_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x0AU))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+      append_bytes(payload, encode_u32_leb128(elem_idx))
+    }
+    ArrayGet(type_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x0BU))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+    }
+    ArrayGetS(type_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x0CU))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+    }
+    ArrayGetU(type_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x0DU))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+    }
+    ArraySet(type_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x0EU))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+    }
+    ArrayLen => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x0FU))
+    }
+    ArrayFill(type_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x10U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+    }
+    ArrayCopy(dst_type, src_type) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x11U))
+      append_bytes(payload, encode_u32_leb128(dst_type))
+      append_bytes(payload, encode_u32_leb128(src_type))
+    }
+    ArrayInitData(type_idx, data_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x12U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+      append_bytes(payload, encode_u32_leb128(data_idx))
+    }
+    ArrayInitElem(type_idx, elem_idx) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x13U))
+      append_bytes(payload, encode_u32_leb128(type_idx))
+      append_bytes(payload, encode_u32_leb128(elem_idx))
+    }
+    BrOnCast(label, target_type, target_nullable, source_type, source_nullable) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x18U))
+      let mut flags = 0U
+      if target_nullable {
+        flags = flags | 0x01U
+      }
+      if source_nullable {
+        flags = flags | 0x02U
+      }
+      payload.push(flags.to_byte())
+      append_bytes(payload, encode_u32_leb128(label))
+      append_bytes(payload, encode_heap_type(target_type))
+      append_bytes(payload, encode_heap_type(source_type))
+    }
+    BrOnCastFail(
+      label,
+      target_type,
+      target_nullable,
+      source_type,
+      source_nullable
+    ) => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x19U))
+      let mut flags = 0U
+      if target_nullable {
+        flags = flags | 0x01U
+      }
+      if source_nullable {
+        flags = flags | 0x02U
+      }
+      payload.push(flags.to_byte())
+      append_bytes(payload, encode_u32_leb128(label))
+      append_bytes(payload, encode_heap_type(target_type))
+      append_bytes(payload, encode_heap_type(source_type))
+    }
+    AnyConvertExtern => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x1AU))
+    }
+    ExternConvertAny => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x1BU))
+    }
+    RefI31 => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x1CU))
+    }
+    I31GetS => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x1DU))
+    }
+    I31GetU => {
+      payload.push(0xFBU.to_byte())
+      append_bytes(payload, encode_u32_leb128(0x1EU))
+    }
+    MemoryInit(data_idx, mem_idx) => {
       payload.push(0xFCU.to_byte())
       append_bytes(payload, encode_u32_leb128(8U))
       append_bytes(payload, encode_u32_leb128(data_idx))
-      append_bytes(payload, encode_u32_leb128(0U))
+      append_bytes(payload, encode_u32_leb128(mem_idx))
     }
     DataDrop(data_idx) => {
       payload.push(0xFCU.to_byte())
       append_bytes(payload, encode_u32_leb128(9U))
       append_bytes(payload, encode_u32_leb128(data_idx))
     }
-    MemoryCopy => {
+    MemoryCopy(dst_idx, src_idx) => {
       payload.push(0xFCU.to_byte())
       append_bytes(payload, encode_u32_leb128(10U))
-      append_bytes(payload, encode_u32_leb128(0U))
-      append_bytes(payload, encode_u32_leb128(0U))
+      append_bytes(payload, encode_u32_leb128(dst_idx))
+      append_bytes(payload, encode_u32_leb128(src_idx))
     }
-    MemoryFill => {
+    MemoryFill(mem_idx) => {
       payload.push(0xFCU.to_byte())
       append_bytes(payload, encode_u32_leb128(11U))
-      append_bytes(payload, encode_u32_leb128(0U))
+      append_bytes(payload, encode_u32_leb128(mem_idx))
     }
     I32Eqz => payload.push(0x45U.to_byte())
     I32Eq => payload.push(0x46U.to_byte())
@@ -1015,6 +1737,19 @@ fn encode_valtype(val_type : @core.ValType) -> Array[Byte] raise EncodeError {
 }
 
 ///|
+fn encode_storage_type(
+  storage_type : @core.StorageType,
+) -> Array[Byte] raise EncodeError {
+  let payload : Array[Byte] = []
+  match storage_type {
+    I8 => payload.push(0x78U.to_byte())
+    I16 => payload.push(0x77U.to_byte())
+    Val(val_type) => append_bytes(payload, encode_valtype(val_type))
+  }
+  payload
+}
+
+///|
 fn encode_reftype(ref_type : @core.RefType, nullable : Bool) -> Array[Byte] {
   let payload : Array[Byte] = []
   if nullable {
@@ -1080,6 +1815,24 @@ fn encode_u32_leb128(value : UInt) -> Array[Byte] {
     let mut byte = (v & 0x7FU).to_byte()
     v = v >> 7
     if v != 0U {
+      byte = (byte.to_uint() | 0x80U).to_byte()
+      out.push(byte)
+    } else {
+      out.push(byte)
+      break
+    }
+  }
+  out
+}
+
+///|
+fn encode_u64_leb128(value : UInt64) -> Array[Byte] {
+  let mut v = value
+  let out : Array[Byte] = []
+  while true {
+    let mut byte = (v & 0x7FUL).to_uint().to_byte()
+    v = v >> 7
+    if v != 0UL {
       byte = (byte.to_uint() | 0x80U).to_byte()
       out.push(byte)
     } else {

@@ -1,12 +1,21 @@
 ///|
 fn validate_module_type_indices(m : @core.Module) -> Unit raise ValidationError {
   // Validate that all type indices in type definitions are valid
-  for func_type in m.types {
-    for param in func_type.params {
-      validate_valtype(m, param)
-    }
-    for result in func_type.results {
-      validate_valtype(m, result)
+  for type_def in m.types {
+    match type_def {
+      Func(func_type) => {
+        for param in func_type.params {
+          validate_valtype(m, param)
+        }
+        for result in func_type.results {
+          validate_valtype(m, result)
+        }
+      }
+      Struct(struct_type) =>
+        for field in struct_type.fields {
+          validate_storage_type(m, field.storage)
+        }
+      Array(array_type) => validate_storage_type(m, array_type.element.storage)
     }
   }
 
@@ -37,7 +46,7 @@ fn validate_module_type_indices(m : @core.Module) -> Unit raise ValidationError 
     }
   }
 
-  // Validate type indices in imported functions
+  // Validate type indices in imported functions and tags
   for imp in m.imports {
     match imp.desc {
       Func(tidx) => {
@@ -45,8 +54,51 @@ fn validate_module_type_indices(m : @core.Module) -> Unit raise ValidationError 
         if type_idx < 0 || type_idx >= m.types.length() {
           raise ValidationError::InvalidTypeIndex(type_idx)
         }
+        match m.types[type_idx] {
+          Func(_) => ()
+          _ =>
+            raise ValidationError::TypeMismatch(
+              "function type index must refer to func type",
+            )
+        }
+      }
+      Tag(tidx) => {
+        let type_idx = tidx.reinterpret_as_int()
+        if type_idx < 0 || type_idx >= m.types.length() {
+          raise ValidationError::InvalidTypeIndex(type_idx)
+        }
+        match m.types[type_idx] {
+          Func(func_type) =>
+            if func_type.results.length() > 0 {
+              raise ValidationError::TypeMismatch(
+                "tag type must not have results",
+              )
+            }
+          _ =>
+            raise ValidationError::TypeMismatch(
+              "tag type index must refer to func type",
+            )
+        }
       }
       _ => ()
+    }
+  }
+
+  // Validate type indices in tags
+  for tag in m.tags {
+    let type_idx = tag.type_idx.reinterpret_as_int()
+    if type_idx < 0 || type_idx >= m.types.length() {
+      raise ValidationError::InvalidTypeIndex(type_idx)
+    }
+    match m.types[type_idx] {
+      Func(func_type) =>
+        if func_type.results.length() > 0 {
+          raise ValidationError::TypeMismatch("tag type must not have results")
+        }
+      _ =>
+        raise ValidationError::TypeMismatch(
+          "tag type index must refer to func type",
+        )
     }
   }
 
@@ -55,6 +107,13 @@ fn validate_module_type_indices(m : @core.Module) -> Unit raise ValidationError 
     let type_idx = m.funcs[i].reinterpret_as_int()
     if type_idx < 0 || type_idx >= m.types.length() {
       raise ValidationError::InvalidTypeIndex(type_idx)
+    }
+    match m.types[type_idx] {
+      Func(_) => ()
+      _ =>
+        raise ValidationError::TypeMismatch(
+          "function type index must refer to func type",
+        )
     }
   }
 }
@@ -79,7 +138,13 @@ fn validate_module_start_function(
 
       // Get the function type
       let type_idx = get_func_type_index(m, func_idx, import_counts)
-      let func_type = m.types[type_idx]
+      let func_type = match m.types[type_idx] {
+        Func(ft) => ft
+        _ =>
+          raise ValidationError::TypeMismatch(
+            "start function type must refer to func type",
+          )
+      }
 
       // Start function must have type [] -> []
       if func_type.params.length() > 0 {
@@ -148,23 +213,24 @@ fn validate_module_memory_limits(
 ) -> Unit raise ValidationError {
   // Validate memory limits
   for mem in m.mems {
+    if mem.shared && mem.limits.max is None {
+      raise ValidationError::InvalidMemorySize("shared memory requires maximum")
+    }
     match mem.limits.max {
       Some(max_val) => {
-        let min = mem.limits.min.reinterpret_as_int()
-        let max = max_val.reinterpret_as_int()
-        if min > max {
+        if mem.limits.min > max_val {
           raise ValidationError::InvalidMemorySize(
             "size minimum must not be greater than maximum",
           )
         }
-        if max_val > 65536 {
+        if not(mem.memory64) && max_val > 65536UL {
           raise ValidationError::InvalidMemorySize(
             "memory size must be at most 65536 pages (4GiB)",
           )
         }
       }
       None =>
-        if mem.limits.min > 65536 {
+        if not(mem.memory64) && mem.limits.min > 65536UL {
           raise ValidationError::InvalidMemorySize(
             "memory size must be at most 65536 pages (4GiB)",
           )
@@ -180,29 +246,33 @@ fn validate_module_imported_memory_limits(
   // Validate memory limits for imported memories
   for imp in m.imports {
     match imp.desc {
-      Mem(mem_type) =>
+      Mem(mem_type) => {
+        if mem_type.shared && mem_type.limits.max is None {
+          raise ValidationError::InvalidMemorySize(
+            "shared memory requires maximum",
+          )
+        }
         match mem_type.limits.max {
           Some(max_val) => {
-            let min = mem_type.limits.min.reinterpret_as_int()
-            let max = max_val.reinterpret_as_int()
-            if min > max {
+            if mem_type.limits.min > max_val {
               raise ValidationError::InvalidMemorySize(
                 "size minimum must not be greater than maximum",
               )
             }
-            if max_val > 65536 {
+            if not(mem_type.memory64) && max_val > 65536UL {
               raise ValidationError::InvalidMemorySize(
                 "memory size must be at most 65536 pages (4GiB)",
               )
             }
           }
           None =>
-            if mem_type.limits.min > 65536 {
+            if not(mem_type.memory64) && mem_type.limits.min > 65536UL {
               raise ValidationError::InvalidMemorySize(
                 "memory size must be at most 65536 pages (4GiB)",
               )
             }
         }
+      }
       _ => ()
     }
   }
@@ -216,14 +286,25 @@ fn validate_module_tables(
   // Validate table limits and initializers
   for table in m.tables {
     match table.limits.max {
-      Some(max_val) =>
+      Some(max_val) => {
         // Use unsigned comparison - compare UInt values directly
         if table.limits.min > max_val {
           raise ValidationError::InvalidTableSize(
             "size minimum must not be greater than maximum",
           )
         }
+        if not(table.table64) && max_val > 0xFFFF_FFFFUL {
+          raise ValidationError::InvalidTableSize(
+            "table size must fit in 32-bit limits",
+          )
+        }
+      }
       None => ()
+    }
+    if not(table.table64) && table.limits.min > 0xFFFF_FFFFUL {
+      raise ValidationError::InvalidTableSize(
+        "table size must fit in 32-bit limits",
+      )
     }
     // Validate table initializer
     // If the table element type is non-nullable, it must have an initializer
@@ -354,20 +435,61 @@ fn validate_module_tables(
   // Validate table limits for imported tables
   for imp in m.imports {
     match imp.desc {
-      Table(table_type) =>
+      Table(table_type) => {
         match table_type.limits.max {
-          Some(max_val) =>
+          Some(max_val) => {
             // Use unsigned comparison - compare UInt values directly
             if table_type.limits.min > max_val {
               raise ValidationError::InvalidTableSize(
                 "size minimum must not be greater than maximum",
               )
             }
+            if not(table_type.table64) && max_val > 0xFFFF_FFFFUL {
+              raise ValidationError::InvalidTableSize(
+                "table size must fit in 32-bit limits",
+              )
+            }
+          }
           None => ()
         }
+        if not(table_type.table64) && table_type.limits.min > 0xFFFF_FFFFUL {
+          raise ValidationError::InvalidTableSize(
+            "table size must fit in 32-bit limits",
+          )
+        }
+      }
       _ => ()
     }
   }
+}
+
+///|
+fn get_global_type_and_mutable(
+  m : @core.Module,
+  global_idx : Int,
+  import_counts : ImportCounts,
+) -> (@core.ValType, Bool) raise ValidationError {
+  if global_idx < import_counts.globals {
+    let mut import_global_idx = 0
+    for imp in m.imports {
+      match imp.desc {
+        Global(gt) => {
+          if import_global_idx == global_idx {
+            return (gt.val_type, gt.mutable)
+          }
+          import_global_idx += 1
+        }
+        _ => ()
+      }
+    }
+    raise ValidationError::UnknownGlobal(global_idx)
+  }
+  let local_idx = global_idx - import_counts.globals
+  if local_idx < 0 || local_idx >= m.globals.length() {
+    raise ValidationError::UnknownGlobal(global_idx)
+  }
+  let gt = m.globals[local_idx].type_
+  (gt.val_type, gt.mutable)
 }
 
 ///|
@@ -379,7 +501,6 @@ fn validate_module_element_segments(
   // Only active segments reference tables; passive/declarative segments don't
   // Count total tables (imported + local)
   let total_tables = import_counts.tables + m.tables.length()
-  let total_funcs = import_counts.funcs + m.funcs.length()
   for elem in m.elems {
     // Only validate table index for active segments
     if elem.is_active {
@@ -389,11 +510,64 @@ fn validate_module_element_segments(
       }
     }
 
-    // Validate that all function indices in the element segment are valid
-    for func_idx in elem.init {
-      let func_idx_int = func_idx.reinterpret_as_int()
-      if func_idx_int < 0 || func_idx_int >= total_funcs {
-        raise ValidationError::InvalidFunctionIndex(func_idx_int)
+    // Validate element init expressions are constant references
+    let expected_type = @core.ValType::Ref(elem.elem_type, elem.elem_nullable)
+    for expr in elem.init {
+      let instrs = expr.instrs
+      guard instrs.length() == 1 else {
+        raise ValidationError::ConstantExpressionRequired(
+          "elem init must be a single const expression",
+        )
+      }
+      let instr = instrs[0]
+      let expr_type = match instr {
+        RefNull(ref_type) => {
+          guard elem.elem_nullable else {
+            raise ValidationError::TypeMismatch(
+              "non-nullable elem cannot be initialized with ref.null",
+            )
+          }
+          @core.ValType::Ref(ref_type, true)
+        }
+        RefFunc(func_idx) => {
+          let idx = func_idx.reinterpret_as_int()
+          let total_funcs = import_counts.funcs + m.funcs.length()
+          if idx < 0 || idx >= total_funcs {
+            raise ValidationError::InvalidFunctionIndex(idx)
+          }
+          let type_idx = get_func_type_index(m, idx, import_counts)
+          match elem.elem_type {
+            @core.RefType::TypeIndex(_) =>
+              @core.ValType::Ref(@core.RefType::TypeIndex(type_idx), false)
+            _ => @core.ValType::Ref(@core.RefType::Func, false)
+          }
+        }
+        GlobalGet(global_idx) => {
+          let gidx = global_idx.reinterpret_as_int()
+          let (gtype, mutable) = get_global_type_and_mutable(
+            m, gidx, import_counts,
+          )
+          guard not(mutable) else {
+            raise ValidationError::ConstantExpressionRequired(
+              "elem init global.get must reference immutable global",
+            )
+          }
+          guard is_ref_valtype(gtype) else {
+            raise ValidationError::TypeMismatch(
+              "elem init global.get must reference a reference type",
+            )
+          }
+          gtype
+        }
+        _ =>
+          raise ValidationError::ConstantExpressionRequired(
+            "elem init must be ref.null/ref.func/global.get",
+          )
+      }
+      guard is_subtype(m, expr_type, expected_type) else {
+        raise ValidationError::TypeMismatch(
+          "elem init type mismatch: \{expr_type} vs \{expected_type}",
+        )
       }
     }
   }
@@ -429,7 +603,13 @@ fn validate_module_function_bodies(
   // Validate function bodies against their types
   for i in 0..<m.codes.length() {
     let type_idx = m.funcs[i].reinterpret_as_int()
-    let func_type = m.types[type_idx]
+    let func_type = match m.types[type_idx] {
+      Func(ft) => ft
+      _ =>
+        raise ValidationError::TypeMismatch(
+          "function type index must refer to func type",
+        )
+    }
     let code = m.codes[i]
 
     // Validate the function body
@@ -482,7 +662,13 @@ fn validate_module_exports(
           raise ValidationError::UnknownExportedGlobal(global_idx)
         }
       }
-      Tag(_) => () // Skip tag export validation for now
+      Tag(idx) => {
+        let tag_idx = idx.reinterpret_as_int()
+        let total_tags = import_counts.tags + m.tags.length()
+        if tag_idx < 0 || tag_idx >= total_tags {
+          raise ValidationError::UnknownExportedTag(tag_idx)
+        }
+      }
     }
   }
 }

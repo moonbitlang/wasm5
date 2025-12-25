@@ -214,12 +214,12 @@ fn CompileCtx::add_br_patch(self : CompileCtx, label : Int, slot : Int) -> Unit 
 fn get_compile_block_type(
   module_ : @core.Module,
   block_type : @core.BlockType,
-) -> (Array[@core.ValType], Array[@core.ValType]) {
+) -> (Array[@core.ValType], Array[@core.ValType]) raise RuntimeError {
   match block_type {
     Empty => ([], [])
     Value(t) => ([], [t])
     TypeIndex(idx) => {
-      let func_type = module_.types[idx]
+      let func_type = require_func_type(module_, idx, "block type")
       (func_type.params, func_type.results)
     }
   }

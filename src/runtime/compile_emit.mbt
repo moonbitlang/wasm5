@@ -607,6 +607,108 @@ fn Runtime::compile_wasm_instr(
     } // pop 3, push 1 => net -2
     Nop => self.emit(WasmInstr(op_nop))
     Unreachable => self.emit(WasmInstr(op_unreachable))
+    Throw(tag_idx) => {
+      let tag_idx_int = tag_idx.reinterpret_as_int()
+      let num_imported = count_imported_tags(self.module_)
+      let type_idx = get_tag_type_idx(self.module_, tag_idx_int, num_imported)
+      if type_idx >= 0 {
+        let tag_type = require_func_type(self.module_, type_idx, "throw")
+        ctx.pop_types(tag_type.params.length())
+      }
+      self.emit(WasmInstr(op_throw))
+      self.emit(ImmediateIdx(tag_idx_int))
+    }
+    Rethrow(label_idx) => {
+      self.emit(WasmInstr(op_rethrow))
+      self.emit(ImmediateIdx(label_idx.reinterpret_as_int()))
+    }
+    Simd(simd) => {
+      match @core.simd_spec_by_opcode(simd.opcode) {
+        Some(spec) =>
+          match @core.simd_stack_effect(spec.name) {
+            Const => ctx.push_type(V128)
+            Load => {
+              ctx.pop_type()
+              ctx.push_type(V128)
+            }
+            Store => ctx.pop_types(2)
+            LoadLane => {
+              ctx.pop_types(2)
+              ctx.push_type(V128)
+            }
+            StoreLane => ctx.pop_types(2)
+            Unary => {
+              ctx.pop_type()
+              ctx.push_type(V128)
+            }
+            Binary => {
+              ctx.pop_types(2)
+              ctx.push_type(V128)
+            }
+            Ternary => {
+              ctx.pop_types(3)
+              ctx.push_type(V128)
+            }
+            Shift => {
+              ctx.pop_types(2)
+              ctx.push_type(V128)
+            }
+            ToI32 => {
+              ctx.pop_type()
+              ctx.push_type(I32)
+            }
+            Splat(_t) => {
+              ctx.pop_type()
+              ctx.push_type(V128)
+            }
+            Extract(t) => {
+              ctx.pop_type()
+              ctx.push_type(t)
+            }
+            Replace(_t) => {
+              ctx.pop_types(2)
+              ctx.push_type(V128)
+            }
+          }
+        None => ()
+      }
+      self.emit(WasmInstr(op_simd_unimplemented))
+    }
+    Atomic(atomic_instr) => {
+      match @core.atomic_spec_by_opcode(atomic_instr.opcode) {
+        Some(spec) =>
+          match @core.atomic_stack_effect(spec.name) {
+            Fence => ()
+            Notify => {
+              ctx.pop_types(2)
+              ctx.push_type(I32)
+            }
+            Wait32 => {
+              ctx.pop_types(3)
+              ctx.push_type(I32)
+            }
+            Wait64 => {
+              ctx.pop_types(3)
+              ctx.push_type(I32)
+            }
+            Load(t, _size) => {
+              ctx.pop_type()
+              ctx.push_type(t)
+            }
+            Store(_t, _size) => ctx.pop_types(2)
+            Rmw(t, _size) => {
+              ctx.pop_types(2)
+              ctx.push_type(t)
+            }
+            Cmpxchg(t, _size) => {
+              ctx.pop_types(3)
+              ctx.push_type(t)
+            }
+          }
+        None => ()
+      }
+      self.emit(WasmInstr(op_atomic_unimplemented))
+    }
     // Control flow
     Block(block_type, instrs) => {
       let (params, results) = get_compile_block_type(self.module_, block_type)
@@ -787,6 +889,20 @@ fn Runtime::compile_wasm_instr(
       ctx.truncate_stack(block.stack_height_at_entry)
       ctx.push_types(block.results)
     }
+    TryTable(block_type, _catches, instrs) => {
+      let (params, results) = get_compile_block_type(self.module_, block_type)
+      ctx.push_control(BlockKind, params, results, 0)
+      for instr in instrs {
+        self.compile_wasm_instr(ctx, instr)
+      }
+      let end_pc = self.ops.length()
+      let block = ctx.pop_control()
+      for slot in block.pending_br_patches {
+        self.ops[slot] = ImmediateIdx(end_pc)
+      }
+      ctx.truncate_stack(block.stack_height_at_entry)
+      ctx.push_types(block.results)
+    }
     Call(func_idx) => {
       // Look up function signature to properly track types
       let func_idx_int = func_idx.reinterpret_as_int()
@@ -795,7 +911,7 @@ fn Runtime::compile_wasm_instr(
 
       // Get the function type and update type stack
       if type_idx >= 0 {
-        let func_type = self.module_.types[type_idx]
+        let func_type = require_func_type(self.module_, type_idx, "call")
         // Pop params from type stack
         ctx.pop_types(func_type.params.length())
         // Push results to type stack
@@ -811,122 +927,122 @@ fn Runtime::compile_wasm_instr(
       self.emit(ImmediateIdx(ctx.func_result_count))
     }
     // Memory instructions (load: pop addr, push value; store: pop addr+value)
-    I32Load(_align, offset) => {
+    I32Load(_align, offset, _mem_idx) => {
       // pop i32 addr, push i32 value
       self.emit(WasmInstr(op_i32_load))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I32Store(_align, offset) => {
+    I32Store(_align, offset, _mem_idx) => {
       ctx.pop_types(2) // pop addr and value
       self.emit(WasmInstr(op_i32_store))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I32Load8S(_align, offset) => {
+    I32Load8S(_align, offset, _mem_idx) => {
       self.emit(WasmInstr(op_i32_load8_s))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I32Load8U(_align, offset) => {
+    I32Load8U(_align, offset, _mem_idx) => {
       self.emit(WasmInstr(op_i32_load8_u))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I32Load16S(_align, offset) => {
+    I32Load16S(_align, offset, _mem_idx) => {
       self.emit(WasmInstr(op_i32_load16_s))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I32Load16U(_align, offset) => {
+    I32Load16U(_align, offset, _mem_idx) => {
       self.emit(WasmInstr(op_i32_load16_u))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I32Store8(_align, offset) => {
+    I32Store8(_align, offset, _mem_idx) => {
       ctx.pop_types(2)
       self.emit(WasmInstr(op_i32_store8))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I32Store16(_align, offset) => {
+    I32Store16(_align, offset, _mem_idx) => {
       ctx.pop_types(2)
       self.emit(WasmInstr(op_i32_store16))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Load(_align, offset) => {
+    I64Load(_align, offset, _mem_idx) => {
       ctx.pop_type()
       ctx.push_type(I64)
       self.emit(WasmInstr(op_i64_load))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Store(_align, offset) => {
+    I64Store(_align, offset, _mem_idx) => {
       ctx.pop_types(2)
       self.emit(WasmInstr(op_i64_store))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Load8S(_align, offset) => {
+    I64Load8S(_align, offset, _mem_idx) => {
       ctx.pop_type()
       ctx.push_type(I64)
       self.emit(WasmInstr(op_i64_load8_s))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Load8U(_align, offset) => {
+    I64Load8U(_align, offset, _mem_idx) => {
       ctx.pop_type()
       ctx.push_type(I64)
       self.emit(WasmInstr(op_i64_load8_u))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Load16S(_align, offset) => {
+    I64Load16S(_align, offset, _mem_idx) => {
       ctx.pop_type()
       ctx.push_type(I64)
       self.emit(WasmInstr(op_i64_load16_s))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Load16U(_align, offset) => {
+    I64Load16U(_align, offset, _mem_idx) => {
       ctx.pop_type()
       ctx.push_type(I64)
       self.emit(WasmInstr(op_i64_load16_u))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Load32S(_align, offset) => {
+    I64Load32S(_align, offset, _mem_idx) => {
       ctx.pop_type()
       ctx.push_type(I64)
       self.emit(WasmInstr(op_i64_load32_s))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Load32U(_align, offset) => {
+    I64Load32U(_align, offset, _mem_idx) => {
       ctx.pop_type()
       ctx.push_type(I64)
       self.emit(WasmInstr(op_i64_load32_u))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Store8(_align, offset) => {
+    I64Store8(_align, offset, _mem_idx) => {
       ctx.pop_types(2)
       self.emit(WasmInstr(op_i64_store8))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Store16(_align, offset) => {
+    I64Store16(_align, offset, _mem_idx) => {
       ctx.pop_types(2)
       self.emit(WasmInstr(op_i64_store16))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    I64Store32(_align, offset) => {
+    I64Store32(_align, offset, _mem_idx) => {
       ctx.pop_types(2)
       self.emit(WasmInstr(op_i64_store32))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    F32Load(_align, offset) => {
+    F32Load(_align, offset, _mem_idx) => {
       ctx.pop_type()
       ctx.push_type(F32)
       self.emit(WasmInstr(op_f32_load))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    F32Store(_align, offset) => {
+    F32Store(_align, offset, _mem_idx) => {
       ctx.pop_types(2)
       self.emit(WasmInstr(op_f32_store))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    F64Load(_align, offset) => {
+    F64Load(_align, offset, _mem_idx) => {
       ctx.pop_type()
       ctx.push_type(F64)
       self.emit(WasmInstr(op_f64_load))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
     }
-    F64Store(_align, offset) => {
+    F64Store(_align, offset, _mem_idx) => {
       ctx.pop_types(2)
       self.emit(WasmInstr(op_f64_store))
       self.emit(ImmediateIdx(offset.reinterpret_as_int()))
@@ -943,22 +1059,22 @@ fn Runtime::compile_wasm_instr(
       self.emit(ImmediateIdx(_idx.reinterpret_as_int()))
     }
     // Memory size and grow
-    MemorySize(_) => {
+    MemorySize(_mem_idx) => {
       ctx.push_type(I32)
       self.emit(WasmInstr(op_memory_size))
     }
-    MemoryGrow(_) => self.emit(WasmInstr(op_memory_grow)) // i32 -> i32
+    MemoryGrow(_mem_idx) => self.emit(WasmInstr(op_memory_grow)) // i32 -> i32
 
     // Bulk memory instructions
-    MemoryCopy => {
+    MemoryCopy(_dst_idx, _src_idx) => {
       ctx.pop_types(3) // pop dest, src, n
       self.emit(WasmInstr(op_memory_copy))
     }
-    MemoryFill => {
+    MemoryFill(_mem_idx) => {
       ctx.pop_types(3) // pop dest, val, n
       self.emit(WasmInstr(op_memory_fill))
     }
-    MemoryInit(data_idx) => {
+    MemoryInit(data_idx, _mem_idx) => {
       ctx.pop_types(3) // pop dest, src, n
       self.emit(WasmInstr(op_memory_init))
       self.emit(ImmediateIdx(data_idx.reinterpret_as_int()))
@@ -980,6 +1096,11 @@ fn Runtime::compile_wasm_instr(
       self.emit(WasmInstr(op_table_copy))
       self.emit(ImmediateIdx(dst_table_idx.reinterpret_as_int()))
       self.emit(ImmediateIdx(src_table_idx.reinterpret_as_int()))
+    }
+    TableFill(table_idx) => {
+      ctx.pop_types(3) // pop dest, val, n
+      self.emit(WasmInstr(op_table_fill))
+      self.emit(ImmediateIdx(table_idx.reinterpret_as_int()))
     }
     ElemDrop(elem_idx) => {
       self.emit(WasmInstr(op_elem_drop))
@@ -1060,13 +1181,250 @@ fn Runtime::compile_wasm_instr(
       }
       self.emit(WasmInstr(op_ref_as_non_null))
     }
+    RefTest(_ref_type, _nullable) => {
+      ctx.pop_type()
+      ctx.push_type(I32)
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    RefCast(ref_type, nullable) => {
+      let target = reftype_to_valtype(ref_type)
+      let result_type = if nullable {
+        target
+      } else {
+        non_null_ref_type(target)
+      }
+      ctx.pop_type()
+      ctx.push_type(result_type)
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    StructNew(type_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let struct_type = require_struct_type(
+        self.module_,
+        type_idx_int,
+        "struct.new",
+      )
+      ctx.pop_types(struct_type.fields.length())
+      ctx.push_type(Ref(TypeIndex(type_idx_int), false))
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    StructNewDefault(type_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let _ = require_struct_type(
+        self.module_,
+        type_idx_int,
+        "struct.new_default",
+      )
+      ctx.push_type(Ref(TypeIndex(type_idx_int), false))
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    StructGet(type_idx, field_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let field_idx_int = field_idx.reinterpret_as_int()
+      let struct_type = require_struct_type(
+        self.module_,
+        type_idx_int,
+        "struct.get",
+      )
+      if field_idx_int < 0 || field_idx_int >= struct_type.fields.length() {
+        raise RuntimeError::InvalidType("struct.get: invalid field index")
+      }
+      let field = struct_type.fields[field_idx_int]
+      ctx.pop_type()
+      ctx.push_type(storage_value_type(field.storage))
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    StructGetS(type_idx, field_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let field_idx_int = field_idx.reinterpret_as_int()
+      let struct_type = require_struct_type(
+        self.module_,
+        type_idx_int,
+        "struct.get_s",
+      )
+      if field_idx_int < 0 || field_idx_int >= struct_type.fields.length() {
+        raise RuntimeError::InvalidType("struct.get_s: invalid field index")
+      }
+      ctx.pop_type()
+      ctx.push_type(I32)
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    StructGetU(type_idx, field_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let field_idx_int = field_idx.reinterpret_as_int()
+      let struct_type = require_struct_type(
+        self.module_,
+        type_idx_int,
+        "struct.get_u",
+      )
+      if field_idx_int < 0 || field_idx_int >= struct_type.fields.length() {
+        raise RuntimeError::InvalidType("struct.get_u: invalid field index")
+      }
+      ctx.pop_type()
+      ctx.push_type(I32)
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    StructSet(type_idx, field_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let field_idx_int = field_idx.reinterpret_as_int()
+      let struct_type = require_struct_type(
+        self.module_,
+        type_idx_int,
+        "struct.set",
+      )
+      if field_idx_int < 0 || field_idx_int >= struct_type.fields.length() {
+        raise RuntimeError::InvalidType("struct.set: invalid field index")
+      }
+      ctx.pop_types(2)
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    ArrayNew(type_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let _ = require_array_type(self.module_, type_idx_int, "array.new")
+      ctx.pop_types(2)
+      ctx.push_type(Ref(TypeIndex(type_idx_int), false))
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    ArrayNewDefault(type_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let _ = require_array_type(
+        self.module_,
+        type_idx_int,
+        "array.new_default",
+      )
+      ctx.pop_type()
+      ctx.push_type(Ref(TypeIndex(type_idx_int), false))
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    ArrayNewFixed(type_idx, len) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let _ = require_array_type(self.module_, type_idx_int, "array.new_fixed")
+      ctx.pop_types(len.reinterpret_as_int())
+      ctx.push_type(Ref(TypeIndex(type_idx_int), false))
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    ArrayNewData(type_idx, _data_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let _ = require_array_type(self.module_, type_idx_int, "array.new_data")
+      ctx.pop_types(2)
+      ctx.push_type(Ref(TypeIndex(type_idx_int), false))
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    ArrayNewElem(type_idx, _elem_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let _ = require_array_type(self.module_, type_idx_int, "array.new_elem")
+      ctx.pop_types(2)
+      ctx.push_type(Ref(TypeIndex(type_idx_int), false))
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    ArrayGet(type_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let array_type = require_array_type(
+        self.module_,
+        type_idx_int,
+        "array.get",
+      )
+      ctx.pop_types(2)
+      ctx.push_type(storage_value_type(array_type.element.storage))
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    ArrayGetS(type_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let _ = require_array_type(self.module_, type_idx_int, "array.get_s")
+      ctx.pop_types(2)
+      ctx.push_type(I32)
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    ArrayGetU(type_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let _ = require_array_type(self.module_, type_idx_int, "array.get_u")
+      ctx.pop_types(2)
+      ctx.push_type(I32)
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    ArraySet(type_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let _ = require_array_type(self.module_, type_idx_int, "array.set")
+      ctx.pop_types(3)
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    ArrayLen => {
+      ctx.pop_type()
+      ctx.push_type(I32)
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    ArrayFill(type_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let _ = require_array_type(self.module_, type_idx_int, "array.fill")
+      ctx.pop_types(4)
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    ArrayCopy(dst_type, src_type) => {
+      let dst_int = dst_type.reinterpret_as_int()
+      let src_int = src_type.reinterpret_as_int()
+      let _ = require_array_type(self.module_, dst_int, "array.copy")
+      let _ = require_array_type(self.module_, src_int, "array.copy")
+      ctx.pop_types(5)
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    ArrayInitData(type_idx, _data_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let _ = require_array_type(self.module_, type_idx_int, "array.init_data")
+      ctx.pop_types(4)
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    ArrayInitElem(type_idx, _elem_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let _ = require_array_type(self.module_, type_idx_int, "array.init_elem")
+      ctx.pop_types(4)
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    BrOnCast(_label, _tref, _tnull, _sref, _snull) => {
+      ctx.pop_type()
+      ctx.push_type(Ref(Any, true))
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    BrOnCastFail(_label, _tref, _tnull, _sref, _snull) => {
+      ctx.pop_type()
+      ctx.push_type(Ref(Any, true))
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    AnyConvertExtern => {
+      ctx.pop_type()
+      ctx.push_type(AnyRef)
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    ExternConvertAny => {
+      ctx.pop_type()
+      ctx.push_type(ExternRef)
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    RefI31 => {
+      ctx.pop_type()
+      ctx.push_type(Ref(I31, false))
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    I31GetS => {
+      ctx.pop_type()
+      ctx.push_type(I32)
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
+    I31GetU => {
+      ctx.pop_type()
+      ctx.push_type(I32)
+      self.emit(WasmInstr(op_gc_unimplemented))
+    }
     // Indirect call
     CallIndirect(type_idx, table_idx) => {
       // Pop table index (i32)
       ctx.pop_type()
       // Get function type to properly track types
       let type_idx_int = type_idx.reinterpret_as_int()
-      let func_type = self.module_.types[type_idx_int]
+      let func_type = require_func_type(
+        self.module_,
+        type_idx_int,
+        "call_indirect",
+      )
       // Pop params from type stack
       ctx.pop_types(func_type.params.length())
       // Push results to type stack
@@ -1087,7 +1445,7 @@ fn Runtime::compile_wasm_instr(
       // Get the function type and update type stack
       // For tail calls, only pop params (results go to caller, not us)
       if type_idx >= 0 {
-        let func_type = self.module_.types[type_idx]
+        let func_type = require_func_type(self.module_, type_idx, "return_call")
         ctx.pop_types(func_type.params.length())
       }
       self.emit(WasmInstr(op_return_call))
@@ -1098,7 +1456,11 @@ fn Runtime::compile_wasm_instr(
       ctx.pop_type()
       // Get function type to properly track types
       let type_idx_int = type_idx.reinterpret_as_int()
-      let func_type = self.module_.types[type_idx_int]
+      let func_type = require_func_type(
+        self.module_,
+        type_idx_int,
+        "return_call_indirect",
+      )
       // Pop params from type stack (no results - tail call)
       ctx.pop_types(func_type.params.length())
       self.emit(WasmInstr(op_return_call_indirect))
@@ -1111,7 +1473,7 @@ fn Runtime::compile_wasm_instr(
       ctx.pop_type()
       // Get function type to properly track types
       let type_idx_int = type_idx.reinterpret_as_int()
-      let func_type = self.module_.types[type_idx_int]
+      let func_type = require_func_type(self.module_, type_idx_int, "call_ref")
       // Pop params from type stack
       ctx.pop_types(func_type.params.length())
       // Push results to type stack
@@ -1126,7 +1488,11 @@ fn Runtime::compile_wasm_instr(
       ctx.pop_type()
       // Get function type to properly track types
       let type_idx_int = type_idx.reinterpret_as_int()
-      let func_type = self.module_.types[type_idx_int]
+      let func_type = require_func_type(
+        self.module_,
+        type_idx_int,
+        "return_call_ref",
+      )
       // Pop params from type stack (no results - tail call)
       ctx.pop_types(func_type.params.length())
       self.emit(WasmInstr(op_return_call_ref))

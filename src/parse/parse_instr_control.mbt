@@ -44,14 +44,14 @@ fn parse_instr_control(parser : Parser, opcode : Byte) -> @core.Instr? raise {
       Some(Nop)
     }
     0x08 => {
-      // throw tagidx - skip tag index, return unreachable
-      let _ = parser.read_u32_leb128()
-      Some(Unreachable)
+      // throw tagidx
+      let tag_idx = parser.read_u32_leb128()
+      Some(Throw(tag_idx))
     }
     0x09 => {
-      // rethrow labelidx - skip label, return unreachable
-      let _ = parser.read_u32_leb128()
-      Some(Unreachable)
+      // rethrow labelidx
+      let label_idx = parser.read_u32_leb128()
+      Some(Rethrow(label_idx))
     }
     0x0A => Some(Nop) // catch_all - just nop
     0x0B => Some(Nop) // delegate - should not be reached as instruction
@@ -87,39 +87,38 @@ fn parse_instr_control(parser : Parser, opcode : Byte) -> @core.Instr? raise {
     // Exception handling: try_table
     0x1F => {
       let blocktype = parse_blocktype(parser)
-      // Read catch clauses
       let catch_count = parser.read_u32_leb128()
+      let catches : Array[@core.CatchClause] = []
       for _ in 0U..<catch_count {
         let catch_kind = parser.read_byte()
         match catch_kind {
           0x00 => {
-            // catch tagidx labelidx
-            let _ = parser.read_u32_leb128()
-            let _ = parser.read_u32_leb128()
-
+            let tag_idx = parser.read_u32_leb128()
+            let label_idx = parser.read_u32_leb128()
+            catches.push(@core.CatchClause::Catch(tag_idx, label_idx))
           }
           0x01 => {
-            // catch_ref tagidx labelidx
-            let _ = parser.read_u32_leb128()
-            let _ = parser.read_u32_leb128()
-
+            let tag_idx = parser.read_u32_leb128()
+            let label_idx = parser.read_u32_leb128()
+            catches.push(@core.CatchClause::CatchRef(tag_idx, label_idx))
           }
           0x02 => {
-            // catch_all labelidx
-            let _ = parser.read_u32_leb128()
-
+            let label_idx = parser.read_u32_leb128()
+            catches.push(@core.CatchClause::CatchAll(label_idx))
           }
           0x03 => {
-            // catch_all_ref labelidx
-            let _ = parser.read_u32_leb128()
-
+            let label_idx = parser.read_u32_leb128()
+            catches.push(@core.CatchClause::CatchAllRef(label_idx))
           }
-          _ => ()
+          _ =>
+            raise @validate.ValidationError::TypeMismatch(
+              "unknown try_table catch kind: 0x\{catch_kind.to_string()}",
+            )
         }
       }
       let instrs = parse_instrs(parser)
       let _ = parser.read_byte() // consume 0x0B end marker
-      Some(Block(blocktype, instrs))
+      Some(TryTable(blocktype, catches, instrs))
     }
     _ => None
   }

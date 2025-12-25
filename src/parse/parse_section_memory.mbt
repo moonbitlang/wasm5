@@ -7,8 +7,8 @@ fn parse_memory_section(
   let count = parser.read_u32_leb128()
   let mems = []
   for i in 0U..<count {
-    let limits = parser.read_limits()
-    mems.push(@core.MemType::{ limits, })
+    let mem_type = parser.read_memtype()
+    mems.push(mem_type)
   }
   mems
 }

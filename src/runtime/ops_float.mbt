@@ -538,7 +538,7 @@ fn op_i64_trunc_f64_s(rt : Runtime) -> RetCode {
   if a >= 9223372036854775808.0 || a < -9223372036854775808.0 {
     return IntegerOverflow
   }
-  push_i64(rt.stack,a.to_int64().reinterpret_as_uint64())
+  push_i64(rt.stack, a.to_int64().reinterpret_as_uint64())
   rt.pc += 1
   OK
 }
@@ -569,7 +569,7 @@ fn op_i32_trunc_f32_s(rt : Runtime) -> RetCode {
   if a >= 2147483648.0 || a < -2147483648.0 {
     return IntegerOverflow
   }
-  push_i32(rt.stack,a.to_int().reinterpret_as_uint())
+  push_i32(rt.stack, a.to_int().reinterpret_as_uint())
   rt.pc += 1
   OK
 }
@@ -584,7 +584,7 @@ fn op_i32_trunc_f32_u(rt : Runtime) -> RetCode {
   if a >= 4294967296.0 || a <= -1.0 {
     return IntegerOverflow
   }
-  push_i32(rt.stack,a.to_double().to_uint64().to_uint())
+  push_i32(rt.stack, a.to_double().to_uint64().to_uint())
   rt.pc += 1
   OK
 }
@@ -599,7 +599,7 @@ fn op_i32_trunc_f64_s(rt : Runtime) -> RetCode {
   if a >= 2147483648.0 || a <= -2147483649.0 {
     return IntegerOverflow
   }
-  push_i32(rt.stack,a.to_int().reinterpret_as_uint())
+  push_i32(rt.stack, a.to_int().reinterpret_as_uint())
   rt.pc += 1
   OK
 }
@@ -614,7 +614,7 @@ fn op_i32_trunc_f64_u(rt : Runtime) -> RetCode {
   if a >= 4294967296.0 || a <= -1.0 {
     return IntegerOverflow
   }
-  push_i32(rt.stack,a.to_uint64().to_uint())
+  push_i32(rt.stack, a.to_uint64().to_uint())
   rt.pc += 1
   OK
 }
@@ -629,7 +629,7 @@ fn op_i64_trunc_f32_s(rt : Runtime) -> RetCode {
   if a >= 9223372036854775808.0 || a < -9223372036854775808.0 {
     return IntegerOverflow
   }
-  push_i64(rt.stack,a.to_int64().reinterpret_as_uint64())
+  push_i64(rt.stack, a.to_int64().reinterpret_as_uint64())
   rt.pc += 1
   OK
 }

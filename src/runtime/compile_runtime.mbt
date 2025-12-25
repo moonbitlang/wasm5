@@ -6,7 +6,7 @@ fn Runtime::compile_func(
 ) -> Unit raise RuntimeError {
   // Get function type
   let type_idx = self.module_.funcs[func_idx].reinterpret_as_int()
-  let func_type = self.module_.types[type_idx]
+  let func_type = require_func_type(self.module_, type_idx, "compile_func")
 
   // Create compile-time context with function result count
   let ctx = CompileCtx::new(func_type.results.length())
@@ -71,7 +71,6 @@ pub fn Runtime::compile(self : Runtime) -> Unit raise RuntimeError {
         if init_result != OK {
           raise init_result.to_error(self.error_detail)
         }
-
         self.pc = start_pc
 
         // Execute start function, ignoring runtime errors
@@ -136,7 +135,7 @@ pub fn Runtime::call_compiled(
   // Adjust to local function index
   let local_idx = idx - num_imported_funcs
   let type_idx = self.module_.funcs[local_idx].reinterpret_as_int()
-  let func_type = self.module_.types[type_idx]
+  let func_type = require_func_type(self.module_, type_idx, "call_compiled")
   let code = self.module_.codes[local_idx]
   guard code.compiled is Some(start_pc) else {
     raise RuntimeError::FunctionNotCompiled(
@@ -153,7 +152,6 @@ pub fn Runtime::call_compiled(
   if init_result != OK {
     raise init_result.to_error(self.error_detail)
   }
-
   self.pc = start_pc
   self.execute()
 

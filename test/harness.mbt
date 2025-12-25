@@ -10,9 +10,13 @@ pub struct TestFailure {
 ///|
 pub impl Show for TestFailure with output(self, logger) {
   if self.line >= 0 {
-    logger.write_string("[\{self.test_type}] \{self.source_file}:\{self.line}: \{self.message}")
+    logger.write_string(
+      "[\{self.test_type}] \{self.source_file}:\{self.line}: \{self.message}",
+    )
   } else {
-    logger.write_string("[\{self.test_type}] \{self.source_file}: \{self.message}")
+    logger.write_string(
+      "[\{self.test_type}] \{self.source_file}: \{self.message}",
+    )
   }
 }
 
@@ -137,8 +141,11 @@ fn register_module(
             match imp.desc {
               @wasm5_core.ImportDesc::Func(type_idx) => {
                 if import_idx == func_idx_int {
-                  let func_type = module_.types[type_idx.reinterpret_as_int()]
-                  found_arity = func_type.params.length().reinterpret_as_uint()
+                  match module_.types[type_idx.reinterpret_as_int()] {
+                    @wasm5_core.TypeDef::Func(ft) =>
+                      found_arity = ft.params.length().reinterpret_as_uint()
+                    _ => ()
+                  }
                   break
                 }
                 import_idx += 1
@@ -151,8 +158,11 @@ fn register_module(
           // It's a local function
           let local_idx = func_idx_int - num_imported_funcs
           let type_idx = module_.funcs[local_idx].reinterpret_as_int()
-          let func_type = module_.types[type_idx]
-          func_type.params.length().reinterpret_as_uint()
+          match module_.types[type_idx] {
+            @wasm5_core.TypeDef::Func(ft) =>
+              ft.params.length().reinterpret_as_uint()
+            _ => 0U
+          }
         }
 
         // Create wrapper and add to resolver
@@ -1010,7 +1020,6 @@ pub async fn process_wast_file(
   (test_result, skipped)
 }
 
-
 ///|
 /// Whitelist of individual tests to skip (file, line)
 /// These are known failing tests that won't be fixed soon
@@ -1076,4 +1085,3 @@ let whitelisted_tests : Array[(String, Set[Int])] = [
   ("table_grow.wast", Set::from_array([124, 130])), // cross-module imports not implemented
   ("func_ptrs.wast", Set::from_array([49])),
 ]
-

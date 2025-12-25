@@ -77,6 +77,48 @@ fn validate_instruction_reference(
         }
         stack.push(non_null_ref_type(popped))
       }
+    RefTest(_, _) => {
+      // ref.test pops a reference and pushes i32
+      if ctx.is_unreachable && stack.length() == 0 {
+        // Unreachable - stack is polymorphic, don't pop anything
+      } else if stack.length() < 1 {
+        raise ValidationError::TypeMismatch(
+          "ref.test expects reference on stack",
+        )
+      } else {
+        let popped = stack.unsafe_pop()
+        guard is_ref_valtype(popped) else {
+          raise ValidationError::TypeMismatch(
+            "ref.test expects reference operand",
+          )
+        }
+      }
+      stack.push(I32)
+    }
+    RefCast(ref_type, nullable) => {
+      // ref.cast pops a reference and pushes a reference of the target type
+      let target = reftype_to_valtype(ref_type)
+      let result_type = if nullable {
+        target
+      } else {
+        non_null_ref_type(target)
+      }
+      if ctx.is_unreachable && stack.length() == 0 {
+        // Unreachable - stack is polymorphic, don't pop anything
+      } else if stack.length() < 1 {
+        raise ValidationError::TypeMismatch(
+          "ref.cast expects reference on stack",
+        )
+      } else {
+        let popped = stack.unsafe_pop()
+        guard is_ref_valtype(popped) else {
+          raise ValidationError::TypeMismatch(
+            "ref.cast expects reference operand",
+          )
+        }
+      }
+      stack.push(result_type)
+    }
     _ => return false
   }
   true

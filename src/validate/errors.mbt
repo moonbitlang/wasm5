@@ -20,6 +20,8 @@ pub(all) suberror ValidationError {
   UnknownExportedMemory(Int)
   UnknownExportedTable(Int)
   UnknownExportedGlobal(Int)
+  UnknownTag(Int)
+  UnknownExportedTag(Int)
   InvalidTableSize(String)
   UnknownTable(Int)
   ConstantExpressionRequired(String)

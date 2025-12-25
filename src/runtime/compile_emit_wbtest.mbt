@@ -1,8 +1,8 @@
 ///|
-fn compile_module_types() -> Array[@core.FuncType] {
-  let type0 : @core.FuncType = { params: [I32, I64], results: [I32] }
-  let type1 : @core.FuncType = { params: [], results: [I32] }
-  let type2 : @core.FuncType = { params: [], results: [] }
+fn compile_module_types() -> Array[@core.TypeDef] {
+  let type0 : @core.TypeDef = Func({ params: [I32, I64], results: [I32] })
+  let type1 : @core.TypeDef = Func({ params: [], results: [I32] })
+  let type2 : @core.TypeDef = Func({ params: [], results: [] })
   [type0, type1, type2]
 }
 
@@ -34,29 +34,29 @@ fn build_compile_instrs() -> Array[@core.Instr] {
   instrs.push(LocalTee(0U))
   instrs.push(GlobalGet(0U))
   instrs.push(GlobalSet(0U))
-  instrs.push(I32Load(0U, 0U))
-  instrs.push(I64Load(0U, 0U))
-  instrs.push(F32Load(0U, 0U))
-  instrs.push(F64Load(0U, 0U))
-  instrs.push(I32Load8S(0U, 0U))
-  instrs.push(I32Load8U(0U, 0U))
-  instrs.push(I32Load16S(0U, 0U))
-  instrs.push(I32Load16U(0U, 0U))
-  instrs.push(I64Load8S(0U, 0U))
-  instrs.push(I64Load8U(0U, 0U))
-  instrs.push(I64Load16S(0U, 0U))
-  instrs.push(I64Load16U(0U, 0U))
-  instrs.push(I64Load32S(0U, 0U))
-  instrs.push(I64Load32U(0U, 0U))
-  instrs.push(I32Store(0U, 0U))
-  instrs.push(I64Store(0U, 0U))
-  instrs.push(F32Store(0U, 0U))
-  instrs.push(F64Store(0U, 0U))
-  instrs.push(I32Store8(0U, 0U))
-  instrs.push(I32Store16(0U, 0U))
-  instrs.push(I64Store8(0U, 0U))
-  instrs.push(I64Store16(0U, 0U))
-  instrs.push(I64Store32(0U, 0U))
+  instrs.push(I32Load(0U, 0U, 0U))
+  instrs.push(I64Load(0U, 0U, 0U))
+  instrs.push(F32Load(0U, 0U, 0U))
+  instrs.push(F64Load(0U, 0U, 0U))
+  instrs.push(I32Load8S(0U, 0U, 0U))
+  instrs.push(I32Load8U(0U, 0U, 0U))
+  instrs.push(I32Load16S(0U, 0U, 0U))
+  instrs.push(I32Load16U(0U, 0U, 0U))
+  instrs.push(I64Load8S(0U, 0U, 0U))
+  instrs.push(I64Load8U(0U, 0U, 0U))
+  instrs.push(I64Load16S(0U, 0U, 0U))
+  instrs.push(I64Load16U(0U, 0U, 0U))
+  instrs.push(I64Load32S(0U, 0U, 0U))
+  instrs.push(I64Load32U(0U, 0U, 0U))
+  instrs.push(I32Store(0U, 0U, 0U))
+  instrs.push(I64Store(0U, 0U, 0U))
+  instrs.push(F32Store(0U, 0U, 0U))
+  instrs.push(F64Store(0U, 0U, 0U))
+  instrs.push(I32Store8(0U, 0U, 0U))
+  instrs.push(I32Store16(0U, 0U, 0U))
+  instrs.push(I64Store8(0U, 0U, 0U))
+  instrs.push(I64Store16(0U, 0U, 0U))
+  instrs.push(I64Store32(0U, 0U, 0U))
   instrs.push(MemorySize(0U))
   instrs.push(MemoryGrow(0U))
   instrs.push(TableGet(0U))
@@ -65,11 +65,12 @@ fn build_compile_instrs() -> Array[@core.Instr] {
   instrs.push(TableGrow(0U))
   instrs.push(TableInit(0U, 0U))
   instrs.push(TableCopy(0U, 0U))
+  instrs.push(TableFill(0U))
   instrs.push(ElemDrop(0U))
-  instrs.push(MemoryInit(0U))
+  instrs.push(MemoryInit(0U, 0U))
   instrs.push(DataDrop(0U))
-  instrs.push(MemoryCopy)
-  instrs.push(MemoryFill)
+  instrs.push(MemoryCopy(0U, 0U))
+  instrs.push(MemoryFill(0U))
   instrs.push(RefNull(Func))
   instrs.push(RefFunc(0U))
   instrs.push(RefIsNull)
@@ -244,10 +245,13 @@ fn make_compile_module(instrs : Array[@core.Instr]) -> @core.Module {
   }
   @core.Module::{
     types,
+    type_groups: [],
+    customs: [],
     funcs: [0U],
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,

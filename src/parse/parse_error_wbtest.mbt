@@ -80,36 +80,54 @@ test "parse prefix fc errors" {
   push_u32_leb(bytes_init, 0U)
   push_u32_leb(bytes_init, 1U)
   let mut saw_error = false
-  let _ = parse_instr_prefix_fc(make_parser(bytes_init)) catch {
+  let instr_init = parse_instr_prefix_fc(make_parser(bytes_init)) catch {
     _ => {
       saw_error = true
       Nop
     }
   }
-  assert_eq(saw_error, true)
+  assert_eq(saw_error, false)
+  match instr_init {
+    MemoryInit(data_idx, mem_idx) => {
+      assert_eq(data_idx, 0U)
+      assert_eq(mem_idx, 1U)
+    }
+    _ => abort("expected memory.init")
+  }
   let bytes_copy : Array[Byte] = []
   push_u32_leb(bytes_copy, 0x0aU)
   push_u32_leb(bytes_copy, 1U)
   push_u32_leb(bytes_copy, 0U)
   saw_error = false
-  let _ = parse_instr_prefix_fc(make_parser(bytes_copy)) catch {
+  let instr_copy = parse_instr_prefix_fc(make_parser(bytes_copy)) catch {
     _ => {
       saw_error = true
       Nop
     }
   }
-  assert_eq(saw_error, true)
+  assert_eq(saw_error, false)
+  match instr_copy {
+    MemoryCopy(dst_idx, src_idx) => {
+      assert_eq(dst_idx, 1U)
+      assert_eq(src_idx, 0U)
+    }
+    _ => abort("expected memory.copy")
+  }
   let bytes_fill : Array[Byte] = []
   push_u32_leb(bytes_fill, 0x0bU)
   push_u32_leb(bytes_fill, 1U)
   saw_error = false
-  let _ = parse_instr_prefix_fc(make_parser(bytes_fill)) catch {
+  let instr_fill = parse_instr_prefix_fc(make_parser(bytes_fill)) catch {
     _ => {
       saw_error = true
       Nop
     }
   }
-  assert_eq(saw_error, true)
+  assert_eq(saw_error, false)
+  match instr_fill {
+    MemoryFill(mem_idx) => assert_eq(mem_idx, 1U)
+    _ => abort("expected memory.fill")
+  }
   let bytes_unknown : Array[Byte] = []
   push_u32_leb(bytes_unknown, 0x11U)
   saw_error = false
@@ -138,7 +156,7 @@ test "parse instr control variants" {
   assert_eq(instr is Some(_), true)
   let bytes_try_table : Array[Byte] = []
   bytes_try_table.push(b'\x40')
-  push_u32_leb(bytes_try_table, 5U)
+  push_u32_leb(bytes_try_table, 4U)
   bytes_try_table.push(b'\x00')
   push_u32_leb(bytes_try_table, 0U)
   push_u32_leb(bytes_try_table, 0U)
@@ -149,7 +167,6 @@ test "parse instr control variants" {
   push_u32_leb(bytes_try_table, 0U)
   bytes_try_table.push(b'\x03')
   push_u32_leb(bytes_try_table, 0U)
-  bytes_try_table.push(b'\x04')
   bytes_try_table.push(b'\x0b')
   let instr = parse_instr_control(make_parser(bytes_try_table), b'\x1f')
   assert_eq(instr is Some(_), true)
@@ -544,10 +561,13 @@ test "parse main header errors" {
       saw_error = true
       {
         types: [],
+        type_groups: [],
+        customs: [],
         funcs: [],
         tables: [],
         mems: [],
         globals: [],
+        tags: [],
         elems: [],
         datas: [],
         start: None,
@@ -568,10 +588,13 @@ test "parse main header errors" {
       saw_error = true
       {
         types: [],
+        type_groups: [],
+        customs: [],
         funcs: [],
         tables: [],
         mems: [],
         globals: [],
+        tags: [],
         elems: [],
         datas: [],
         start: None,
@@ -602,10 +625,13 @@ test "parse main section skips" {
       saw_error = true
       {
         types: [],
+        type_groups: [],
+        customs: [],
         funcs: [],
         tables: [],
         mems: [],
         globals: [],
+        tags: [],
         elems: [],
         datas: [],
         start: None,
@@ -627,7 +653,7 @@ test "parse type section invalid tag" {
   let _ = parse_type_section(make_parser(bytes)) catch {
     _ => {
       saw_error = true
-      []
+      ([], [])
     }
   }
   assert_eq(saw_error, true)
@@ -646,7 +672,7 @@ test "parse type section subtypes" {
   push_u32_leb(bytes, 1U)
   push_u32_leb(bytes, 0U)
   append_bytes(bytes, encode_func_type(empty_sig, empty_sig))
-  let types = parse_type_section(make_parser(bytes))
+  let (types, _groups) = parse_type_section(make_parser(bytes))
   assert_eq(types.length(), 2)
 }
 
@@ -661,7 +687,7 @@ test "parse type section invalid composite tag" {
   let _ = parse_type_section(make_parser(bytes)) catch {
     _ => {
       saw_error = true
-      []
+      ([], [])
     }
   }
   assert_eq(saw_error, true)
@@ -680,7 +706,7 @@ test "parse type section results and struct" {
   push_u32_leb(bytes, 1U)
   bytes.push(b'\x7f')
   bytes.push(b'\x00')
-  let types = parse_type_section(make_parser(bytes))
+  let (types, _groups) = parse_type_section(make_parser(bytes))
   assert_eq(types.length(), 2)
 }
 

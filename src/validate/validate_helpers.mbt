@@ -29,6 +29,7 @@ priv struct ImportCounts {
   tables : Int
   mems : Int
   globals : Int
+  tags : Int
 }
 
 ///|
@@ -39,16 +40,18 @@ fn get_import_counts(module_ : @core.Module) -> ImportCounts {
   let mut tables = 0
   let mut mems = 0
   let mut globals = 0
+  let mut tags = 0
   for imp in module_.imports {
     match imp.desc {
       Func(_) => funcs += 1
       Table(_) => tables += 1
       Mem(_) => mems += 1
       Global(_) => globals += 1
+      Tag(_) => tags += 1
       _ => ()
     }
   }
-  { funcs, tables, mems, globals }
+  { funcs, tables, mems, globals, tags }
 }
 
 ///|
@@ -86,6 +89,39 @@ fn get_func_type_index(
 }
 
 ///|
+/// Get the type index for a tag (imported or local)
+fn get_tag_type_index(
+  module_ : @core.Module,
+  tag_idx : Int,
+  import_counts : ImportCounts,
+) -> Int raise ValidationError {
+  if tag_idx < import_counts.tags {
+    // Imported tag - find type index from imports
+    let mut current_import = 0
+    let mut found_type_idx = 0
+    for imp in module_.imports {
+      match imp.desc {
+        Tag(tidx) => {
+          if current_import == tag_idx {
+            found_type_idx = tidx.reinterpret_as_int()
+            break
+          }
+          current_import += 1
+        }
+        _ => ()
+      }
+    }
+    found_type_idx
+  } else {
+    let local_idx = tag_idx - import_counts.tags
+    if local_idx < 0 || local_idx >= module_.tags.length() {
+      raise ValidationError::UnknownTag(tag_idx)
+    }
+    module_.tags[local_idx].type_idx.reinterpret_as_int()
+  }
+}
+
+///|
 /// Validate a binary operation
 fn validate_binary_op(
   ctx : ValidationCtx,
@@ -106,13 +142,15 @@ fn validate_load(
   module_ : @core.Module,
   import_counts : ImportCounts,
   align : UInt,
+  mem_idx : UInt,
+  addr_type : @core.ValType,
   natural_align : Int,
   result_type : @core.ValType,
   op_name : String,
 ) -> Unit raise ValidationError {
-  validate_memory_exists(module_, import_counts)
+  validate_memory_index(module_, import_counts, mem_idx)
   validate_alignment(align, natural_align)
-  ctx.poly_pop_expect(module_, I32, "\{op_name} address")
+  ctx.poly_pop_expect(module_, addr_type, "\{op_name} address")
   ctx.stack.push(result_type)
 }
 
@@ -123,14 +161,16 @@ fn validate_store(
   module_ : @core.Module,
   import_counts : ImportCounts,
   align : UInt,
+  mem_idx : UInt,
+  addr_type : @core.ValType,
   natural_align : Int,
   value_type : @core.ValType,
   op_name : String,
 ) -> Unit raise ValidationError {
-  validate_memory_exists(module_, import_counts)
+  validate_memory_index(module_, import_counts, mem_idx)
   validate_alignment(align, natural_align)
   ctx.poly_pop_expect(module_, value_type, "\{op_name} value")
-  ctx.poly_pop_expect(module_, I32, "\{op_name} address")
+  ctx.poly_pop_expect(module_, addr_type, "\{op_name} address")
 }
 
 ///|
@@ -172,9 +212,137 @@ fn validate_memory_exists(
   module_ : @core.Module,
   import_counts : ImportCounts,
 ) -> Unit raise ValidationError {
+  validate_memory_index(module_, import_counts, 0U)
+}
+
+///|
+fn validate_memory_index(
+  module_ : @core.Module,
+  import_counts : ImportCounts,
+  mem_idx : UInt,
+) -> Unit raise ValidationError {
   let total_mems = import_counts.mems + module_.mems.length()
-  if total_mems == 0 {
-    raise ValidationError::UnknownMemory(0)
+  let idx = mem_idx.reinterpret_as_int()
+  if idx < 0 || idx >= total_mems {
+    raise ValidationError::UnknownMemory(idx)
+  }
+}
+
+///|
+fn get_memtype(
+  module_ : @core.Module,
+  import_counts : ImportCounts,
+  mem_idx : UInt,
+) -> @core.MemType raise ValidationError {
+  let total_mems = import_counts.mems + module_.mems.length()
+  let idx = mem_idx.reinterpret_as_int()
+  if idx < 0 || idx >= total_mems {
+    raise ValidationError::UnknownMemory(idx)
+  }
+  if idx < import_counts.mems {
+    let mut import_mem_idx = 0
+    for imp in module_.imports {
+      match imp.desc {
+        Mem(mem_type) => {
+          if import_mem_idx == idx {
+            return mem_type
+          }
+          import_mem_idx = import_mem_idx + 1
+        }
+        _ => ()
+      }
+    }
+  } else {
+    let local_idx = idx - import_counts.mems
+    return module_.mems[local_idx]
+  }
+  raise ValidationError::UnknownMemory(idx)
+}
+
+///|
+fn memory_addr_type(mem_type : @core.MemType) -> @core.ValType {
+  if mem_type.memory64 {
+    I64
+  } else {
+    I32
+  }
+}
+
+///|
+fn validate_load_mem(
+  ctx : ValidationCtx,
+  module_ : @core.Module,
+  import_counts : ImportCounts,
+  align : UInt,
+  mem_idx : UInt,
+  natural_align : Int,
+  result_type : @core.ValType,
+  op_name : String,
+) -> Unit raise ValidationError {
+  let mem_type = get_memtype(module_, import_counts, mem_idx)
+  let addr_type = memory_addr_type(mem_type)
+  validate_load(
+    ctx, module_, import_counts, align, mem_idx, addr_type, natural_align, result_type,
+    op_name,
+  )
+}
+
+///|
+fn validate_store_mem(
+  ctx : ValidationCtx,
+  module_ : @core.Module,
+  import_counts : ImportCounts,
+  align : UInt,
+  mem_idx : UInt,
+  natural_align : Int,
+  value_type : @core.ValType,
+  op_name : String,
+) -> Unit raise ValidationError {
+  let mem_type = get_memtype(module_, import_counts, mem_idx)
+  let addr_type = memory_addr_type(mem_type)
+  validate_store(
+    ctx, module_, import_counts, align, mem_idx, addr_type, natural_align, value_type,
+    op_name,
+  )
+}
+
+///|
+fn get_table_type(
+  module_ : @core.Module,
+  import_counts : ImportCounts,
+  table_idx : UInt,
+) -> @core.TableType raise ValidationError {
+  let total_tables = import_counts.tables + module_.tables.length()
+  let idx = table_idx.reinterpret_as_int()
+  if idx < 0 || idx >= total_tables {
+    raise ValidationError::UnknownTable(idx)
+  }
+  if idx < import_counts.tables {
+    let mut import_table_idx = 0
+    for imp in module_.imports {
+      match imp.desc {
+        Table(table_type) => {
+          if import_table_idx == idx {
+            return table_type
+          }
+          import_table_idx = import_table_idx + 1
+        }
+        _ => ()
+      }
+    }
+  } else {
+    let local_idx = idx - import_counts.tables
+    return module_.tables[local_idx]
+  }
+  raise ValidationError::UnknownTable(idx)
+}
+
+///|
+fn table_index_type(table_type : @core.TableType) -> @core.ValType {
+  if table_type.table64 {
+    I64
+  } else {
+    I32
   }
 }
 
@@ -309,9 +477,35 @@ fn validate_const_expr_globals(
 ///|
 /// Check if a type index refers to a function type in the module
 fn is_func_type_index(module_ : @core.Module, type_idx : Int) -> Bool {
-  // In our current implementation, all entries in module_.types are @core.FuncType
-  // So any valid type index is a function type
-  type_idx >= 0 && type_idx < module_.types.length()
+  if type_idx < 0 || type_idx >= module_.types.length() {
+    return false
+  }
+  match module_.types[type_idx] {
+    Func(_) => true
+    _ => false
+  }
+}
+
+///|
+fn is_struct_type_index(module_ : @core.Module, type_idx : Int) -> Bool {
+  if type_idx < 0 || type_idx >= module_.types.length() {
+    return false
+  }
+  match module_.types[type_idx] {
+    Struct(_) => true
+    _ => false
+  }
+}
+
+///|
+fn is_array_type_index(module_ : @core.Module, type_idx : Int) -> Bool {
+  if type_idx < 0 || type_idx >= module_.types.length() {
+    return false
+  }
+  match module_.types[type_idx] {
+    Array(_) => true
+    _ => false
+  }
 }
 
 ///|
@@ -326,6 +520,17 @@ fn validate_valtype(
         raise ValidationError::UnknownType(idx)
       }
     _ => () // Other types don't have type indices
+  }
+}
+
+///|
+fn validate_storage_type(
+  module_ : @core.Module,
+  storage_type : @core.StorageType,
+) -> Unit raise ValidationError {
+  match storage_type {
+    Val(val_type) => validate_valtype(module_, val_type)
+    I8 | I16 => ()
   }
 }
 
@@ -379,6 +584,17 @@ fn is_subtype(
     (Ref(Extern, _), ExternRef) => true
     // Ref(Func, _) is compatible with FuncRef (nullable funcref)
     (Ref(Func, _), FuncRef) => true
+    // Ref(I31, _) is compatible with i31ref
+    (Ref(I31, _), I31Ref) => true
+    // Ref(Struct, _) is compatible with structref
+    (Ref(Struct, _), StructRef) => true
+    // Ref(Array, _) is compatible with arrayref
+    (Ref(Array, _), ArrayRef) => true
+    // Ref(Eq, _) is compatible with eqref
+    (Ref(Eq, _), EqRef) => true
+    // i31ref/structref/arrayref are eqref
+    (Ref(I31, _), EqRef) | (Ref(Struct, _), EqRef) | (Ref(Array, _), EqRef) =>
+      true
     // Ref(TypeIndex(n), _) is a typed function reference, compatible with FuncRef
     // only if type n is actually a function type
     (Ref(TypeIndex(n), _), FuncRef) => is_func_type_index(module_, n)
@@ -386,6 +602,18 @@ fn is_subtype(
     (Ref(TypeIndex(n), false), Ref(Func, false)) =>
       is_func_type_index(module_, n)
     (Ref(TypeIndex(n), _), Ref(Func, true)) => is_func_type_index(module_, n)
+    // Typed struct/array references are compatible with structref/arrayref
+    (Ref(TypeIndex(n), _), StructRef) => is_struct_type_index(module_, n)
+    (Ref(TypeIndex(n), _), ArrayRef) => is_array_type_index(module_, n)
+    (Ref(TypeIndex(n), _), EqRef) =>
+      is_struct_type_index(module_, n) || is_array_type_index(module_, n)
+    (Ref(TypeIndex(n), false), Ref(Struct, false)) =>
+      is_struct_type_index(module_, n)
+    (Ref(TypeIndex(n), _), Ref(Struct, true)) =>
+      is_struct_type_index(module_, n)
+    (Ref(TypeIndex(n), false), Ref(Array, false)) =>
+      is_array_type_index(module_, n)
+    (Ref(TypeIndex(n), _), Ref(Array, true)) => is_array_type_index(module_, n)
     // NOTE: FuncRef is NOT a subtype of typed function references
     // General funcref cannot be used where specific typed reference is required
     // (FuncRef, Ref(TypeIndex(n), true)) => false

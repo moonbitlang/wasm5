@@ -12,10 +12,16 @@ fn parse_import_section(parser : Parser) -> Array[@core.Import] raise {
       0x00 => Func(parser.read_u32_leb128())
       0x01 => {
         let (elem_type, nullable) = parser.read_reftype_with_nullability()
-        let limits = parser.read_limits()
-        Table(@core.TableType::{ elem_type, limits, init: None, nullable })
+        let (limits, table64) = parser.read_limits()
+        Table(@core.TableType::{
+          elem_type,
+          limits,
+          init: None,
+          nullable,
+          table64,
+        })
       }
-      0x02 => Mem(@core.MemType::{ limits: parser.read_limits() })
+      0x02 => Mem(parser.read_memtype())
       0x03 => {
         let val_type = parser.read_valtype()
         let mutable = parser.read_byte() == 0x01
@@ -23,7 +29,12 @@ fn parse_import_section(parser : Parser) -> Array[@core.Import] raise {
       }
       // Exception handling: tag import
       0x04 => {
-        let _ = parser.read_byte() // tag attribute (should be 0x00)
+        let attr = parser.read_byte()
+        if attr != 0x00U.to_byte() {
+          raise @validate.ValidationError::TypeMismatch(
+            "invalid tag attribute: 0x\{attr.to_string()}",
+          )
+        }
         let type_idx = parser.read_u32_leb128()
         Tag(type_idx)
       }

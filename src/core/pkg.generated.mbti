@@ -2,10 +2,70 @@
 package "moonbitlang/wasm5/src/core"
 
 // Values
+pub fn atomic_spec_by_name(Bytes) -> AtomicSpec?
+
+pub fn atomic_spec_by_opcode(UInt) -> AtomicSpec?
+
+pub let atomic_specs : Array[AtomicSpec]
+
+pub fn atomic_stack_effect(Bytes) -> AtomicStackEffect
+
+pub fn simd_spec_by_name(Bytes) -> SimdSpec?
+
+pub fn simd_spec_by_opcode(UInt) -> SimdSpec?
+
+pub let simd_specs : Array[SimdSpec]
+
+pub fn simd_stack_effect(Bytes) -> SimdStackEffect
 
 // Errors
 
 // Types and methods
+pub(all) struct ArrayType {
+  element : FieldType
+}
+pub impl Eq for ArrayType
+pub impl Show for ArrayType
+
+pub(all) enum AtomicImmKind {
+  None
+  MemArg
+  Fence
+}
+pub impl Eq for AtomicImmKind
+pub impl Show for AtomicImmKind
+
+pub(all) enum AtomicImmediate {
+  None
+  MemArg(UInt, UInt, UInt)
+  Fence(UInt)
+}
+pub impl Show for AtomicImmediate
+
+pub(all) struct AtomicInstr {
+  opcode : UInt
+  imm : AtomicImmediate
+}
+pub impl Show for AtomicInstr
+
+pub(all) struct AtomicSpec {
+  name : Bytes
+  opcode : UInt
+  imm : AtomicImmKind
+}
+
+pub(all) enum AtomicStackEffect {
+  Fence
+  Notify
+  Wait32
+  Wait64
+  Load(ValType, Int)
+  Store(ValType, Int)
+  Rmw(ValType, Int)
+  Cmpxchg(ValType, Int)
+}
+pub impl Show for AtomicStackEffect
+
 pub(all) enum BlockType {
   Empty
   Value(ValType)
@@ -13,11 +73,36 @@ pub(all) enum BlockType {
 }
 pub impl Show for BlockType
 
+pub(all) enum CatchClause {
+  Catch(UInt, UInt)
+  CatchRef(UInt, UInt)
+  CatchAll(UInt)
+  CatchAllRef(UInt)
+}
+pub impl Show for CatchClause
+
 pub(all) struct Code {
   locals : Array[ValType]
   body : Expr
   mut compiled : Int?
 }
+
+pub(all) enum CustomPlacement {
+  Start
+  Before(SectionId)
+  After(SectionId)
+  End
+}
+pub impl Eq for CustomPlacement
+pub impl Show for CustomPlacement
+
+pub(all) struct CustomSection {
+  name : Bytes
+  data : Bytes
+  placement : CustomPlacement
+}
+pub impl Eq for CustomSection
+pub impl Show for CustomSection
 
 pub(all) struct Data {
   mem_idx : UInt
@@ -29,9 +114,12 @@ pub(all) struct Data {
 pub(all) struct Elem {
   table_idx : UInt
   offset : Expr
-  init : Array[UInt]
+  init : Array[Expr]
   is_active : Bool
+  is_declarative : Bool
   elem_type : RefType
+  elem_nullable : Bool
+  explicit_table : Bool
 }
 
 pub(all) struct Export {
@@ -51,10 +139,19 @@ pub(all) struct Expr {
   instrs : Array[Instr]
 }
 
+pub(all) struct FieldType {
+  storage : StorageType
+  mutable : Bool
+}
+pub impl Eq for FieldType
+pub impl Show for FieldType
+
 pub(all) struct FuncType {
   params : Array[ValType]
   results : Array[ValType]
 }
+pub impl Eq for FuncType
+pub impl Show for FuncType
 
 pub(all) struct Global {
   type_ : GlobalType
@@ -86,6 +183,7 @@ pub(all) enum Instr {
   Block(BlockType, Array[Instr])
   Loop(BlockType, Array[Instr])
   If(BlockType, Array[Instr], Array[Instr])
+  TryTable(BlockType, Array[CatchClause], Array[Instr])
   Br(UInt)
   BrIf(UInt)
   BrTable(Array[UInt], UInt)
@@ -98,6 +196,10 @@ pub(all) enum Instr {
   ReturnCallIndirect(UInt, UInt)
   CallRef(UInt)
   ReturnCallRef(UInt)
+  Throw(UInt)
+  Rethrow(UInt)
+  Simd(SimdInstr)
+  Atomic(AtomicInstr)
   Drop
   Select
   SelectTyped(Array[ValType])
@@ -106,29 +208,29 @@ pub(all) enum Instr {
   LocalTee(UInt)
   GlobalGet(UInt)
   GlobalSet(UInt)
-  I32Load(UInt, UInt)
-  I64Load(UInt, UInt)
-  F32Load(UInt, UInt)
-  F64Load(UInt, UInt)
-  I32Load8S(UInt, UInt)
-  I32Load8U(UInt, UInt)
-  I32Load16S(UInt, UInt)
-  I32Load16U(UInt, UInt)
-  I64Load8S(UInt, UInt)
-  I64Load8U(UInt, UInt)
-  I64Load16S(UInt, UInt)
-  I64Load16U(UInt, UInt)
-  I64Load32S(UInt, UInt)
-  I64Load32U(UInt, UInt)
-  I32Store(UInt, UInt)
-  I64Store(UInt, UInt)
-  F32Store(UInt, UInt)
-  F64Store(UInt, UInt)
-  I32Store8(UInt, UInt)
-  I32Store16(UInt, UInt)
-  I64Store8(UInt, UInt)
-  I64Store16(UInt, UInt)
-  I64Store32(UInt, UInt)
+  I32Load(UInt, UInt, UInt)
+  I64Load(UInt, UInt, UInt)
+  F32Load(UInt, UInt, UInt)
+  F64Load(UInt, UInt, UInt)
+  I32Load8S(UInt, UInt, UInt)
+  I32Load8U(UInt, UInt, UInt)
+  I32Load16S(UInt, UInt, UInt)
+  I32Load16U(UInt, UInt, UInt)
+  I64Load8S(UInt, UInt, UInt)
+  I64Load8U(UInt, UInt, UInt)
+  I64Load16S(UInt, UInt, UInt)
+  I64Load16U(UInt, UInt, UInt)
+  I64Load32S(UInt, UInt, UInt)
+  I64Load32U(UInt, UInt, UInt)
+  I32Store(UInt, UInt, UInt)
+  I64Store(UInt, UInt, UInt)
+  F32Store(UInt, UInt, UInt)
+  F64Store(UInt, UInt, UInt)
+  I32Store8(UInt, UInt, UInt)
+  I32Store16(UInt, UInt, UInt)
+  I64Store8(UInt, UInt, UInt)
+  I64Store16(UInt, UInt, UInt)
+  I64Store32(UInt, UInt, UInt)
   MemorySize(UInt)
   MemoryGrow(UInt)
   TableGet(UInt)
@@ -137,16 +239,46 @@ pub(all) enum Instr {
   TableGrow(UInt)
   TableInit(UInt, UInt)
   TableCopy(UInt, UInt)
+  TableFill(UInt)
   ElemDrop(UInt)
-  MemoryInit(UInt)
+  MemoryInit(UInt, UInt)
   DataDrop(UInt)
-  MemoryCopy
-  MemoryFill
+  MemoryCopy(UInt, UInt)
+  MemoryFill(UInt)
   RefNull(RefType)
   RefFunc(UInt)
   RefIsNull
   RefEq
   RefAsNonNull
+  RefTest(RefType, Bool)
+  RefCast(RefType, Bool)
+  StructNew(UInt)
+  StructNewDefault(UInt)
+  StructGet(UInt, UInt)
+  StructGetS(UInt, UInt)
+  StructGetU(UInt, UInt)
+  StructSet(UInt, UInt)
+  ArrayNew(UInt)
+  ArrayNewDefault(UInt)
+  ArrayNewFixed(UInt, UInt)
+  ArrayNewData(UInt, UInt)
+  ArrayNewElem(UInt, UInt)
+  ArrayGet(UInt)
+  ArrayGetS(UInt)
+  ArrayGetU(UInt)
+  ArraySet(UInt)
+  ArrayLen
+  ArrayFill(UInt)
+  ArrayCopy(UInt, UInt)
+  ArrayInitData(UInt, UInt)
+  ArrayInitElem(UInt, UInt)
+  BrOnCast(UInt, RefType, Bool, RefType, Bool)
+  BrOnCastFail(UInt, RefType, Bool, RefType, Bool)
+  AnyConvertExtern
+  ExternConvertAny
+  RefI31
+  I31GetS
+  I31GetU
   I32Const(UInt)
   I64Const(UInt64)
   F32Const(Float)
@@ -291,20 +423,25 @@ pub(all) enum Instr {
 pub impl Show for Instr
 
 pub(all) struct Limits {
-  min : UInt
-  max : UInt?
+  min : UInt64
+  max : UInt64?
 }
 
 pub(all) struct MemType {
   limits : Limits
+  shared : Bool
+  memory64 : Bool
 }
 
 pub(all) struct Module {
-  types : Array[FuncType]
+  types : Array[TypeDef]
+  type_groups : Array[TypeGroup]
+  customs : Array[CustomSection]
   funcs : Array[UInt]
   tables : Array[TableType]
   mems : Array[MemType]
   globals : Array[Global]
+  tags : Array[Tag]
   elems : Array[Elem]
   datas : Array[Data]
   start : UInt?
@@ -331,12 +468,122 @@ pub(all) enum RefType {
 pub impl Eq for RefType
 pub impl Show for RefType
 
+pub(all) enum SectionId {
+  Type
+  Import
+  Func
+  Table
+  Memory
+  Global
+  Tag
+  Export
+  Start
+  Elem
+  DataCount
+  Code
+  Data
+}
+pub impl Eq for SectionId
+pub impl Show for SectionId
+
+pub(all) enum SimdImmKind {
+  None
+  MemArg
+  Lane
+  MemArgLane
+  Shuffle
+  V128Const
+}
+pub impl Eq for SimdImmKind
+pub impl Show for SimdImmKind
+
+pub(all) enum SimdImmediate {
+  None
+  MemArg(UInt, UInt, UInt)
+  Lane(UInt)
+  MemArgLane(UInt, UInt, UInt, UInt)
+  Shuffle(Array[Byte])
+  V128Const(Array[Byte])
+}
+pub impl Show for SimdImmediate
+
+pub(all) struct SimdInstr {
+  opcode : UInt
+  imm : SimdImmediate
+}
+pub impl Show for SimdInstr
+
+pub(all) struct SimdSpec {
+  name : Bytes
+  opcode : UInt
+  imm : SimdImmKind
+}
+
+pub(all) enum SimdStackEffect {
+  Const
+  Load
+  Store
+  LoadLane
+  StoreLane
+  Unary
+  Binary
+  Ternary
+  Shift
+  ToI32
+  Splat(ValType)
+  Extract(ValType)
+  Replace(ValType)
+}
+pub impl Show for SimdStackEffect
+
+pub(all) enum StorageType {
+  Val(ValType)
+  I8
+  I16
+}
+pub impl Eq for StorageType
+pub impl Show for StorageType
+
+pub(all) struct StructType {
+  fields : Array[FieldType]
+}
+pub impl Eq for StructType
+pub impl Show for StructType
+
+pub(all) struct SubTypeDef {
+  type_idx : UInt
+  supertypes : Array[UInt]
+  is_final : Bool
+}
+pub impl Eq for SubTypeDef
+pub impl Show for SubTypeDef
+
 pub(all) struct TableType {
   elem_type : RefType
   limits : Limits
   init : Expr?
   nullable : Bool
+  table64 : Bool
 }
+
+pub(all) struct Tag {
+  type_idx : UInt
+}
+
+pub(all) enum TypeDef {
+  Func(FuncType)
+  Struct(StructType)
+  Array(ArrayType)
+}
+pub impl Eq for TypeDef
+pub impl Show for TypeDef
+
+pub(all) struct TypeGroup {
+  subtypes : Array[SubTypeDef]
+  explicit : Bool
+}
+pub impl Eq for TypeGroup
+pub impl Show for TypeGroup
 
 pub(all) enum ValType {
   I32

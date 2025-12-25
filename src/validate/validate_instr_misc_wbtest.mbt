@@ -2,10 +2,13 @@
 fn test_module_with_memory() -> @core.Module {
   {
     types: [],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
-    mems: [{ limits: { min: 0U, max: None } }],
+    mems: [{ limits: { min: 0UL, max: None }, shared: false, memory64: false }],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -19,12 +22,21 @@ fn test_module_with_memory() -> @core.Module {
 fn test_module_with_table(elem_type : @core.RefType) -> @core.Module {
   {
     types: [],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [
-      { elem_type, limits: { min: 0U, max: None }, init: None, nullable: true },
+      {
+        elem_type,
+        limits: { min: 0UL, max: None },
+        init: None,
+        nullable: true,
+        table64: false,
+      },
     ],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -90,6 +102,8 @@ test "validate variable instruction errors" {
   assert_eq(saw_error, true)
   let module_global : @core.Module = {
     types: [],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
@@ -99,6 +113,7 @@ test "validate variable instruction errors" {
         init: { instrs: [I32Const(0U)] },
       },
     ],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -195,10 +210,13 @@ test "validate variable instruction errors" {
   assert_eq(ctx_tee_local.initialized_locals.length() > 0, true)
   let module_imported : @core.Module = {
     types: [],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -225,10 +243,13 @@ test "validate variable instruction errors" {
   assert_eq(ctx_import_get.stack[0], I64)
   let module_imported_mut : @core.Module = {
     types: [],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -255,10 +276,13 @@ test "validate variable instruction errors" {
   assert_eq(ok, true)
   let module_import_scan : @core.Module = {
     types: [],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -555,7 +579,7 @@ test "validate memory instruction errors" {
     module_mem,
     ctx_init,
     counts,
-    MemoryInit(0U),
+    MemoryInit(0U, 0U),
   ) catch {
     _ => {
       saw_error = true
@@ -584,7 +608,7 @@ test "validate memory instruction errors" {
     module_mem,
     ctx_align,
     counts,
-    I32Load(3U, 0U),
+    I32Load(3U, 0U, 0U),
   ) catch {
     _ => {
       saw_error = true
@@ -598,7 +622,7 @@ test "validate memory instruction errors" {
     module_mem,
     ctx_load,
     counts,
-    I32Load(0U, 0U),
+    I32Load(0U, 0U, 0U),
   )
   assert_eq(ok, true)
   assert_eq(ctx_load.stack.length(), 1)
@@ -662,11 +686,17 @@ test "validate reference instruction errors" {
 ///|
 test "validate table instruction errors" {
   let module_table = test_module_with_table(Func)
+  let counts = get_import_counts(module_table)
   let mut saw_error = false
   let ctx_set = ValidationCtx::new()
   ctx_set.stack.push(I32)
   ctx_set.stack.push(ExternRef)
-  let _ = validate_instruction_table(module_table, ctx_set, TableSet(0U)) catch {
+  let _ = validate_instruction_table(
+    module_table,
+    ctx_set,
+    counts,
+    TableSet(0U),
+  ) catch {
     _ => {
       saw_error = true
       false
@@ -676,7 +706,12 @@ test "validate table instruction errors" {
   saw_error = false
   let ctx_grow = ValidationCtx::new()
   ctx_grow.stack.push(I32)
-  let _ = validate_instruction_table(module_table, ctx_grow, TableGrow(0U)) catch {
+  let _ = validate_instruction_table(
+    module_table,
+    ctx_grow,
+    counts,
+    TableGrow(0U),
+  ) catch {
     _ => {
       saw_error = true
       false
@@ -685,25 +720,46 @@ test "validate table instruction errors" {
   assert_eq(saw_error, true)
   let ctx_get = ValidationCtx::new()
   ctx_get.stack.push(I32)
-  let ok = validate_instruction_table(module_table, ctx_get, TableGet(0U))
+  let ok = validate_instruction_table(
+    module_table,
+    ctx_get,
+    counts,
+    TableGet(0U),
+  )
   assert_eq(ok, true)
   assert_eq(ctx_get.stack[0], FuncRef)
   let ctx_missing = ValidationCtx::new()
   ctx_missing.stack.push(I32)
-  let ok = validate_instruction_table(module_table, ctx_missing, TableGet(9U))
-  assert_eq(ok, true)
-  assert_eq(ctx_missing.stack[0], FuncRef)
+  saw_error = false
+  let _ = validate_instruction_table(
+    module_table,
+    ctx_missing,
+    counts,
+    TableGet(9U),
+  ) catch {
+    _ => {
+      saw_error = true
+      false
+    }
+  }
+  assert_eq(saw_error, true)
   let ctx_unreachable = ValidationCtx::new()
   ctx_unreachable.mark_unreachable()
   let ok = validate_instruction_table(
     module_table,
     ctx_unreachable,
+    counts,
     TableSet(0U),
   )
   assert_eq(ok, true)
   let mut saw_error = false
   let ctx_empty = ValidationCtx::new()
-  let _ = validate_instruction_table(module_table, ctx_empty, TableSet(0U)) catch {
+  let _ = validate_instruction_table(
+    module_table,
+    ctx_empty,
+    counts,
+    TableSet(0U),
+  ) catch {
     _ => {
       saw_error = true
       false
@@ -716,6 +772,7 @@ test "validate table instruction errors" {
   let _ = validate_instruction_table(
     module_table,
     ctx_missing_table,
+    counts,
     TableSet(2U),
   ) catch {
     _ => {
@@ -729,6 +786,7 @@ test "validate table instruction errors" {
   let ok = validate_instruction_table(
     module_table,
     ctx_grow_unreachable,
+    counts,
     TableGrow(0U),
   )
   assert_eq(ok, true)
@@ -739,6 +797,7 @@ test "validate table instruction errors" {
   let _ = validate_instruction_table(
     module_table,
     ctx_grow_mismatch,
+    counts,
     TableGrow(0U),
   ) catch {
     _ => {
@@ -754,6 +813,7 @@ test "validate table instruction errors" {
   let _ = validate_instruction_table(
     module_table,
     ctx_grow_default,
+    counts,
     TableGrow(3U),
   ) catch {
     _ => {
@@ -768,18 +828,22 @@ test "validate table instruction errors" {
 test "validate control instruction branches" {
   let func_type : @core.FuncType = { params: [I32], results: [I32] }
   let module_funcs : @core.Module = {
-    types: [func_type],
+    types: [Func(func_type)],
+    type_groups: [],
+    customs: [],
     funcs: [0U],
     tables: [
       {
         elem_type: Func,
-        limits: { min: 0U, max: None },
+        limits: { min: 0UL, max: None },
         init: None,
         nullable: true,
+        table64: false,
       },
     ],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -1017,11 +1081,14 @@ test "validate control instruction branches" {
 test "validate control block loop if branches" {
   let block_type : @core.FuncType = { params: [I32], results: [I64] }
   let module_block : @core.Module = {
-    types: [block_type],
+    types: [Func(block_type)],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -1369,11 +1436,14 @@ test "validate control loop results" {
 test "validate control if branch coverage" {
   let block_type : @core.FuncType = { params: [I32], results: [I32] }
   let module_if : @core.Module = {
-    types: [block_type],
+    types: [Func(block_type)],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -1607,11 +1677,14 @@ test "validate control call errors" {
   }
   assert_eq(saw_error, true)
   let module_import_table : @core.Module = {
-    types: [{ params: [], results: [] }],
+    types: [Func({ params: [], results: [] })],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -1621,9 +1694,10 @@ test "validate control call errors" {
         name: Bytes::from_array([b't']),
         desc: Table({
           elem_type: Func,
-          limits: { min: 0U, max: None },
+          limits: { min: 0UL, max: None },
           init: None,
           nullable: true,
+          table64: false,
         }),
       },
     ],
@@ -1643,11 +1717,14 @@ test "validate control call errors" {
   )
   assert_eq(ok, true)
   let module_import_scan : @core.Module = {
-    types: [{ params: [], results: [] }],
+    types: [Func({ params: [], results: [] })],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -1662,9 +1739,10 @@ test "validate control call errors" {
         name: Bytes::from_array([b't']),
         desc: Table({
           elem_type: Func,
-          limits: { min: 0U, max: None },
+          limits: { min: 0UL, max: None },
           init: None,
           nullable: true,
+          table64: false,
         }),
       },
     ],
@@ -1696,18 +1774,22 @@ test "validate control call errors" {
   assert_eq(ok, true)
   saw_error = false
   let module_table_bad : @core.Module = {
-    types: [{ params: [], results: [] }],
+    types: [Func({ params: [], results: [] })],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [
       {
         elem_type: Extern,
-        limits: { min: 0U, max: None },
+        limits: { min: 0UL, max: None },
         init: None,
         nullable: true,
+        table64: false,
       },
     ],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -1733,17 +1815,21 @@ test "validate control call errors" {
   saw_error = false
   let module_table_no_types : @core.Module = {
     types: [],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [
       {
         elem_type: Func,
-        limits: { min: 0U, max: None },
+        limits: { min: 0UL, max: None },
         init: None,
         nullable: true,
+        table64: false,
       },
     ],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -1768,11 +1854,14 @@ test "validate control call errors" {
   assert_eq(saw_error, true)
   saw_error = false
   let module_return_call : @core.Module = {
-    types: [{ params: [], results: [] }],
+    types: [Func({ params: [], results: [] })],
+    type_groups: [],
+    customs: [],
     funcs: [1U],
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -1907,11 +1996,14 @@ test "validate function stack mismatch" {
   }
   assert_eq(saw_error, true)
   let module_types : @core.Module = {
-    types: [{ params: [], results: [] }],
+    types: [Func({ params: [], results: [] })],
+    type_groups: [],
+    customs: [],
     funcs: [],
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,

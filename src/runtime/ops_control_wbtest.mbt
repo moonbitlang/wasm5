@@ -1,16 +1,19 @@
 ///|
 fn base_module(
-  types : Array[@core.FuncType],
+  types : Array[@core.TypeDef],
   funcs : Array[UInt],
   codes : Array[@core.Code],
   imports : Array[@core.Import],
 ) -> @core.Module {
   {
     types,
+    type_groups: [],
+    customs: [],
     funcs,
     tables: [],
     mems: [],
     globals: [],
+    tags: [],
     elems: [],
     datas: [],
     start: None,
@@ -57,18 +60,14 @@ fn assert_ctrl_stack_eq(got : UInt64, expected : Value) -> Unit {
 
 ///|
 test "ops control drop and select" {
-  let rt_drop = base_runtime(
-    base_module([], [], [], []),
-    [],
-    [Value::I32(1U)],
-  )
+  let rt_drop = base_runtime(base_module([], [], [], []), [], [Value::I32(1U)])
   assert_ok(op_drop(rt_drop))
   assert_eq(rt_drop.stack.length(), 0)
-  let rt_select = base_runtime(
-    base_module([], [], [], []),
-    [],
-    [Value::I32(10U), Value::I32(20U), Value::I32(1U)],
-  )
+  let rt_select = base_runtime(base_module([], [], [], []), [], [
+    Value::I32(10U),
+    Value::I32(20U),
+    Value::I32(1U),
+  ])
   assert_ok(op_select(rt_select))
   assert_ctrl_stack_eq(rt_select.stack[0], Value::I32(10U))
 }
@@ -177,7 +176,7 @@ test "ops control table grow and globals" {
     memory: [],
     memory_max: None,
     globals: [],
-    tables: [RuntimeTable::{ data: [None, None], max: Some(3U) }],
+    tables: [RuntimeTable::{ data: [None, None], max: Some(3UL) }],
     imported_funcs: [],
     data_segments: [],
     error_detail: "",
@@ -196,7 +195,7 @@ test "ops control table grow and globals" {
     memory: [],
     memory_max: None,
     globals: [],
-    tables: [RuntimeTable::{ data: [None], max: Some(3U) }],
+    tables: [RuntimeTable::{ data: [None], max: Some(3UL) }],
     imported_funcs: [],
     data_segments: [],
     error_detail: "",
@@ -240,32 +239,24 @@ test "ops control reference ops" {
   let rt_ref_is_null = base_runtime(module_local, [], [Value::Ref(None)])
   assert_ok(op_ref_is_null(rt_ref_is_null))
   assert_ctrl_stack_eq(rt_ref_is_null.stack[0], Value::I32(1U))
-  let rt_ref_eq_same = base_runtime(
-    module_local,
-    [],
-    [Value::Ref(Some(1)), Value::Ref(Some(1))],
-  )
+  let rt_ref_eq_same = base_runtime(module_local, [], [
+    Value::Ref(Some(1)),
+    Value::Ref(Some(1)),
+  ])
   assert_ok(op_ref_eq(rt_ref_eq_same))
   assert_ctrl_stack_eq(rt_ref_eq_same.stack[0], Value::I32(1U))
-  let rt_ref_eq_diff = base_runtime(
-    module_local,
-    [],
-    [Value::Ref(Some(1)), Value::Ref(Some(2))],
-  )
+  let rt_ref_eq_diff = base_runtime(module_local, [], [
+    Value::Ref(Some(1)),
+    Value::Ref(Some(2)),
+  ])
   assert_ok(op_ref_eq(rt_ref_eq_diff))
   assert_ctrl_stack_eq(rt_ref_eq_diff.stack[0], Value::I32(0U))
-  let rt_ref_as_non_null = base_runtime(
-    module_local,
-    [],
-    [Value::Ref(Some(0))],
-  )
+  let rt_ref_as_non_null = base_runtime(module_local, [], [Value::Ref(Some(0))])
   assert_ok(op_ref_as_non_null(rt_ref_as_non_null))
   assert_ctrl_stack_eq(rt_ref_as_non_null.stack[0], Value::Ref(Some(0)))
-  let rt_ref_as_non_null_null = base_runtime(
-    module_local,
-    [],
-    [Value::Ref(None)],
-  )
+  let rt_ref_as_non_null_null = base_runtime(module_local, [], [
+    Value::Ref(None),
+  ])
   assert_ret(op_ref_as_non_null(rt_ref_as_non_null_null), InvalidType)
 }
 

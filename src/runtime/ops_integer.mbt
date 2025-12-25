@@ -276,7 +276,7 @@ fn op_i32_eqz(rt : Runtime) -> RetCode {
 ///|
 fn op_i32_clz(rt : Runtime) -> RetCode {
   let a = rt.pop_i32()
-  push_i32(rt.stack,a.clz().reinterpret_as_uint())
+  push_i32(rt.stack, a.clz().reinterpret_as_uint())
   rt.pc += 1
   OK
 }
@@ -284,7 +284,7 @@ fn op_i32_clz(rt : Runtime) -> RetCode {
 ///|
 fn op_i32_ctz(rt : Runtime) -> RetCode {
   let a = rt.pop_i32()
-  push_i32(rt.stack,a.ctz().reinterpret_as_uint())
+  push_i32(rt.stack, a.ctz().reinterpret_as_uint())
   rt.pc += 1
   OK
 }
@@ -292,7 +292,7 @@ fn op_i32_ctz(rt : Runtime) -> RetCode {
 ///|
 fn op_i32_popcnt(rt : Runtime) -> RetCode {
   let a = rt.pop_i32()
-  push_i32(rt.stack,a.popcnt().reinterpret_as_uint())
+  push_i32(rt.stack, a.popcnt().reinterpret_as_uint())
   rt.pc += 1
   OK
 }
@@ -624,7 +624,7 @@ fn op_i64_eqz(rt : Runtime) -> RetCode {
 ///|
 fn op_i64_clz(rt : Runtime) -> RetCode {
   let a = rt.pop_i64()
-  push_i64(rt.stack,a.clz().to_uint64())
+  push_i64(rt.stack, a.clz().to_uint64())
   rt.pc += 1
   OK
 }
@@ -632,7 +632,7 @@ fn op_i64_clz(rt : Runtime) -> RetCode {
 ///|
 fn op_i64_ctz(rt : Runtime) -> RetCode {
   let a = rt.pop_i64()
-  push_i64(rt.stack,a.ctz().to_uint64())
+  push_i64(rt.stack, a.ctz().to_uint64())
   rt.pc += 1
   OK
 }
@@ -640,7 +640,7 @@ fn op_i64_ctz(rt : Runtime) -> RetCode {
 ///|
 fn op_i64_popcnt(rt : Runtime) -> RetCode {
   let a = rt.pop_i64()
-  push_i64(rt.stack,a.popcnt().to_uint64())
+  push_i64(rt.stack, a.popcnt().to_uint64())
   rt.pc += 1
   OK
 }
