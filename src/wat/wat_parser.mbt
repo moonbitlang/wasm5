@@ -2709,6 +2709,11 @@ fn parse_elem(
           init.push([
             WatInstr::RefFunc(parse_func_ref(expect_atom(list_items[1]))),
           ])
+        } else if list_items.length() == 2 &&
+          list_items[0] is Atom(tag) &&
+          tag == b"item" {
+          let instrs = parse_instrs([list_items[1]], Map::new(), [], type_map)
+          init.push(instrs)
         } else {
           let instrs = parse_instrs([items[i]], Map::new(), [], type_map)
           init.push(instrs)

@@ -767,6 +767,16 @@ async test "wat encoder matches wasm-tools for elem exprs reftype" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for elem item exprs" {
+  let wat =
+    #|(module
+    #|  (table 1 funcref)
+    #|  (func $f)
+    #|  (elem (i32.const 0) (ref null func) (item (ref.func $f)) (item (ref.null func))))
+  assert_wat_matches("elem_item_exprs", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for data segments and memory.init" {
   let wat =
     #|(module (memory 1) (data $p "hi") (data (i32.const 0) "ok") (func (export "init") (param i32 i32 i32) local.get 0 local.get 1 local.get 2 memory.init $p data.drop $p))
