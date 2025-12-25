@@ -670,6 +670,30 @@ async test "wat encoder matches wasm-tools for br_on_null" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for throw" {
+  let wat =
+    #|(module
+    #|  (tag $e (param i32))
+    #|  (func (export "throw") (param i32)
+    #|    local.get 0
+    #|    throw $e))
+  assert_wat_matches("throw", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for try_table simple" {
+  let wat =
+    #|(module
+    #|  (tag $e (param i32))
+    #|  (func (export "f") (result i32)
+    #|    (block $out (result i32)
+    #|      (try_table (result i32)
+    #|        (catch $e $out)
+    #|        (i32.const 0)))))
+  assert_wat_matches("try_table_simple", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for call_indirect" {
   let wat =
     #|(module (table 1 funcref) (func (export "call") (param i32 i32) (result i32) local.get 0 local.get 1 call_indirect (param i32) (result i32)))

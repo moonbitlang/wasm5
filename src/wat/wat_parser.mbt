@@ -248,6 +248,14 @@ priv enum WatImportItem {
 }
 
 ///|
+priv enum WatTypeUseItem {
+  FuncImport(Int)
+  FuncDef(Int)
+  TagImport(Int)
+  TagDef(Int)
+}
+
+///|
 priv struct WatExport {
   name : Bytes
   desc : WatExportDesc
@@ -272,6 +280,7 @@ priv struct WatModule {
   global_imports : Array[WatImportGlobal]
   tag_imports : Array[WatImportTag]
   import_order : Array[WatImportItem]
+  typeuse_order : Array[WatTypeUseItem]
   funcs : Array[WatFunc]
   mems : Array[WatMemory]
   tables : Array[WatTable]
@@ -1079,6 +1088,7 @@ fn parse_module(expr : SExpr) -> WatModule raise WatError {
     global_imports: [],
     tag_imports: [],
     import_order: [],
+    typeuse_order: [],
     funcs: [],
     mems: [],
     tables: [],
@@ -1249,8 +1259,10 @@ fn parse_module_field(
         }
         module_.func_imports.push(imported)
         module_.import_order.push(WatImportItem::Func(func_index))
+        module_.typeuse_order.push(WatTypeUseItem::FuncImport(func_index))
       } else {
         let func = parse_func(items, module_.type_defs, type_map)
+        let func_def_index = module_.funcs.length()
         let func_index = (module_.func_imports.length() + module_.funcs.length()).reinterpret_as_uint()
         for name in func.exports {
           module_.exports.push({
@@ -1269,6 +1281,7 @@ fn parse_module_field(
           body: func.body,
           exports: [],
         })
+        module_.typeuse_order.push(WatTypeUseItem::FuncDef(func_def_index))
       }
     b"import" => parse_import(module_, items, type_map)
     b"memory" =>
@@ -1421,8 +1434,10 @@ fn parse_module_field(
         }
         module_.tag_imports.push(imported)
         module_.import_order.push(WatImportItem::Tag(tag_index))
+        module_.typeuse_order.push(WatTypeUseItem::TagImport(tag_index))
       } else {
         let tag = parse_tag(items, module_.type_defs, type_map)
+        let tag_def_index = module_.tags.length()
         let tag_index = (module_.tag_imports.length() + module_.tags.length()).reinterpret_as_uint()
         for name in tag.exports {
           module_.exports.push({
@@ -1437,6 +1452,7 @@ fn parse_module_field(
           results: tag.results,
           exports: [],
         })
+        module_.typeuse_order.push(WatTypeUseItem::TagDef(tag_def_index))
       }
     b"elem" => module_.elems.push(parse_elem(items, type_map))
     b"data" => module_.datas.push(parse_data(items, type_map))
@@ -2031,6 +2047,7 @@ fn parse_import(
         results,
       })
       module_.import_order.push(WatImportItem::Func(func_index))
+      module_.typeuse_order.push(WatTypeUseItem::FuncImport(func_index))
     }
     b"memory" => {
       let mut idx = 1
@@ -2119,6 +2136,7 @@ fn parse_import(
         results,
       })
       module_.import_order.push(WatImportItem::Tag(tag_index))
+      module_.typeuse_order.push(WatTypeUseItem::TagImport(tag_index))
     }
     _ => raise WatError::Unsupported("import desc \{desc_tag}")
   }
@@ -6349,6 +6367,50 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
     None => ()
   }
   let initial_type_count = types.length()
+  for item in wat.typeuse_order {
+    match item {
+      FuncImport(idx) => {
+        let imp = wat.func_imports[idx]
+        match imp.type_idx {
+          Some(_) => ()
+          None => {
+            let _ = type_index(types, imp.params, imp.results)
+
+          }
+        }
+      }
+      FuncDef(idx) => {
+        let func = wat.funcs[idx]
+        match func.type_idx {
+          Some(_) => ()
+          None => {
+            let _ = type_index(types, func.params, func.results)
+
+          }
+        }
+      }
+      TagImport(idx) => {
+        let imp = wat.tag_imports[idx]
+        match imp.type_idx {
+          Some(_) => ()
+          None => {
+            let _ = type_index(types, imp.params, imp.results)
+
+          }
+        }
+      }
+      TagDef(idx) => {
+        let tag = wat.tags[idx]
+        match tag.type_idx {
+          Some(_) => ()
+          None => {
+            let _ = type_index(types, tag.params, tag.results)
+
+          }
+        }
+      }
+    }
+  }
   let imports : Array[@core.Import] = []
   if wat.import_order.length() == 0 {
     for imp in wat.func_imports {
