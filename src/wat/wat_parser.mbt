@@ -239,6 +239,15 @@ priv enum WatExportDesc {
 }
 
 ///|
+priv enum WatImportItem {
+  Func(Int)
+  Table(Int)
+  Mem(Int)
+  Global(Int)
+  Tag(Int)
+}
+
+///|
 priv struct WatExport {
   name : Bytes
   desc : WatExportDesc
@@ -262,6 +271,7 @@ priv struct WatModule {
   table_imports : Array[WatImportTable]
   global_imports : Array[WatImportGlobal]
   tag_imports : Array[WatImportTag]
+  import_order : Array[WatImportItem]
   funcs : Array[WatFunc]
   mems : Array[WatMemory]
   tables : Array[WatTable]
@@ -1063,6 +1073,7 @@ fn parse_module(expr : SExpr) -> WatModule raise WatError {
     table_imports: [],
     global_imports: [],
     tag_imports: [],
+    import_order: [],
     funcs: [],
     mems: [],
     tables: [],
@@ -1190,6 +1201,22 @@ fn parse_module(expr : SExpr) -> WatModule raise WatError {
 }
 
 ///|
+fn has_inline_import(items : Array[SExpr]) -> Bool {
+  for i in 1..<items.length() {
+    match items[i] {
+      List(list_items) =>
+        if list_items.length() > 0 &&
+          list_items[0] is Atom(tag) &&
+          tag == b"import" {
+          return true
+        }
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
 fn parse_module_field(
   module_ : WatModule,
   items : Array[SExpr],
@@ -1200,139 +1227,216 @@ fn parse_module_field(
     raise WatError::InvalidSyntax("field head must be atom")
   }
   match head {
-    b"func" => {
-      let func = parse_func(items, module_.type_defs, type_map)
-      let func_index = (module_.func_imports.length() + module_.funcs.length()).reinterpret_as_uint()
-      for name in func.exports {
-        module_.exports.push({
-          name,
-          desc: WatExportDesc::Func(FuncRef::Index(func_index)),
+    b"func" =>
+      if has_inline_import(items) {
+        let (imported, export_names) = parse_inline_func_import(
+          items,
+          module_.type_defs,
+          type_map,
+        )
+        let func_index = module_.func_imports.length()
+        let func_index_u = func_index.reinterpret_as_uint()
+        for name in export_names {
+          module_.exports.push({
+            name,
+            desc: WatExportDesc::Func(FuncRef::Index(func_index_u)),
+          })
+        }
+        module_.func_imports.push(imported)
+        module_.import_order.push(WatImportItem::Func(func_index))
+      } else {
+        let func = parse_func(items, module_.type_defs, type_map)
+        let func_index = (module_.func_imports.length() + module_.funcs.length()).reinterpret_as_uint()
+        for name in func.exports {
+          module_.exports.push({
+            name,
+            desc: WatExportDesc::Func(FuncRef::Index(func_index)),
+          })
+        }
+        module_.funcs.push({
+          name: func.name,
+          type_idx: func.type_idx,
+          params: func.params,
+          param_names: func.param_names,
+          results: func.results,
+          locals: func.locals,
+          local_names: func.local_names,
+          body: func.body,
+          exports: [],
         })
       }
-      module_.funcs.push({
-        name: func.name,
-        type_idx: func.type_idx,
-        params: func.params,
-        param_names: func.param_names,
-        results: func.results,
-        locals: func.locals,
-        local_names: func.local_names,
-        body: func.body,
-        exports: [],
-      })
-    }
     b"import" => parse_import(module_, items, type_map)
-    b"memory" => {
-      let (mem, inline_data) = parse_memory(items)
-      let mem_index = (module_.mem_imports.length() + module_.mems.length()).reinterpret_as_uint()
-      for name in mem.exports {
-        module_.exports.push({
-          name,
-          desc: WatExportDesc::Mem(IndexRef::Index(mem_index)),
-        })
-      }
-      module_.mems.push({
-        name: mem.name,
-        limits: mem.limits,
-        shared: mem.shared,
-        memory64: mem.memory64,
-        exports: [],
-      })
-      match inline_data {
-        Some(data_bytes) => {
-          let offset = if mem.memory64 {
-            WatInstr::Core(@core.Instr::I64Const(0UL))
-          } else {
-            WatInstr::Core(@core.Instr::I32Const(0U))
-          }
-          module_.datas.push({
-            name: None,
-            mem_ref: IndexRef::Index(mem_index),
-            offset: [offset],
-            init: data_bytes,
-            is_active: true,
+    b"memory" =>
+      if has_inline_import(items) {
+        let (imported, export_names) = parse_inline_memory_import(items)
+        let mem_index = module_.mem_imports.length()
+        let mem_index_u = mem_index.reinterpret_as_uint()
+        for name in export_names {
+          module_.exports.push({
+            name,
+            desc: WatExportDesc::Mem(IndexRef::Index(mem_index_u)),
           })
         }
-        None => ()
-      }
-    }
-    b"table" => {
-      let table = parse_table(items, type_map)
-      let table_index = (module_.table_imports.length() +
-      module_.tables.length()).reinterpret_as_uint()
-      for name in table.exports {
-        module_.exports.push({
-          name,
-          desc: WatExportDesc::Table(IndexRef::Index(table_index)),
-        })
-      }
-      module_.tables.push({
-        name: table.name,
-        table_type: table.table_type,
-        init: table.init,
-        inline_elem: table.inline_elem,
-        exports: [],
-      })
-      match table.inline_elem {
-        Some(funcs) => {
-          let init : Array[Array[WatInstr]] = []
-          for func_ref in funcs {
-            init.push([WatInstr::RefFunc(func_ref)])
-          }
-          let offset = if table.table_type.table64 {
-            WatInstr::Core(@core.Instr::I64Const(0UL))
-          } else {
-            WatInstr::Core(@core.Instr::I32Const(0U))
-          }
-          module_.elems.push({
-            name: None,
-            table_ref: IndexRef::Index(table_index),
-            offset: [offset],
-            init,
-            is_active: true,
-            is_declarative: false,
-            elem_type: table.table_type.elem_type,
-            elem_nullable: table.table_type.nullable,
-            explicit_table: true,
+        module_.mem_imports.push(imported)
+        module_.import_order.push(WatImportItem::Mem(mem_index))
+      } else {
+        let (mem, inline_data) = parse_memory(items)
+        let mem_index = (module_.mem_imports.length() + module_.mems.length()).reinterpret_as_uint()
+        for name in mem.exports {
+          module_.exports.push({
+            name,
+            desc: WatExportDesc::Mem(IndexRef::Index(mem_index)),
           })
         }
-        None => ()
+        module_.mems.push({
+          name: mem.name,
+          limits: mem.limits,
+          shared: mem.shared,
+          memory64: mem.memory64,
+          exports: [],
+        })
+        match inline_data {
+          Some(data_bytes) => {
+            let offset = if mem.memory64 {
+              WatInstr::Core(@core.Instr::I64Const(0UL))
+            } else {
+              WatInstr::Core(@core.Instr::I32Const(0U))
+            }
+            module_.datas.push({
+              name: None,
+              mem_ref: IndexRef::Index(mem_index),
+              offset: [offset],
+              init: data_bytes,
+              is_active: true,
+            })
+          }
+          None => ()
+        }
       }
-    }
-    b"global" => {
-      let global_ = parse_global(items, type_map)
-      let global_index = (module_.global_imports.length() +
-      module_.globals.length()).reinterpret_as_uint()
-      for name in global_.exports {
-        module_.exports.push({
-          name,
-          desc: WatExportDesc::Global(IndexRef::Index(global_index)),
+    b"table" =>
+      if has_inline_import(items) {
+        let (imported, export_names) = parse_inline_table_import(
+          items, type_map,
+        )
+        let table_index = module_.table_imports.length()
+        let table_index_u = table_index.reinterpret_as_uint()
+        for name in export_names {
+          module_.exports.push({
+            name,
+            desc: WatExportDesc::Table(IndexRef::Index(table_index_u)),
+          })
+        }
+        module_.table_imports.push(imported)
+        module_.import_order.push(WatImportItem::Table(table_index))
+      } else {
+        let table = parse_table(items, type_map)
+        let table_index = (module_.table_imports.length() +
+        module_.tables.length()).reinterpret_as_uint()
+        for name in table.exports {
+          module_.exports.push({
+            name,
+            desc: WatExportDesc::Table(IndexRef::Index(table_index)),
+          })
+        }
+        module_.tables.push({
+          name: table.name,
+          table_type: table.table_type,
+          init: table.init,
+          inline_elem: table.inline_elem,
+          exports: [],
+        })
+        match table.inline_elem {
+          Some(funcs) => {
+            let init : Array[Array[WatInstr]] = []
+            for func_ref in funcs {
+              init.push([WatInstr::RefFunc(func_ref)])
+            }
+            let offset = if table.table_type.table64 {
+              WatInstr::Core(@core.Instr::I64Const(0UL))
+            } else {
+              WatInstr::Core(@core.Instr::I32Const(0U))
+            }
+            module_.elems.push({
+              name: None,
+              table_ref: IndexRef::Index(table_index),
+              offset: [offset],
+              init,
+              is_active: true,
+              is_declarative: false,
+              elem_type: table.table_type.elem_type,
+              elem_nullable: table.table_type.nullable,
+              explicit_table: true,
+            })
+          }
+          None => ()
+        }
+      }
+    b"global" =>
+      if has_inline_import(items) {
+        let (imported, export_names) = parse_inline_global_import(
+          items, type_map,
+        )
+        let global_index = module_.global_imports.length()
+        let global_index_u = global_index.reinterpret_as_uint()
+        for name in export_names {
+          module_.exports.push({
+            name,
+            desc: WatExportDesc::Global(IndexRef::Index(global_index_u)),
+          })
+        }
+        module_.global_imports.push(imported)
+        module_.import_order.push(WatImportItem::Global(global_index))
+      } else {
+        let global_ = parse_global(items, type_map)
+        let global_index = (module_.global_imports.length() +
+        module_.globals.length()).reinterpret_as_uint()
+        for name in global_.exports {
+          module_.exports.push({
+            name,
+            desc: WatExportDesc::Global(IndexRef::Index(global_index)),
+          })
+        }
+        module_.globals.push({
+          name: global_.name,
+          type_: global_.type_,
+          init: global_.init,
+          exports: [],
         })
       }
-      module_.globals.push({
-        name: global_.name,
-        type_: global_.type_,
-        init: global_.init,
-        exports: [],
-      })
-    }
-    b"tag" => {
-      let tag = parse_tag(items, module_.type_defs, type_map)
-      let tag_index = (module_.tag_imports.length() + module_.tags.length()).reinterpret_as_uint()
-      for name in tag.exports {
-        module_.exports.push({
-          name,
-          desc: WatExportDesc::Tag(IndexRef::Index(tag_index)),
+    b"tag" =>
+      if has_inline_import(items) {
+        let (imported, export_names) = parse_inline_tag_import(
+          items,
+          module_.type_defs,
+          type_map,
+        )
+        let tag_index = module_.tag_imports.length()
+        let tag_index_u = tag_index.reinterpret_as_uint()
+        for name in export_names {
+          module_.exports.push({
+            name,
+            desc: WatExportDesc::Tag(IndexRef::Index(tag_index_u)),
+          })
+        }
+        module_.tag_imports.push(imported)
+        module_.import_order.push(WatImportItem::Tag(tag_index))
+      } else {
+        let tag = parse_tag(items, module_.type_defs, type_map)
+        let tag_index = (module_.tag_imports.length() + module_.tags.length()).reinterpret_as_uint()
+        for name in tag.exports {
+          module_.exports.push({
+            name,
+            desc: WatExportDesc::Tag(IndexRef::Index(tag_index)),
+          })
+        }
+        module_.tags.push({
+          name: tag.name,
+          type_idx: tag.type_idx,
+          params: tag.params,
+          results: tag.results,
+          exports: [],
         })
       }
-      module_.tags.push({
-        name: tag.name,
-        type_idx: tag.type_idx,
-        params: tag.params,
-        results: tag.results,
-        exports: [],
-      })
-    }
     b"elem" => module_.elems.push(parse_elem(items, type_map))
     b"data" => module_.datas.push(parse_data(items, type_map))
     b"export" => module_.exports.push(parse_export(items))
@@ -1449,6 +1553,450 @@ fn parse_func(
 }
 
 ///|
+fn parse_inline_import_list(
+  items : Array[SExpr],
+) -> (Bytes, Bytes) raise WatError {
+  guard items.length() == 3 else {
+    raise WatError::InvalidSyntax("import expects module and name")
+  }
+  let module_name = expect_string(items[1])
+  let field_name = expect_string(items[2])
+  (module_name, field_name)
+}
+
+///|
+fn parse_inline_func_import(
+  items : Array[SExpr],
+  type_defs : Array[WatTypeDef],
+  type_map : Map[Bytes, UInt],
+) -> (WatImportFunc, Array[Bytes]) raise WatError {
+  let mut idx = 1
+  let mut func_name : Bytes? = None
+  if idx < items.length() && items[idx] is Atom(atom) && is_name(atom) {
+    func_name = Some(atom)
+    idx = idx + 1
+  }
+  let exports : Array[Bytes] = []
+  let mut import_module : Bytes? = None
+  let mut import_name : Bytes? = None
+  let mut type_ref : WatTypeRef? = None
+  let params : Array[@core.ValType] = []
+  let results : Array[@core.ValType] = []
+  let mut seen_import = false
+  for i in idx..<items.length() {
+    match items[i] {
+      List(list_items) => {
+        guard list_items.length() > 0 && list_items[0] is Atom(tag) else {
+          raise WatError::InvalidSyntax("func import item tag must be atom")
+        }
+        match tag {
+          b"export" => {
+            guard not(seen_import) else {
+              raise WatError::InvalidSyntax("export must precede import")
+            }
+            exports.push(parse_inline_export(list_items))
+          }
+          b"import" => {
+            guard not(seen_import) else {
+              raise WatError::InvalidSyntax("duplicate import")
+            }
+            let (module_name, field_name) = parse_inline_import_list(list_items)
+            import_module = Some(module_name)
+            import_name = Some(field_name)
+            seen_import = true
+          }
+          b"type" => {
+            guard seen_import else {
+              raise WatError::InvalidSyntax("import must precede typeuse")
+            }
+            guard type_ref is None else {
+              raise WatError::InvalidSyntax("duplicate type in func import")
+            }
+            type_ref = Some(parse_type_ref(list_items))
+          }
+          b"param" => {
+            guard seen_import else {
+              raise WatError::InvalidSyntax("import must precede typeuse")
+            }
+            append_types(params, list_items, type_map, allow_names=true)
+          }
+          b"result" => {
+            guard seen_import else {
+              raise WatError::InvalidSyntax("import must precede typeuse")
+            }
+            append_types(results, list_items, type_map, allow_names=false)
+          }
+          _ =>
+            raise WatError::InvalidSyntax("unexpected func import item \{tag}")
+        }
+      }
+      _ => raise WatError::InvalidSyntax("unexpected func import item")
+    }
+  }
+  guard seen_import else {
+    raise WatError::InvalidSyntax("func import missing import")
+  }
+  let (type_idx, resolved_params, resolved_results) = resolve_type_use(
+    type_ref, params, results, type_defs, type_map,
+  )
+  guard import_module is Some(module_name) && import_name is Some(field_name) else {
+    raise WatError::InvalidSyntax("func import missing module/name")
+  }
+  let imported = WatImportFunc::{
+    module_: module_name,
+    name: field_name,
+    func_name,
+    type_idx,
+    params: resolved_params,
+    results: resolved_results,
+  }
+  (imported, exports)
+}
+
+///|
+fn parse_inline_memory_import(
+  items : Array[SExpr],
+) -> (WatImportMem, Array[Bytes]) raise WatError {
+  let mut idx = 1
+  let mut mem_name : Bytes? = None
+  if idx < items.length() && items[idx] is Atom(atom) && is_name(atom) {
+    mem_name = Some(atom)
+    idx = idx + 1
+  }
+  let exports : Array[Bytes] = []
+  let limit_atoms : Array[Bytes] = []
+  let mut import_module : Bytes? = None
+  let mut import_name : Bytes? = None
+  let mut seen_import = false
+  for i in idx..<items.length() {
+    match items[i] {
+      List(list_items) => {
+        guard list_items.length() > 0 && list_items[0] is Atom(tag) else {
+          raise WatError::InvalidSyntax("memory import item tag must be atom")
+        }
+        match tag {
+          b"export" => {
+            guard not(seen_import) else {
+              raise WatError::InvalidSyntax("export must precede import")
+            }
+            exports.push(parse_inline_export(list_items))
+          }
+          b"import" => {
+            guard not(seen_import) else {
+              raise WatError::InvalidSyntax("duplicate import")
+            }
+            let (module_name, field_name) = parse_inline_import_list(list_items)
+            import_module = Some(module_name)
+            import_name = Some(field_name)
+            seen_import = true
+          }
+          _ =>
+            raise WatError::InvalidSyntax(
+              "unexpected memory import item \{tag}",
+            )
+        }
+      }
+      Atom(atom) => {
+        guard seen_import else {
+          raise WatError::InvalidSyntax("import must precede limits")
+        }
+        limit_atoms.push(atom)
+      }
+      _ => raise WatError::InvalidSyntax("unexpected memory import item")
+    }
+  }
+  guard seen_import else {
+    raise WatError::InvalidSyntax("memory import missing import")
+  }
+  let (limits, shared, memory64) = parse_memory_limits_from_atoms(limit_atoms)
+  guard import_module is Some(module_name) && import_name is Some(field_name) else {
+    raise WatError::InvalidSyntax("memory import missing module/name")
+  }
+  let imported = WatImportMem::{
+    module_: module_name,
+    name: field_name,
+    mem_name,
+    limits,
+    shared,
+    memory64,
+  }
+  (imported, exports)
+}
+
+///|
+fn parse_inline_table_import(
+  items : Array[SExpr],
+  type_map : Map[Bytes, UInt],
+) -> (WatImportTable, Array[Bytes]) raise WatError {
+  let mut idx = 1
+  let mut table_name : Bytes? = None
+  if idx < items.length() && items[idx] is Atom(atom) && is_name(atom) {
+    table_name = Some(atom)
+    idx = idx + 1
+  }
+  let exports : Array[Bytes] = []
+  let limit_atoms : Array[Bytes] = []
+  let mut elem_type : @core.RefType? = None
+  let mut elem_nullable : Bool? = None
+  let mut import_module : Bytes? = None
+  let mut import_name : Bytes? = None
+  let mut seen_import = false
+  for i in idx..<items.length() {
+    match items[i] {
+      List(list_items) => {
+        guard list_items.length() > 0 && list_items[0] is Atom(tag) else {
+          raise WatError::InvalidSyntax("table import item tag must be atom")
+        }
+        match tag {
+          b"export" => {
+            guard not(seen_import) else {
+              raise WatError::InvalidSyntax("export must precede import")
+            }
+            exports.push(parse_inline_export(list_items))
+          }
+          b"import" => {
+            guard not(seen_import) else {
+              raise WatError::InvalidSyntax("duplicate import")
+            }
+            let (module_name, field_name) = parse_inline_import_list(list_items)
+            import_module = Some(module_name)
+            import_name = Some(field_name)
+            seen_import = true
+          }
+          _ => {
+            guard seen_import else {
+              raise WatError::InvalidSyntax("import must precede table type")
+            }
+            guard elem_type is None else {
+              raise WatError::InvalidSyntax("duplicate table elem type")
+            }
+            let (ref_type, nullable) = parse_reftype_expr(items[i], type_map)
+            elem_type = Some(ref_type)
+            elem_nullable = Some(nullable)
+          }
+        }
+      }
+      Atom(atom) => {
+        guard seen_import else {
+          raise WatError::InvalidSyntax("import must precede table type")
+        }
+        if is_uint_atom(atom) || atom == b"i64" || atom == b"i32" {
+          limit_atoms.push(atom)
+        } else {
+          guard elem_type is None else {
+            raise WatError::InvalidSyntax("duplicate table elem type")
+          }
+          let (ref_type, nullable) = parse_reftype_expr(items[i], type_map)
+          elem_type = Some(ref_type)
+          elem_nullable = Some(nullable)
+        }
+      }
+      _ => raise WatError::InvalidSyntax("unexpected table import item")
+    }
+  }
+  guard seen_import else {
+    raise WatError::InvalidSyntax("table import missing import")
+  }
+  guard elem_type is Some(elem_type) else {
+    raise WatError::InvalidSyntax("table element type missing")
+  }
+  let (numeric_atoms, table64) = split_table_limit_atoms(limit_atoms)
+  let limits = parse_limits_from_atoms(numeric_atoms)
+  let nullable = match elem_nullable {
+    Some(value) => value
+    None => true
+  }
+  let table_type : @core.TableType = {
+    elem_type,
+    limits,
+    init: None,
+    nullable,
+    table64,
+  }
+  guard import_module is Some(module_name) && import_name is Some(field_name) else {
+    raise WatError::InvalidSyntax("table import missing module/name")
+  }
+  let imported = WatImportTable::{
+    module_: module_name,
+    name: field_name,
+    table_name,
+    table_type,
+  }
+  (imported, exports)
+}
+
+///|
+fn parse_inline_global_import(
+  items : Array[SExpr],
+  type_map : Map[Bytes, UInt],
+) -> (WatImportGlobal, Array[Bytes]) raise WatError {
+  let mut idx = 1
+  let mut global_name : Bytes? = None
+  if idx < items.length() && items[idx] is Atom(atom) && is_name(atom) {
+    global_name = Some(atom)
+    idx = idx + 1
+  }
+  let exports : Array[Bytes] = []
+  let mut type_expr : SExpr? = None
+  let mut import_module : Bytes? = None
+  let mut import_name : Bytes? = None
+  let mut seen_import = false
+  for i in idx..<items.length() {
+    match items[i] {
+      List(list_items) => {
+        guard list_items.length() > 0 && list_items[0] is Atom(tag) else {
+          raise WatError::InvalidSyntax("global import item tag must be atom")
+        }
+        match tag {
+          b"export" => {
+            guard not(seen_import) else {
+              raise WatError::InvalidSyntax("export must precede import")
+            }
+            exports.push(parse_inline_export(list_items))
+          }
+          b"import" => {
+            guard not(seen_import) else {
+              raise WatError::InvalidSyntax("duplicate import")
+            }
+            let (module_name, field_name) = parse_inline_import_list(list_items)
+            import_module = Some(module_name)
+            import_name = Some(field_name)
+            seen_import = true
+          }
+          _ => {
+            guard seen_import else {
+              raise WatError::InvalidSyntax("import must precede global type")
+            }
+            guard type_expr is None else {
+              raise WatError::InvalidSyntax("duplicate global type")
+            }
+            type_expr = Some(items[i])
+          }
+        }
+      }
+      Atom(_) => {
+        guard seen_import else {
+          raise WatError::InvalidSyntax("import must precede global type")
+        }
+        guard type_expr is None else {
+          raise WatError::InvalidSyntax("duplicate global type")
+        }
+        type_expr = Some(items[i])
+      }
+      _ => raise WatError::InvalidSyntax("unexpected global import item")
+    }
+  }
+  guard seen_import else {
+    raise WatError::InvalidSyntax("global import missing import")
+  }
+  guard type_expr is Some(type_expr) else {
+    raise WatError::InvalidSyntax("global type missing")
+  }
+  guard import_module is Some(module_name) && import_name is Some(field_name) else {
+    raise WatError::InvalidSyntax("global import missing module/name")
+  }
+  let imported = WatImportGlobal::{
+    module_: module_name,
+    name: field_name,
+    global_name,
+    type_: parse_global_type(type_expr, type_map),
+  }
+  (imported, exports)
+}
+
+///|
+fn parse_inline_tag_import(
+  items : Array[SExpr],
+  type_defs : Array[WatTypeDef],
+  type_map : Map[Bytes, UInt],
+) -> (WatImportTag, Array[Bytes]) raise WatError {
+  let mut idx = 1
+  let mut tag_name : Bytes? = None
+  if idx < items.length() && items[idx] is Atom(atom) && is_name(atom) {
+    tag_name = Some(atom)
+    idx = idx + 1
+  }
+  let exports : Array[Bytes] = []
+  let mut import_module : Bytes? = None
+  let mut import_name : Bytes? = None
+  let mut type_ref : WatTypeRef? = None
+  let params : Array[@core.ValType] = []
+  let results : Array[@core.ValType] = []
+  let mut seen_import = false
+  for i in idx..<items.length() {
+    match items[i] {
+      List(list_items) => {
+        guard list_items.length() > 0 && list_items[0] is Atom(tag) else {
+          raise WatError::InvalidSyntax("tag import item tag must be atom")
+        }
+        match tag {
+          b"export" => {
+            guard not(seen_import) else {
+              raise WatError::InvalidSyntax("export must precede import")
+            }
+            exports.push(parse_inline_export(list_items))
+          }
+          b"import" => {
+            guard not(seen_import) else {
+              raise WatError::InvalidSyntax("duplicate import")
+            }
+            let (module_name, field_name) = parse_inline_import_list(list_items)
+            import_module = Some(module_name)
+            import_name = Some(field_name)
+            seen_import = true
+          }
+          b"type" => {
+            guard seen_import else {
+              raise WatError::InvalidSyntax("import must precede typeuse")
+            }
+            guard type_ref is None else {
+              raise WatError::InvalidSyntax("duplicate type in tag import")
+            }
+            type_ref = Some(parse_type_ref(list_items))
+          }
+          b"param" => {
+            guard seen_import else {
+              raise WatError::InvalidSyntax("import must precede typeuse")
+            }
+            append_types(params, list_items, type_map, allow_names=true)
+          }
+          b"result" => {
+            guard seen_import else {
+              raise WatError::InvalidSyntax("import must precede typeuse")
+            }
+            append_types(results, list_items, type_map, allow_names=false)
+          }
+          _ =>
+            raise WatError::InvalidSyntax("unexpected tag import item \{tag}")
+        }
+      }
+      _ => raise WatError::InvalidSyntax("unexpected tag import item")
+    }
+  }
+  guard seen_import else {
+    raise WatError::InvalidSyntax("tag import missing import")
+  }
+  let (type_idx, resolved_params, resolved_results) = resolve_type_use(
+    type_ref, params, results, type_defs, type_map,
+  )
+  guard resolved_results.length() == 0 else {
+    raise WatError::InvalidSyntax("tag must not have results")
+  }
+  guard import_module is Some(module_name) && import_name is Some(field_name) else {
+    raise WatError::InvalidSyntax("tag import missing module/name")
+  }
+  let imported = WatImportTag::{
+    module_: module_name,
+    name: field_name,
+    tag_name,
+    type_idx,
+    params: resolved_params,
+    results: resolved_results,
+  }
+  (imported, exports)
+}
+
+///|
 fn parse_import(
   module_ : WatModule,
   items : Array[SExpr],
@@ -1472,6 +2020,7 @@ fn parse_import(
         module_.type_defs,
         type_map,
       )
+      let func_index = module_.func_imports.length()
       module_.func_imports.push({
         module_: module_name,
         name: field_name,
@@ -1480,6 +2029,7 @@ fn parse_import(
         params,
         results,
       })
+      module_.import_order.push(WatImportItem::Func(func_index))
     }
     b"memory" => {
       let mut idx = 1
@@ -1494,6 +2044,7 @@ fn parse_import(
         desc_items,
         start=idx,
       )
+      let mem_index = module_.mem_imports.length()
       module_.mem_imports.push({
         module_: module_name,
         name: field_name,
@@ -1502,6 +2053,7 @@ fn parse_import(
         shared,
         memory64,
       })
+      module_.import_order.push(WatImportItem::Mem(mem_index))
     }
     b"table" => {
       let mut idx = 1
@@ -1513,12 +2065,14 @@ fn parse_import(
         idx = idx + 1
       }
       let table_type = parse_table_type(desc_items, idx, type_map)
+      let table_index = module_.table_imports.length()
       module_.table_imports.push({
         module_: module_name,
         name: field_name,
         table_name,
         table_type,
       })
+      module_.import_order.push(WatImportItem::Table(table_index))
     }
     b"global" => {
       let mut idx = 1
@@ -1536,12 +2090,14 @@ fn parse_import(
       guard idx + 1 == desc_items.length() else {
         raise WatError::InvalidSyntax("global import expects only type")
       }
+      let global_index = module_.global_imports.length()
       module_.global_imports.push({
         module_: module_name,
         name: field_name,
         global_name,
         type_: global_type,
       })
+      module_.import_order.push(WatImportItem::Global(global_index))
     }
     b"tag" => {
       let (tag_name, type_idx, params, results) = parse_func_typeuse(
@@ -1552,6 +2108,7 @@ fn parse_import(
       guard results.length() == 0 else {
         raise WatError::InvalidSyntax("tag must not have results")
       }
+      let tag_index = module_.tag_imports.length()
       module_.tag_imports.push({
         module_: module_name,
         name: field_name,
@@ -1560,6 +2117,7 @@ fn parse_import(
         params,
         results,
       })
+      module_.import_order.push(WatImportItem::Tag(tag_index))
     }
     _ => raise WatError::Unsupported("import desc \{desc_tag}")
   }
@@ -5720,52 +6278,111 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
   }
   let initial_type_count = types.length()
   let imports : Array[@core.Import] = []
-  for imp in wat.func_imports {
-    let type_idx = match imp.type_idx {
-      Some(idx) => idx
-      None => type_index(types, imp.params, imp.results)
+  if wat.import_order.length() == 0 {
+    for imp in wat.func_imports {
+      let type_idx = match imp.type_idx {
+        Some(idx) => idx
+        None => type_index(types, imp.params, imp.results)
+      }
+      imports.push({
+        module_: imp.module_,
+        name: imp.name,
+        desc: @core.ImportDesc::Func(type_idx),
+      })
     }
-    imports.push({
-      module_: imp.module_,
-      name: imp.name,
-      desc: @core.ImportDesc::Func(type_idx),
-    })
-  }
-  for imp in wat.table_imports {
-    imports.push({
-      module_: imp.module_,
-      name: imp.name,
-      desc: @core.ImportDesc::Table(imp.table_type),
-    })
-  }
-  for imp in wat.mem_imports {
-    imports.push({
-      module_: imp.module_,
-      name: imp.name,
-      desc: @core.ImportDesc::Mem({
-        limits: imp.limits,
-        shared: imp.shared,
-        memory64: imp.memory64,
-      }),
-    })
-  }
-  for imp in wat.global_imports {
-    imports.push({
-      module_: imp.module_,
-      name: imp.name,
-      desc: @core.ImportDesc::Global(imp.type_),
-    })
-  }
-  for imp in wat.tag_imports {
-    let type_idx = match imp.type_idx {
-      Some(idx) => idx
-      None => type_index(types, imp.params, imp.results)
+    for imp in wat.table_imports {
+      imports.push({
+        module_: imp.module_,
+        name: imp.name,
+        desc: @core.ImportDesc::Table(imp.table_type),
+      })
     }
-    imports.push({
-      module_: imp.module_,
-      name: imp.name,
-      desc: @core.ImportDesc::Tag(type_idx),
-    })
+    for imp in wat.mem_imports {
+      imports.push({
+        module_: imp.module_,
+        name: imp.name,
+        desc: @core.ImportDesc::Mem({
+          limits: imp.limits,
+          shared: imp.shared,
+          memory64: imp.memory64,
+        }),
+      })
+    }
+    for imp in wat.global_imports {
+      imports.push({
+        module_: imp.module_,
+        name: imp.name,
+        desc: @core.ImportDesc::Global(imp.type_),
+      })
+    }
+    for imp in wat.tag_imports {
+      let type_idx = match imp.type_idx {
+        Some(idx) => idx
+        None => type_index(types, imp.params, imp.results)
+      }
+      imports.push({
+        module_: imp.module_,
+        name: imp.name,
+        desc: @core.ImportDesc::Tag(type_idx),
+      })
+    }
+  } else {
+    for item in wat.import_order {
+      match item {
+        Func(idx) => {
+          let imp = wat.func_imports[idx]
+          let type_idx = match imp.type_idx {
+            Some(value) => value
+            None => type_index(types, imp.params, imp.results)
+          }
+          imports.push({
+            module_: imp.module_,
+            name: imp.name,
+            desc: @core.ImportDesc::Func(type_idx),
+          })
+        }
+        Table(idx) => {
+          let imp = wat.table_imports[idx]
+          imports.push({
+            module_: imp.module_,
+            name: imp.name,
+            desc: @core.ImportDesc::Table(imp.table_type),
+          })
+        }
+        Mem(idx) => {
+          let imp = wat.mem_imports[idx]
+          imports.push({
+            module_: imp.module_,
+            name: imp.name,
+            desc: @core.ImportDesc::Mem({
+              limits: imp.limits,
+              shared: imp.shared,
+              memory64: imp.memory64,
+            }),
+          })
+        }
+        Global(idx) => {
+          let imp = wat.global_imports[idx]
+          imports.push({
+            module_: imp.module_,
+            name: imp.name,
+            desc: @core.ImportDesc::Global(imp.type_),
+          })
+        }
+        Tag(idx) => {
+          let imp = wat.tag_imports[idx]
+          let type_idx = match imp.type_idx {
+            Some(value) => value
+            None => type_index(types, imp.params, imp.results)
+          }
+          imports.push({
+            module_: imp.module_,
+            name: imp.name,
+            desc: @core.ImportDesc::Tag(type_idx),
+          })
+        }
+      }
+    }
   }
   let funcs : Array[UInt] = []
   let codes : Array[@core.Code] = []

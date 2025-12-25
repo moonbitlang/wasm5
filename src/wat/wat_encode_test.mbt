@@ -239,6 +239,18 @@ async test "wat encoder matches wasm-tools for memory64/table64 imports" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for inline imports" {
+  let wat =
+    #|(module
+    #|  (func $f (export "f") (import "env" "f") (param i32) (result i32))
+    #|  (memory $m (export "mem") (import "env" "mem") 1)
+    #|  (table $t (export "tab") (import "env" "tab") 1 funcref)
+    #|  (global $g (export "g") (import "env" "g") (mut i32))
+    #|  (tag $e (export "tag") (import "env" "tag") (param i32)))
+  assert_wat_matches("inline_imports", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for memory64/table64 definitions" {
   let wat =
     #|(module
