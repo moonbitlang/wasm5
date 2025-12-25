@@ -50,10 +50,10 @@ priv enum WatInstr {
   ArrayNewElem(UInt, IndexRef)
   ArrayInitData(UInt, IndexRef)
   ArrayInitElem(UInt, IndexRef)
-  Block(WatBlockType, Array[WatInstr])
-  Loop(WatBlockType, Array[WatInstr])
-  If(WatBlockType, Array[WatInstr], Array[WatInstr])
-  TryTable(WatBlockType, Array[WatCatchClause], Array[WatInstr])
+  Block(Bytes?, WatBlockType, Array[WatInstr])
+  Loop(Bytes?, WatBlockType, Array[WatInstr])
+  If(Bytes?, WatBlockType, Array[WatInstr], Array[WatInstr])
+  TryTable(Bytes?, WatBlockType, Array[WatCatchClause], Array[WatInstr])
 }
 
 ///|
@@ -90,6 +90,7 @@ priv struct WatTypeDef {
   type_def : @core.TypeDef
   supertypes : Array[WatTypeRef]
   is_final : Bool
+  field_names : Array[Bytes?]
 }
 
 ///|
@@ -302,7 +303,7 @@ fn parse_block_instr(
   let body_items = slice_sexprs(list_items, next_idx)
   let nested_labels = push_label(labels, label)
   let body = parse_instrs(body_items, local_map, nested_labels, type_map)
-  WatInstr::Block(block_type, body)
+  WatInstr::Block(label, block_type, body)
 }
 
 ///|
@@ -317,7 +318,7 @@ fn parse_loop_instr(
   let body_items = slice_sexprs(list_items, next_idx)
   let nested_labels = push_label(labels, label)
   let body = parse_instrs(body_items, local_map, nested_labels, type_map)
-  WatInstr::Loop(block_type, body)
+  WatInstr::Loop(label, block_type, body)
 }
 
 ///|
@@ -364,7 +365,7 @@ fn parse_if_instr(
   let nested_labels = push_label(labels, label)
   let then_body = parse_instrs(then_items, local_map, nested_labels, type_map)
   let else_body = parse_instrs(else_items, local_map, nested_labels, type_map)
-  WatInstr::If(block_type, then_body, else_body)
+  WatInstr::If(label, block_type, then_body, else_body)
 }
 
 ///|
@@ -374,9 +375,11 @@ fn parse_try_table_instr(
   labels : Array[Bytes?],
   type_map : Map[Bytes, UInt],
 ) -> WatInstr raise WatError {
-  let (block_type, next_idx) = parse_block_type(list_items, 1, type_map)
+  let (label, idx) = parse_optional_label(list_items, 1)
+  let (block_type, next_idx) = parse_block_type(list_items, idx, type_map)
   let catches : Array[WatCatchClause] = []
   let mut idx = next_idx
+  let nested_labels = push_label(labels, label)
   while idx < list_items.length() {
     match list_items[idx] {
       List(catch_items) => {
@@ -425,8 +428,8 @@ fn parse_try_table_instr(
     }
   }
   let body_items = slice_sexprs(list_items, idx)
-  let body = parse_instrs(body_items, local_map, labels, type_map)
-  WatInstr::TryTable(block_type, catches, body)
+  let body = parse_instrs(body_items, local_map, nested_labels, type_map)
+  WatInstr::TryTable(label, block_type, catches, body)
 }
 
 ///|
@@ -2200,12 +2203,14 @@ fn parse_field_type_expr(
 fn parse_field_type(
   items : Array[SExpr],
   type_map : Map[Bytes, UInt],
-) -> @core.FieldType raise WatError {
+) -> (@core.FieldType, Bytes?) raise WatError {
   guard items.length() >= 2 else {
     raise WatError::InvalidSyntax("field expects type")
   }
   let mut idx = 1
+  let mut name : Bytes? = None
   if items[idx] is Atom(atom) && is_name(atom) {
+    name = Some(atom)
     idx = idx + 1
   }
   guard idx < items.length() else {
@@ -2214,14 +2219,14 @@ fn parse_field_type(
   guard idx == items.length() - 1 else {
     raise WatError::InvalidSyntax("field expects single type")
   }
-  parse_field_type_expr(items[idx], type_map)
+  (parse_field_type_expr(items[idx], type_map), name)
 }
 
 ///|
 fn parse_type_def_body(
   list_items : Array[SExpr],
   type_map : Map[Bytes, UInt],
-) -> @core.TypeDef raise WatError {
+) -> (@core.TypeDef, Array[Bytes?]) raise WatError {
   guard list_items.length() > 0 && list_items[0] is Atom(tag) else {
     raise WatError::InvalidSyntax("type head must be atom")
   }
@@ -2246,10 +2251,11 @@ fn parse_type_def_body(
           _ => raise WatError::InvalidSyntax("unexpected item in type")
         }
       }
-      @core.TypeDef::Func(@core.FuncType::{ params, results })
+      (@core.TypeDef::Func(@core.FuncType::{ params, results }), [])
     }
     b"struct" => {
       let fields : Array[@core.FieldType] = []
+      let field_names : Array[Bytes?] = []
       for i in 1..<list_items.length() {
         match list_items[i] {
           List(field_items) => {
@@ -2258,19 +2264,23 @@ fn parse_type_def_body(
               field_tag == b"field" else {
               raise WatError::InvalidSyntax("struct expects field items")
             }
-            fields.push(parse_field_type(field_items, type_map))
+            let (field_type, field_name) = parse_field_type(
+              field_items, type_map,
+            )
+            fields.push(field_type)
+            field_names.push(field_name)
           }
           _ => raise WatError::InvalidSyntax("struct expects field lists")
         }
       }
-      @core.TypeDef::Struct(@core.StructType::{ fields, })
+      (@core.TypeDef::Struct(@core.StructType::{ fields, }), field_names)
     }
     b"array" => {
       guard list_items.length() == 2 else {
         raise WatError::InvalidSyntax("array expects element type")
       }
       let element = parse_field_type_expr(list_items[1], type_map)
-      @core.TypeDef::Array(@core.ArrayType::{ element, })
+      (@core.TypeDef::Array(@core.ArrayType::{ element, }), [])
     }
     _ => raise WatError::InvalidSyntax("type expects func, struct, or array")
   }
@@ -2280,7 +2290,7 @@ fn parse_type_def_body(
 fn parse_subtype_def(
   list_items : Array[SExpr],
   type_map : Map[Bytes, UInt],
-) -> (@core.TypeDef, Array[WatTypeRef], Bool) raise WatError {
+) -> (@core.TypeDef, Array[WatTypeRef], Bool, Array[Bytes?]) raise WatError {
   let mut idx = 1
   let mut is_final = false
   if idx < list_items.length() &&
@@ -2306,7 +2316,8 @@ fn parse_subtype_def(
   guard idx == list_items.length() - 1 else {
     raise WatError::InvalidSyntax("sub expects single type")
   }
-  (parse_type_def_body(type_items, type_map), supertypes, is_final)
+  let (type_def, field_names) = parse_type_def_body(type_items, type_map)
+  (type_def, supertypes, is_final, field_names)
 }
 
 ///|
@@ -2323,13 +2334,15 @@ fn parse_type_def(
   guard idx < items.length() && items[idx] is List(list_items) else {
     raise WatError::InvalidSyntax("type expects definition list")
   }
-  let (type_def, supertypes, is_final) = if list_items[0] is Atom(tag) &&
+  let (type_def, supertypes, is_final, field_names) = if list_items[0]
+    is Atom(tag) &&
     tag == b"sub" {
     parse_subtype_def(list_items, type_map)
   } else {
-    (parse_type_def_body(list_items, type_map), [], true)
+    let (type_def, field_names) = parse_type_def_body(list_items, type_map)
+    (type_def, [], true, field_names)
   }
-  WatTypeDef::{ name, type_def, supertypes, is_final }
+  WatTypeDef::{ name, type_def, supertypes, is_final, field_names }
 }
 
 ///|
@@ -4671,12 +4684,77 @@ priv struct LocalNameEntry {
 }
 
 ///|
+priv struct LabelNameEntry {
+  func_idx : UInt
+  labels : Array[NameEntry]
+}
+
+///|
+priv struct FieldNameEntry {
+  type_idx : UInt
+  fields : Array[NameEntry]
+}
+
+///|
+fn append_label_names(
+  entries : Array[NameEntry],
+  instrs : Array[WatInstr],
+  label_index : UInt,
+) -> UInt {
+  let mut next_index = label_index
+  for instr in instrs {
+    match instr {
+      WatInstr::Block(label, _, body) => {
+        match label {
+          Some(name) =>
+            entries.push({ idx: next_index, name: strip_name_prefix(name) })
+          None => ()
+        }
+        next_index = next_index + 1U
+        next_index = append_label_names(entries, body, next_index)
+      }
+      WatInstr::Loop(label, _, body) => {
+        match label {
+          Some(name) =>
+            entries.push({ idx: next_index, name: strip_name_prefix(name) })
+          None => ()
+        }
+        next_index = next_index + 1U
+        next_index = append_label_names(entries, body, next_index)
+      }
+      WatInstr::If(label, _, then_body, else_body) => {
+        match label {
+          Some(name) =>
+            entries.push({ idx: next_index, name: strip_name_prefix(name) })
+          None => ()
+        }
+        next_index = next_index + 1U
+        next_index = append_label_names(entries, then_body, next_index)
+        next_index = append_label_names(entries, else_body, next_index)
+      }
+      WatInstr::TryTable(label, _, _, body) => {
+        match label {
+          Some(name) =>
+            entries.push({ idx: next_index, name: strip_name_prefix(name) })
+          None => ()
+        }
+        next_index = next_index + 1U
+        next_index = append_label_names(entries, body, next_index)
+      }
+      _ => ()
+    }
+  }
+  next_index
+}
+
+///|
 fn build_name_custom(wat : WatModule) -> @core.CustomSection? {
   if has_name_custom(wat.customs) {
     return None
   }
   let func_names : Array[NameEntry] = []
   let local_names : Array[LocalNameEntry] = []
+  let label_names : Array[LabelNameEntry] = []
   let mut func_index = 0U
   for imp in wat.func_imports {
     if imp.func_name is Some(name) {
@@ -4713,9 +4791,15 @@ fn build_name_custom(wat : WatModule) -> @core.CustomSection? {
     if local_entries.length() > 0 {
       local_names.push({ func_idx: func_index, locals: local_entries })
     }
+    let label_entries : Array[NameEntry] = []
+    let _ = append_label_names(label_entries, func.body, 0U)
+    if label_entries.length() > 0 {
+      label_names.push({ func_idx: func_index, labels: label_entries })
+    }
     func_index = func_index + 1U
   }
   let type_names : Array[NameEntry] = []
+  let field_names : Array[FieldNameEntry] = []
   for i in 0..<wat.type_defs.length() {
     let type_def = wat.type_defs[i]
     if type_def.name is Some(name) {
@@ -4723,6 +4807,25 @@ fn build_name_custom(wat : WatModule) -> @core.CustomSection? {
         idx: i.reinterpret_as_uint(),
         name: strip_name_prefix(name),
       })
+    }
+    if type_def.field_names.length() > 0 {
+      let field_entries : Array[NameEntry] = []
+      for j in 0..<type_def.field_names.length() {
+        match type_def.field_names[j] {
+          Some(name) =>
+            field_entries.push({
+              idx: j.reinterpret_as_uint(),
+              name: strip_name_prefix(name),
+            })
+          None => ()
+        }
+      }
+      if field_entries.length() > 0 {
+        field_names.push({
+          type_idx: i.reinterpret_as_uint(),
+          fields: field_entries,
+        })
+      }
     }
   }
   let table_names : Array[NameEntry] = []
@@ -4805,12 +4908,14 @@ fn build_name_custom(wat : WatModule) -> @core.CustomSection? {
   let has_names = module_name is Some(_) ||
     func_names.length() > 0 ||
     local_names.length() > 0 ||
+    label_names.length() > 0 ||
     type_names.length() > 0 ||
     table_names.length() > 0 ||
     mem_names.length() > 0 ||
     global_names.length() > 0 ||
     elem_names.length() > 0 ||
     data_names.length() > 0 ||
+    field_names.length() > 0 ||
     tag_names.length() > 0
   if not(has_names) {
     return None
@@ -4825,6 +4930,9 @@ fn build_name_custom(wat : WatModule) -> @core.CustomSection? {
   }
   if local_names.length() > 0 {
     append_name_subsection(payload, 2U, encode_local_name_map(local_names))
+  }
+  if label_names.length() > 0 {
+    append_name_subsection(payload, 3U, encode_label_name_map(label_names))
   }
   if type_names.length() > 0 {
     append_name_subsection(payload, 4U, encode_name_map(type_names))
@@ -4843,6 +4951,9 @@ fn build_name_custom(wat : WatModule) -> @core.CustomSection? {
   }
   if data_names.length() > 0 {
     append_name_subsection(payload, 9U, encode_name_map(data_names))
+  }
+  if field_names.length() > 0 {
+    append_name_subsection(payload, 10U, encode_field_name_map(field_names))
   }
   if tag_names.length() > 0 {
     append_name_subsection(payload, 11U, encode_name_map(tag_names))
@@ -4889,6 +5000,28 @@ fn encode_local_name_map(entries : Array[LocalNameEntry]) -> Array[Byte] {
   for entry in entries {
     append_u32(payload, entry.func_idx)
     append_bytes(payload, encode_name_map(entry.locals))
+  }
+  payload
+}
+
+///|
+fn encode_label_name_map(entries : Array[LabelNameEntry]) -> Array[Byte] {
+  let payload : Array[Byte] = []
+  append_u32(payload, entries.length().reinterpret_as_uint())
+  for entry in entries {
+    append_u32(payload, entry.func_idx)
+    append_bytes(payload, encode_name_map(entry.labels))
+  }
+  payload
+}
+
+///|
+fn encode_field_name_map(entries : Array[FieldNameEntry]) -> Array[Byte] {
+  let payload : Array[Byte] = []
+  append_u32(payload, entries.length().reinterpret_as_uint())
+  for entry in entries {
+    append_u32(payload, entry.type_idx)
+    append_bytes(payload, encode_name_map(entry.fields))
   }
   payload
 }
@@ -5498,7 +5631,7 @@ fn resolve_instr(
     WatInstr::Throw(tag_ref) =>
       @core.Instr::Throw(resolve_index_ref(tag_ref, tag_map, "tag"))
     WatInstr::Rethrow(label_idx) => @core.Instr::Rethrow(label_idx)
-    WatInstr::Block(block_type, body) =>
+    WatInstr::Block(_, block_type, body) =>
       @core.Instr::Block(
         resolve_block_type(block_type, type_defs, type_map, types),
         resolve_instrs(
@@ -5506,7 +5639,7 @@ fn resolve_instr(
           type_defs, type_map, types,
         ),
       )
-    WatInstr::Loop(block_type, body) =>
+    WatInstr::Loop(_, block_type, body) =>
       @core.Instr::Loop(
         resolve_block_type(block_type, type_defs, type_map, types),
         resolve_instrs(
@@ -5514,7 +5647,7 @@ fn resolve_instr(
           type_defs, type_map, types,
         ),
       )
-    WatInstr::If(block_type, then_body, else_body) =>
+    WatInstr::If(_, block_type, then_body, else_body) =>
       @core.Instr::If(
         resolve_block_type(block_type, type_defs, type_map, types),
         resolve_instrs(
@@ -5526,7 +5659,7 @@ fn resolve_instr(
           tag_map, type_defs, type_map, types,
         ),
       )
-    WatInstr::TryTable(block_type, catches, body) => {
+    WatInstr::TryTable(_, block_type, catches, body) => {
       let resolved_catches : Array[@core.CatchClause] = []
       for clause in catches {
         match clause {

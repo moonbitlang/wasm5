@@ -494,6 +494,30 @@ async test "wat encoder matches wasm-tools for name section" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for label names" {
+  let wat =
+    #|(module
+    #|  (func (export "labels") (param i32) (result i32)
+    #|    (block $out (result i32)
+    #|      (loop $loop
+    #|        (if $if (result i32)
+    #|          (then i32.const 1)
+    #|          (else
+    #|            (block $in
+    #|              i32.const 2))))
+    #|      i32.const 3)))
+  assert_wat_matches_with_names("label_names", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for field names" {
+  let wat =
+    #|(module
+    #|  (type (struct (field $x i32) (field (mut i64)) (field $z i32))))
+  assert_wat_matches_with_names("field_names", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for rec type groups" {
   let wat =
     #|(module (rec (type $a (struct (field i32))) (type $b (struct (field (ref $a))))))
