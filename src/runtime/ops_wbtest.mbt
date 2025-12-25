@@ -28,7 +28,7 @@ fn make_runtime(
   let stack64 = stack.map(value_to_stack)
   Runtime::{
     module_: empty_module(),
-    ops,
+    ops: FixedArray::from_array(ops),
     stack: stack64,
     sp: 0,
     num_locals: 0,

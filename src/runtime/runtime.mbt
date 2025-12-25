@@ -222,7 +222,7 @@ pub fn ImportResolver::get_memory(
 /// Runtime structure that holds a loaded WebAssembly module
 pub struct Runtime {
   module_ : @core.Module
-  ops : Array[MInstr]
+  ops : FixedArray[MInstr] // Compiled instructions for execution
   stack : Array[UInt64] // Unified stack for locals and operand stack (tagless)
   mut sp : Int // Stack pointer: index of first local in unified stack
   mut num_locals : Int // Number of locals for current function
@@ -501,9 +501,14 @@ pub fn Runtime::load_with_resolver(
     }
     data_segments.push(segment)
   }
+
+  // Compile all functions before creating Runtime
+  let compiler = Compiler::new(m)
+  compiler.compile()
+
   Runtime::{
     module_: m,
-    ops: [],
+    ops: compiler.finish(),
     stack: [],
     sp: 0,
     num_locals: 0,
