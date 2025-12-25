@@ -567,6 +567,50 @@ async test "wat encoder matches wasm-tools for folded memarg" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for folded call" {
+  let wat =
+    #|(module
+    #|  (func $add (param i32 i32) (result i32) local.get 0 local.get 1 i32.add)
+    #|  (func (export "call") (result i32)
+    #|    (call $add (i32.const 2) (i32.const 3))))
+  assert_wat_matches("folded_call", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for folded call_indirect" {
+  let wat =
+    #|(module
+    #|  (type $t (func (param i32) (result i32)))
+    #|  (table 1 funcref)
+    #|  (func $f (type $t) (param i32) (result i32) local.get 0)
+    #|  (elem (i32.const 0) $f)
+    #|  (func (export "call") (param i32 i32) (result i32)
+    #|    (call_indirect (type $t) (local.get 0) (local.get 1))))
+  assert_wat_matches("folded_call_indirect", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for folded bulk/table ops" {
+  let wat =
+    #|(module
+    #|  (memory 1)
+    #|  (table 1 funcref)
+    #|  (func $f)
+    #|  (elem (i32.const 0) $f)
+    #|  (data (i32.const 0) "hi")
+    #|  (func (export "bulk") (result i32)
+    #|    (memory.init 0 (i32.const 0) (i32.const 0) (i32.const 2))
+    #|    (memory.copy (i32.const 0) (i32.const 1) (i32.const 1))
+    #|    (memory.fill (i32.const 0) (i32.const 7) (i32.const 2))
+    #|    data.drop 0
+    #|    (table.init 0 (i32.const 0) (i32.const 0) (i32.const 1))
+    #|    elem.drop 0
+    #|    (table.copy 0 0 (i32.const 0) (i32.const 0) (i32.const 1))
+    #|    i32.const 0))
+  assert_wat_matches("folded_bulk_ops", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for control flow" {
   let wat =
     #|(module (func (export "block_if") (param i32) (result i32) (block $out (result i32) i32.const 7 local.get 0 br_if $out i32.const 42)) (func (export "loop_br") (result i32) (block (result i32) (loop $top i32.const 9 br 1))) (func (export "if_else") (param i32) (result i32) local.get 0 (if (result i32) (then i32.const 1) (else i32.const 2))) (func (export "br_table") (param i32) (block local.get 0 br_table 0 0)))
