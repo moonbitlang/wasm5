@@ -577,6 +577,7 @@ fn parse_call_indirect_items(
   let results : Array[@core.ValType] = []
   let mut table_ref = IndexRef::Index(0U)
   let mut seen_table = false
+  let mut table_from_list = false
   if idx < list_items.length() {
     match list_items[idx] {
       Atom(atom) if is_name(atom) || is_uint_atom(atom) => {
@@ -611,12 +612,19 @@ fn parse_call_indirect_items(
             }
             table_ref = parse_index_ref(expect_atom(items[1]))
             seen_table = true
+            table_from_list = true
           }
           _ => raise WatError::InvalidSyntax("\{context} expects typeuse")
         }
       }
       _ => raise WatError::InvalidSyntax("\{context} expects lists")
     }
+  }
+  if table_from_list &&
+    type_ref is None &&
+    params.length() == 0 &&
+    results.length() == 0 {
+    raise WatError::InvalidSyntax("\{context} missing typeuse")
   }
   { type_ref, params, results, table_ref }
 }
