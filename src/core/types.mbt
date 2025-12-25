@@ -164,8 +164,8 @@ pub(all) enum BlockType {
 
 ///|
 pub(all) struct Limits {
-  min : UInt
-  max : UInt?
+  min : UInt64
+  max : UInt64?
 }
 
 // Memory type
@@ -174,6 +174,7 @@ pub(all) struct Limits {
 pub(all) struct MemType {
   limits : Limits
   shared : Bool
+  memory64 : Bool
 }
 
 // Table type
@@ -184,6 +185,7 @@ pub(all) struct TableType {
   limits : Limits
   init : Expr? // Optional initializer expression (GC proposal)
   nullable : Bool // Whether the element type is nullable (default true for backward compat)
+  table64 : Bool
 }
 
 // Global type

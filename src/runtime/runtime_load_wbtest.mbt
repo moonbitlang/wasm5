@@ -7,14 +7,16 @@ fn make_expr(instrs : Array[@core.Instr]) -> @core.Expr {
 test "runtime load with resolver" {
   let func_type : @core.TypeDef = Func({ params: [], results: [] })
   let mem_type : @core.MemType = {
-    limits: { min: 1U, max: Some(2U) },
+    limits: { min: 1UL, max: Some(2UL) },
     shared: false,
+    memory64: false,
   }
   let table_type : @core.TableType = {
     elem_type: Func,
-    limits: { min: 1U, max: Some(2U) },
+    limits: { min: 1UL, max: Some(2UL) },
     init: None,
     nullable: true,
+    table64: false,
   }
   let data_view = b"hi".sub()
   let module_ : @core.Module = {
@@ -76,11 +78,11 @@ test "runtime load with resolver" {
   resolver.add_global(b"m", b"g0", Value::I32(42U))
   resolver.add_table(b"m", b"t0", RuntimeTable::{
     data: [None, None],
-    max: Some(2U),
+    max: Some(2UL),
   })
   resolver.add_memory(b"m", b"mem", ImportedMemory::{
     data: Array::make(8, b'\x00'),
-    max: Some(2U),
+    max: Some(2UL),
   })
   let rt = Runtime::load_with_resolver(module_, resolver)
   assert_eq(rt.memory.length(), 8)
@@ -105,8 +107,9 @@ test "runtime load with resolver" {
 ///|
 test "runtime load fallback memory" {
   let mem_type : @core.MemType = {
-    limits: { min: 1U, max: Some(2U) },
+    limits: { min: 1UL, max: Some(2UL) },
     shared: false,
+    memory64: false,
   }
   let module_ : @core.Module = {
     types: [],
@@ -126,14 +129,15 @@ test "runtime load fallback memory" {
   }
   let rt = Runtime::load_with_resolver(module_, ImportResolver::new())
   assert_eq(rt.memory.length(), 65536)
-  assert_eq(rt.memory_max, Some(2U))
+  assert_eq(rt.memory_max, Some(2UL))
 }
 
 ///|
 test "runtime load local memory" {
   let mem_type : @core.MemType = {
-    limits: { min: 1U, max: None },
+    limits: { min: 1UL, max: None },
     shared: false,
+    memory64: false,
   }
   let module_ : @core.Module = {
     types: [],

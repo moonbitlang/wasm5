@@ -83,8 +83,9 @@ test "runtime call compiled imported func" {
 ///|
 test "runtime call compiled non func export" {
   let mem_type : @core.MemType = {
-    limits: { min: 1U, max: None },
+    limits: { min: 1UL, max: None },
     shared: false,
+    memory64: false,
   }
   let module_ : @core.Module = {
     types: [],

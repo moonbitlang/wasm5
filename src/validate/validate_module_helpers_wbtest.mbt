@@ -8,9 +8,10 @@ test "validate module type index errors" {
     tables: [
       {
         elem_type: TypeIndex(1),
-        limits: { min: 0U, max: None },
+        limits: { min: 0UL, max: None },
         init: None,
         nullable: true,
+        table64: false,
       },
     ],
     mems: [],
@@ -265,7 +266,9 @@ test "validate module memory limit errors" {
     customs: [],
     funcs: [],
     tables: [],
-    mems: [{ limits: { min: 10U, max: Some(5U) }, shared: false }],
+    mems: [
+      { limits: { min: 10UL, max: Some(5UL) }, shared: false, memory64: false },
+    ],
     globals: [],
     tags: [],
     elems: [],
@@ -289,7 +292,13 @@ test "validate module memory limit errors" {
     customs: [],
     funcs: [],
     tables: [],
-    mems: [{ limits: { min: 0U, max: Some(70000U) }, shared: false }],
+    mems: [
+      {
+        limits: { min: 0UL, max: Some(70000UL) },
+        shared: false,
+        memory64: false,
+      },
+    ],
     globals: [],
     tags: [],
     elems: [],
@@ -313,7 +322,9 @@ test "validate module memory limit errors" {
     customs: [],
     funcs: [],
     tables: [],
-    mems: [{ limits: { min: 70000U, max: None }, shared: false }],
+    mems: [
+      { limits: { min: 70000UL, max: None }, shared: false, memory64: false },
+    ],
     globals: [],
     tags: [],
     elems: [],
@@ -351,7 +362,11 @@ test "validate module imported memory limit errors" {
       {
         module_: Bytes::from_array([b'i']),
         name: Bytes::from_array([b'm']),
-        desc: Mem({ limits: { min: 10U, max: Some(5U) }, shared: false }),
+        desc: Mem({
+          limits: { min: 10UL, max: Some(5UL) },
+          shared: false,
+          memory64: false,
+        }),
       },
     ],
     exports: [],
@@ -381,7 +396,11 @@ test "validate module imported memory limit errors" {
       {
         module_: Bytes::from_array([b'i']),
         name: Bytes::from_array([b'm']),
-        desc: Mem({ limits: { min: 0U, max: Some(70000U) }, shared: false }),
+        desc: Mem({
+          limits: { min: 0UL, max: Some(70000UL) },
+          shared: false,
+          memory64: false,
+        }),
       },
     ],
     exports: [],
@@ -411,7 +430,11 @@ test "validate module imported memory limit errors" {
       {
         module_: Bytes::from_array([b'i']),
         name: Bytes::from_array([b'm']),
-        desc: Mem({ limits: { min: 70000U, max: None }, shared: false }),
+        desc: Mem({
+          limits: { min: 70000UL, max: None },
+          shared: false,
+          memory64: false,
+        }),
       },
     ],
     exports: [],
@@ -437,9 +460,10 @@ test "validate module table errors" {
     tables: [
       {
         elem_type: Func,
-        limits: { min: 0U, max: None },
+        limits: { min: 0UL, max: None },
         init: None,
         nullable: false,
+        table64: false,
       },
     ],
     mems: [],
@@ -471,9 +495,10 @@ test "validate module table errors" {
     tables: [
       {
         elem_type: Func,
-        limits: { min: 5U, max: Some(1U) },
+        limits: { min: 5UL, max: Some(1UL) },
         init: None,
         nullable: true,
+        table64: false,
       },
     ],
     mems: [],
@@ -497,6 +522,76 @@ test "validate module table errors" {
     }
   }
   assert_eq(saw_error, true)
+  let module_oversize : @core.Module = {
+    types: [],
+    type_groups: [],
+    customs: [],
+    funcs: [],
+    tables: [
+      {
+        elem_type: Func,
+        limits: { min: 4294967296UL, max: None },
+        init: None,
+        nullable: true,
+        table64: false,
+      },
+    ],
+    mems: [],
+    globals: [],
+    tags: [],
+    elems: [],
+    datas: [],
+    start: None,
+    imports: [],
+    exports: [],
+    codes: [],
+  }
+  saw_error = false
+  let _ = validate_module_tables(
+    module_oversize,
+    get_import_counts(module_oversize),
+  ) catch {
+    _ => {
+      saw_error = true
+      ()
+    }
+  }
+  assert_eq(saw_error, true)
+  let module_table64 : @core.Module = {
+    types: [],
+    type_groups: [],
+    customs: [],
+    funcs: [],
+    tables: [
+      {
+        elem_type: Func,
+        limits: { min: 4294967296UL, max: None },
+        init: None,
+        nullable: true,
+        table64: true,
+      },
+    ],
+    mems: [],
+    globals: [],
+    tags: [],
+    elems: [],
+    datas: [],
+    start: None,
+    imports: [],
+    exports: [],
+    codes: [],
+  }
+  saw_error = false
+  let _ = validate_module_tables(
+    module_table64,
+    get_import_counts(module_table64),
+  ) catch {
+    _ => {
+      saw_error = true
+      ()
+    }
+  }
+  assert_eq(saw_error, false)
   let module_bad_init_len : @core.Module = {
     types: [],
     type_groups: [],
@@ -505,9 +600,10 @@ test "validate module table errors" {
     tables: [
       {
         elem_type: Func,
-        limits: { min: 0U, max: None },
+        limits: { min: 0UL, max: None },
         init: Some({ instrs: [] }),
         nullable: false,
+        table64: false,
       },
     ],
     mems: [],
@@ -539,9 +635,10 @@ test "validate module table errors" {
     tables: [
       {
         elem_type: Func,
-        limits: { min: 0U, max: None },
+        limits: { min: 0UL, max: None },
         init: Some({ instrs: [RefNull(Func)] }),
         nullable: false,
+        table64: false,
       },
     ],
     mems: [],
@@ -570,9 +667,10 @@ test "validate module table errors" {
     tables: [
       {
         elem_type: Func,
-        limits: { min: 0U, max: None },
+        limits: { min: 0UL, max: None },
         init: Some({ instrs: [I32Const(0U)] }),
         nullable: false,
+        table64: false,
       },
     ],
     mems: [],
@@ -604,9 +702,10 @@ test "validate module table errors" {
     tables: [
       {
         elem_type: Func,
-        limits: { min: 0U, max: None },
+        limits: { min: 0UL, max: None },
         init: Some({ instrs: [] }),
         nullable: true,
+        table64: false,
       },
     ],
     mems: [],
@@ -638,9 +737,10 @@ test "validate module table errors" {
     tables: [
       {
         elem_type: Func,
-        limits: { min: 0U, max: None },
+        limits: { min: 0UL, max: None },
         init: Some({ instrs: [I32Const(0U)] }),
         nullable: true,
+        table64: false,
       },
     ],
     mems: [],
@@ -672,9 +772,10 @@ test "validate module table errors" {
     tables: [
       {
         elem_type: Func,
-        limits: { min: 0U, max: None },
+        limits: { min: 0UL, max: None },
         init: Some({ instrs: [RefNull(TypeIndex(0))] }),
         nullable: true,
+        table64: false,
       },
     ],
     mems: [],
@@ -699,9 +800,10 @@ test "validate module table errors" {
     tables: [
       {
         elem_type: TypeIndex(0),
-        limits: { min: 0U, max: None },
+        limits: { min: 0UL, max: None },
         init: Some({ instrs: [RefFunc(0U)] }),
         nullable: false,
+        table64: false,
       },
     ],
     mems: [],
@@ -726,9 +828,10 @@ test "validate module table errors" {
     tables: [
       {
         elem_type: Extern,
-        limits: { min: 0U, max: None },
+        limits: { min: 0UL, max: None },
         init: Some({ instrs: [RefNull(NoExtern)] }),
         nullable: true,
+        table64: false,
       },
     ],
     mems: [],
@@ -753,9 +856,10 @@ test "validate module table errors" {
     tables: [
       {
         elem_type: Extern,
-        limits: { min: 0U, max: None },
+        limits: { min: 0UL, max: None },
         init: Some({ instrs: [RefNull(Func)] }),
         nullable: true,
+        table64: false,
       },
     ],
     mems: [],
@@ -787,9 +891,10 @@ test "validate module table errors" {
     tables: [
       {
         elem_type: Func,
-        limits: { min: 0U, max: None },
+        limits: { min: 0UL, max: None },
         init: Some({ instrs: [RefNull(Extern)] }),
         nullable: true,
+        table64: false,
       },
     ],
     mems: [],
@@ -831,9 +936,10 @@ test "validate module table errors" {
         name: Bytes::from_array([b't']),
         desc: Table({
           elem_type: Func,
-          limits: { min: 10U, max: Some(5U) },
+          limits: { min: 10UL, max: Some(5UL) },
           init: None,
           nullable: true,
+          table64: false,
         }),
       },
     ],
@@ -975,7 +1081,7 @@ test "validate module data segment errors" {
     customs: [],
     funcs: [],
     tables: [],
-    mems: [{ limits: { min: 0U, max: None }, shared: false }],
+    mems: [{ limits: { min: 0UL, max: None }, shared: false, memory64: false }],
     globals: [
       {
         type_: { val_type: I32, mutable: true },

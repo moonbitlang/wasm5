@@ -744,7 +744,7 @@ test "ops memory load/store and size" {
     running: false,
     call_stack: [],
     memory: Array::make(65536, b'\x00'),
-    memory_max: Some(2U),
+    memory_max: Some(2UL),
     globals: [],
     tables: [],
     imported_funcs: [],
@@ -854,7 +854,11 @@ test "compile helpers canonicalize and counts" {
       {
         module_: b"m",
         name: b"mem",
-        desc: Mem({ limits: { min: 1U, max: None }, shared: false }),
+        desc: Mem({
+          limits: { min: 1UL, max: None },
+          shared: false,
+          memory64: false,
+        }),
       },
     ],
     exports: [],

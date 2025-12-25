@@ -197,6 +197,28 @@ async test "wat encoder matches wasm-tools for memory/table imports" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for memory64/table64 imports" {
+  let wat =
+    #|(module
+    #|  (import "env" "tab" (table i64 1 funcref))
+    #|  (import "env" "mem" (memory i64 1 2))
+    #|  (func (export "msize") (result i64) memory.size)
+    #|  (func (export "tsize") (result i64) table.size))
+  assert_wat_matches("import_mem_table64", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for memory64/table64 definitions" {
+  let wat =
+    #|(module
+    #|  (memory i64 1 2)
+    #|  (table i64 1 funcref)
+    #|  (func (export "msize") (result i64) memory.size)
+    #|  (func (export "tsize") (result i64) table.size))
+  assert_wat_matches("mem_table64", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for data" {
   let wat =
     #|(module (memory (export "mem") 1) (data (i32.const 0) "hi"))

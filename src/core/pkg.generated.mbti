@@ -423,13 +423,14 @@ pub(all) enum Instr {
 pub impl Show for Instr
 
 pub(all) struct Limits {
-  min : UInt
-  max : UInt?
+  min : UInt64
+  max : UInt64?
 }
 
 pub(all) struct MemType {
   limits : Limits
   shared : Bool
+  memory64 : Bool
 }
 
 pub(all) struct Module {
@@ -562,6 +563,7 @@ pub(all) struct TableType {
   limits : Limits
   init : Expr?
   nullable : Bool
+  table64 : Bool
 }
 
 pub(all) struct Tag {

@@ -28,7 +28,7 @@ fn validate_instruction(
   if validate_instruction_memory(module_, ctx, import_counts, instr) {
     return
   }
-  if validate_instruction_table(module_, ctx, instr) {
+  if validate_instruction_table(module_, ctx, import_counts, instr) {
     return
   }
   if validate_instruction_gc(module_, ctx, instr) {

@@ -143,13 +143,14 @@ fn validate_load(
   import_counts : ImportCounts,
   align : UInt,
   mem_idx : UInt,
+  addr_type : @core.ValType,
   natural_align : Int,
   result_type : @core.ValType,
   op_name : String,
 ) -> Unit raise ValidationError {
   validate_memory_index(module_, import_counts, mem_idx)
   validate_alignment(align, natural_align)
-  ctx.poly_pop_expect(module_, I32, "\{op_name} address")
+  ctx.poly_pop_expect(module_, addr_type, "\{op_name} address")
   ctx.stack.push(result_type)
 }
 
@@ -161,6 +162,7 @@ fn validate_store(
   import_counts : ImportCounts,
   align : UInt,
   mem_idx : UInt,
+  addr_type : @core.ValType,
   natural_align : Int,
   value_type : @core.ValType,
   op_name : String,
@@ -168,7 +170,7 @@ fn validate_store(
   validate_memory_index(module_, import_counts, mem_idx)
   validate_alignment(align, natural_align)
   ctx.poly_pop_expect(module_, value_type, "\{op_name} value")
-  ctx.poly_pop_expect(module_, I32, "\{op_name} address")
+  ctx.poly_pop_expect(module_, addr_type, "\{op_name} address")
 }
 
 ///|
@@ -223,6 +225,124 @@ fn validate_memory_index(
   let idx = mem_idx.reinterpret_as_int()
   if idx < 0 || idx >= total_mems {
     raise ValidationError::UnknownMemory(idx)
+  }
+}
+
+///|
+fn get_memtype(
+  module_ : @core.Module,
+  import_counts : ImportCounts,
+  mem_idx : UInt,
+) -> @core.MemType raise ValidationError {
+  let total_mems = import_counts.mems + module_.mems.length()
+  let idx = mem_idx.reinterpret_as_int()
+  if idx < 0 || idx >= total_mems {
+    raise ValidationError::UnknownMemory(idx)
+  }
+  if idx < import_counts.mems {
+    let mut import_mem_idx = 0
+    for imp in module_.imports {
+      match imp.desc {
+        Mem(mem_type) => {
+          if import_mem_idx == idx {
+            return mem_type
+          }
+          import_mem_idx = import_mem_idx + 1
+        }
+        _ => ()
+      }
+    }
+  } else {
+    let local_idx = idx - import_counts.mems
+    return module_.mems[local_idx]
+  }
+  raise ValidationError::UnknownMemory(idx)
+}
+
+///|
+fn memory_addr_type(mem_type : @core.MemType) -> @core.ValType {
+  if mem_type.memory64 {
+    I64
+  } else {
+    I32
+  }
+}
+
+///|
+fn validate_load_mem(
+  ctx : ValidationCtx,
+  module_ : @core.Module,
+  import_counts : ImportCounts,
+  align : UInt,
+  mem_idx : UInt,
+  natural_align : Int,
+  result_type : @core.ValType,
+  op_name : String,
+) -> Unit raise ValidationError {
+  let mem_type = get_memtype(module_, import_counts, mem_idx)
+  let addr_type = memory_addr_type(mem_type)
+  validate_load(
+    ctx, module_, import_counts, align, mem_idx, addr_type, natural_align, result_type,
+    op_name,
+  )
+}
+
+///|
+fn validate_store_mem(
+  ctx : ValidationCtx,
+  module_ : @core.Module,
+  import_counts : ImportCounts,
+  align : UInt,
+  mem_idx : UInt,
+  natural_align : Int,
+  value_type : @core.ValType,
+  op_name : String,
+) -> Unit raise ValidationError {
+  let mem_type = get_memtype(module_, import_counts, mem_idx)
+  let addr_type = memory_addr_type(mem_type)
+  validate_store(
+    ctx, module_, import_counts, align, mem_idx, addr_type, natural_align, value_type,
+    op_name,
+  )
+}
+
+///|
+fn get_table_type(
+  module_ : @core.Module,
+  import_counts : ImportCounts,
+  table_idx : UInt,
+) -> @core.TableType raise ValidationError {
+  let total_tables = import_counts.tables + module_.tables.length()
+  let idx = table_idx.reinterpret_as_int()
+  if idx < 0 || idx >= total_tables {
+    raise ValidationError::UnknownTable(idx)
+  }
+  if idx < import_counts.tables {
+    let mut import_table_idx = 0
+    for imp in module_.imports {
+      match imp.desc {
+        Table(table_type) => {
+          if import_table_idx == idx {
+            return table_type
+          }
+          import_table_idx = import_table_idx + 1
+        }
+        _ => ()
+      }
+    }
+  } else {
+    let local_idx = idx - import_counts.tables
+    return module_.tables[local_idx]
+  }
+  raise ValidationError::UnknownTable(idx)
+}
+
+///|
+fn table_index_type(table_type : @core.TableType) -> @core.ValType {
+  if table_type.table64 {
+    I64
+  } else {
+    I32
   }
 }
 

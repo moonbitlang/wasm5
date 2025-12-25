@@ -476,7 +476,7 @@ fn op_memory_grow(rt : Runtime) -> RetCode {
   // Check against maximum memory limit from module definition
   // If no max is defined, WebAssembly spec allows up to 65536 pages (4GB)
   let max_pages = match rt.memory_max {
-    Some(max) => max.reinterpret_as_int()
+    Some(max) => max.reinterpret_as_int64().to_int()
     None => 65536 // No limit specified in module
   }
   if new_size_pages > max_pages {

@@ -6,9 +6,9 @@ fn validate_instruction_memory(
   instr : @core.Instr,
 ) -> Bool raise ValidationError {
   match instr {
-    // Memory operations - loads (all take i32 address and push the loaded value)
+    // Memory operations - loads (address type depends on memory64)
     I32Load(align, _, mem_idx) =>
-      validate_load(
+      validate_load_mem(
         ctx,
         module_,
         import_counts,
@@ -19,7 +19,7 @@ fn validate_instruction_memory(
         "i32.load",
       )
     I64Load(align, _, mem_idx) =>
-      validate_load(
+      validate_load_mem(
         ctx,
         module_,
         import_counts,
@@ -30,7 +30,7 @@ fn validate_instruction_memory(
         "i64.load",
       )
     F32Load(align, _, mem_idx) =>
-      validate_load(
+      validate_load_mem(
         ctx,
         module_,
         import_counts,
@@ -41,7 +41,7 @@ fn validate_instruction_memory(
         "f32.load",
       )
     F64Load(align, _, mem_idx) =>
-      validate_load(
+      validate_load_mem(
         ctx,
         module_,
         import_counts,
@@ -52,7 +52,7 @@ fn validate_instruction_memory(
         "f64.load",
       )
     I32Load8S(align, _, mem_idx) =>
-      validate_load(
+      validate_load_mem(
         ctx,
         module_,
         import_counts,
@@ -63,7 +63,7 @@ fn validate_instruction_memory(
         "i32.load8_s",
       )
     I32Load8U(align, _, mem_idx) =>
-      validate_load(
+      validate_load_mem(
         ctx,
         module_,
         import_counts,
@@ -74,7 +74,7 @@ fn validate_instruction_memory(
         "i32.load8_u",
       )
     I32Load16S(align, _, mem_idx) =>
-      validate_load(
+      validate_load_mem(
         ctx,
         module_,
         import_counts,
@@ -85,7 +85,7 @@ fn validate_instruction_memory(
         "i32.load16_s",
       )
     I32Load16U(align, _, mem_idx) =>
-      validate_load(
+      validate_load_mem(
         ctx,
         module_,
         import_counts,
@@ -96,7 +96,7 @@ fn validate_instruction_memory(
         "i32.load16_u",
       )
     I64Load8S(align, _, mem_idx) =>
-      validate_load(
+      validate_load_mem(
         ctx,
         module_,
         import_counts,
@@ -107,7 +107,7 @@ fn validate_instruction_memory(
         "i64.load8_s",
       )
     I64Load8U(align, _, mem_idx) =>
-      validate_load(
+      validate_load_mem(
         ctx,
         module_,
         import_counts,
@@ -118,7 +118,7 @@ fn validate_instruction_memory(
         "i64.load8_u",
       )
     I64Load16S(align, _, mem_idx) =>
-      validate_load(
+      validate_load_mem(
         ctx,
         module_,
         import_counts,
@@ -129,7 +129,7 @@ fn validate_instruction_memory(
         "i64.load16_s",
       )
     I64Load16U(align, _, mem_idx) =>
-      validate_load(
+      validate_load_mem(
         ctx,
         module_,
         import_counts,
@@ -140,7 +140,7 @@ fn validate_instruction_memory(
         "i64.load16_u",
       )
     I64Load32S(align, _, mem_idx) =>
-      validate_load(
+      validate_load_mem(
         ctx,
         module_,
         import_counts,
@@ -151,7 +151,7 @@ fn validate_instruction_memory(
         "i64.load32_s",
       )
     I64Load32U(align, _, mem_idx) =>
-      validate_load(
+      validate_load_mem(
         ctx,
         module_,
         import_counts,
@@ -162,9 +162,9 @@ fn validate_instruction_memory(
         "i64.load32_u",
       )
 
-    // Memory operations - stores (all take i32 address and value, push nothing)
+    // Memory operations - stores (address type depends on memory64)
     I32Store(align, _, mem_idx) =>
-      validate_store(
+      validate_store_mem(
         ctx,
         module_,
         import_counts,
@@ -175,7 +175,7 @@ fn validate_instruction_memory(
         "i32.store",
       )
     I64Store(align, _, mem_idx) =>
-      validate_store(
+      validate_store_mem(
         ctx,
         module_,
         import_counts,
@@ -186,7 +186,7 @@ fn validate_instruction_memory(
         "i64.store",
       )
     F32Store(align, _, mem_idx) =>
-      validate_store(
+      validate_store_mem(
         ctx,
         module_,
         import_counts,
@@ -197,7 +197,7 @@ fn validate_instruction_memory(
         "f32.store",
       )
     F64Store(align, _, mem_idx) =>
-      validate_store(
+      validate_store_mem(
         ctx,
         module_,
         import_counts,
@@ -208,7 +208,7 @@ fn validate_instruction_memory(
         "f64.store",
       )
     I32Store8(align, _, mem_idx) =>
-      validate_store(
+      validate_store_mem(
         ctx,
         module_,
         import_counts,
@@ -219,7 +219,7 @@ fn validate_instruction_memory(
         "i32.store8",
       )
     I32Store16(align, _, mem_idx) =>
-      validate_store(
+      validate_store_mem(
         ctx,
         module_,
         import_counts,
@@ -230,7 +230,7 @@ fn validate_instruction_memory(
         "i32.store16",
       )
     I64Store8(align, _, mem_idx) =>
-      validate_store(
+      validate_store_mem(
         ctx,
         module_,
         import_counts,
@@ -241,7 +241,7 @@ fn validate_instruction_memory(
         "i64.store8",
       )
     I64Store16(align, _, mem_idx) =>
-      validate_store(
+      validate_store_mem(
         ctx,
         module_,
         import_counts,
@@ -252,7 +252,7 @@ fn validate_instruction_memory(
         "i64.store16",
       )
     I64Store32(align, _, mem_idx) =>
-      validate_store(
+      validate_store_mem(
         ctx,
         module_,
         import_counts,
@@ -265,18 +265,21 @@ fn validate_instruction_memory(
 
     // Memory size and grow
     MemorySize(mem_idx) => {
-      validate_memory_index(module_, import_counts, mem_idx)
-      ctx.stack.push(I32)
+      let mem_type = get_memtype(module_, import_counts, mem_idx)
+      let addr_type = memory_addr_type(mem_type)
+      ctx.stack.push(addr_type)
     }
     MemoryGrow(mem_idx) => {
-      validate_memory_index(module_, import_counts, mem_idx)
-      ctx.poly_pop_expect(module_, I32, "memory.grow")
-      ctx.stack.push(I32)
+      let mem_type = get_memtype(module_, import_counts, mem_idx)
+      let addr_type = memory_addr_type(mem_type)
+      ctx.poly_pop_expect(module_, addr_type, "memory.grow")
+      ctx.stack.push(addr_type)
     }
 
     // Bulk memory instructions
     MemoryInit(data_idx, mem_idx) => {
-      validate_memory_index(module_, import_counts, mem_idx)
+      let mem_type = get_memtype(module_, import_counts, mem_idx)
+      let addr_type = memory_addr_type(mem_type)
       // Validate data segment index
       if data_idx.reinterpret_as_int() < 0 ||
         data_idx.reinterpret_as_int() >= module_.datas.length() {
@@ -284,10 +287,10 @@ fn validate_instruction_memory(
           "memory.init: data segment index out of range",
         )
       }
-      // memory.init pops: n, src, dest (all i32)
-      ctx.poly_pop_expect(module_, I32, "memory.init n")
-      ctx.poly_pop_expect(module_, I32, "memory.init src")
-      ctx.poly_pop_expect(module_, I32, "memory.init dest")
+      // memory.init pops: n, src, dest (address type)
+      ctx.poly_pop_expect(module_, addr_type, "memory.init n")
+      ctx.poly_pop_expect(module_, addr_type, "memory.init src")
+      ctx.poly_pop_expect(module_, addr_type, "memory.init dest")
     }
     DataDrop(data_idx) =>
       // Validate data segment index
@@ -298,19 +301,26 @@ fn validate_instruction_memory(
         )
       }
     MemoryCopy(dst_idx, src_idx) => {
-      validate_memory_index(module_, import_counts, dst_idx)
-      validate_memory_index(module_, import_counts, src_idx)
-      // memory.copy pops: n, src, dest (all i32)
-      ctx.poly_pop_expect(module_, I32, "memory.copy n")
-      ctx.poly_pop_expect(module_, I32, "memory.copy src")
-      ctx.poly_pop_expect(module_, I32, "memory.copy dest")
+      let dst_type = get_memtype(module_, import_counts, dst_idx)
+      let src_type = get_memtype(module_, import_counts, src_idx)
+      guard dst_type.memory64 == src_type.memory64 else {
+        raise ValidationError::TypeMismatch(
+          "memory.copy requires matching memory index types",
+        )
+      }
+      let addr_type = memory_addr_type(dst_type)
+      // memory.copy pops: n, src, dest (address type)
+      ctx.poly_pop_expect(module_, addr_type, "memory.copy n")
+      ctx.poly_pop_expect(module_, addr_type, "memory.copy src")
+      ctx.poly_pop_expect(module_, addr_type, "memory.copy dest")
     }
     MemoryFill(mem_idx) => {
-      validate_memory_index(module_, import_counts, mem_idx)
+      let mem_type = get_memtype(module_, import_counts, mem_idx)
+      let addr_type = memory_addr_type(mem_type)
       // memory.fill pops: n, val, dest (val is i32)
-      ctx.poly_pop_expect(module_, I32, "memory.fill n")
+      ctx.poly_pop_expect(module_, addr_type, "memory.fill n")
       ctx.poly_pop_expect(module_, I32, "memory.fill val")
-      ctx.poly_pop_expect(module_, I32, "memory.fill dest")
+      ctx.poly_pop_expect(module_, addr_type, "memory.fill dest")
     }
     _ => return false
   }

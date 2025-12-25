@@ -27,7 +27,7 @@ pub(all) enum Value {
 /// Table with its limits
 struct RuntimeTable {
   data : Array[Int?] // Table data (function indices, None = null ref)
-  max : UInt? // Maximum size limit (None = no limit)
+  max : UInt64? // Maximum size limit (None = no limit)
 }
 
 ///|
@@ -49,7 +49,7 @@ pub fn ImportedFunc::new(
 /// Imported memory with its limits
 pub struct ImportedMemory {
   data : Array[Byte]
-  max : UInt? // Maximum size in pages (None = no limit)
+  max : UInt64? // Maximum size in pages (None = no limit)
 }
 
 ///|
@@ -230,7 +230,7 @@ pub struct Runtime {
   mut running : Bool // Execution loop control flag
   call_stack : Array[CallFrame]
   memory : Array[Byte] // Linear memory
-  memory_max : UInt? // Maximum memory size in pages (None = no limit)
+  memory_max : UInt64? // Maximum memory size in pages (None = no limit)
   globals : Array[Value] // Global variables
   tables : Array[RuntimeTable] // Tables with limits
   imported_funcs : Array[ImportedFunc] // Imported functions
@@ -285,13 +285,16 @@ pub fn default_import_resolver() -> ImportResolver {
   })
   // Add spectest table (10 funcref, max 20)
   let table_data : Array[Int?] = Array::make(10, None)
-  resolver.add_table(b"spectest", b"table", { data: table_data, max: Some(20U) })
+  resolver.add_table(b"spectest", b"table", {
+    data: table_data,
+    max: Some(20UL),
+  })
   // Add spectest memory (1 page initial, 2 pages max)
   let memory_size = 1 * 65536 // 1 page = 65536 bytes
   let memory_data : Array[Byte] = Array::make(memory_size, b'\x00')
   resolver.add_memory(b"spectest", b"memory", {
     data: memory_data,
-    max: Some(2U),
+    max: Some(2UL),
   })
   resolver
 }
@@ -310,7 +313,7 @@ pub fn Runtime::load_with_resolver(
 ) -> Runtime raise RuntimeError {
   // Initialize memory
   let mut memory : Array[Byte] = []
-  let mut memory_max_pages : UInt? = None
+  let mut memory_max_pages : UInt64? = None
 
   // Check for imported memory first
   let mut has_imported_memory = false
@@ -326,7 +329,10 @@ pub fn Runtime::load_with_resolver(
           }
           None => {
             // Fall back to creating memory with the specified limits
-            let memory_size = mem_type.limits.min.reinterpret_as_int() * 65536
+            let memory_size = mem_type.limits.min
+              .reinterpret_as_int64()
+              .to_int() *
+              65536
             memory = Array::make(memory_size, b'\x00')
             memory_max_pages = mem_type.limits.max
           }
@@ -341,7 +347,7 @@ pub fn Runtime::load_with_resolver(
   if not(has_imported_memory) && m.mems.length() > 0 {
     let memory_min_pages = m.mems[0].limits.min
     memory_max_pages = m.mems[0].limits.max
-    let memory_size = memory_min_pages.reinterpret_as_int() * 65536
+    let memory_size = memory_min_pages.reinterpret_as_int64().to_int() * 65536
     memory = Array::make(memory_size, b'\x00')
   }
   // Initialize globals
@@ -409,7 +415,7 @@ pub fn Runtime::load_with_resolver(
             // This shouldn't happen with proper test setup, but provides graceful fallback
             let table_size = 10 // Default size for fallback
             let table_data : Array[Int?] = Array::make(table_size, None)
-            tables.push({ data: table_data, max: Some(20U) })
+            tables.push({ data: table_data, max: Some(20UL) })
           }
         }
       _ => ()
@@ -417,7 +423,7 @@ pub fn Runtime::load_with_resolver(
   }
   // Then add local tables
   for table in m.tables {
-    let table_size = table.limits.min.reinterpret_as_int()
+    let table_size = table.limits.min.reinterpret_as_int64().to_int()
     // Initialize table with default value (null unless table has init expr)
     let init_ref = match table.init {
       Some(init_expr) => {

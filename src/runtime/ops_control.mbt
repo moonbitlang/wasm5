@@ -1057,7 +1057,7 @@ fn op_table_grow(rt : Runtime) -> RetCode {
   // Check max limit
   match runtime_table.max {
     Some(max) =>
-      if new_size > max.reinterpret_as_int() {
+      if new_size > max.reinterpret_as_int64().to_int() {
         // Would exceed max - return -1 (failure)
         push_i32(rt.stack, 0xFFFFFFFFU)
         rt.pc += 1

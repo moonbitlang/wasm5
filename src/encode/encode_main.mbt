@@ -781,17 +781,36 @@ fn instr_uses_bulk_memory(instr : @core.Instr) -> Bool {
 }
 
 ///|
-fn encode_limits(limits : @core.Limits) -> Array[Byte] {
+fn encode_limits(
+  limits : @core.Limits,
+  is_64 : Bool,
+) -> Array[Byte] raise EncodeError {
   let payload : Array[Byte] = []
-  match limits.max {
-    Some(max) => {
-      payload.push(0x01U.to_byte())
-      append_bytes(payload, encode_u32_leb128(limits.min))
-      append_bytes(payload, encode_u32_leb128(max))
+  let mut flags = if limits.max is Some(_) { 0x01U } else { 0x00U }
+  if is_64 {
+    flags = flags | 0x04U
+  }
+  payload.push(flags.to_byte())
+  let max_limit = 0xFFFF_FFFFUL
+  if is_64 {
+    append_bytes(payload, encode_u64_leb128(limits.min))
+    match limits.max {
+      Some(max) => append_bytes(payload, encode_u64_leb128(max))
+      None => ()
     }
-    None => {
-      payload.push(0x00U.to_byte())
-      append_bytes(payload, encode_u32_leb128(limits.min))
+  } else {
+    if limits.min > max_limit {
+      raise EncodeError::Unsupported("limits exceed 32-bit range")
+    }
+    append_bytes(payload, encode_u32_leb128(limits.min.to_uint()))
+    match limits.max {
+      Some(max) => {
+        if max > max_limit {
+          raise EncodeError::Unsupported("limits exceed 32-bit range")
+        }
+        append_bytes(payload, encode_u32_leb128(max.to_uint()))
+      }
+      None => ()
     }
   }
   payload
@@ -802,22 +821,37 @@ fn encode_memory_limits(
   mem_type : @core.MemType,
 ) -> Array[Byte] raise EncodeError {
   let payload : Array[Byte] = []
-  match (mem_type.shared, mem_type.limits.max) {
-    (true, Some(max)) => {
-      payload.push(0x03U.to_byte())
-      append_bytes(payload, encode_u32_leb128(mem_type.limits.min))
-      append_bytes(payload, encode_u32_leb128(max))
+  let mut flags = if mem_type.limits.max is Some(_) { 0x01U } else { 0x00U }
+  if mem_type.shared {
+    flags = flags | 0x02U
+  }
+  if mem_type.memory64 {
+    flags = flags | 0x04U
+  }
+  if mem_type.shared && mem_type.limits.max is None {
+    raise EncodeError::Unsupported("shared memory requires maximum")
+  }
+  payload.push(flags.to_byte())
+  let max_limit = 0xFFFF_FFFFUL
+  if mem_type.memory64 {
+    append_bytes(payload, encode_u64_leb128(mem_type.limits.min))
+    match mem_type.limits.max {
+      Some(max) => append_bytes(payload, encode_u64_leb128(max))
+      None => ()
     }
-    (true, None) =>
-      raise EncodeError::Unsupported("shared memory requires maximum")
-    (false, Some(max)) => {
-      payload.push(0x01U.to_byte())
-      append_bytes(payload, encode_u32_leb128(mem_type.limits.min))
-      append_bytes(payload, encode_u32_leb128(max))
+  } else {
+    if mem_type.limits.min > max_limit {
+      raise EncodeError::Unsupported("limits exceed 32-bit range")
     }
-    (false, None) => {
-      payload.push(0x00U.to_byte())
-      append_bytes(payload, encode_u32_leb128(mem_type.limits.min))
+    append_bytes(payload, encode_u32_leb128(mem_type.limits.min.to_uint()))
+    match mem_type.limits.max {
+      Some(max) => {
+        if max > max_limit {
+          raise EncodeError::Unsupported("limits exceed 32-bit range")
+        }
+        append_bytes(payload, encode_u32_leb128(max.to_uint()))
+      }
+      None => ()
     }
   }
   payload
@@ -907,7 +941,10 @@ fn encode_table_type(
         payload,
         encode_reftype(table_type.elem_type, table_type.nullable),
       )
-      append_bytes(payload, encode_limits(table_type.limits))
+      append_bytes(
+        payload,
+        encode_limits(table_type.limits, table_type.table64),
+      )
       append_bytes(payload, encode_expr(init_expr))
     }
     None => {
@@ -915,7 +952,10 @@ fn encode_table_type(
         payload,
         encode_reftype(table_type.elem_type, table_type.nullable),
       )
-      append_bytes(payload, encode_limits(table_type.limits))
+      append_bytes(
+        payload,
+        encode_limits(table_type.limits, table_type.table64),
+      )
     }
   }
   payload
@@ -1775,6 +1815,24 @@ fn encode_u32_leb128(value : UInt) -> Array[Byte] {
     let mut byte = (v & 0x7FU).to_byte()
     v = v >> 7
     if v != 0U {
+      byte = (byte.to_uint() | 0x80U).to_byte()
+      out.push(byte)
+    } else {
+      out.push(byte)
+      break
+    }
+  }
+  out
+}
+
+///|
+fn encode_u64_leb128(value : UInt64) -> Array[Byte] {
+  let mut v = value
+  let out : Array[Byte] = []
+  while true {
+    let mut byte = (v & 0x7FUL).to_uint().to_byte()
+    v = v >> 7
+    if v != 0UL {
       byte = (byte.to_uint() | 0x80U).to_byte()
       out.push(byte)
     } else {

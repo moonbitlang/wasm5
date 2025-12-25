@@ -6,7 +6,7 @@ fn test_module_with_memory() -> @core.Module {
     customs: [],
     funcs: [],
     tables: [],
-    mems: [{ limits: { min: 0U, max: None }, shared: false }],
+    mems: [{ limits: { min: 0UL, max: None }, shared: false, memory64: false }],
     globals: [],
     tags: [],
     elems: [],
@@ -26,7 +26,13 @@ fn test_module_with_table(elem_type : @core.RefType) -> @core.Module {
     customs: [],
     funcs: [],
     tables: [
-      { elem_type, limits: { min: 0U, max: None }, init: None, nullable: true },
+      {
+        elem_type,
+        limits: { min: 0UL, max: None },
+        init: None,
+        nullable: true,
+        table64: false,
+      },
     ],
     mems: [],
     globals: [],
@@ -680,11 +686,17 @@ test "validate reference instruction errors" {
 ///|
 test "validate table instruction errors" {
   let module_table = test_module_with_table(Func)
+  let counts = get_import_counts(module_table)
   let mut saw_error = false
   let ctx_set = ValidationCtx::new()
   ctx_set.stack.push(I32)
   ctx_set.stack.push(ExternRef)
-  let _ = validate_instruction_table(module_table, ctx_set, TableSet(0U)) catch {
+  let _ = validate_instruction_table(
+    module_table,
+    ctx_set,
+    counts,
+    TableSet(0U),
+  ) catch {
     _ => {
       saw_error = true
       false
@@ -694,7 +706,12 @@ test "validate table instruction errors" {
   saw_error = false
   let ctx_grow = ValidationCtx::new()
   ctx_grow.stack.push(I32)
-  let _ = validate_instruction_table(module_table, ctx_grow, TableGrow(0U)) catch {
+  let _ = validate_instruction_table(
+    module_table,
+    ctx_grow,
+    counts,
+    TableGrow(0U),
+  ) catch {
     _ => {
       saw_error = true
       false
@@ -703,25 +720,46 @@ test "validate table instruction errors" {
   assert_eq(saw_error, true)
   let ctx_get = ValidationCtx::new()
   ctx_get.stack.push(I32)
-  let ok = validate_instruction_table(module_table, ctx_get, TableGet(0U))
+  let ok = validate_instruction_table(
+    module_table,
+    ctx_get,
+    counts,
+    TableGet(0U),
+  )
   assert_eq(ok, true)
   assert_eq(ctx_get.stack[0], FuncRef)
   let ctx_missing = ValidationCtx::new()
   ctx_missing.stack.push(I32)
-  let ok = validate_instruction_table(module_table, ctx_missing, TableGet(9U))
-  assert_eq(ok, true)
-  assert_eq(ctx_missing.stack[0], FuncRef)
+  saw_error = false
+  let _ = validate_instruction_table(
+    module_table,
+    ctx_missing,
+    counts,
+    TableGet(9U),
+  ) catch {
+    _ => {
+      saw_error = true
+      false
+    }
+  }
+  assert_eq(saw_error, true)
   let ctx_unreachable = ValidationCtx::new()
   ctx_unreachable.mark_unreachable()
   let ok = validate_instruction_table(
     module_table,
     ctx_unreachable,
+    counts,
     TableSet(0U),
   )
   assert_eq(ok, true)
   let mut saw_error = false
   let ctx_empty = ValidationCtx::new()
-  let _ = validate_instruction_table(module_table, ctx_empty, TableSet(0U)) catch {
+  let _ = validate_instruction_table(
+    module_table,
+    ctx_empty,
+    counts,
+    TableSet(0U),
+  ) catch {
     _ => {
       saw_error = true
       false
@@ -734,6 +772,7 @@ test "validate table instruction errors" {
   let _ = validate_instruction_table(
     module_table,
     ctx_missing_table,
+    counts,
     TableSet(2U),
   ) catch {
     _ => {
@@ -747,6 +786,7 @@ test "validate table instruction errors" {
   let ok = validate_instruction_table(
     module_table,
     ctx_grow_unreachable,
+    counts,
     TableGrow(0U),
   )
   assert_eq(ok, true)
@@ -757,6 +797,7 @@ test "validate table instruction errors" {
   let _ = validate_instruction_table(
     module_table,
     ctx_grow_mismatch,
+    counts,
     TableGrow(0U),
   ) catch {
     _ => {
@@ -772,6 +813,7 @@ test "validate table instruction errors" {
   let _ = validate_instruction_table(
     module_table,
     ctx_grow_default,
+    counts,
     TableGrow(3U),
   ) catch {
     _ => {
@@ -793,9 +835,10 @@ test "validate control instruction branches" {
     tables: [
       {
         elem_type: Func,
-        limits: { min: 0U, max: None },
+        limits: { min: 0UL, max: None },
         init: None,
         nullable: true,
+        table64: false,
       },
     ],
     mems: [],
@@ -1651,9 +1694,10 @@ test "validate control call errors" {
         name: Bytes::from_array([b't']),
         desc: Table({
           elem_type: Func,
-          limits: { min: 0U, max: None },
+          limits: { min: 0UL, max: None },
           init: None,
           nullable: true,
+          table64: false,
         }),
       },
     ],
@@ -1695,9 +1739,10 @@ test "validate control call errors" {
         name: Bytes::from_array([b't']),
         desc: Table({
           elem_type: Func,
-          limits: { min: 0U, max: None },
+          limits: { min: 0UL, max: None },
           init: None,
           nullable: true,
+          table64: false,
         }),
       },
     ],
@@ -1736,9 +1781,10 @@ test "validate control call errors" {
     tables: [
       {
         elem_type: Extern,
-        limits: { min: 0U, max: None },
+        limits: { min: 0UL, max: None },
         init: None,
         nullable: true,
+        table64: false,
       },
     ],
     mems: [],
@@ -1775,9 +1821,10 @@ test "validate control call errors" {
     tables: [
       {
         elem_type: Func,
-        limits: { min: 0U, max: None },
+        limits: { min: 0UL, max: None },
         init: None,
         nullable: true,
+        table64: false,
       },
     ],
     mems: [],

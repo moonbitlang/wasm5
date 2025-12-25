@@ -142,6 +142,7 @@ priv struct WatImportMem {
   mem_name : Bytes?
   limits : @core.Limits
   shared : Bool
+  memory64 : Bool
 }
 
 ///|
@@ -175,6 +176,7 @@ priv struct WatMemory {
   name : Bytes?
   limits : @core.Limits
   shared : Bool
+  memory64 : Bool
   exports : Array[Bytes]
 }
 
@@ -1179,6 +1181,7 @@ fn parse_module_field(
         name: mem.name,
         limits: mem.limits,
         shared: mem.shared,
+        memory64: mem.memory64,
         exports: [],
       })
       match inline_data {
@@ -1422,13 +1425,17 @@ fn parse_import(
         mem_name = Some(atom)
         idx = idx + 1
       }
-      let (limits, shared) = parse_memory_limits(desc_items, start=idx)
+      let (limits, shared, memory64) = parse_memory_limits(
+        desc_items,
+        start=idx,
+      )
       module_.mem_imports.push({
         module_: module_name,
         name: field_name,
         mem_name,
         limits,
         shared,
+        memory64,
       })
     }
     b"table" => {
@@ -1540,9 +1547,12 @@ fn parse_memory(items : Array[SExpr]) -> (WatMemory, Bytes?) raise WatError {
         raise WatError::InvalidSyntax("unexpected string in memory")
     }
   }
-  let (limits, shared) = match inline_data {
+  let (limits, shared, memory64) = match inline_data {
     Some(bytes) => {
-      guard limit_atoms.length() == 0 else {
+      let (numeric_atoms, shared, memory64) = split_memory_limit_atoms(
+        limit_atoms,
+      )
+      guard numeric_atoms.length() == 0 else {
         raise WatError::InvalidSyntax("inline data cannot specify limits")
       }
       let page_size = 65536
@@ -1550,15 +1560,16 @@ fn parse_memory(items : Array[SExpr]) -> (WatMemory, Bytes?) raise WatError {
       let pages = (len + page_size - 1) / page_size
       (
         @core.Limits::{
-          min: pages.reinterpret_as_uint(),
-          max: Some(pages.reinterpret_as_uint()),
+          min: pages.reinterpret_as_uint().to_uint64(),
+          max: Some(pages.reinterpret_as_uint().to_uint64()),
         },
-        false,
+        shared,
+        memory64,
       )
     }
     None => parse_memory_limits_from_atoms(limit_atoms)
   }
-  (WatMemory::{ name, limits, shared, exports }, inline_data)
+  (WatMemory::{ name, limits, shared, memory64, exports }, inline_data)
 }
 
 ///|
@@ -1634,7 +1645,7 @@ fn parse_table(
       Atom(atom) =>
         if inline_elem is Some(_) {
           raise WatError::InvalidSyntax("unexpected table item")
-        } else if is_uint_atom(atom) {
+        } else if is_uint_atom(atom) || atom == b"i64" || atom == b"i32" {
           limit_atoms.push(atom)
         } else if elem_type is None && is_reftype_expr(items[i]) {
           let (ref_type, nullable) = parse_reftype_expr(items[i], type_map)
@@ -1659,21 +1670,28 @@ fn parse_table(
     Some(value) => value
     None => true
   }
+  let (numeric_atoms, table64) = split_table_limit_atoms(limit_atoms)
   let limits = match inline_elem {
     Some(funcs) => {
-      guard limit_atoms.length() == 0 else {
+      guard numeric_atoms.length() == 0 else {
         raise WatError::InvalidSyntax("inline elem cannot specify limits")
       }
-      let count = funcs.length().reinterpret_as_uint()
+      let count = funcs.length().reinterpret_as_uint().to_uint64()
       @core.Limits::{ min: count, max: Some(count) }
     }
-    None => parse_limits_from_atoms(limit_atoms)
+    None => parse_limits_from_atoms(numeric_atoms)
   }
   let init_instrs = match init_item {
     Some(init_expr) => Some(parse_instrs([init_expr], Map::new(), [], type_map))
     None => None
   }
-  let table_type : @core.TableType = { elem_type, limits, init: None, nullable }
+  let table_type : @core.TableType = {
+    elem_type,
+    limits,
+    init: None,
+    nullable,
+    table64,
+  }
   WatTable::{ name, table_type, init: init_instrs, inline_elem, exports }
 }
 
@@ -1689,7 +1707,7 @@ fn parse_table_type(
   for i in start..<items.length() {
     match items[i] {
       Atom(atom) =>
-        if is_uint_atom(atom) {
+        if is_uint_atom(atom) || atom == b"i64" || atom == b"i32" {
           limit_atoms.push(atom)
         } else {
           let (ref_type, nullable) = parse_reftype_expr(items[i], type_map)
@@ -1713,12 +1731,13 @@ fn parse_table_type(
   guard elem_type is Some(elem_type) else {
     raise WatError::InvalidSyntax("table element type missing")
   }
-  let limits = parse_limits_from_atoms(limit_atoms)
+  let (numeric_atoms, table64) = split_table_limit_atoms(limit_atoms)
+  let limits = parse_limits_from_atoms(numeric_atoms)
   let nullable = match elem_nullable {
     Some(value) => value
     None => true
   }
-  { elem_type, limits, init: None, nullable }
+  { elem_type, limits, init: None, nullable, table64 }
 }
 
 ///|
@@ -2623,16 +2642,82 @@ fn parse_limits_from_atoms(atoms : Array[Bytes]) -> @core.Limits raise WatError 
   guard atoms.length() >= 1 && atoms.length() <= 2 else {
     raise WatError::InvalidSyntax("limits expects 1 or 2 values")
   }
-  let min = parse_uint(atoms[0])
-  let max = if atoms.length() == 2 { Some(parse_uint(atoms[1])) } else { None }
+  let min = parse_uint64(atoms[0])
+  let max = if atoms.length() == 2 {
+    Some(parse_uint64(atoms[1]))
+  } else {
+    None
+  }
   { min, max }
+}
+
+///|
+fn split_memory_limit_atoms(
+  atoms : Array[Bytes],
+) -> (Array[Bytes], Bool, Bool) raise WatError {
+  let limit_atoms : Array[Bytes] = []
+  let mut shared = false
+  let mut memory64 : Bool? = None
+  for atom in atoms {
+    if atom == b"shared" {
+      guard not(shared) else {
+        raise WatError::InvalidSyntax("duplicate shared")
+      }
+      shared = true
+    } else if atom == b"i64" {
+      guard memory64 is None else {
+        raise WatError::InvalidSyntax("duplicate memory size type")
+      }
+      memory64 = Some(true)
+    } else if atom == b"i32" {
+      guard memory64 is None else {
+        raise WatError::InvalidSyntax("duplicate memory size type")
+      }
+      memory64 = Some(false)
+    } else {
+      limit_atoms.push(atom)
+    }
+  }
+  let is_memory64 = match memory64 {
+    Some(value) => value
+    None => false
+  }
+  (limit_atoms, shared, is_memory64)
+}
+
+///|
+fn split_table_limit_atoms(
+  atoms : Array[Bytes],
+) -> (Array[Bytes], Bool) raise WatError {
+  let limit_atoms : Array[Bytes] = []
+  let mut table64 : Bool? = None
+  for atom in atoms {
+    if atom == b"i64" {
+      guard table64 is None else {
+        raise WatError::InvalidSyntax("duplicate table size type")
+      }
+      table64 = Some(true)
+    } else if atom == b"i32" {
+      guard table64 is None else {
+        raise WatError::InvalidSyntax("duplicate table size type")
+      }
+      table64 = Some(false)
+    } else {
+      limit_atoms.push(atom)
+    }
+  }
+  let is_table64 = match table64 {
+    Some(value) => value
+    None => false
+  }
+  (limit_atoms, is_table64)
 }
 
 ///|
 fn parse_memory_limits(
   items : Array[SExpr],
   start~ : Int,
-) -> (@core.Limits, Bool) raise WatError {
+) -> (@core.Limits, Bool, Bool) raise WatError {
   let atoms : Array[Bytes] = []
   for i in start..<items.length() {
     match items[i] {
@@ -2646,24 +2731,13 @@ fn parse_memory_limits(
 ///|
 fn parse_memory_limits_from_atoms(
   atoms : Array[Bytes],
-) -> (@core.Limits, Bool) raise WatError {
-  let limit_atoms : Array[Bytes] = []
-  let mut shared = false
-  for atom in atoms {
-    if atom == b"shared" {
-      guard not(shared) else {
-        raise WatError::InvalidSyntax("duplicate shared")
-      }
-      shared = true
-    } else {
-      limit_atoms.push(atom)
-    }
-  }
+) -> (@core.Limits, Bool, Bool) raise WatError {
+  let (limit_atoms, shared, memory64) = split_memory_limit_atoms(atoms)
   let limits = parse_limits_from_atoms(limit_atoms)
   if shared && limits.max is None {
     raise WatError::InvalidSyntax("shared memory requires maximum")
   }
-  (limits, shared)
+  (limits, shared, memory64)
 }
 
 ///|
@@ -5204,7 +5278,11 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
     imports.push({
       module_: imp.module_,
       name: imp.name,
-      desc: @core.ImportDesc::Mem({ limits: imp.limits, shared: imp.shared }),
+      desc: @core.ImportDesc::Mem({
+        limits: imp.limits,
+        shared: imp.shared,
+        memory64: imp.memory64,
+      }),
     })
   }
   for imp in wat.global_imports {
@@ -5288,7 +5366,7 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
   }
   let mems : Array[@core.MemType] = []
   for mem in wat.mems {
-    mems.push({ limits: mem.limits, shared: mem.shared })
+    mems.push({ limits: mem.limits, shared: mem.shared, memory64: mem.memory64 })
   }
   let tables : Array[@core.TableType] = []
   for table in wat.tables {
@@ -5309,6 +5387,7 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
       limits: table.table_type.limits,
       init: init_expr,
       nullable: table.table_type.nullable,
+      table64: table.table_type.table64,
     })
   }
   let elems : Array[@core.Elem] = []
@@ -6116,6 +6195,15 @@ fn parse_uint(atom : Bytes) -> UInt raise WatError {
     raise WatError::InvalidNumber("expected unsigned, got \{atom}")
   }
   value.reinterpret_as_uint()
+}
+
+///|
+fn parse_uint64(atom : Bytes) -> UInt64 raise WatError {
+  let value = parse_int64(atom)
+  guard value >= 0 else {
+    raise WatError::InvalidNumber("expected unsigned, got \{atom}")
+  }
+  value.reinterpret_as_uint64()
 }
 
 ///|

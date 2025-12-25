@@ -20,13 +20,15 @@ test "validate helper counts and type lookup" {
   let func_type1 : @core.FuncType = { params: [I32], results: [I32] }
   let table_type : @core.TableType = {
     elem_type: Func,
-    limits: { min: 0U, max: None },
+    limits: { min: 0UL, max: None },
     init: None,
     nullable: true,
+    table64: false,
   }
   let mem_type : @core.MemType = {
-    limits: { min: 0U, max: None },
+    limits: { min: 0UL, max: None },
     shared: false,
+    memory64: false,
   }
   let global_type : @core.GlobalType = { val_type: I32, mutable: false }
   let imports : Array[@core.Import] = [
@@ -91,9 +93,10 @@ test "validate helper import scan in func lookup" {
   let func_type : @core.FuncType = { params: [], results: [] }
   let table_type : @core.TableType = {
     elem_type: Func,
-    limits: { min: 0U, max: None },
+    limits: { min: 0UL, max: None },
     init: None,
     nullable: true,
+    table64: false,
   }
   let module_ : @core.Module = {
     types: [Func(func_type)],
@@ -205,9 +208,10 @@ test "validate const expr checks" {
         name: Bytes::from_array([b't']),
         desc: Table({
           elem_type: Func,
-          limits: { min: 0U, max: None },
+          limits: { min: 0UL, max: None },
           init: None,
           nullable: true,
+          table64: false,
         }),
       },
       {

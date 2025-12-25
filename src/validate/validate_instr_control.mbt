@@ -564,43 +564,13 @@ fn validate_instruction_control(
       }
     }
     CallIndirect(type_idx, table_idx) => {
-      // Validate table index
-      let total_tables = import_counts.tables + module_.tables.length()
-      let tidx = table_idx.reinterpret_as_int()
-      if tidx < 0 || tidx >= total_tables {
-        raise ValidationError::UnknownTable(tidx)
-      }
-
-      // Validate that the table has funcref element type (call_indirect requires funcref tables)
-      let table_elem_type = if tidx < import_counts.tables {
-        // Imported table - find it in imports
-        let mut import_table_idx = 0
-        let mut elem_type : @core.RefType = Func // default
-        for imp in module_.imports {
-          match imp.desc {
-            Table(table_type) => {
-              if import_table_idx == tidx {
-                elem_type = table_type.elem_type
-                break
-              }
-              import_table_idx += 1
-            }
-            _ => ()
-          }
-        }
-        elem_type
-      } else {
-        // Local table
-        let local_idx = tidx - import_counts.tables
-        module_.tables[local_idx].elem_type
-      }
-
+      let table_type = get_table_type(module_, import_counts, table_idx)
       // Check that table element type is funcref-compatible
-      match table_elem_type {
+      match table_type.elem_type {
         Func | TypeIndex(_) => () // OK - function references
         _ =>
           raise ValidationError::TypeMismatch(
-            "call_indirect requires funcref table, got \{table_elem_type}",
+            "call_indirect requires funcref table, got \{table_type.elem_type}",
           )
       }
       let idx = type_idx.reinterpret_as_int()
@@ -608,7 +578,11 @@ fn validate_instruction_control(
         module_, idx, "call_indirect",
       )
       // Pop table index
-      ctx.poly_pop_expect(module_, I32, "call_indirect table index")
+      ctx.poly_pop_expect(
+        module_,
+        table_index_type(table_type),
+        "call_indirect table index",
+      )
       // Pop arguments from stack (in reverse order)
       for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
         ctx.poly_pop_expect(
@@ -649,44 +623,13 @@ fn validate_instruction_control(
     ReturnCallIndirect(type_idx, table_idx) => {
       // return_call_indirect: tail call through table that returns to caller
       // Like doing a call_indirect followed by return - must match current function's return type
-
-      // Validate table index
-      let total_tables = import_counts.tables + module_.tables.length()
-      let tidx = table_idx.reinterpret_as_int()
-      if tidx < 0 || tidx >= total_tables {
-        raise ValidationError::UnknownTable(tidx)
-      }
-
-      // Validate that the table has funcref element type (return_call_indirect requires funcref tables)
-      let table_elem_type = if tidx < import_counts.tables {
-        // Imported table - find it in imports
-        let mut import_table_idx = 0
-        let mut elem_type : @core.RefType = Func // default
-        for imp in module_.imports {
-          match imp.desc {
-            Table(table_type) => {
-              if import_table_idx == tidx {
-                elem_type = table_type.elem_type
-                break
-              }
-              import_table_idx += 1
-            }
-            _ => ()
-          }
-        }
-        elem_type
-      } else {
-        // Local table
-        let local_idx = tidx - import_counts.tables
-        module_.tables[local_idx].elem_type
-      }
-
+      let table_type = get_table_type(module_, import_counts, table_idx)
       // Check that table element type is funcref-compatible
-      match table_elem_type {
+      match table_type.elem_type {
         Func | TypeIndex(_) => () // OK - function references
         _ =>
           raise ValidationError::TypeMismatch(
-            "return_call_indirect requires funcref table, got \{table_elem_type}",
+            "return_call_indirect requires funcref table, got \{table_type.elem_type}",
           )
       }
       let idx = type_idx.reinterpret_as_int()
@@ -697,7 +640,11 @@ fn validate_instruction_control(
         module_, func_type_called, func_type, "return_call_indirect",
       )
       // Pop table index
-      ctx.poly_pop_expect(module_, I32, "return_call_indirect table index")
+      ctx.poly_pop_expect(
+        module_,
+        table_index_type(table_type),
+        "return_call_indirect table index",
+      )
       // Pop arguments from stack (in reverse order)
       for i = func_type_called.params.length() - 1; i >= 0; i = i - 1 {
         ctx.poly_pop_expect(

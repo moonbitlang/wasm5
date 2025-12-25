@@ -12,8 +12,14 @@ fn parse_import_section(parser : Parser) -> Array[@core.Import] raise {
       0x00 => Func(parser.read_u32_leb128())
       0x01 => {
         let (elem_type, nullable) = parser.read_reftype_with_nullability()
-        let limits = parser.read_limits()
-        Table(@core.TableType::{ elem_type, limits, init: None, nullable })
+        let (limits, table64) = parser.read_limits()
+        Table(@core.TableType::{
+          elem_type,
+          limits,
+          init: None,
+          nullable,
+          table64,
+        })
       }
       0x02 => Mem(parser.read_memtype())
       0x03 => {

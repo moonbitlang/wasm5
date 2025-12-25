@@ -31,6 +31,34 @@ fn Parser::read_u32_leb128(self : Parser) -> UInt raise ParseError {
 }
 
 ///|
+fn Parser::read_u64_leb128(self : Parser) -> UInt64 raise ParseError {
+  fn read_loop(shift : Int, result : UInt64) -> UInt64 raise ParseError {
+    let byte = self.read_byte()
+    // Check for overflow: shift >= 63 means we're on the 10th byte (bits 63-69)
+    // For a valid u64, the 10th byte must have value <= 0x01 and no continuation bit.
+    if shift >= 63 && (byte & 0x80) != 0 {
+      raise ParseError::InvalidFormat(
+        "LEB128 u64 overflow: too many continuation bytes",
+      )
+    }
+    if shift >= 63 && byte > 0x01 {
+      raise ParseError::InvalidFormat(
+        "LEB128 u64 overflow: value exceeds 64 bits",
+      )
+    }
+    let value = byte.land(0x7f).to_uint64() << shift
+    let new_result = result | value
+    if (byte & 0x80) == 0 {
+      new_result
+    } else {
+      read_loop(shift + 7, new_result)
+    }
+  }
+
+  read_loop(0, 0UL)
+}
+
+///|
 fn Parser::read_i32_leb128(self : Parser) -> Int raise ParseError {
   let mut result = 0
   let mut shift = 0

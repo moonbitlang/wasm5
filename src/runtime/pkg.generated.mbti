@@ -83,7 +83,7 @@ pub fn ImportedFunc::new(UInt, (Array[Value]) -> Array[Value]) -> Self
 
 pub struct ImportedMemory {
   data : Array[Byte]
-  max : UInt?
+  max : UInt64?
 }
 
 pub enum MInstr {
@@ -114,7 +114,7 @@ pub struct Runtime {
   mut running : Bool
   call_stack : Array[CallFrame]
   memory : Array[Byte]
-  memory_max : UInt?
+  memory_max : UInt64?
   globals : Array[Value]
   tables : Array[RuntimeTable]
   imported_funcs : Array[ImportedFunc]
