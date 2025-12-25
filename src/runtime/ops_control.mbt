@@ -91,22 +91,24 @@ fn op_br(rt : Runtime) -> RetCode {
   let arity = rt.read_imm_idx()
   let drop_count = rt.read_imm_idx()
 
-  // Save the top `arity` values (the branch result values)
-  let results : Array[UInt64] = []
-  for _ in 0..<arity {
-    results.push(rt.stack.unsafe_pop())
+  // In-place stack shuffle: move arity values down by drop_count positions
+  // Stack: [..., drop_values (drop_count), result_values (arity)]
+  // Want:  [..., result_values (arity)]
+  if drop_count > 0 && arity > 0 {
+    let result_start = rt.stack.length() - arity
+    let target_start = result_start - drop_count
+    // Copy forward is safe since target_start < result_start
+    for i = 0; i < arity; i = i + 1 {
+      rt.stack[target_start + i] = rt.stack[result_start + i]
+    }
   }
 
-  // Drop the unwanted values
-  for _ in 0..<drop_count {
+  // Trim stack to remove drop_count values
+  let target_len = rt.stack.length() - drop_count
+  while rt.stack.length() > target_len {
     let _ = rt.stack.unsafe_pop()
-
   }
 
-  // Push results back (in reverse order since we popped them)
-  for i = results.length() - 1; i >= 0; i = i - 1 {
-    rt.stack.push(results[i])
-  }
   rt.pc = target_pc
   OK
 }
@@ -118,22 +120,21 @@ fn op_br_if(rt : Runtime) -> RetCode {
   let drop_count = rt.read_imm_idx()
   let cond = rt.pop_i32()
   if cond != 0U {
-    // Save the top `arity` values (the branch result values)
-    let results : Array[UInt64] = []
-    for _ in 0..<arity {
-      results.push(rt.stack.unsafe_pop())
+    // In-place stack shuffle: move arity values down by drop_count positions
+    if drop_count > 0 && arity > 0 {
+      let result_start = rt.stack.length() - arity
+      let target_start = result_start - drop_count
+      for i = 0; i < arity; i = i + 1 {
+        rt.stack[target_start + i] = rt.stack[result_start + i]
+      }
     }
 
-    // Drop the unwanted values
-    for _ in 0..<drop_count {
+    // Trim stack to remove drop_count values
+    let target_len = rt.stack.length() - drop_count
+    while rt.stack.length() > target_len {
       let _ = rt.stack.unsafe_pop()
-
     }
 
-    // Push results back (in reverse order since we popped them)
-    for i = results.length() - 1; i >= 0; i = i - 1 {
-      rt.stack.push(results[i])
-    }
     rt.pc = target_pc
   } else {
     rt.pc += 1
@@ -163,22 +164,21 @@ fn op_br_table(rt : Runtime) -> RetCode {
     }
   }
 
-  // Save the top `arity` values (the branch result values)
-  let results : Array[UInt64] = []
-  for _ in 0..<arity {
-    results.push(rt.stack.unsafe_pop())
+  // In-place stack shuffle: move arity values down by drop_count positions
+  if drop_count > 0 && arity > 0 {
+    let result_start = rt.stack.length() - arity
+    let target_start = result_start - drop_count
+    for i = 0; i < arity; i = i + 1 {
+      rt.stack[target_start + i] = rt.stack[result_start + i]
+    }
   }
 
-  // Drop the unwanted values
-  for _ in 0..<drop_count {
+  // Trim stack to remove drop_count values
+  let target_len = rt.stack.length() - drop_count
+  while rt.stack.length() > target_len {
     let _ = rt.stack.unsafe_pop()
-
   }
 
-  // Push results back (in reverse order since we popped them)
-  for i = results.length() - 1; i >= 0; i = i - 1 {
-    rt.stack.push(results[i])
-  }
   rt.pc = target_pc
   OK
 }
@@ -193,22 +193,22 @@ fn op_br_on_null(rt : Runtime) -> RetCode {
   let ref_idx = ref_val.reinterpret_as_int64().to_int()
   let is_null = ref_idx == -1
   if is_null {
-    // Save the top `arity` values
-    let results : Array[UInt64] = []
-    for _ in 0..<arity {
-      results.push(rt.stack.unsafe_pop())
+    // Ref is consumed (not passed to branch target), just shuffle remaining values
+    // In-place stack shuffle: move arity values down by drop_count positions
+    if drop_count > 0 && arity > 0 {
+      let result_start = rt.stack.length() - arity
+      let target_start = result_start - drop_count
+      for i = 0; i < arity; i = i + 1 {
+        rt.stack[target_start + i] = rt.stack[result_start + i]
+      }
     }
 
-    // Drop the unwanted values
-    for _ in 0..<drop_count {
+    // Trim stack to remove drop_count values
+    let target_len = rt.stack.length() - drop_count
+    while rt.stack.length() > target_len {
       let _ = rt.stack.unsafe_pop()
-
     }
 
-    // Push results back
-    for i = results.length() - 1; i >= 0; i = i - 1 {
-      rt.stack.push(results[i])
-    }
     rt.pc = target_pc
   } else {
     // Not null - push back the value and continue
@@ -228,23 +228,24 @@ fn op_br_on_non_null(rt : Runtime) -> RetCode {
   let ref_idx = ref_val.reinterpret_as_int64().to_int()
   let is_non_null = ref_idx != -1
   if is_non_null {
-    // Save the top `arity` values (includes the ref we just popped if arity > 0)
-    rt.stack.push(ref_val) // Push it back first for proper handling
-    let results : Array[UInt64] = []
-    for _ in 0..<arity {
-      results.push(rt.stack.unsafe_pop())
+    // Push ref back first - arity values include the ref we just pushed
+    rt.stack.push(ref_val)
+
+    // In-place stack shuffle: move arity values down by drop_count positions
+    if drop_count > 0 && arity > 0 {
+      let result_start = rt.stack.length() - arity
+      let target_start = result_start - drop_count
+      for i = 0; i < arity; i = i + 1 {
+        rt.stack[target_start + i] = rt.stack[result_start + i]
+      }
     }
 
-    // Drop the unwanted values
-    for _ in 0..<drop_count {
+    // Trim stack to remove drop_count values
+    let target_len = rt.stack.length() - drop_count
+    while rt.stack.length() > target_len {
       let _ = rt.stack.unsafe_pop()
-
     }
 
-    // Push results back
-    for i = results.length() - 1; i >= 0; i = i - 1 {
-      rt.stack.push(results[i])
-    }
     rt.pc = target_pc
   } else {
     // Null - don't push anything, continue
@@ -504,24 +505,22 @@ fn op_return_call(rt : Runtime) -> RetCode {
     return FunctionNotCompiled
   }
   // Tail call: reuse current frame
-  // Pop arguments, trim stack to sp, push args back as new locals
+  // Move arguments in-place from stack top to sp position
   let num_params = func_type.params.length()
+  let args_start = rt.stack.length() - num_params
 
-  // Save arguments from stack top
-  let args : Array[UInt64] = []
-  for _ in 0..<num_params {
-    args.push(rt.stack.unsafe_pop())
+  // Copy arguments to sp position (they become new locals)
+  if num_params > 0 && args_start > rt.sp {
+    for i = 0; i < num_params; i = i + 1 {
+      rt.stack[rt.sp + i] = rt.stack[args_start + i]
+    }
   }
 
-  // Trim stack to sp (remove current frame)
-  while rt.stack.length() > rt.sp {
+  // Trim stack to sp + num_params
+  let target_len = rt.sp + num_params
+  while rt.stack.length() > target_len {
     let _ = rt.stack.unsafe_pop()
 
-  }
-
-  // Push arguments back as new locals (in correct order)
-  for i = num_params - 1; i >= 0; i = i - 1 {
-    rt.stack.push(args[i])
   }
 
   // Push default values for declared locals
@@ -631,23 +630,22 @@ fn op_return_call_indirect(rt : Runtime) -> RetCode {
   }
 
   // Tail call: reuse current frame
+  // Move arguments in-place from stack top to sp position
   let num_params = actual_type.params.length()
+  let args_start = rt.stack.length() - num_params
 
-  // Save arguments from stack top
-  let args : Array[UInt64] = []
-  for _ in 0..<num_params {
-    args.push(rt.stack.unsafe_pop())
+  // Copy arguments to sp position (they become new locals)
+  if num_params > 0 && args_start > rt.sp {
+    for i = 0; i < num_params; i = i + 1 {
+      rt.stack[rt.sp + i] = rt.stack[args_start + i]
+    }
   }
 
-  // Trim stack to sp (remove current frame)
-  while rt.stack.length() > rt.sp {
+  // Trim stack to sp + num_params
+  let target_len = rt.sp + num_params
+  while rt.stack.length() > target_len {
     let _ = rt.stack.unsafe_pop()
 
-  }
-
-  // Push arguments back as new locals (in correct order)
-  for i = num_params - 1; i >= 0; i = i - 1 {
-    rt.stack.push(args[i])
   }
 
   // Push default values for declared locals
@@ -839,23 +837,22 @@ fn op_return_call_ref(rt : Runtime) -> RetCode {
   }
 
   // Tail call: reuse current frame
+  // Move arguments in-place from stack top to sp position
   let num_params = func_type.params.length()
+  let args_start = rt.stack.length() - num_params
 
-  // Save arguments from stack top
-  let args : Array[UInt64] = []
-  for _ in 0..<num_params {
-    args.push(rt.stack.unsafe_pop())
+  // Copy arguments to sp position (they become new locals)
+  if num_params > 0 && args_start > rt.sp {
+    for i = 0; i < num_params; i = i + 1 {
+      rt.stack[rt.sp + i] = rt.stack[args_start + i]
+    }
   }
 
-  // Trim stack to sp (remove current frame)
-  while rt.stack.length() > rt.sp {
+  // Trim stack to sp + num_params
+  let target_len = rt.sp + num_params
+  while rt.stack.length() > target_len {
     let _ = rt.stack.unsafe_pop()
 
-  }
-
-  // Push arguments back as new locals (in correct order)
-  for i = num_params - 1; i >= 0; i = i - 1 {
-    rt.stack.push(args[i])
   }
 
   // Push default values for declared locals
