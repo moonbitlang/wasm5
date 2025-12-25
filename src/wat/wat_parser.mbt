@@ -21,6 +21,7 @@ priv enum WatCatchClause {
 ///|
 priv enum WatInstr {
   Core(@core.Instr)
+  CoreMemRef(@core.Instr, IndexRef)
   GlobalGet(IndexRef)
   GlobalSet(IndexRef)
   Call(FuncRef)
@@ -109,7 +110,7 @@ priv enum WatTypeItem {
 priv enum MemArg {
   Align(UInt)
   Offset(UInt)
-  Memory(UInt)
+  Memory(IndexRef)
 }
 
 ///|
@@ -3793,16 +3794,13 @@ fn parse_mem_instr_from_atom(
 ) -> (WatInstr, Int)? raise WatError {
   match memarg_default_align(op) {
     Some(default_align) => {
-      let (align, offset, memory_idx, next_idx) = parse_memarg_from_items(
+      let (align, offset, memory_ref, next_idx) = parse_memarg_from_items(
         items,
         idx + 1,
         default_align,
       )
-      let instr = match make_mem_instr(op, align, offset, memory_idx) {
-        Some(mem_instr) => mem_instr
-        None => raise WatError::Unsupported("instruction \{op}")
-      }
-      Some((WatInstr::Core(instr), next_idx))
+      let instr = make_mem_wat_instr(op, align, offset, memory_ref)
+      Some((instr, next_idx))
     }
     None => None
   }
@@ -3815,14 +3813,11 @@ fn parse_mem_instr_from_list(
 ) -> WatInstr? raise WatError {
   match memarg_default_align(op) {
     Some(default_align) => {
-      let (align, offset, memory_idx) = parse_memarg_from_list(
+      let (align, offset, memory_ref) = parse_memarg_from_list(
         list_items, 1, default_align,
       )
-      let instr = match make_mem_instr(op, align, offset, memory_idx) {
-        Some(mem_instr) => mem_instr
-        None => raise WatError::Unsupported("instruction \{op}")
-      }
-      Some(WatInstr::Core(instr))
+      let instr = make_mem_wat_instr(op, align, offset, memory_ref)
+      Some(instr)
     }
     None => None
   }
@@ -3833,14 +3828,30 @@ fn parse_memarg_from_items(
   items : Array[SExpr],
   start : Int,
   default_align : UInt,
-) -> (UInt, UInt, UInt, Int) raise WatError {
+) -> (UInt, UInt, IndexRef, Int) raise WatError {
   let mut align = default_align
   let mut offset = 0U
-  let mut memory_idx = 0U
+  let mut memory_ref = IndexRef::Index(0U)
   let mut seen_align = false
   let mut seen_offset = false
   let mut seen_memory = false
   let mut idx = start
+  if idx < items.length() {
+    match items[idx] {
+      Atom(atom) =>
+        if parse_memarg_atom(atom) is None {
+          match try_parse_index_ref(atom) {
+            Some(mem_ref) => {
+              memory_ref = mem_ref
+              seen_memory = true
+              idx = idx + 1
+            }
+            None => ()
+          }
+        }
+      _ => ()
+    }
+  }
   while idx < items.length() {
     match items[idx] {
       Atom(atom) =>
@@ -3865,7 +3876,7 @@ fn parse_memarg_from_items(
             guard not(seen_memory) else {
               raise WatError::InvalidSyntax("duplicate memory")
             }
-            memory_idx = value
+            memory_ref = value
             seen_memory = true
             idx = idx + 1
           }
@@ -3874,7 +3885,7 @@ fn parse_memarg_from_items(
       _ => break
     }
   }
-  (align, offset, memory_idx, idx)
+  (align, offset, memory_ref, idx)
 }
 
 ///|
@@ -3882,14 +3893,31 @@ fn parse_memarg_from_list(
   list_items : Array[SExpr],
   start : Int,
   default_align : UInt,
-) -> (UInt, UInt, UInt) raise WatError {
+) -> (UInt, UInt, IndexRef) raise WatError {
   let mut align = default_align
   let mut offset = 0U
-  let mut memory_idx = 0U
+  let mut memory_ref = IndexRef::Index(0U)
   let mut seen_align = false
   let mut seen_offset = false
   let mut seen_memory = false
-  for i in start..<list_items.length() {
+  let mut idx = start
+  if idx < list_items.length() {
+    match list_items[idx] {
+      Atom(atom) =>
+        if parse_memarg_atom(atom) is None {
+          match try_parse_index_ref(atom) {
+            Some(mem_ref) => {
+              memory_ref = mem_ref
+              seen_memory = true
+              idx = idx + 1
+            }
+            None => ()
+          }
+        }
+      _ => ()
+    }
+  }
+  for i in idx..<list_items.length() {
     match list_items[i] {
       Atom(atom) =>
         match parse_memarg_atom(atom) {
@@ -3911,18 +3939,18 @@ fn parse_memarg_from_list(
             guard not(seen_memory) else {
               raise WatError::InvalidSyntax("duplicate memory")
             }
-            memory_idx = value
+            memory_ref = value
             seen_memory = true
           }
           None =>
             raise WatError::InvalidSyntax(
-              "memory operands must be offset=, align=, or memory=",
+              "memory operands must be index, offset=, align=, or memory=",
             )
         }
       _ => raise WatError::InvalidSyntax("memory operands must be atoms")
     }
   }
-  (align, offset, memory_idx)
+  (align, offset, memory_ref)
 }
 
 ///|
@@ -3937,10 +3965,26 @@ fn parse_memarg_atom(atom : Bytes) -> MemArg? raise WatError {
     return Some(Align(align))
   }
   if bytes_starts_with(atom, b"memory=") {
-    let value = parse_uint_from_bytes(atom, b"memory=".length())
+    let value = parse_index_ref(slice_bytes(atom, b"memory=".length()))
     return Some(Memory(value))
   }
   None
+}
+
+///|
+fn mem_ref_to_index(mem_ref : IndexRef) -> UInt {
+  match mem_ref {
+    Index(idx) => idx
+    Name(_) => 0U
+  }
+}
+
+///|
+fn wrap_mem_ref_instr(core_instr : @core.Instr, mem_ref : IndexRef) -> WatInstr {
+  match mem_ref {
+    Index(_) => WatInstr::Core(core_instr)
+    Name(_) => WatInstr::CoreMemRef(core_instr, mem_ref)
+  }
 }
 
 ///|
@@ -4153,6 +4197,7 @@ fn parse_simd_instr_from_atom(
   match @core.simd_spec_by_name(op) {
     None => None
     Some(spec) => {
+      let mut mem_ref : IndexRef? = None
       let (imm, next_idx) = match spec.imm {
         None => (@core.SimdImmediate::None, idx + 1)
         Lane => {
@@ -4165,27 +4210,39 @@ fn parse_simd_instr_from_atom(
             Some(value) => value
             None => raise WatError::Unsupported("instruction \{op}")
           }
-          let (align, offset, memory_idx, next_idx) = parse_memarg_from_items(
+          let (align, offset, mem_value, next_idx) = parse_memarg_from_items(
             items,
             idx + 1,
             default_align,
           )
-          (@core.SimdImmediate::MemArg(align, offset, memory_idx), next_idx)
+          mem_ref = Some(mem_value)
+          let imm = @core.SimdImmediate::MemArg(
+            align,
+            offset,
+            mem_ref_to_index(mem_value),
+          )
+          (imm, next_idx)
         }
         MemArgLane => {
           let default_align = match simd_memarg_default_align(op) {
             Some(value) => value
             None => raise WatError::Unsupported("instruction \{op}")
           }
-          let (align, offset, memory_idx, next_idx) = parse_memarg_from_items(
+          let (align, offset, mem_value, next_idx) = parse_memarg_from_items(
             items,
             idx + 1,
             default_align,
           )
+          mem_ref = Some(mem_value)
           let lane_atom = expect_atom_at(items, next_idx)
           let lane = parse_simd_lane(op, lane_atom)
           (
-            @core.SimdImmediate::MemArgLane(align, offset, memory_idx, lane),
+            @core.SimdImmediate::MemArgLane(
+              align,
+              offset,
+              mem_ref_to_index(mem_value),
+              lane,
+            ),
             next_idx + 1,
           )
         }
@@ -4199,7 +4256,12 @@ fn parse_simd_instr_from_atom(
         }
       }
       let simd = @core.SimdInstr::{ opcode: spec.opcode, imm }
-      Some((WatInstr::Core(@core.Instr::Simd(simd)), next_idx))
+      let core_instr = @core.Instr::Simd(simd)
+      let instr = match mem_ref {
+        Some(mem_value) => wrap_mem_ref_instr(core_instr, mem_value)
+        None => WatInstr::Core(core_instr)
+      }
+      Some((instr, next_idx))
     }
   }
 }
@@ -4214,6 +4276,7 @@ fn parse_simd_instr_from_list(
   match @core.simd_spec_by_name(op) {
     None => None
     Some(spec) => {
+      let mut mem_ref : IndexRef? = None
       let imm = match spec.imm {
         None => {
           guard list_items.length() == 1 else {
@@ -4233,28 +4296,39 @@ fn parse_simd_instr_from_list(
             Some(value) => value
             None => raise WatError::Unsupported("instruction \{op}")
           }
-          let (align, offset, memory_idx, next_idx) = parse_memarg_from_items(
+          let (align, offset, mem_value, next_idx) = parse_memarg_from_items(
             list_items, 1, default_align,
           )
+          mem_ref = Some(mem_value)
           guard next_idx == list_items.length() else {
             raise WatError::InvalidSyntax("unexpected operands for \{op}")
           }
-          @core.SimdImmediate::MemArg(align, offset, memory_idx)
+          @core.SimdImmediate::MemArg(
+            align,
+            offset,
+            mem_ref_to_index(mem_value),
+          )
         }
         MemArgLane => {
           let default_align = match simd_memarg_default_align(op) {
             Some(value) => value
             None => raise WatError::Unsupported("instruction \{op}")
           }
-          let (align, offset, memory_idx, next_idx) = parse_memarg_from_items(
+          let (align, offset, mem_value, next_idx) = parse_memarg_from_items(
             list_items, 1, default_align,
           )
+          mem_ref = Some(mem_value)
           guard next_idx + 1 == list_items.length() else {
             raise WatError::InvalidSyntax("lane expects one operand")
           }
           let lane_atom = expect_atom(list_items[next_idx])
           let lane = parse_simd_lane(op, lane_atom)
-          @core.SimdImmediate::MemArgLane(align, offset, memory_idx, lane)
+          @core.SimdImmediate::MemArgLane(
+            align,
+            offset,
+            mem_ref_to_index(mem_value),
+            lane,
+          )
         }
         Shuffle => {
           guard list_items.length() == 17 else {
@@ -4275,7 +4349,12 @@ fn parse_simd_instr_from_list(
         }
       }
       let simd = @core.SimdInstr::{ opcode: spec.opcode, imm }
-      Some(WatInstr::Core(@core.Instr::Simd(simd)))
+      let core_instr = @core.Instr::Simd(simd)
+      let instr = match mem_ref {
+        Some(mem_value) => wrap_mem_ref_instr(core_instr, mem_value)
+        None => WatInstr::Core(core_instr)
+      }
+      Some(instr)
     }
   }
 }
@@ -4289,6 +4368,7 @@ fn parse_atomic_instr_from_atom(
   match @core.atomic_spec_by_name(op) {
     None => None
     Some(spec) => {
+      let mut mem_ref : IndexRef? = None
       let (imm, next_idx) = match spec.imm {
         None => (@core.AtomicImmediate::None, idx + 1)
         Fence => (@core.AtomicImmediate::Fence(0U), idx + 1)
@@ -4297,16 +4377,29 @@ fn parse_atomic_instr_from_atom(
             Some(value) => value
             None => raise WatError::Unsupported("instruction \{op}")
           }
-          let (align, offset, memory_idx, next_idx) = parse_memarg_from_items(
+          let (align, offset, mem_value, next_idx) = parse_memarg_from_items(
             items,
             idx + 1,
             default_align,
           )
-          (@core.AtomicImmediate::MemArg(align, offset, memory_idx), next_idx)
+          mem_ref = Some(mem_value)
+          (
+            @core.AtomicImmediate::MemArg(
+              align,
+              offset,
+              mem_ref_to_index(mem_value),
+            ),
+            next_idx,
+          )
         }
       }
       let atomic_instr = @core.AtomicInstr::{ opcode: spec.opcode, imm }
-      Some((WatInstr::Core(@core.Instr::Atomic(atomic_instr)), next_idx))
+      let core_instr = @core.Instr::Atomic(atomic_instr)
+      let instr = match mem_ref {
+        Some(mem_value) => wrap_mem_ref_instr(core_instr, mem_value)
+        None => WatInstr::Core(core_instr)
+      }
+      Some((instr, next_idx))
     }
   }
 }
@@ -4321,6 +4414,7 @@ fn parse_atomic_instr_from_list(
   match @core.atomic_spec_by_name(op) {
     None => None
     Some(spec) => {
+      let mut mem_ref : IndexRef? = None
       let imm = match spec.imm {
         None => {
           guard list_items.length() == 1 else {
@@ -4339,17 +4433,27 @@ fn parse_atomic_instr_from_list(
             Some(value) => value
             None => raise WatError::Unsupported("instruction \{op}")
           }
-          let (align, offset, memory_idx, next_idx) = parse_memarg_from_items(
+          let (align, offset, mem_value, next_idx) = parse_memarg_from_items(
             list_items, 1, default_align,
           )
+          mem_ref = Some(mem_value)
           guard next_idx == list_items.length() else {
             raise WatError::InvalidSyntax("unexpected operands for \{op}")
           }
-          @core.AtomicImmediate::MemArg(align, offset, memory_idx)
+          @core.AtomicImmediate::MemArg(
+            align,
+            offset,
+            mem_ref_to_index(mem_value),
+          )
         }
       }
       let atomic_instr = @core.AtomicInstr::{ opcode: spec.opcode, imm }
-      Some(WatInstr::Core(@core.Instr::Atomic(atomic_instr)))
+      let core_instr = @core.Instr::Atomic(atomic_instr)
+      let instr = match mem_ref {
+        Some(mem_value) => wrap_mem_ref_instr(core_instr, mem_value)
+        None => WatInstr::Core(core_instr)
+      }
+      Some(instr)
     }
   }
 }
@@ -4386,6 +4490,98 @@ fn make_mem_instr(
     b"i64.store16" => Some(@core.Instr::I64Store16(align, offset, memory_idx))
     b"i64.store32" => Some(@core.Instr::I64Store32(align, offset, memory_idx))
     _ => None
+  }
+}
+
+///|
+fn make_mem_wat_instr(
+  op : Bytes,
+  align : UInt,
+  offset : UInt,
+  memory_ref : IndexRef,
+) -> WatInstr raise WatError {
+  let instr = match
+    make_mem_instr(op, align, offset, mem_ref_to_index(memory_ref)) {
+    Some(mem_instr) => mem_instr
+    None => raise WatError::Unsupported("instruction \{op}")
+  }
+  wrap_mem_ref_instr(instr, memory_ref)
+}
+
+///|
+fn set_instr_mem_idx(
+  instr : @core.Instr,
+  memory_idx : UInt,
+) -> @core.Instr raise WatError {
+  match instr {
+    I32Load(align, offset, _) => @core.Instr::I32Load(align, offset, memory_idx)
+    I64Load(align, offset, _) => @core.Instr::I64Load(align, offset, memory_idx)
+    F32Load(align, offset, _) => @core.Instr::F32Load(align, offset, memory_idx)
+    F64Load(align, offset, _) => @core.Instr::F64Load(align, offset, memory_idx)
+    I32Load8S(align, offset, _) =>
+      @core.Instr::I32Load8S(align, offset, memory_idx)
+    I32Load8U(align, offset, _) =>
+      @core.Instr::I32Load8U(align, offset, memory_idx)
+    I32Load16S(align, offset, _) =>
+      @core.Instr::I32Load16S(align, offset, memory_idx)
+    I32Load16U(align, offset, _) =>
+      @core.Instr::I32Load16U(align, offset, memory_idx)
+    I64Load8S(align, offset, _) =>
+      @core.Instr::I64Load8S(align, offset, memory_idx)
+    I64Load8U(align, offset, _) =>
+      @core.Instr::I64Load8U(align, offset, memory_idx)
+    I64Load16S(align, offset, _) =>
+      @core.Instr::I64Load16S(align, offset, memory_idx)
+    I64Load16U(align, offset, _) =>
+      @core.Instr::I64Load16U(align, offset, memory_idx)
+    I64Load32S(align, offset, _) =>
+      @core.Instr::I64Load32S(align, offset, memory_idx)
+    I64Load32U(align, offset, _) =>
+      @core.Instr::I64Load32U(align, offset, memory_idx)
+    I32Store(align, offset, _) =>
+      @core.Instr::I32Store(align, offset, memory_idx)
+    I64Store(align, offset, _) =>
+      @core.Instr::I64Store(align, offset, memory_idx)
+    F32Store(align, offset, _) =>
+      @core.Instr::F32Store(align, offset, memory_idx)
+    F64Store(align, offset, _) =>
+      @core.Instr::F64Store(align, offset, memory_idx)
+    I32Store8(align, offset, _) =>
+      @core.Instr::I32Store8(align, offset, memory_idx)
+    I32Store16(align, offset, _) =>
+      @core.Instr::I32Store16(align, offset, memory_idx)
+    I64Store8(align, offset, _) =>
+      @core.Instr::I64Store8(align, offset, memory_idx)
+    I64Store16(align, offset, _) =>
+      @core.Instr::I64Store16(align, offset, memory_idx)
+    I64Store32(align, offset, _) =>
+      @core.Instr::I64Store32(align, offset, memory_idx)
+    Simd(simd) =>
+      match simd.imm {
+        @core.SimdImmediate::MemArg(align, offset, _) =>
+          @core.Instr::Simd(@core.SimdInstr::{
+            opcode: simd.opcode,
+            imm: @core.SimdImmediate::MemArg(align, offset, memory_idx),
+          })
+        @core.SimdImmediate::MemArgLane(align, offset, _, lane) =>
+          @core.Instr::Simd(@core.SimdInstr::{
+            opcode: simd.opcode,
+            imm: @core.SimdImmediate::MemArgLane(
+              align, offset, memory_idx, lane,
+            ),
+          })
+        _ => raise WatError::Unsupported("instruction has no memory operand")
+      }
+    Atomic(atomic_instr) =>
+      match atomic_instr.imm {
+        @core.AtomicImmediate::MemArg(align, offset, _) =>
+          @core.Instr::Atomic(@core.AtomicInstr::{
+            opcode: atomic_instr.opcode,
+            imm: @core.AtomicImmediate::MemArg(align, offset, memory_idx),
+          })
+        _ => raise WatError::Unsupported("instruction has no memory operand")
+      }
+    _ => raise WatError::Unsupported("instruction has no memory operand")
   }
 }
 
@@ -5612,6 +5808,8 @@ fn resolve_const_instrs(
             out.push(core_instr)
           _ => raise WatError::Unsupported("non-const init expression")
         }
+      WatInstr::CoreMemRef(_, _) =>
+        raise WatError::Unsupported("non-const init expression")
       WatInstr::RefFunc(func_ref) =>
         out.push(@core.Instr::RefFunc(resolve_func_ref(func_ref, func_map)))
       WatInstr::GlobalGet(global_ref) => {
@@ -5660,6 +5858,10 @@ fn resolve_offset_instrs(
               "\{context} expects \{type_name}.const/global.get",
             )
         }
+      WatInstr::CoreMemRef(_, _) =>
+        raise WatError::Unsupported(
+          "\{context} expects \{type_name}.const/global.get",
+        )
       WatInstr::GlobalGet(global_ref) => {
         let idx = resolve_global_ref(global_ref, global_map)
         guard idx < imported_globals.length().reinterpret_as_uint() else {
@@ -5703,6 +5905,11 @@ fn resolve_instr(
 ) -> @core.Instr raise WatError {
   match instr {
     WatInstr::Core(core_instr) => core_instr
+    WatInstr::CoreMemRef(core_instr, mem_ref) =>
+      set_instr_mem_idx(
+        core_instr,
+        resolve_index_ref(mem_ref, mem_map, "memory"),
+      )
     WatInstr::GlobalGet(global_ref) =>
       @core.Instr::GlobalGet(resolve_global_ref(global_ref, global_map))
     WatInstr::GlobalSet(global_ref) =>
@@ -6095,6 +6302,15 @@ fn parse_index_ref(atom : Bytes) -> IndexRef raise WatError {
   } else {
     Index(parse_uint(atom))
   }
+}
+
+///|
+fn try_parse_index_ref(atom : Bytes) -> IndexRef? {
+  if is_name(atom) {
+    return Some(IndexRef::Name(atom))
+  }
+  let idx = parse_uint(atom) catch { _ => return None }
+  Some(IndexRef::Index(idx))
 }
 
 ///|
