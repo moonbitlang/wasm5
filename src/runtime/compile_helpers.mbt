@@ -391,6 +391,7 @@ fn Runtime::read_imm_idx(self : Runtime) -> Int {
 
 ///|
 /// Value pair for binary i32 operations
+#valtype
 priv struct TwoI32(UInt, UInt)
 
 ///|
