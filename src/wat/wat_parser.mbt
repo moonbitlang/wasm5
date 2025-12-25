@@ -6727,6 +6727,11 @@ fn resolve_const_instrs(
         match core_instr {
           I32Const(_) | I64Const(_) | F32Const(_) | F64Const(_) | RefNull(_) =>
             out.push(core_instr)
+          Simd(simd) =>
+            match simd.imm {
+              V128Const(_) => out.push(@core.Instr::Simd(simd))
+              _ => raise WatError::Unsupported("non-const init expression")
+            }
           _ => raise WatError::Unsupported("non-const init expression")
         }
       WatInstr::CoreMemRef(_, _) =>
