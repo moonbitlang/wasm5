@@ -505,24 +505,22 @@ fn op_return_call(rt : Runtime) -> RetCode {
     return FunctionNotCompiled
   }
   // Tail call: reuse current frame
-  // Pop arguments, trim stack to sp, push args back as new locals
+  // Move arguments in-place from stack top to sp position
   let num_params = func_type.params.length()
+  let args_start = rt.stack.length() - num_params
 
-  // Save arguments from stack top
-  let args : Array[UInt64] = []
-  for _ in 0..<num_params {
-    args.push(rt.stack.unsafe_pop())
+  // Copy arguments to sp position (they become new locals)
+  if num_params > 0 && args_start > rt.sp {
+    for i = 0; i < num_params; i = i + 1 {
+      rt.stack[rt.sp + i] = rt.stack[args_start + i]
+    }
   }
 
-  // Trim stack to sp (remove current frame)
-  while rt.stack.length() > rt.sp {
+  // Trim stack to sp + num_params
+  let target_len = rt.sp + num_params
+  while rt.stack.length() > target_len {
     let _ = rt.stack.unsafe_pop()
 
-  }
-
-  // Push arguments back as new locals (in correct order)
-  for i = num_params - 1; i >= 0; i = i - 1 {
-    rt.stack.push(args[i])
   }
 
   // Push default values for declared locals
@@ -632,23 +630,22 @@ fn op_return_call_indirect(rt : Runtime) -> RetCode {
   }
 
   // Tail call: reuse current frame
+  // Move arguments in-place from stack top to sp position
   let num_params = actual_type.params.length()
+  let args_start = rt.stack.length() - num_params
 
-  // Save arguments from stack top
-  let args : Array[UInt64] = []
-  for _ in 0..<num_params {
-    args.push(rt.stack.unsafe_pop())
+  // Copy arguments to sp position (they become new locals)
+  if num_params > 0 && args_start > rt.sp {
+    for i = 0; i < num_params; i = i + 1 {
+      rt.stack[rt.sp + i] = rt.stack[args_start + i]
+    }
   }
 
-  // Trim stack to sp (remove current frame)
-  while rt.stack.length() > rt.sp {
+  // Trim stack to sp + num_params
+  let target_len = rt.sp + num_params
+  while rt.stack.length() > target_len {
     let _ = rt.stack.unsafe_pop()
 
-  }
-
-  // Push arguments back as new locals (in correct order)
-  for i = num_params - 1; i >= 0; i = i - 1 {
-    rt.stack.push(args[i])
   }
 
   // Push default values for declared locals
@@ -840,23 +837,22 @@ fn op_return_call_ref(rt : Runtime) -> RetCode {
   }
 
   // Tail call: reuse current frame
+  // Move arguments in-place from stack top to sp position
   let num_params = func_type.params.length()
+  let args_start = rt.stack.length() - num_params
 
-  // Save arguments from stack top
-  let args : Array[UInt64] = []
-  for _ in 0..<num_params {
-    args.push(rt.stack.unsafe_pop())
+  // Copy arguments to sp position (they become new locals)
+  if num_params > 0 && args_start > rt.sp {
+    for i = 0; i < num_params; i = i + 1 {
+      rt.stack[rt.sp + i] = rt.stack[args_start + i]
+    }
   }
 
-  // Trim stack to sp (remove current frame)
-  while rt.stack.length() > rt.sp {
+  // Trim stack to sp + num_params
+  let target_len = rt.sp + num_params
+  while rt.stack.length() > target_len {
     let _ = rt.stack.unsafe_pop()
 
-  }
-
-  // Push arguments back as new locals (in correct order)
-  for i = num_params - 1; i >= 0; i = i - 1 {
-    rt.stack.push(args[i])
   }
 
   // Push default values for declared locals
