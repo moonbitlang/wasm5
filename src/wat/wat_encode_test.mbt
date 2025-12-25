@@ -1028,6 +1028,25 @@ async test "wat encoder matches wasm-tools for call_ref type order" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for return_call_ref type order" {
+  let wat =
+    #|(module
+    #|  (func (export "f") (result i32)
+    #|    (block (result i64 i32)
+    #|      i64.const 1
+    #|      i32.const 2)
+    #|    drop
+    #|    drop
+    #|    i32.const 0)
+    #|  (func $g (param i64) (result i32) local.get 0 i32.wrap_i64)
+    #|  (func (export "tail") (param i64) (result i32)
+    #|    local.get 0
+    #|    ref.func $g
+    #|    return_call_ref 2))
+  assert_wat_matches("return_call_ref_type_order", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for ref types" {
   let wat =
     #|(module (type $t (func)) (func $f (type $t)) (table 1 (ref null $t)) (func (export "short") (param funcref externref anyref eqref i31ref structref arrayref exnref nullref nullfuncref nullexternref nullexnref)) (func (export "typed") (param (ref func) (ref extern) (ref any)) (result (ref $t) (ref null $t) (ref null func)) ref.func $f ref.null $t ref.null func))
