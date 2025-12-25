@@ -464,6 +464,13 @@ async test "wat encoder matches wasm-tools for mutable globals" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for v128 global" {
+  let wat =
+    #|(module (global (export "g") v128 (v128.const i32x4 1 2 3 4)))
+  assert_wat_matches("global_v128", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for data offset global" {
   let wat =
     #|(module (import "env" "g" (global $g i32)) (memory 1) (data (global.get $g) "hi"))
