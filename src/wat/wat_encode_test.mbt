@@ -693,6 +693,15 @@ async test "wat encoder matches wasm-tools for global init get" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for global init add" {
+  let wat =
+    #|(module
+    #|  (global (export "g") i32
+    #|    (i32.add (i32.const 1) (i32.const 2))))
+  assert_wat_matches("global_init_add", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for ref globals" {
   let wat =
     #|(module
@@ -721,6 +730,24 @@ async test "wat encoder matches wasm-tools for data offset global" {
   let wat =
     #|(module (import "env" "g" (global $g i32)) (memory 1) (data (global.get $g) "hi"))
   assert_wat_matches("data_global", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for data offset add" {
+  let wat =
+    #|(module
+    #|  (memory 1)
+    #|  (data (i32.add (i32.const 1) (i32.const 2)) "hi"))
+  assert_wat_matches("data_offset_add", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for memory64 data offset add" {
+  let wat =
+    #|(module
+    #|  (memory i64 1)
+    #|  (data (i64.add (i64.const 1) (i64.const 2)) "hi"))
+  assert_wat_matches("mem64_data_offset_add", wat)
 }
 
 ///|
@@ -1779,6 +1806,16 @@ async test "wat encoder matches wasm-tools for elem exprs active" {
   let wat =
     #|(module (table 2 funcref) (func $f (result i32) i32.const 0) (elem (i32.const 0) (ref null func) (ref.func $f) (ref.null func)))
   assert_wat_matches("elem_expr_active", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for elem offset add" {
+  let wat =
+    #|(module
+    #|  (table 3 funcref)
+    #|  (func $f)
+    #|  (elem (i32.add (i32.const 1) (i32.const 2)) func $f))
+  assert_wat_matches("elem_offset_add", wat)
 }
 
 ///|

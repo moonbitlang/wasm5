@@ -7067,6 +7067,8 @@ fn resolve_const_instrs(
         match core_instr {
           I32Const(_) | I64Const(_) | F32Const(_) | F64Const(_) | RefNull(_) =>
             out.push(core_instr)
+          I32Add | I32Sub | I32Mul | I64Add | I64Sub | I64Mul =>
+            out.push(core_instr)
           Simd(simd) =>
             match simd.imm {
               V128Const(_) => out.push(@core.Instr::Simd(simd))
@@ -7119,6 +7121,12 @@ fn resolve_offset_instrs(
         match (core_instr, expected_type) {
           (I32Const(_), @core.ValType::I32)
           | (I64Const(_), @core.ValType::I64) => out.push(core_instr)
+          (I32Add, @core.ValType::I32)
+          | (I32Sub, @core.ValType::I32)
+          | (I32Mul, @core.ValType::I32)
+          | (I64Add, @core.ValType::I64)
+          | (I64Sub, @core.ValType::I64)
+          | (I64Mul, @core.ValType::I64) => out.push(core_instr)
           _ =>
             raise WatError::Unsupported(
               "\{context} expects \{type_name}.const/global.get",
