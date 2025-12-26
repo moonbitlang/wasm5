@@ -340,7 +340,7 @@ fn table_index_type(table_type : @core.TableType) -> @core.ValType {
 /// Validate that all instructions in an expression are valid constant expression instructions
 /// WebAssembly constant expressions can only contain:
 /// - Constant instructions: i32.const, i64.const, f32.const, f64.const
-/// - Reference instructions: ref.null, ref.func
+/// - Reference instructions: ref.null, ref.func, ref.is_null, ref.eq, ref.as_non_null, ref.test, ref.cast, ref.i31
 /// - @core.Global access: global.get
 /// - Numeric instructions (integer/float ops, conversions, sign-extend, trunc-sat)
 fn validate_const_expr_instructions(
@@ -355,6 +355,12 @@ fn validate_const_expr_instructions(
       | RefNull(_)
       | RefFunc(_)
       | GlobalGet(_)
+      | RefIsNull
+      | RefEq
+      | RefAsNonNull
+      | RefTest(_, _)
+      | RefCast(_, _)
+      | RefI31
       | I32Eqz
       | I32Eq
       | I32Ne
