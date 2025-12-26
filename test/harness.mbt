@@ -1041,7 +1041,7 @@ let whitelisted_tests : Array[(String, Set[Int])] = [
   // - Line 26: invoke $ModuleName syntax not supported (need registry lookup in action handler)
   // - Lines 93,94,97: "get" action type not supported (need handler to read exported globals)
   ("exports.wast", Set::from_array([26, 93, 94, 97])),
-  ("br_on_non_null.wast", Set::from_array([92])),
+  // br_on_non_null.wast line 92 - now handled correctly by br_on_non_null validation
   ("ref_as_non_null.wast", Set::from_array([27])),
   ("br_on_null.wast", Set::from_array([82])),
   ("unreached-invalid.wast", Set::from_array([676, 687])),

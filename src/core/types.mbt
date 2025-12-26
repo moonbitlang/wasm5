@@ -68,6 +68,49 @@ pub fn ValType::is_defaultable(self : ValType) -> Bool {
   }
 }
 
+///|
+/// Check if this is a reference type
+pub fn ValType::is_ref_type(self : ValType) -> Bool {
+  match self {
+    FuncRef
+    | ExternRef
+    | AnyRef
+    | ExnRef
+    | EqRef
+    | I31Ref
+    | StructRef
+    | ArrayRef
+    | NullRef
+    | NullFuncRef
+    | NullExnRef
+    | NullExternRef
+    | Ref(_, _) => true
+    _ => false
+  }
+}
+
+///|
+/// Convert a nullable reference type to its non-nullable version
+pub fn ValType::to_non_nullable(self : ValType) -> ValType {
+  match self {
+    FuncRef => Ref(Func, false)
+    ExternRef => Ref(Extern, false)
+    AnyRef => Ref(Any, false)
+    ExnRef => Ref(Exn, false)
+    EqRef => Ref(Eq, false)
+    I31Ref => Ref(I31, false)
+    StructRef => Ref(Struct, false)
+    ArrayRef => Ref(Array, false)
+    NullRef => Ref(Any, false)
+    NullFuncRef => Ref(Func, false)
+    NullExnRef => Ref(Exn, false)
+    NullExternRef => Ref(Extern, false)
+    Ref(ht, _) => Ref(ht, false)
+    // Non-ref types return as-is
+    other => other
+  }
+}
+
 // Function type (signature)
 
 ///|
