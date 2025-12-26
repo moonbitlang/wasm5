@@ -22,7 +22,7 @@ pub fn Runtime::compile(self : Runtime) -> Runtime raise RuntimeError {
 
         // Clear stack and call_stack before setting up locals
         self.ctx.call_stack.clear()
-        let rt : Runtime = { ..self, stack_top: 0, status: Terminated }
+        let rt : Runtime = { ..self, sp: 0, status: Terminated }
 
         // Initialize entry locals (start function has no parameters)
         let rt = initialize_entry_locals(rt, [], code)
@@ -38,7 +38,7 @@ pub fn Runtime::compile(self : Runtime) -> Runtime raise RuntimeError {
         }
 
         // Return with cleared stack
-        return { ..rt, stack_top: 0 }
+        return { ..rt, sp: 0 }
       }
       self
     }
@@ -107,7 +107,7 @@ pub fn Runtime::call_compiled(
 
   // Clear stack and call_stack before setting up entry frame
   self.ctx.call_stack.clear()
-  let rt : Runtime = { ..self, stack_top: 0, status: Terminated }
+  let rt : Runtime = { ..self, sp: 0, status: Terminated }
 
   // Initialize entry locals (pushes args and locals onto stack, sets sp/num_locals)
   let rt = initialize_entry_locals(rt, args, code)
@@ -122,7 +122,7 @@ pub fn Runtime::call_compiled(
   let results : Array[Value] = []
   let result_types = func_type.results
   for i in 0..<result_types.length() {
-    if i < rt.stack_top {
+    if i < rt.sp {
       results.push(stack_to_value(rt.stack.unsafe_get(i), result_types[i]))
     }
   }

@@ -39,7 +39,7 @@ test "runtime compile start function" {
   let rt = rt.compile()
   assert_eq(rt.ops.length() > 0, true)
   // Stack is cleared after start function execution (unified stack model)
-  assert_eq(rt.stack_top, 0)
+  assert_eq(rt.sp, 0)
 }
 
 ///|

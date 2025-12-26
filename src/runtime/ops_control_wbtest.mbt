@@ -42,8 +42,8 @@ fn base_runtime(
   Runtime::{
     ops: FixedArray::from_array(ops),
     stack: stack_buf,
-    stack_top: stack_len,
-    sp: 0,
+    sp: stack_len,
+    bp: 0,
     num_locals: 0,
     pc: 0,
     status: Running,
@@ -64,7 +64,7 @@ test "ops control drop and select" {
   let rt_drop = base_runtime(base_module([], [], [], []), [], [Value::I32(1U)])
   let rt_drop = op_drop(rt_drop)
   assert_ok(rt_drop)
-  assert_eq(rt_drop.stack_top, 0)
+  assert_eq(rt_drop.sp, 0)
   let rt_select = base_runtime(base_module([], [], [], []), [], [
     Value::I32(10U),
     Value::I32(20U),
@@ -101,7 +101,7 @@ test "ops control branching" {
   let rt_br = op_br(rt_br)
   assert_ok(rt_br)
   assert_eq(rt_br.pc, 10)
-  assert_eq(rt_br.stack_top, 2)
+  assert_eq(rt_br.sp, 2)
   assert_eq(rt_br.stack.unsafe_get(0), 1UL)
   assert_eq(rt_br.stack.unsafe_get(1), 3UL)
   let rt_br_if = base_runtime(
@@ -190,8 +190,8 @@ test "ops control table grow and globals" {
   let rt_table_size = Runtime::{
     ops: FixedArray::from_array([ImmediateIdx(0), ImmediateIdx(0)]),
     stack: FixedArray::make(64, 0UL),
-    stack_top: 0,
     sp: 0,
+    bp: 0,
     num_locals: 0,
     pc: 0,
     status: Running,
@@ -215,8 +215,8 @@ test "ops control table grow and globals" {
   let rt_table_grow = Runtime::{
     ops: FixedArray::from_array([ImmediateIdx(0), ImmediateIdx(0)]),
     stack: stack_grow,
-    stack_top: 2,
-    sp: 0,
+    sp: 2,
+    bp: 0,
     num_locals: 0,
     pc: 0,
     status: Running,
@@ -239,8 +239,8 @@ test "ops control table grow and globals" {
   let rt_global = Runtime::{
     ops: FixedArray::from_array([ImmediateIdx(0), ImmediateIdx(0)]),
     stack: stack_global,
-    stack_top: 1,
-    sp: 0,
+    sp: 1,
+    bp: 0,
     num_locals: 0,
     pc: 0,
     status: Running,
@@ -248,7 +248,7 @@ test "ops control table grow and globals" {
   }
   let rt_global = op_global_set(rt_global)
   assert_ok(rt_global)
-  let rt_global = { ..rt_global, stack_top: 0, pc: 0 }
+  let rt_global = { ..rt_global, sp: 0, pc: 0 }
   let rt_global = op_global_get(rt_global)
   assert_ok(rt_global)
   assert_ctrl_stack_eq(rt_global.stack.unsafe_get(0), Value::I32(9U))

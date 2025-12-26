@@ -248,8 +248,8 @@ let initial_stack_capacity : Int = 1024
 pub struct Runtime {
   ops : FixedArray[MInstr] // Compiled instructions for execution
   stack : FixedArray[UInt64] // Unified stack for locals and operand stack (tagless)
-  stack_top : Int // Current top of stack (next push position)
-  sp : Int // Stack pointer: index of first local in unified stack
+  sp : Int // Current top of stack (next push position)
+  bp : Int // Base pointer: index of first local in unified stack
   num_locals : Int // Number of locals for current function
   pc : Int // Program counter
   status : RuntimeStatus // Execution status: Running, Terminated, or Trap
@@ -531,8 +531,8 @@ pub fn Runtime::load_with_resolver(
   Runtime::{
     ops: compiler.finish(),
     stack: FixedArray::make(initial_stack_capacity, 0UL),
-    stack_top: 0,
     sp: 0,
+    bp: 0,
     num_locals: 0,
     pc: 0,
     status: Terminated,

@@ -235,21 +235,21 @@ priv struct PopArgs {
 fn pop_arguments(rt : Runtime, func_type : @core.FuncType) -> PopArgs {
   let num_params = func_type.params.length()
   let args : Array[Value] = Array::make(num_params, Value::I32(0U))
-  let mut stack_top = rt.stack_top
+  let mut stack_top = rt.sp
   for i = num_params - 1; i >= 0; i = i - 1 {
     stack_top -= 1
     let raw = rt.stack.unsafe_get(stack_top)
     args[i] = stack_to_value(raw, func_type.params[i])
   }
-  { rt: { ..rt, stack_top, }, args }
+  { rt: { ..rt, sp: stack_top }, args }
 }
 
 ///|
 /// Push default values for declared locals onto the unified stack.
 /// Params are already on the stack - this only handles declared locals.
-/// Returns Runtime with updated stack_top and status (Trap on error).
+/// Returns Runtime with updated sp and status (Trap on error).
 fn init_declared_locals(rt : Runtime, code : @core.Code) -> Runtime {
-  let mut stack_top = rt.stack_top
+  let mut stack_top = rt.sp
   for local_type in code.locals {
     match local_type {
       I32 | I64 | F32 | F64 => {
@@ -274,25 +274,25 @@ fn init_declared_locals(rt : Runtime, code : @core.Code) -> Runtime {
       }
       _ => {
         rt.ctx.error_detail = "Unsupported local type: \{local_type}"
-        return { ..rt, stack_top, status: Trap }
+        return { ..rt, sp: stack_top, status: Trap }
       }
     }
   }
-  { ..rt, stack_top, }
+  { ..rt, sp: stack_top }
 }
 
 ///|
 /// Initialize locals for entry point (call_compiled, start function).
 /// Pushes args onto stack, then declared locals, and sets sp/num_locals.
-/// Returns Runtime with updated sp, stack_top, num_locals, and status.
+/// Returns Runtime with updated sp, bp, num_locals, and status.
 fn initialize_entry_locals(
   rt : Runtime,
   args : Array[Value],
   code : @core.Code,
 ) -> Runtime {
   // sp points to start of locals (current stack position)
-  let sp = rt.stack_top
-  let mut stack_top = rt.stack_top
+  let sp = rt.sp
+  let mut stack_top = rt.sp
 
   // Push arguments as first locals
   for arg in args {
@@ -301,14 +301,14 @@ fn initialize_entry_locals(
   }
 
   // Push default values for declared locals
-  let rt2 = init_declared_locals({ ..rt, stack_top, }, code)
+  let rt2 = init_declared_locals({ ..rt, sp: stack_top }, code)
   if rt2.status == Trap {
-    return { ..rt2, sp, }
+    return { ..rt2, bp: sp }
   }
 
   // Set num_locals
   let num_locals = args.length() + code.locals.length()
-  { ..rt2, sp, num_locals }
+  { ..rt2, bp: sp, num_locals }
 }
 
 ///|
@@ -342,7 +342,7 @@ fn check_type_signature_match(
 
 ///|
 /// Call an imported function and push results onto the stack (as UInt64)
-/// Returns Runtime with updated stack_top.
+/// Returns Runtime with updated sp.
 fn call_imported_function(
   rt : Runtime,
   func_idx : Int,
@@ -356,12 +356,12 @@ fn call_imported_function(
   } else {
     results.length()
   }
-  let mut stack_top = rt.stack_top
+  let mut stack_top = rt.sp
   for i in 0..<count {
     rt.stack.unsafe_set(stack_top, value_to_stack(results[i]))
     stack_top += 1
   }
-  { ..rt, stack_top, }
+  { ..rt, sp: stack_top }
 }
 
 ///|
@@ -372,7 +372,7 @@ fn handle_tail_call_return(rt : Runtime) -> Runtime {
     let frame = rt.ctx.call_stack.unsafe_pop()
     {
       ..rt,
-      sp: frame.caller_sp,
+      bp: frame.caller_sp,
       num_locals: frame.caller_num_locals,
       pc: frame.return_pc + 1,
     }

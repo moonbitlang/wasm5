@@ -1,26 +1,26 @@
 ///|
-/// Local access uses unified stack: stack[sp + idx]
+/// Local access uses unified stack: stack[bp + idx]
 fn op_local_get(rt : Runtime) -> Runtime {
   let { rt, value: idx } = read_imm_idx(rt)
-  let value = rt.stack.unsafe_get(rt.sp + idx)
-  rt.stack.unsafe_set(rt.stack_top, value)
-  { ..rt, stack_top: rt.stack_top + 1, pc: rt.pc + 1 }
+  let value = rt.stack.unsafe_get(rt.bp + idx)
+  rt.stack.unsafe_set(rt.sp, value)
+  { ..rt, sp: rt.sp + 1, pc: rt.pc + 1 }
 }
 
 ///|
 fn op_local_set(rt : Runtime) -> Runtime {
   let { rt, value: idx } = read_imm_idx(rt)
-  let stack_top = rt.stack_top - 1
+  let stack_top = rt.sp - 1
   let value = rt.stack.unsafe_get(stack_top)
-  rt.stack.unsafe_set(rt.sp + idx, value)
-  { ..rt, stack_top, pc: rt.pc + 1 }
+  rt.stack.unsafe_set(rt.bp + idx, value)
+  { ..rt, sp: stack_top, pc: rt.pc + 1 }
 }
 
 ///|
 fn op_local_tee(rt : Runtime) -> Runtime {
   let { rt, value: idx } = read_imm_idx(rt)
-  let value = rt.stack.unsafe_get(rt.stack_top - 1)
-  rt.stack.unsafe_set(rt.sp + idx, value)
+  let value = rt.stack.unsafe_get(rt.sp - 1)
+  rt.stack.unsafe_set(rt.bp + idx, value)
   { ..rt, pc: rt.pc + 1 }
 }
 
@@ -30,17 +30,17 @@ fn op_local_tee(rt : Runtime) -> Runtime {
 
 ///|
 fn op_drop(rt : Runtime) -> Runtime {
-  { ..rt, stack_top: rt.stack_top - 1, pc: rt.pc + 1 }
+  { ..rt, sp: rt.sp - 1, pc: rt.pc + 1 }
 }
 
 ///|
 fn op_select(rt : Runtime) -> Runtime {
-  let stack_top = rt.stack_top - 3
-  let cond = rt.stack.unsafe_get(rt.stack_top - 1).to_uint()
-  let val2 = rt.stack.unsafe_get(rt.stack_top - 2)
+  let stack_top = rt.sp - 3
+  let cond = rt.stack.unsafe_get(rt.sp - 1).to_uint()
+  let val2 = rt.stack.unsafe_get(rt.sp - 2)
   let val1 = rt.stack.unsafe_get(stack_top)
   rt.stack.unsafe_set(stack_top, if cond != 0U { val1 } else { val2 })
-  { ..rt, stack_top: stack_top + 1, pc: rt.pc + 1 }
+  { ..rt, sp: stack_top + 1, pc: rt.pc + 1 }
 }
 
 ///|
@@ -69,12 +69,12 @@ fn get_func_type_or_error(
 ///|
 fn op_if(rt : Runtime) -> Runtime {
   let { rt, value: else_pc } = read_imm_idx(rt)
-  let stack_top = rt.stack_top - 1
+  let stack_top = rt.sp - 1
   let cond = rt.stack.unsafe_get(stack_top).to_uint()
   if cond != 0U {
-    { ..rt, stack_top, pc: rt.pc + 1 }
+    { ..rt, sp: stack_top, pc: rt.pc + 1 }
   } else {
-    { ..rt, stack_top, pc: else_pc }
+    { ..rt, sp: stack_top, pc: else_pc }
   }
 }
 
@@ -91,7 +91,7 @@ fn op_br(rt : Runtime) -> Runtime {
   // Stack: [..., drop_values (drop_count), result_values (arity)]
   // Want:  [..., result_values (arity)]
   if drop_count > 0 && arity > 0 {
-    let result_start = rt.stack_top - arity
+    let result_start = rt.sp - arity
     let target_start = result_start - drop_count
     // Copy forward is safe since target_start < result_start
     for i = 0; i < arity; i = i + 1 {
@@ -103,7 +103,7 @@ fn op_br(rt : Runtime) -> Runtime {
   }
 
   // Trim stack to remove drop_count values
-  { ..rt, stack_top: rt.stack_top - drop_count, pc: target_pc }
+  { ..rt, sp: rt.sp - drop_count, pc: target_pc }
 }
 
 ///|
@@ -111,7 +111,7 @@ fn op_br_if(rt : Runtime) -> Runtime {
   let { rt, value: target_pc } = read_imm_idx(rt)
   let { rt, value: arity } = read_imm_idx(rt)
   let { rt, value: drop_count } = read_imm_idx(rt)
-  let stack_top = rt.stack_top - 1
+  let stack_top = rt.sp - 1
   let cond = rt.stack.unsafe_get(stack_top).to_uint()
   if cond != 0U {
     // In-place stack shuffle: move arity values down by drop_count positions
@@ -127,9 +127,9 @@ fn op_br_if(rt : Runtime) -> Runtime {
     }
 
     // Trim stack to remove drop_count values
-    { ..rt, stack_top: stack_top - drop_count, pc: target_pc }
+    { ..rt, sp: stack_top - drop_count, pc: target_pc }
   } else {
-    { ..rt, stack_top, pc: rt.pc + 1 }
+    { ..rt, sp: stack_top, pc: rt.pc + 1 }
   }
 }
 
@@ -137,7 +137,7 @@ fn op_br_if(rt : Runtime) -> Runtime {
 fn op_br_table(rt : Runtime) -> Runtime {
   let { rt, value: num_labels } = read_imm_idx(rt)
   let { rt, value: arity } = read_imm_idx(rt)
-  let stack_top = rt.stack_top - 1
+  let stack_top = rt.sp - 1
   let index = rt.stack.unsafe_get(stack_top).to_uint().reinterpret_as_int()
 
   // Read all target_pc+drop_count pairs, selecting the right one
@@ -171,7 +171,7 @@ fn op_br_table(rt : Runtime) -> Runtime {
   }
 
   // Trim stack to remove drop_count values
-  { ..rt, stack_top: stack_top - drop_count, pc: target_pc }
+  { ..rt, sp: stack_top - drop_count, pc: target_pc }
 }
 
 ///|
@@ -180,7 +180,7 @@ fn op_br_on_null(rt : Runtime) -> Runtime {
   let { rt, value: arity } = read_imm_idx(rt)
   let { rt, value: drop_count } = read_imm_idx(rt)
   // Pop reference value (refs are stored as Int64, -1 = null)
-  let stack_top = rt.stack_top - 1
+  let stack_top = rt.sp - 1
   let ref_val = rt.stack.unsafe_get(stack_top)
   let ref_idx = ref_val.reinterpret_as_int64().to_int()
   let is_null = ref_idx == -1
@@ -199,7 +199,7 @@ fn op_br_on_null(rt : Runtime) -> Runtime {
     }
 
     // Trim stack to remove drop_count values
-    { ..rt, stack_top: stack_top - drop_count, pc: target_pc }
+    { ..rt, sp: stack_top - drop_count, pc: target_pc }
   } else {
     // Not null - push back the value and continue
     rt.stack.unsafe_set(stack_top, ref_val)
@@ -213,7 +213,7 @@ fn op_br_on_non_null(rt : Runtime) -> Runtime {
   let { rt, value: arity } = read_imm_idx(rt)
   let { rt, value: drop_count } = read_imm_idx(rt)
   // Pop reference value (refs are stored as Int64, -1 = null)
-  let stack_top = rt.stack_top - 1
+  let stack_top = rt.sp - 1
   let ref_val = rt.stack.unsafe_get(stack_top)
   let ref_idx = ref_val.reinterpret_as_int64().to_int()
   let is_non_null = ref_idx != -1
@@ -235,10 +235,10 @@ fn op_br_on_non_null(rt : Runtime) -> Runtime {
     }
 
     // Trim stack to remove drop_count values
-    { ..rt, stack_top: stack_top - drop_count, pc: target_pc }
+    { ..rt, sp: stack_top - drop_count, pc: target_pc }
   } else {
     // Null - don't push anything, continue
-    { ..rt, stack_top, pc: rt.pc + 1 }
+    { ..rt, sp: stack_top, pc: rt.pc + 1 }
   }
 }
 
@@ -289,7 +289,7 @@ fn op_call(rt : Runtime) -> Runtime {
   // Unified stack: arguments are already on stack, they become callee's first locals
   // new_sp points to where arguments start (they stay in place!)
   let num_params = func_type.params.length()
-  let new_sp = rt.stack_top - num_params
+  let new_sp = rt.sp - num_params
 
   // Check stack capacity for the callee
   if new_sp + code.max_stack_height > rt.stack.length() {
@@ -300,7 +300,7 @@ fn op_call(rt : Runtime) -> Runtime {
   // Save caller's frame
   rt.ctx.call_stack.push(CallFrame::{
     return_pc: rt.pc,
-    caller_sp: rt.sp,
+    caller_sp: rt.bp,
     caller_num_locals: rt.num_locals,
   })
 
@@ -313,7 +313,7 @@ fn op_call(rt : Runtime) -> Runtime {
   // Update frame state
   {
     ..rt,
-    sp: new_sp,
+    bp: new_sp,
     num_locals: num_params + code.locals.length(),
     pc: callee_pc,
   }
@@ -328,26 +328,26 @@ fn op_return(rt : Runtime) -> Runtime {
   // Return values are the top num_return_values values on the stack
   // Copy them in-place to: stack[sp .. sp + num_return_values)
   // Then trim stack to sp + num_return_values
-  let return_start = rt.stack_top - num_return_values
+  let return_start = rt.sp - num_return_values
 
   // Copy return values to start of frame
   for i = 0; i < num_return_values; i = i + 1 {
-    rt.stack.unsafe_set(rt.sp + i, rt.stack.unsafe_get(return_start + i))
+    rt.stack.unsafe_set(rt.bp + i, rt.stack.unsafe_get(return_start + i))
   }
 
   // Trim stack to keep only return values at frame position
-  let stack_top = rt.sp + num_return_values
+  let stack_top = rt.bp + num_return_values
   if rt.ctx.call_stack.length() == 0 {
     // Entry function returning - results are now at stack[0..num_return_values)
-    return { ..rt, stack_top, status: Terminated }
+    return { ..rt, sp: stack_top, status: Terminated }
   }
 
   // Restore caller's state
   let frame = rt.ctx.call_stack.unsafe_pop()
   {
     ..rt,
-    stack_top,
-    sp: frame.caller_sp,
+    sp: stack_top,
+    bp: frame.caller_sp,
     num_locals: frame.caller_num_locals,
     pc: frame.return_pc + 1,
   }
@@ -359,9 +359,9 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
   let { rt, value: table_idx } = read_imm_idx(rt)
 
   // Pop the function index from the stack
-  let stack_top = rt.stack_top - 1
+  let stack_top = rt.sp - 1
   let elem_idx = rt.stack.unsafe_get(stack_top).to_uint().reinterpret_as_int()
-  let rt = { ..rt, stack_top, }
+  let rt = { ..rt, sp: stack_top }
 
   // Check table bounds
   if table_idx < 0 || table_idx >= rt.ctx.tables.length() {
@@ -456,7 +456,7 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
 
   // Unified stack: arguments are already on stack, they become callee's first locals
   let num_params = actual_type.params.length()
-  let new_sp = rt.stack_top - num_params
+  let new_sp = rt.sp - num_params
 
   // Check stack capacity for the callee
   if new_sp + code.max_stack_height > rt.stack.length() {
@@ -467,7 +467,7 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
   // Save caller's frame
   rt.ctx.call_stack.push(CallFrame::{
     return_pc: rt.pc,
-    caller_sp: rt.sp,
+    caller_sp: rt.bp,
     caller_num_locals: rt.num_locals,
   })
 
@@ -480,7 +480,7 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
   // Update frame state
   {
     ..rt,
-    sp: new_sp,
+    bp: new_sp,
     num_locals: num_params + code.locals.length(),
     pc: callee_pc,
   }
@@ -532,17 +532,17 @@ fn op_return_call(rt : Runtime) -> Runtime {
   // Tail call: reuse current frame
   // Move arguments in-place from stack top to sp position
   let num_params = func_type.params.length()
-  let args_start = rt.stack_top - num_params
+  let args_start = rt.sp - num_params
 
   // Copy arguments to sp position (they become new locals)
-  if num_params > 0 && args_start > rt.sp {
+  if num_params > 0 && args_start > rt.bp {
     for i = 0; i < num_params; i = i + 1 {
-      rt.stack.unsafe_set(rt.sp + i, rt.stack.unsafe_get(args_start + i))
+      rt.stack.unsafe_set(rt.bp + i, rt.stack.unsafe_get(args_start + i))
     }
   }
 
   // Trim stack to sp + num_params
-  let rt = { ..rt, stack_top: rt.sp + num_params }
+  let rt = { ..rt, sp: rt.bp + num_params }
 
   // Push default values for declared locals
   let rt = init_declared_locals(rt, code)
@@ -560,9 +560,9 @@ fn op_return_call_indirect(rt : Runtime) -> Runtime {
   let { rt, value: table_idx } = read_imm_idx(rt)
 
   // Pop the function index from the stack
-  let stack_top = rt.stack_top - 1
+  let stack_top = rt.sp - 1
   let elem_idx = rt.stack.unsafe_get(stack_top).to_uint().reinterpret_as_int()
-  let rt = { ..rt, stack_top, }
+  let rt = { ..rt, sp: stack_top }
 
   // Check table bounds
   if table_idx < 0 || table_idx >= rt.ctx.tables.length() {
@@ -658,17 +658,17 @@ fn op_return_call_indirect(rt : Runtime) -> Runtime {
   // Tail call: reuse current frame
   // Move arguments in-place from stack top to sp position
   let num_params = actual_type.params.length()
-  let args_start = rt.stack_top - num_params
+  let args_start = rt.sp - num_params
 
   // Copy arguments to sp position (they become new locals)
-  if num_params > 0 && args_start > rt.sp {
+  if num_params > 0 && args_start > rt.bp {
     for i = 0; i < num_params; i = i + 1 {
-      rt.stack.unsafe_set(rt.sp + i, rt.stack.unsafe_get(args_start + i))
+      rt.stack.unsafe_set(rt.bp + i, rt.stack.unsafe_get(args_start + i))
     }
   }
 
   // Trim stack to sp + num_params
-  let rt = { ..rt, stack_top: rt.sp + num_params }
+  let rt = { ..rt, sp: rt.bp + num_params }
 
   // Push default values for declared locals
   let rt = init_declared_locals(rt, code)
@@ -685,12 +685,12 @@ fn op_call_ref(rt : Runtime) -> Runtime {
   let { rt, value: type_idx } = read_imm_idx(rt)
 
   // Pop the function reference from the stack (stored as Int64, -1 = null)
-  let stack_top = rt.stack_top - 1
+  let stack_top = rt.sp - 1
   let func_ref_raw = rt.stack
     .unsafe_get(stack_top)
     .reinterpret_as_int64()
     .to_int()
-  let rt = { ..rt, stack_top, }
+  let rt = { ..rt, sp: stack_top }
   if func_ref_raw == -1 {
     rt.ctx.error_detail = "call_ref: null function reference"
     return { ..rt, status: Trap }
@@ -767,7 +767,7 @@ fn op_call_ref(rt : Runtime) -> Runtime {
 
   // Unified stack: arguments are already on stack, they become callee's first locals
   let num_params = func_type.params.length()
-  let new_sp = rt.stack_top - num_params
+  let new_sp = rt.sp - num_params
 
   // Check stack capacity for the callee
   if new_sp + code.max_stack_height > rt.stack.length() {
@@ -778,7 +778,7 @@ fn op_call_ref(rt : Runtime) -> Runtime {
   // Save caller's frame
   rt.ctx.call_stack.push(CallFrame::{
     return_pc: rt.pc,
-    caller_sp: rt.sp,
+    caller_sp: rt.bp,
     caller_num_locals: rt.num_locals,
   })
 
@@ -791,7 +791,7 @@ fn op_call_ref(rt : Runtime) -> Runtime {
   // Update frame state
   {
     ..rt,
-    sp: new_sp,
+    bp: new_sp,
     num_locals: num_params + code.locals.length(),
     pc: callee_pc,
   }
@@ -802,12 +802,12 @@ fn op_return_call_ref(rt : Runtime) -> Runtime {
   let { rt, value: type_idx } = read_imm_idx(rt)
 
   // Pop the function reference from the stack (stored as Int64, -1 = null)
-  let stack_top = rt.stack_top - 1
+  let stack_top = rt.sp - 1
   let func_ref_raw = rt.stack
     .unsafe_get(stack_top)
     .reinterpret_as_int64()
     .to_int()
-  let rt = { ..rt, stack_top, }
+  let rt = { ..rt, sp: stack_top }
   if func_ref_raw == -1 {
     rt.ctx.error_detail = "return_call_ref: null function reference"
     return { ..rt, status: Trap }
@@ -886,17 +886,17 @@ fn op_return_call_ref(rt : Runtime) -> Runtime {
   // Tail call: reuse current frame
   // Move arguments in-place from stack top to sp position
   let num_params = func_type.params.length()
-  let args_start = rt.stack_top - num_params
+  let args_start = rt.sp - num_params
 
   // Copy arguments to sp position (they become new locals)
-  if num_params > 0 && args_start > rt.sp {
+  if num_params > 0 && args_start > rt.bp {
     for i = 0; i < num_params; i = i + 1 {
-      rt.stack.unsafe_set(rt.sp + i, rt.stack.unsafe_get(args_start + i))
+      rt.stack.unsafe_set(rt.bp + i, rt.stack.unsafe_get(args_start + i))
     }
   }
 
   // Trim stack to sp + num_params
-  let rt = { ..rt, stack_top: rt.sp + num_params }
+  let rt = { ..rt, sp: rt.bp + num_params }
 
   // Push default values for declared locals
   let rt = init_declared_locals(rt, code)
@@ -958,24 +958,24 @@ fn op_gc_unimplemented(rt : Runtime) -> Runtime {
 fn op_table_init(rt : Runtime) -> Runtime {
   let { rt, value: _table_idx } = read_imm_idx(rt)
   let { rt, value: _elem_idx } = read_imm_idx(rt)
-  let stack_top = rt.stack_top - 3
-  let _n = rt.stack.unsafe_get(rt.stack_top - 1).to_uint()
-  let _src = rt.stack.unsafe_get(rt.stack_top - 2).to_uint()
+  let stack_top = rt.sp - 3
+  let _n = rt.stack.unsafe_get(rt.sp - 1).to_uint()
+  let _src = rt.stack.unsafe_get(rt.sp - 2).to_uint()
   let _dest = rt.stack.unsafe_get(stack_top).to_uint()
   // TODO: Implement table.init
-  { ..rt, stack_top, pc: rt.pc + 1 }
+  { ..rt, sp: stack_top, pc: rt.pc + 1 }
 }
 
 ///|
 fn op_table_copy(rt : Runtime) -> Runtime {
   let { rt, value: _dst_table_idx } = read_imm_idx(rt)
   let { rt, value: _src_table_idx } = read_imm_idx(rt)
-  let stack_top = rt.stack_top - 3
-  let _n = rt.stack.unsafe_get(rt.stack_top - 1).to_uint()
-  let _src = rt.stack.unsafe_get(rt.stack_top - 2).to_uint()
+  let stack_top = rt.sp - 3
+  let _n = rt.stack.unsafe_get(rt.sp - 1).to_uint()
+  let _src = rt.stack.unsafe_get(rt.sp - 2).to_uint()
   let _dest = rt.stack.unsafe_get(stack_top).to_uint()
   // TODO: Implement table.copy
-  { ..rt, stack_top, pc: rt.pc + 1 }
+  { ..rt, sp: stack_top, pc: rt.pc + 1 }
 }
 
 ///|
@@ -985,23 +985,20 @@ fn op_table_fill(rt : Runtime) -> Runtime {
     rt.ctx.error_detail = "table index out of bounds"
     return { ..rt, status: Trap }
   }
-  let stack_top = rt.stack_top - 3
-  let n = rt.stack.unsafe_get(rt.stack_top - 1).to_uint().reinterpret_as_int()
-  let raw_ref = rt.stack
-    .unsafe_get(rt.stack_top - 2)
-    .reinterpret_as_int64()
-    .to_int()
+  let stack_top = rt.sp - 3
+  let n = rt.stack.unsafe_get(rt.sp - 1).to_uint().reinterpret_as_int()
+  let raw_ref = rt.stack.unsafe_get(rt.sp - 2).reinterpret_as_int64().to_int()
   let ref_value : Int? = if raw_ref == -1 { None } else { Some(raw_ref) }
   let dest = rt.stack.unsafe_get(stack_top).to_uint().reinterpret_as_int()
   let table = rt.ctx.tables[table_idx].data
   if dest < 0 || n < 0 || dest + n > table.length() {
     rt.ctx.error_detail = "table fill out of bounds"
-    return { ..rt, stack_top, status: Trap }
+    return { ..rt, sp: stack_top, status: Trap }
   }
   for i = 0; i < n; i = i + 1 {
     table[dest + i] = ref_value
   }
-  { ..rt, stack_top, pc: rt.pc + 1 }
+  { ..rt, sp: stack_top, pc: rt.pc + 1 }
 }
 
 ///|
@@ -1023,8 +1020,8 @@ fn op_table_size(rt : Runtime) -> Runtime {
     return { ..rt, status: Trap }
   }
   let size = rt.ctx.tables[table_idx].data.length()
-  rt.stack.unsafe_set(rt.stack_top, size.reinterpret_as_uint().to_uint64())
-  { ..rt, stack_top: rt.stack_top + 1, pc: rt.pc + 1 }
+  rt.stack.unsafe_set(rt.sp, size.reinterpret_as_uint().to_uint64())
+  { ..rt, sp: rt.sp + 1, pc: rt.pc + 1 }
 }
 
 ///|
@@ -1034,12 +1031,12 @@ fn op_table_get(rt : Runtime) -> Runtime {
     rt.ctx.error_detail = "table index out of bounds"
     return { ..rt, status: Trap }
   }
-  let stack_top = rt.stack_top - 1
+  let stack_top = rt.sp - 1
   let elem_idx = rt.stack.unsafe_get(stack_top).to_uint().reinterpret_as_int()
   let table = rt.ctx.tables[table_idx].data
   if elem_idx < 0 || elem_idx >= table.length() {
     rt.ctx.error_detail = "table element index out of bounds"
-    return { ..rt, stack_top, status: Trap }
+    return { ..rt, sp: stack_top, status: Trap }
   }
   // Return the function reference (or null) - stored as Int64, -1 = null
   let ref_val = match table[elem_idx] {
@@ -1058,34 +1055,28 @@ fn op_table_set(rt : Runtime) -> Runtime {
     return { ..rt, status: Trap }
   }
   // Pop ref value - stored as Int64, -1 = null
-  let stack_top = rt.stack_top - 2
-  let raw_ref = rt.stack
-    .unsafe_get(rt.stack_top - 1)
-    .reinterpret_as_int64()
-    .to_int()
+  let stack_top = rt.sp - 2
+  let raw_ref = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_int64().to_int()
   let ref_value : Int? = if raw_ref == -1 { None } else { Some(raw_ref) }
   let elem_idx = rt.stack.unsafe_get(stack_top).to_uint().reinterpret_as_int()
   let table = rt.ctx.tables[table_idx].data
   if elem_idx < 0 || elem_idx >= table.length() {
     rt.ctx.error_detail = "table element index out of bounds"
-    return { ..rt, stack_top, status: Trap }
+    return { ..rt, sp: stack_top, status: Trap }
   }
   table[elem_idx] = ref_value
-  { ..rt, stack_top, pc: rt.pc + 1 }
+  { ..rt, sp: stack_top, pc: rt.pc + 1 }
 }
 
 ///|
 fn op_table_grow(rt : Runtime) -> Runtime {
   let { rt, value: table_idx } = read_imm_idx(rt)
   if table_idx < 0 || table_idx >= rt.ctx.tables.length() {
-    rt.stack.unsafe_set(rt.stack_top, 0xFFFFFFFFUL) // -1 indicates failure
-    return { ..rt, stack_top: rt.stack_top + 1, pc: rt.pc + 1 }
+    rt.stack.unsafe_set(rt.sp, 0xFFFFFFFFUL) // -1 indicates failure
+    return { ..rt, sp: rt.sp + 1, pc: rt.pc + 1 }
   }
-  let stack_top = rt.stack_top - 2
-  let delta = rt.stack
-    .unsafe_get(rt.stack_top - 1)
-    .to_uint()
-    .reinterpret_as_int()
+  let stack_top = rt.sp - 2
+  let delta = rt.stack.unsafe_get(rt.sp - 1).to_uint().reinterpret_as_int()
   // Pop ref value - stored as Int64, -1 = null
   let raw_ref = rt.stack.unsafe_get(stack_top).reinterpret_as_int64().to_int()
   let init_value : Int? = if raw_ref == -1 { None } else { Some(raw_ref) }
@@ -1094,7 +1085,7 @@ fn op_table_grow(rt : Runtime) -> Runtime {
   let old_size = table.length()
   if delta < 0 {
     rt.stack.unsafe_set(stack_top, 0xFFFFFFFFUL) // -1 indicates failure
-    return { ..rt, stack_top: stack_top + 1, pc: rt.pc + 1 }
+    return { ..rt, sp: stack_top + 1, pc: rt.pc + 1 }
   }
   let new_size = old_size + delta
 
@@ -1104,7 +1095,7 @@ fn op_table_grow(rt : Runtime) -> Runtime {
       if new_size > max.reinterpret_as_int64().to_int() {
         // Would exceed max - return -1 (failure)
         rt.stack.unsafe_set(stack_top, 0xFFFFFFFFUL)
-        return { ..rt, stack_top: stack_top + 1, pc: rt.pc + 1 }
+        return { ..rt, sp: stack_top + 1, pc: rt.pc + 1 }
       }
     None => () // No max limit
   }
@@ -1114,7 +1105,7 @@ fn op_table_grow(rt : Runtime) -> Runtime {
     table.push(init_value)
   }
   rt.stack.unsafe_set(stack_top, old_size.reinterpret_as_uint().to_uint64())
-  { ..rt, stack_top: stack_top + 1, pc: rt.pc + 1 }
+  { ..rt, sp: stack_top + 1, pc: rt.pc + 1 }
 }
 
 // =============================================================================
@@ -1127,8 +1118,8 @@ fn op_ref_null(rt : Runtime) -> Runtime {
   // The heap type is encoded in the immediate but we don't need it at runtime
   let { rt, value: _ } = read_imm_idx(rt) // Skip the heap type encoding
   // Push null ref as -1 (Int64)
-  rt.stack.unsafe_set(rt.stack_top, (-1).to_int64().reinterpret_as_uint64())
-  { ..rt, stack_top: rt.stack_top + 1, pc: rt.pc + 1 }
+  rt.stack.unsafe_set(rt.sp, (-1).to_int64().reinterpret_as_uint64())
+  { ..rt, sp: rt.sp + 1, pc: rt.pc + 1 }
 }
 
 ///|
@@ -1136,15 +1127,15 @@ fn op_ref_func(rt : Runtime) -> Runtime {
   // ref.func pushes a reference to the given function onto the stack
   let { rt, value: func_idx } = read_imm_idx(rt)
   // Push func ref as Int64
-  rt.stack.unsafe_set(rt.stack_top, func_idx.to_int64().reinterpret_as_uint64())
-  { ..rt, stack_top: rt.stack_top + 1, pc: rt.pc + 1 }
+  rt.stack.unsafe_set(rt.sp, func_idx.to_int64().reinterpret_as_uint64())
+  { ..rt, sp: rt.sp + 1, pc: rt.pc + 1 }
 }
 
 ///|
 fn op_ref_is_null(rt : Runtime) -> Runtime {
   // ref.is_null tests whether a reference is null
   // Refs are stored as Int64, -1 = null
-  let stack_top = rt.stack_top - 1
+  let stack_top = rt.sp - 1
   let ref_val = rt.stack.unsafe_get(stack_top).reinterpret_as_int64().to_int()
   let is_null : UInt64 = if ref_val == -1 { 1UL } else { 0UL }
   rt.stack.unsafe_set(stack_top, is_null)
@@ -1155,22 +1146,19 @@ fn op_ref_is_null(rt : Runtime) -> Runtime {
 fn op_ref_eq(rt : Runtime) -> Runtime {
   // ref.eq compares two references for identity equality
   // Refs are stored as Int64, -1 = null
-  let stack_top = rt.stack_top - 2
-  let rhs = rt.stack
-    .unsafe_get(rt.stack_top - 1)
-    .reinterpret_as_int64()
-    .to_int()
+  let stack_top = rt.sp - 2
+  let rhs = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_int64().to_int()
   let lhs = rt.stack.unsafe_get(stack_top).reinterpret_as_int64().to_int()
   let eq : UInt64 = if lhs == rhs { 1UL } else { 0UL }
   rt.stack.unsafe_set(stack_top, eq)
-  { ..rt, stack_top: stack_top + 1, pc: rt.pc + 1 }
+  { ..rt, sp: stack_top + 1, pc: rt.pc + 1 }
 }
 
 ///|
 fn op_ref_as_non_null(rt : Runtime) -> Runtime {
   // ref.as_non_null traps on null references
   // Refs are stored as Int64, -1 = null
-  let value = rt.stack.unsafe_get(rt.stack_top - 1)
+  let value = rt.stack.unsafe_get(rt.sp - 1)
   let ref_val = value.reinterpret_as_int64().to_int()
   if ref_val == -1 {
     rt.ctx.error_detail = "ref.as_non_null: null reference"
@@ -1184,14 +1172,14 @@ fn op_ref_as_non_null(rt : Runtime) -> Runtime {
 fn op_global_get(rt : Runtime) -> Runtime {
   let { rt, value: idx } = read_imm_idx(rt)
   // Convert Value to UInt64 for stack
-  rt.stack.unsafe_set(rt.stack_top, value_to_stack(rt.ctx.globals[idx]))
-  { ..rt, stack_top: rt.stack_top + 1, pc: rt.pc + 1 }
+  rt.stack.unsafe_set(rt.sp, value_to_stack(rt.ctx.globals[idx]))
+  { ..rt, sp: rt.sp + 1, pc: rt.pc + 1 }
 }
 
 ///|
 fn op_global_set(rt : Runtime) -> Runtime {
   let { rt, value: idx } = read_imm_idx(rt)
-  let stack_top = rt.stack_top - 1
+  let stack_top = rt.sp - 1
   let raw = rt.stack.unsafe_get(stack_top)
   // Infer the value type from the existing global's tag
   // (handles both imported and defined globals without index adjustment)
@@ -1203,5 +1191,5 @@ fn op_global_set(rt : Runtime) -> Runtime {
     Ref(_) => FuncRef // Ref types all stored the same way
   }
   rt.ctx.globals[idx] = stack_to_value(raw, val_type)
-  { ..rt, stack_top, pc: rt.pc + 1 }
+  { ..rt, sp: stack_top, pc: rt.pc + 1 }
 }

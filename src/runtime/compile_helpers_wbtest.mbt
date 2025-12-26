@@ -15,11 +15,11 @@ test "compile helpers initialize entry locals" {
   let rt = initialize_entry_locals(rt, [Value::I32(9U)], code)
   assert_ok(rt)
   // Check unified stack: [arg0=9, local0=0, local1=null_ref]
-  assert_eq(rt.stack_top, 3)
+  assert_eq(rt.sp, 3)
   assert_eq(rt.stack.unsafe_get(0), 9UL) // arg
   assert_eq(rt.stack.unsafe_get(1), 0UL) // i32 local
   assert_eq(rt.stack.unsafe_get(2), (-1L).reinterpret_as_uint64()) // null ref
-  assert_eq(rt.sp, 0)
+  assert_eq(rt.bp, 0)
   assert_eq(rt.num_locals, 3)
 }
 
@@ -86,22 +86,22 @@ test "compile helpers imported func result truncation" {
   let rt = Runtime::{
     ops: FixedArray::from_array([]),
     stack: FixedArray::make(64, 0UL),
-    stack_top: 0,
     sp: 0,
+    bp: 0,
     num_locals: 0,
     pc: 0,
     status: Terminated,
     ctx,
   }
   let rt = call_imported_function(rt, 0, [], 1)
-  assert_eq(rt.stack_top, 1)
+  assert_eq(rt.sp, 1)
   assert_eq(rt.stack.unsafe_get(0), 1UL)
 }
 
 ///|
 test "compile helpers tail call return branches" {
   let rt = make_runtime([], [], 0)
-  let rt = { ..rt, status: Running, sp: 5, num_locals: 3 }
+  let rt = { ..rt, status: Running, bp: 5, num_locals: 3 }
   rt.ctx.call_stack.push(CallFrame::{
     return_pc: 3,
     caller_sp: 10,
@@ -109,7 +109,7 @@ test "compile helpers tail call return branches" {
   })
   let rt = handle_tail_call_return(rt)
   assert_eq(rt.pc, 4)
-  assert_eq(rt.sp, 10)
+  assert_eq(rt.bp, 10)
   assert_eq(rt.num_locals, 2)
   let rt_empty = make_runtime([], [], 0)
   let rt_empty = { ..rt_empty, status: Running }

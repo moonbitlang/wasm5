@@ -44,8 +44,8 @@ fn make_runtime(
   Runtime::{
     ops: FixedArray::from_array(ops),
     stack: stack_buf,
-    stack_top: stack_len,
-    sp: 0,
+    sp: stack_len,
+    bp: 0,
     num_locals: 0,
     pc: 0,
     status: Terminated,
@@ -73,8 +73,8 @@ fn stack_f64(raw : UInt64) -> Double {
 
 ///|
 fn push_value(rt : Runtime, v : Value) -> Runtime {
-  rt.stack.unsafe_set(rt.stack_top, value_to_stack(v))
-  { ..rt, stack_top: rt.stack_top + 1 }
+  rt.stack.unsafe_set(rt.sp, value_to_stack(v))
+  { ..rt, sp: rt.sp + 1 }
 }
 
 ///|
@@ -737,30 +737,30 @@ test "ops memory load/store and size" {
   let rt = push_value(rt, Value::I32(0x11223344U))
   let rt = op_i32_store(rt)
   assert_ok(rt)
-  let rt = { ..rt, stack_top: 0, pc: 0 }
+  let rt = { ..rt, sp: 0, pc: 0 }
   let rt = push_value(rt, Value::I32(0U))
   let rt = op_i32_load(rt)
   assert_ok(rt)
   assert_stack_elem_eq(rt.stack.unsafe_get(0), Value::I32(0x11223344U))
   rt.ctx.memory[0] = 0xFFU.to_byte()
-  let rt = { ..rt, stack_top: 0, pc: 0 }
+  let rt = { ..rt, sp: 0, pc: 0 }
   let rt = push_value(rt, Value::I32(0U))
   let rt = op_i32_load8_s(rt)
   assert_ok(rt)
   assert_stack_elem_eq(rt.stack.unsafe_get(0), Value::I32(0xFFFFFFFFU))
-  let rt = { ..rt, stack_top: 0, pc: 0 }
+  let rt = { ..rt, sp: 0, pc: 0 }
   let rt = push_value(rt, Value::I32(0U))
   let rt = op_i32_load8_u(rt)
   assert_ok(rt)
   assert_stack_elem_eq(rt.stack.unsafe_get(0), Value::I32(255U))
   rt.ctx.memory[0] = 0x00U.to_byte()
   rt.ctx.memory[1] = 0x80U.to_byte()
-  let rt = { ..rt, stack_top: 0, pc: 0 }
+  let rt = { ..rt, sp: 0, pc: 0 }
   let rt = push_value(rt, Value::I32(0U))
   let rt = op_i32_load16_s(rt)
   assert_ok(rt)
   assert_stack_elem_eq(rt.stack.unsafe_get(0), Value::I32(0xFFFF8000U))
-  let rt = { ..rt, stack_top: 0, pc: 0 }
+  let rt = { ..rt, sp: 0, pc: 0 }
   let rt = push_value(rt, Value::I32(0U))
   let rt = op_i32_load16_u(rt)
   assert_ok(rt)
@@ -783,8 +783,8 @@ test "ops memory load/store and size" {
   let rt_grow = Runtime::{
     ops: FixedArray::from_array([]),
     stack: stack_grow,
-    stack_top: 1,
-    sp: 0,
+    sp: 1,
+    bp: 0,
     num_locals: 0,
     pc: 0,
     status: Terminated,
@@ -811,7 +811,7 @@ test "ops memory out of bounds and bulk ops" {
   let rt_i64 = push_value(rt_i64, Value::I64(0x1122334455667788UL))
   let rt_i64 = op_i64_store(rt_i64)
   assert_ok(rt_i64)
-  let rt_i64 = { ..rt_i64, stack_top: 0, pc: 0 }
+  let rt_i64 = { ..rt_i64, sp: 0, pc: 0 }
   let rt_i64 = push_value(rt_i64, Value::I32(0U))
   let rt_i64 = op_i64_load(rt_i64)
   assert_ok(rt_i64)
@@ -854,8 +854,8 @@ test "ops memory out of bounds and bulk ops" {
   let rt_init = Runtime::{
     ops: FixedArray::from_array([ImmediateIdx(0), ImmediateIdx(0)]),
     stack: stack_init,
-    stack_top: 3,
-    sp: 0,
+    sp: 3,
+    bp: 0,
     num_locals: 0,
     pc: 0,
     status: Terminated,
@@ -877,8 +877,8 @@ test "ops memory out of bounds and bulk ops" {
   let rt_drop = Runtime::{
     ops: FixedArray::from_array([ImmediateIdx(0), ImmediateIdx(0)]),
     stack: FixedArray::make(64, 0UL),
-    stack_top: 0,
     sp: 0,
+    bp: 0,
     num_locals: 0,
     pc: 0,
     status: Terminated,
@@ -951,7 +951,7 @@ test "compile helpers pop arguments" {
   let { rt, args } = pop_arguments(rt, func_type)
   assert_eq(args[0], Value::I32(2U))
   assert_eq(args[1], Value::I32(3U))
-  assert_eq(rt.stack_top, 1)
+  assert_eq(rt.sp, 1)
 }
 
 ///|
