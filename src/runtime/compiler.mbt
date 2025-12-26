@@ -3,17 +3,25 @@
 // ============================================================================
 
 ///|
+/// Pending call patch for forward references
+struct PendingCallPatch {
+  local_func_idx : Int // Which function is being called
+  slot : Int // Which slot in ops needs the callee_pc
+}
+
+///|
 /// Compiler holds the instruction array during compilation.
 /// After compilation, the ops array is converted to FixedArray for runtime.
 pub struct Compiler {
   module_ : @core.Module
   ops : Array[UInt64]
+  pending_call_patches : Array[PendingCallPatch] // Forward call references to patch
 }
 
 ///|
 /// Create a new compiler for a module
 pub fn Compiler::new(module_ : @core.Module) -> Compiler {
-  { module_, ops: [] }
+  { module_, ops: [], pending_call_patches: [] }
 }
 
 ///|
@@ -137,5 +145,15 @@ fn Compiler::compile_func(
 pub fn Compiler::compile(self : Compiler) -> Unit raise RuntimeError {
   for i, code in self.module_.codes {
     self.compile_func(i, code)
+  }
+  // Patch forward call references now that all functions are compiled
+  for patch in self.pending_call_patches {
+    let code = self.module_.codes[patch.local_func_idx]
+    guard code.compiled is Some(callee_pc) else {
+      raise RuntimeError::FunctionNotCompiled(
+        "Forward call to uncompiled function: \{patch.local_func_idx}",
+      )
+    }
+    self.ops[patch.slot] = callee_pc.to_int64().reinterpret_as_uint64()
   }
 }

@@ -927,8 +927,30 @@ fn Compiler::compile_wasm_instr(
         self.emit_fn(op_call_import)
         self.emit_idx(func_idx_int)
       } else {
+        // Emit op_call_local with all immediates computed at compile time:
+        // - callee_pc (or placeholder for forward ref)
+        // - num_params
+        // - num_locals
+        // - max_stack_height
+        let local_func_idx = func_idx_int - num_imported
+        let code = self.module_.codes[local_func_idx]
+        let func_type = require_func_type(self.module_, type_idx, "call")
+        let num_params = func_type.params.length()
+        let num_locals = num_params + code.locals.length()
+
         self.emit_fn(op_call_local)
-        self.emit_idx(func_idx_int - num_imported) // Emit local_func_idx
+        let callee_pc_slot = self.ops.length()
+        match code.compiled {
+          Some(callee_pc) => self.emit_idx(callee_pc)
+          None => {
+            // Forward reference - emit placeholder and record for patching
+            self.emit_idx(0)
+            self.pending_call_patches.push({ local_func_idx, slot: callee_pc_slot })
+          }
+        }
+        self.emit_idx(num_params)
+        self.emit_idx(num_locals)
+        self.emit_idx(code.max_stack_height)
       }
     }
     Return => {
@@ -1463,8 +1485,25 @@ fn Compiler::compile_wasm_instr(
         self.emit_fn(op_return_call_import)
         self.emit_idx(func_idx_int)
       } else {
+        // Emit op_return_call_local with all immediates computed at compile time
+        let local_func_idx = func_idx_int - num_imported
+        let code = self.module_.codes[local_func_idx]
+        let func_type = require_func_type(self.module_, type_idx, "return_call")
+        let num_params = func_type.params.length()
+        let num_locals = num_params + code.locals.length()
+
         self.emit_fn(op_return_call_local)
-        self.emit_idx(func_idx_int - num_imported) // Emit local_func_idx
+        let callee_pc_slot = self.ops.length()
+        match code.compiled {
+          Some(callee_pc) => self.emit_idx(callee_pc)
+          None => {
+            // Forward reference - emit placeholder and record for patching
+            self.emit_idx(0)
+            self.pending_call_patches.push({ local_func_idx, slot: callee_pc_slot })
+          }
+        }
+        self.emit_idx(num_params)
+        self.emit_idx(num_locals)
       }
     }
     ReturnCallIndirect(type_idx, table_idx) => {

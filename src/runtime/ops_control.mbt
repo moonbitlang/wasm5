@@ -240,43 +240,35 @@ fn op_br_on_non_null(rt : Runtime) -> Runtime {
 }
 
 ///|
-/// Call a local (module-defined) function. Immediate is local_func_idx (already adjusted).
+/// Call a local (module-defined) function.
+/// Immediates (all computed at compile time):
+///   pc+1: callee_pc
+///   pc+2: num_params
+///   pc+3: num_locals
+///   pc+4: max_stack_height
 /// Uses native stack: recursively calls execute() for the callee.
 fn op_call_local(rt : Runtime) -> Runtime {
-  let local_func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  let type_idx = rt.ctx.module_.funcs[local_func_idx].reinterpret_as_int()
-  let func_type = match get_func_type_or_error(rt, type_idx, "call") {
-    Some(found) => found
-    None => return { ..rt, status: Trap }
-  }
-  let code = rt.ctx.module_.codes[local_func_idx]
-  guard code.compiled is Some(callee_pc) else {
-    rt.ctx.error_detail = "Function not compiled: local[\{local_func_idx}]"
-    return { ..rt, status: Trap }
-  }
+  let callee_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let num_params = rt.ops.unsafe_get(rt.pc + 2).to_int()
+  let num_locals = rt.ops.unsafe_get(rt.pc + 3).to_int()
+  let max_stack_height = rt.ops.unsafe_get(rt.pc + 4).to_int()
 
   // Unified stack: arguments are already on stack, they become callee's first locals
-  let num_params = func_type.params.length()
   let new_bp = rt.sp - num_params
 
   // Check stack capacity for the callee
-  if new_bp + code.max_stack_height > rt.stack.length() {
-    rt.ctx.error_detail = "Stack overflow: need \{code.max_stack_height} slots"
+  if new_bp + max_stack_height > rt.stack.length() {
+    rt.ctx.error_detail = "Stack overflow: need \{max_stack_height} slots"
     return { ..rt, status: Trap }
   }
 
   // Save caller state on native stack
   let caller_bp = rt.bp
   let caller_num_locals = rt.num_locals
-  let return_pc = rt.pc + 2 // Next instruction after call
+  let return_pc = rt.pc + 5 // Next instruction after call (op + 4 immediates)
 
   // Set up callee frame (locals will be initialized by compiled code)
-  let rt = {
-    ..rt,
-    sp: new_bp + num_params, // sp points past params, callee's init ops will push locals
-    bp: new_bp,
-    num_locals: num_params + code.locals.length(),
-  }
+  let rt = { ..rt, sp: new_bp + num_params, bp: new_bp, num_locals }
 
   // Recursively execute callee using native stack
   let rt = execute_call(rt, callee_pc, caller_bp, caller_num_locals, return_pc) catch {
@@ -483,23 +475,18 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
 }
 
 ///|
-/// Tail call a local (module-defined) function. Immediate is local_func_idx.
+/// Tail call a local (module-defined) function.
+/// Immediates (all computed at compile time):
+///   pc+1: callee_pc
+///   pc+2: num_params
+///   pc+3: num_locals
 fn op_return_call_local(rt : Runtime) -> Runtime {
-  let local_func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  let type_idx = rt.ctx.module_.funcs[local_func_idx].reinterpret_as_int()
-  let func_type = match get_func_type_or_error(rt, type_idx, "return_call") {
-    Some(found) => found
-    None => return { ..rt, status: Trap }
-  }
-  let code = rt.ctx.module_.codes[local_func_idx]
-  guard code.compiled is Some(callee_pc) else {
-    rt.ctx.error_detail = "Function not compiled: local[\{local_func_idx}]"
-    return { ..rt, status: Trap }
-  }
+  let callee_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let num_params = rt.ops.unsafe_get(rt.pc + 2).to_int()
+  let num_locals = rt.ops.unsafe_get(rt.pc + 3).to_int()
 
   // Tail call: reuse current frame
   // Move arguments in-place from stack top to bp position
-  let num_params = func_type.params.length()
   let args_start = rt.sp - num_params
 
   // Copy arguments to bp position (they become new locals)
@@ -510,7 +497,7 @@ fn op_return_call_local(rt : Runtime) -> Runtime {
   }
 
   // Trim stack to bp + num_params (locals will be initialized by compiled code)
-  { ..rt, sp: rt.bp + num_params, num_locals: num_params + code.locals.length(), pc: callee_pc }
+  { ..rt, sp: rt.bp + num_params, num_locals, pc: callee_pc }
 }
 
 ///|
