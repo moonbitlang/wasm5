@@ -2308,6 +2308,41 @@ async test "wat encoder matches wasm-tools for try delegate" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for try delegate depth" {
+  let wat =
+    #|(module
+    #|  (tag $e (param i32))
+    #|  (func (export "f") (param i32) (result i32)
+    #|    (block (result i32)
+    #|      try (result i32)
+    #|        local.get 0
+    #|        throw $e
+    #|        i32.const 0
+    #|      delegate 0)))
+  assert_wat_matches("try_delegate_depth", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for try delegate nested" {
+  let wat =
+    #|(module
+    #|  (tag $e (param i32))
+    #|  (func (export "f") (param i32) (result i32)
+    #|    (block $out (result i32)
+    #|      try (result i32)
+    #|        try (result i32)
+    #|          local.get 0
+    #|          throw $e
+    #|          i32.const 0
+    #|        catch $e
+    #|          i32.const 1
+    #|        end
+    #|        i32.const 2
+    #|      delegate $out)))
+  assert_wat_matches("try_delegate_nested", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for simd ops" {
   let wat =
     #|(module
