@@ -265,7 +265,7 @@ fn op_call_local(rt : Runtime) -> Runtime {
     return { ..rt, status: Trap }
   }
 
-  // Save caller state on native stack (not call_stack)
+  // Save caller state on native stack
   let caller_bp = rt.bp
   let caller_num_locals = rt.num_locals
   let return_pc = rt.pc + 2 // Next instruction after call

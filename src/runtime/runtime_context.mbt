@@ -3,7 +3,6 @@
 /// during instruction execution. This is a reference type.
 pub struct RuntimeContext {
   module_ : @core.Module
-  call_stack : Array[CallFrame]
   memory : Array[Byte]
   memory_max : UInt64?
   globals : Array[Value]
@@ -26,7 +25,6 @@ fn RuntimeContext::new(
 ) -> RuntimeContext {
   {
     module_,
-    call_stack: [],
     memory,
     memory_max,
     globals,
