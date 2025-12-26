@@ -314,11 +314,7 @@ test "ops i32 compare and unary" {
 
 ///|
 test "ops i64 const and arithmetic" {
-  let rt_const = make_runtime(
-    [],
-    [imm(0U), imm(3U), imm(2U)],
-    0,
-  )
+  let rt_const = make_runtime([], [imm(0U), imm(3U), imm(2U)], 0)
   let rt_const = op_i64_const(rt_const)
   assert_ok(rt_const)
   assert_stack_elem_eq(rt_const.stack[0], Value::I64(0x0000000200000003UL))
@@ -439,11 +435,7 @@ test "ops i32 error paths" {
 
 ///|
 test "ops float const and arithmetic" {
-  let rt_f32_const = make_runtime(
-    [],
-    [imm(0U), imm(0x3F800000U)],
-    0,
-  )
+  let rt_f32_const = make_runtime([], [imm(0U), imm(0x3F800000U)], 0)
   let rt_f32_const = op_f32_const(rt_f32_const)
   assert_ok(rt_f32_const)
   assert_stack_elem_eq(rt_f32_const.stack[0], Value::F32(1.0))

@@ -77,11 +77,9 @@ test "ops control drop and select" {
 
 ///|
 test "ops control branching" {
-  let rt_if_true = base_runtime(
-    base_module([], [], [], []),
-    [idx(0), idx(7)],
-    [Value::I32(1U)],
-  )
+  let rt_if_true = base_runtime(base_module([], [], [], []), [idx(0), idx(7)], [
+    Value::I32(1U),
+  ])
   let rt_if_true = op_if(rt_if_true)
   assert_ok(rt_if_true)
   assert_eq(rt_if_true.pc, 2)
@@ -123,17 +121,7 @@ test "ops control branching" {
   assert_eq(rt_br_if_false.pc, 4)
   let rt_br_table = base_runtime(
     base_module([], [], [], []),
-    [
-      idx(0),
-      idx(2),
-      idx(1),
-      idx(10),
-      idx(0),
-      idx(20),
-      idx(0),
-      idx(30),
-      idx(0),
-    ],
+    [idx(0), idx(2), idx(1), idx(10), idx(0), idx(20), idx(0), idx(30), idx(0)],
     [Value::I32(7U), Value::I32(1U)],
   )
   let rt_br_table = op_br_table(rt_br_table)
@@ -141,17 +129,7 @@ test "ops control branching" {
   assert_eq(rt_br_table.pc, 20)
   let rt_br_table_default = base_runtime(
     base_module([], [], [], []),
-    [
-      idx(0),
-      idx(2),
-      idx(1),
-      idx(10),
-      idx(0),
-      idx(20),
-      idx(0),
-      idx(30),
-      idx(0),
-    ],
+    [idx(0), idx(2), idx(1), idx(10), idx(0), idx(20), idx(0), idx(30), idx(0)],
     [Value::I32(7U), Value::I32(5U)],
   )
   let rt_br_table_default = op_br_table(rt_br_table_default)
@@ -257,11 +235,7 @@ test "ops control table grow and globals" {
 ///|
 test "ops control reference ops" {
   let module_local = base_module([], [], [], [])
-  let rt_ref_null = base_runtime(
-    module_local,
-    [idx(0), idx(0)],
-    [],
-  )
+  let rt_ref_null = base_runtime(module_local, [idx(0), idx(0)], [])
   let rt_ref_null = op_ref_null(rt_ref_null)
   assert_ok(rt_ref_null)
   assert_ctrl_stack_eq(rt_ref_null.stack[0], Value::Ref(None))
@@ -297,25 +271,21 @@ test "ops control reference ops" {
 ///|
 test "ops control table bulk stubs" {
   let module_local = base_module([], [], [], [])
-  let rt_table_init = base_runtime(
-    module_local,
-    [idx(0), idx(0), idx(0)],
-    [Value::I32(0U), Value::I32(0U), Value::I32(0U)],
-  )
+  let rt_table_init = base_runtime(module_local, [idx(0), idx(0), idx(0)], [
+    Value::I32(0U),
+    Value::I32(0U),
+    Value::I32(0U),
+  ])
   let rt_table_init = op_table_init(rt_table_init)
   assert_ok(rt_table_init)
-  let rt_table_copy = base_runtime(
-    module_local,
-    [idx(0), idx(0), idx(0)],
-    [Value::I32(0U), Value::I32(0U), Value::I32(0U)],
-  )
+  let rt_table_copy = base_runtime(module_local, [idx(0), idx(0), idx(0)], [
+    Value::I32(0U),
+    Value::I32(0U),
+    Value::I32(0U),
+  ])
   let rt_table_copy = op_table_copy(rt_table_copy)
   assert_ok(rt_table_copy)
-  let rt_elem_drop = base_runtime(
-    module_local,
-    [idx(0), idx(0)],
-    [],
-  )
+  let rt_elem_drop = base_runtime(module_local, [idx(0), idx(0)], [])
   let rt_elem_drop = op_elem_drop(rt_elem_drop)
   assert_ok(rt_elem_drop)
 }

@@ -381,38 +381,6 @@ fn handle_tail_call_return(rt : Runtime) -> Runtime {
   }
 }
 
-///|
-/// Value struct for read_imm_i32 result (avoids tuple allocation)
-#valtype
-priv struct ReadI32 {
-  rt : Runtime
-  value : UInt
-}
-
-///|
-/// Value struct for read_imm_idx result (avoids tuple allocation)
-#valtype
-priv struct ReadIdx {
-  rt : Runtime
-  value : Int
-}
-
-///|
-/// Read immediate i32 value and advance PC
-fn read_imm_i32(rt : Runtime) -> ReadI32 {
-  let pc = rt.pc + 1
-  let value = rt.ops.unsafe_get(pc).to_uint()
-  { rt: { ..rt, pc }, value }
-}
-
-///|
-/// Read immediate index value and advance PC
-fn read_imm_idx(rt : Runtime) -> ReadIdx {
-  let pc = rt.pc + 1
-  let value = rt.ops.unsafe_get(pc).reinterpret_as_int64().to_int()
-  { rt: { ..rt, pc }, value }
-}
-
 // ============================================================================
 // Tagless UInt64 stack representation
 // ============================================================================
