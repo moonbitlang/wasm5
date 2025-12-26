@@ -224,6 +224,7 @@ fn get_tag_type_idx(
 
 ///|
 /// Value struct for pop_arguments result (avoids tuple allocation)
+#valtype
 struct PopArgs {
   rt : Runtime
   args : Array[Value]
@@ -382,6 +383,7 @@ fn handle_tail_call_return(rt : Runtime) -> Runtime {
 
 ///|
 /// Value struct for read_imm_i32 result (avoids tuple allocation)
+#valtype
 struct ReadI32 {
   rt : Runtime
   value : UInt
@@ -389,6 +391,7 @@ struct ReadI32 {
 
 ///|
 /// Value struct for read_imm_idx result (avoids tuple allocation)
+#valtype
 struct ReadIdx {
   rt : Runtime
   value : Int
