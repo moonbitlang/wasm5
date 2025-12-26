@@ -41,7 +41,7 @@ fn op_drop(rt : Runtime) -> RetCode {
 
 ///|
 fn op_select(rt : Runtime) -> RetCode {
-  let cond = rt.pop_i32()
+  let cond = pop_i32(rt)
   rt.stack_top -= 1
   let val2 = rt.stack.unsafe_get(rt.stack_top)
   rt.stack_top -= 1
@@ -78,7 +78,7 @@ fn get_func_type_or_error(
 ///|
 fn op_if(rt : Runtime) -> RetCode {
   let else_pc = rt.read_imm_idx()
-  let cond = rt.pop_i32()
+  let cond = pop_i32(rt)
   if cond != 0U {
     rt.pc += 1
   } else {
@@ -123,7 +123,7 @@ fn op_br_if(rt : Runtime) -> RetCode {
   let target_pc = rt.read_imm_idx()
   let arity = rt.read_imm_idx()
   let drop_count = rt.read_imm_idx()
-  let cond = rt.pop_i32()
+  let cond = pop_i32(rt)
   if cond != 0U {
     // In-place stack shuffle: move arity values down by drop_count positions
     if drop_count > 0 && arity > 0 {
@@ -151,7 +151,7 @@ fn op_br_if(rt : Runtime) -> RetCode {
 fn op_br_table(rt : Runtime) -> RetCode {
   let num_labels = rt.read_imm_idx()
   let arity = rt.read_imm_idx()
-  let index = rt.pop_i32().reinterpret_as_int()
+  let index = pop_i32(rt).reinterpret_as_int()
 
   // Read all target_pc+drop_count pairs, selecting the right one
   let mut target_pc = 0
@@ -369,7 +369,7 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
   let table_idx = rt.read_imm_idx()
 
   // Pop the function index from the stack
-  let elem_idx = rt.pop_i32().reinterpret_as_int()
+  let elem_idx = pop_i32(rt).reinterpret_as_int()
 
   // Check table bounds
   if table_idx < 0 || table_idx >= rt.tables.length() {
@@ -555,7 +555,7 @@ fn op_return_call_indirect(rt : Runtime) -> RetCode {
   let table_idx = rt.read_imm_idx()
 
   // Pop the function index from the stack
-  let elem_idx = rt.pop_i32().reinterpret_as_int()
+  let elem_idx = pop_i32(rt).reinterpret_as_int()
 
   // Check table bounds
   if table_idx < 0 || table_idx >= rt.tables.length() {
@@ -929,9 +929,9 @@ fn op_gc_unimplemented(rt : Runtime) -> RetCode {
 fn op_table_init(rt : Runtime) -> RetCode {
   let _table_idx = rt.read_imm_idx()
   let _elem_idx = rt.read_imm_idx()
-  let _n = rt.pop_i32()
-  let _src = rt.pop_i32()
-  let _dest = rt.pop_i32()
+  let _n = pop_i32(rt)
+  let _src = pop_i32(rt)
+  let _dest = pop_i32(rt)
   // TODO: Implement table.init
   rt.pc += 1
   OK
@@ -941,9 +941,9 @@ fn op_table_init(rt : Runtime) -> RetCode {
 fn op_table_copy(rt : Runtime) -> RetCode {
   let _dst_table_idx = rt.read_imm_idx()
   let _src_table_idx = rt.read_imm_idx()
-  let _n = rt.pop_i32()
-  let _src = rt.pop_i32()
-  let _dest = rt.pop_i32()
+  let _n = pop_i32(rt)
+  let _src = pop_i32(rt)
+  let _dest = pop_i32(rt)
   // TODO: Implement table.copy
   rt.pc += 1
   OK
@@ -956,10 +956,10 @@ fn op_table_fill(rt : Runtime) -> RetCode {
     rt.error_detail = "table index out of bounds"
     return InvalidType
   }
-  let n = rt.pop_i32().reinterpret_as_int()
+  let n = pop_i32(rt).reinterpret_as_int()
   rt.stack_top -= 1; let raw_ref = rt.stack.unsafe_get(rt.stack_top).reinterpret_as_int64().to_int()
   let ref_value : Int? = if raw_ref == -1 { None } else { Some(raw_ref) }
-  let dest = rt.pop_i32().reinterpret_as_int()
+  let dest = pop_i32(rt).reinterpret_as_int()
   let table = rt.tables[table_idx].data
   if dest < 0 || n < 0 || dest + n > table.length() {
     rt.error_detail = "table fill out of bounds"
@@ -1004,7 +1004,7 @@ fn op_table_get(rt : Runtime) -> RetCode {
     rt.error_detail = "table index out of bounds"
     return InvalidType
   }
-  let elem_idx = rt.pop_i32().reinterpret_as_int()
+  let elem_idx = pop_i32(rt).reinterpret_as_int()
   let table = rt.tables[table_idx].data
   if elem_idx < 0 || elem_idx >= table.length() {
     rt.error_detail = "table element index out of bounds"
@@ -1031,7 +1031,7 @@ fn op_table_set(rt : Runtime) -> RetCode {
   // Pop ref value - stored as Int64, -1 = null
   rt.stack_top -= 1; let raw_ref = rt.stack.unsafe_get(rt.stack_top).reinterpret_as_int64().to_int()
   let ref_value : Int? = if raw_ref == -1 { None } else { Some(raw_ref) }
-  let elem_idx = rt.pop_i32().reinterpret_as_int()
+  let elem_idx = pop_i32(rt).reinterpret_as_int()
   let table = rt.tables[table_idx].data
   if elem_idx < 0 || elem_idx >= table.length() {
     rt.error_detail = "table element index out of bounds"
@@ -1050,7 +1050,7 @@ fn op_table_grow(rt : Runtime) -> RetCode {
     rt.pc += 1
     return OK
   }
-  let delta = rt.pop_i32().reinterpret_as_int()
+  let delta = pop_i32(rt).reinterpret_as_int()
   // Pop ref value - stored as Int64, -1 = null
   rt.stack_top -= 1; let raw_ref = rt.stack.unsafe_get(rt.stack_top).reinterpret_as_int64().to_int()
   let init_value : Int? = if raw_ref == -1 { None } else { Some(raw_ref) }
