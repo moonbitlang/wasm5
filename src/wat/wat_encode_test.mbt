@@ -702,6 +702,35 @@ async test "wat encoder matches wasm-tools for global init add" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for global init bitwise" {
+  let wat =
+    #|(module
+    #|  (global (export "g") i32
+    #|    (i32.or
+    #|      (i32.and (i32.const 12) (i32.const 10))
+    #|      (i32.xor (i32.const 5) (i32.const 3)))))
+  assert_wat_matches("global_init_bitwise", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for global init float ops" {
+  let wat =
+    #|(module
+    #|  (global (export "g") f32
+    #|    (f32.max (f32.neg (f32.const 1.5)) (f32.const 2.25))))
+  assert_wat_matches("global_init_float_ops", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for global init convert" {
+  let wat =
+    #|(module
+    #|  (global (export "g") i32
+    #|    (i32.wrap_i64 (i64.const 5))))
+  assert_wat_matches("global_init_convert", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for ref globals" {
   let wat =
     #|(module
@@ -742,12 +771,30 @@ async test "wat encoder matches wasm-tools for data offset add" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for data offset shift" {
+  let wat =
+    #|(module
+    #|  (memory 1)
+    #|  (data (i32.shl (i32.const 1) (i32.const 3)) "hi"))
+  assert_wat_matches("data_offset_shift", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for memory64 data offset add" {
   let wat =
     #|(module
     #|  (memory i64 1)
     #|  (data (i64.add (i64.const 1) (i64.const 2)) "hi"))
   assert_wat_matches("mem64_data_offset_add", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for memory64 data offset shift" {
+  let wat =
+    #|(module
+    #|  (memory i64 1)
+    #|  (data (i64.shl (i64.const 1) (i64.const 4)) "hi"))
+  assert_wat_matches("mem64_data_offset_shift", wat)
 }
 
 ///|
