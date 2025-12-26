@@ -3,52 +3,149 @@
 ## Quick Reference
 
 ```bash
-moon check --target native                    # Check for errors
-moon build --target native                    # Build project
-moon run test --target native                 # Run all tests (~45 seconds)
-timeout 45 moon run test --target native 2>&1 | grep "wast_file"  # Test specific file
-timeout 45 moon run test --target native 2>&1 | tail -5           # See failure count
+moon check --target native                     # Check for errors
+moon build --target native                     # Build project
+moon test test --target native --release       # Run all tests
+moon fmt                                       # Format code
 ```
 
 ## Project Architecture
 
 ```
 src/
-  types.mbt     - Core type definitions & instruction enum (Instr, ValType, Module)
-  parse.mbt     - Binary WASM parser (opcode → Instr mapping)
-  runtime.mbt   - Instruction executor & runtime state (Runtime struct, execute_*)
-  validate.mbt  - Validation engine (ValidationCtx, type checking, control flow)
+  core/
+    types.mbt        - Core type definitions (ValType, Instr, Module, FuncType)
+
+  parse/
+    parse_*.mbt      - Binary WASM parser (opcode → Instr mapping)
+
+  runtime/
+    runtime.mbt      - Runtime struct, module loading, error types
+    compile_*.mbt    - Threaded code compiler (Instr → MInstr)
+    ops_*.mbt        - Instruction handlers (ops_integer, ops_float, ops_memory, ops_control)
+
+  validate/
+    validate_*.mbt   - Validation engine (type checking, control flow)
 
 test/
-  main.mbt                     - Test harness (runs .wast.json tests)
   reference_tests/*.wast       - WebAssembly spec tests (human-readable)
   reference_tests/*.wast.json  - Compiled test data (loaded by harness)
 ```
 
 ### Key Data Structures
 
-**Runtime State** (runtime.mbt):
+**Runtime State** (`src/runtime/runtime.mbt`):
 ```moonbit
 struct Runtime {
-  module_ : Module              // Loaded WASM module
-  stack : Array[Value]          // Value stack (I32/I64/F32/F64/Ref)
-  call_stack : Array[CallFrame] // Function call frames
-  pc : Int                      // Program counter
-  locals : Array[Value]         // Current function locals
-  memory : Array[Byte]          // Linear memory
-  globals : Array[Value]        // Global variables
-  tables : Array[RuntimeTable]  // Function tables
-  branch_targets : Array[Int]   // Branch target PCs
+  module_ : @core.Module           // Loaded WASM module
+  ops : FixedArray[MInstr]         // Compiled threaded code
+  stack : FixedArray[UInt64]       // Unified stack (locals + operands, tagless)
+  mut stack_top : Int              // Next push position
+  mut sp : Int                     // Stack pointer (first local)
+  mut num_locals : Int             // Number of locals in current frame
+  mut pc : Int                     // Program counter into ops
+  mut status : RuntimeStatus       // Running, Terminated, or Trap
+  call_stack : Array[CallFrame]    // Function call frames
+  memory : Array[Byte]             // Linear memory
+  globals : Array[Value]           // Global variables
+  tables : Array[RuntimeTable]     // Function tables
+  mut error_detail : String        // Error message on trap
 }
 ```
 
-**Validation Context** (validate.mbt):
+**Instruction Format** (`src/runtime/compile_context.mbt`):
+```moonbit
+enum MInstr {
+  WasmInstr((Runtime) -> Unit)  // Instruction handler function
+  ImmediateI32(UInt)            // Inline i32 immediate
+  ImmediateIdx(Int)             // Inline index immediate
+}
+
+enum RuntimeStatus {
+  Running     // Execution continues
+  Terminated  // Normal completion
+  Trap        // Error occurred (check error_detail)
+}
+```
+
+**Validation Context** (`src/validate/validate_context.mbt`):
 ```moonbit
 struct ValidationCtx {
-  stack : Array[ValType]        // Type stack (not values!)
+  stack : Array[ValType]           // Type stack (not values!)
+  mut is_unreachable : Bool        // Polymorphic stack mode
   control_stack : Array[(Array[ValType], Array[ValType])]  // (params, results)
-  is_unreachable : Bool         // Polymorphic stack mode
-  unreachable_stack_height : Int
+  initialized_locals : Array[Bool] // For non-defaultable types
+}
+```
+
+## Runtime Execution Model
+
+### Threaded Interpreter
+
+The VM compiles WASM instructions to a flat array of `MInstr`:
+
+```moonbit
+// Compilation: Instr → MInstr array
+Block(bt, body) → [
+  WasmInstr(op_if),      // if handler
+  ImmediateIdx(else_pc), // branch target
+  ...body instructions...,
+  WasmInstr(op_end),     // end handler
+]
+
+// Execution loop (compile_runtime.mbt)
+fn Runtime::execute(self) {
+  self.status = Running
+  while self.status == Running {
+    let WasmInstr(f) = self.ops[self.pc]
+    f(self)  // handler may update pc, status
+  }
+  if self.status == Trap {
+    raise RuntimeError::from_detail(self.error_detail)
+  }
+}
+```
+
+### Unified Stack
+
+Locals and operand values share one stack:
+
+```
+stack: [local0, local1, local2, operand0, operand1, ...]
+        ^sp                      ^stack_top
+```
+
+- `sp` points to first local
+- `stack_top` is next push position
+- Locals accessed via `stack[sp + idx]`
+- Values stored as `UInt64` (tagless for performance)
+
+### Instruction Handler Pattern
+
+All handlers return `Unit` and use status for control flow:
+
+```moonbit
+fn op_i32_div_s(rt : Runtime) -> Unit {
+  let b = rt.stack.unsafe_get(rt.stack_top - 1).to_uint()
+  let a = rt.stack.unsafe_get(rt.stack_top - 2).to_uint()
+  if b == 0U {
+    rt.error_detail = "division by zero"
+    rt.status = Trap
+    return
+  }
+  let result = a.reinterpret_as_int() / b.reinterpret_as_int()
+  rt.stack_top -= 1
+  rt.stack.unsafe_set(rt.stack_top - 1, result.reinterpret_as_uint().to_uint64())
+  rt.pc += 1
+}
+
+fn op_return(rt : Runtime) -> Unit {
+  // ... copy results, restore frame ...
+  if rt.call_stack.length() == 0 {
+    rt.status = Terminated  // Entry function done
+    return
+  }
+  // ... restore caller state ...
 }
 ```
 
@@ -65,7 +162,7 @@ The test harness reads `.wast.json` but reports line numbers from `.wast`.
 ### Step 1: Identify the failure
 
 ```bash
-moon run test --target native 2>&1 | grep "wast_file.wast"
+moon test test --target native --release 2>&1 | grep "wast_file.wast"
 ```
 
 Example output:
@@ -82,7 +179,6 @@ sed -n '465,475p' test/reference_tests/br_if.wast
 
 # Find function definition
 grep -n "func.*function-name" test/reference_tests/br_if.wast
-sed -n 'start_line,end_line p' test/reference_tests/br_if.wast
 ```
 
 ### Step 3: Understand the test type
@@ -97,24 +193,24 @@ sed -n 'start_line,end_line p' test/reference_tests/br_if.wast
 ### Step 4: Debug the right layer
 
 **Runtime failures** (`assert_return`, `assert_trap`):
-- Check `src/runtime.mbt` - execution logic
-- Add debug prints in `execute_*` functions
-- Check stack state before/after instruction
+- Check `src/runtime/ops_*.mbt` - instruction handlers
+- Check stack manipulation and pc updates
+- Verify trap conditions are correct
 
 **Validation failures** (`assert_invalid`):
-- Check `src/validate.mbt` - validation logic
-- Look at `validate_instruction()` for the specific opcode
-- Check if we're missing a validation rule
+- Check `src/validate/validate_instr_*.mbt`
+- Look at the specific instruction validation
+- Check control stack handling
 
 **Parsing failures** (`assert_malformed`):
-- Check `src/parse.mbt` - binary decoding
-- Look at opcode mapping in `parse_instruction()`
+- Check `src/parse/parse_*.mbt`
+- Look at opcode mapping
 
 ## Adding New Instructions
 
 Example: Adding `i32.popcnt` (count set bits)
 
-### 1. Add enum variant (`src/types.mbt`)
+### 1. Add enum variant (`src/core/types.mbt`)
 ```moonbit
 pub enum Instr {
   // ... existing instructions ...
@@ -122,155 +218,60 @@ pub enum Instr {
 }
 ```
 
-### 2. Add parser mapping (`src/parse.mbt`)
+### 2. Add parser mapping (`src/parse/parse_instr.mbt`)
 ```moonbit
-fn parse_instruction(parser) -> Instr {
-  match opcode {
-    // ... existing opcodes ...
-    0x69 => I32Popcnt  // ← Map opcode to enum
-  }
+0x69 => I32Popcnt  // ← Map opcode to enum
+```
+
+### 3. Add validation (`src/validate/validate_instr_numeric.mbt`)
+```moonbit
+I32Popcnt => {
+  ctx.poly_pop_expect(I32, "i32.popcnt")
+  stack.push(I32)
 }
 ```
 
-### 3. Add validation (`src/validate.mbt`)
+### 4. Add compilation (`src/runtime/compile_emit.mbt`)
 ```moonbit
-fn validate_instruction(..., instr: Instr) {
-  match instr {
-    // ... existing cases ...
-    I32Popcnt => {
-      ctx.poly_pop_expect(I32, "i32.popcnt")  // Pop i32
-      stack.push(I32)                          // Push i32 result
-    }
-  }
-}
+I32Popcnt => ctx.emit_op(op_i32_popcnt)
 ```
 
-### 4. Add runtime (`src/runtime.mbt`)
+### 5. Add runtime handler (`src/runtime/ops_integer.mbt`)
 ```moonbit
-fn execute_instruction(runtime, instr) {
-  match instr {
-    // ... existing cases ...
-    I32Popcnt => {
-      let a = runtime.stack.pop_i32()
-      let result = count_bits(a)  // Actual implementation
-      runtime.stack.push(Value::I32(result))
-    }
-  }
+fn op_i32_popcnt(rt : Runtime) -> Unit {
+  let a = rt.stack.unsafe_get(rt.stack_top - 1).to_uint()
+  let result = popcnt32(a)  // Count set bits
+  rt.stack.unsafe_set(rt.stack_top - 1, result.to_uint64())
+  rt.pc += 1
 }
-```
-
-## Validation vs Runtime
-
-**Important distinction**:
-
-| Phase | When | What | Data |
-|-------|------|------|------|
-| **Validation** | Module load | Type checking | `ValidationCtx` with type stack |
-| **Runtime** | Execution | Actual computation | `Runtime` with value stack |
-
-Common mistake: Confusing `ValidationCtx::stack` (types) with `Runtime::stack` (values)
-
-```moonbit
-// VALIDATION (validate.mbt) - operates on TYPES
-ctx.poly_pop_expect(I32, "operation")  // ✓ Check type is I32
-stack.push(I32)                        // ✓ Push TYPE I32
-
-// RUNTIME (runtime.mbt) - operates on VALUES
-let val = runtime.stack.pop_i32()      // ✓ Pop actual value
-runtime.stack.push(Value::I32(result)) // ✓ Push actual value
 ```
 
 ## Error Handling Patterns
 
-### Use `raise`, not `abort`
+### Runtime errors (instruction handlers)
 
 ```moonbit
-// ✓ GOOD - Runtime errors
-if b == 0 {
-  raise RuntimeError::DivisionByZero
+// Set error detail and trap status, then return
+if divisor == 0U {
+  rt.error_detail = "division by zero"
+  rt.status = Trap
+  return
 }
 
-// ✓ GOOD - Validation errors
+// For unrecoverable internal errors only
+guard some_condition else {
+  rt.error_detail = "unexpected state"
+  rt.status = Trap
+  return
+}
+```
+
+### Validation errors
+
+```moonbit
+// Use raise for validation
 if stack.length() < 2 {
   raise ValidationError::TypeMismatch("i32.add needs 2 operands")
-}
-
-// ✗ BAD - Don't use abort for expected errors
-if b == 0 {
-  abort("division by zero")  // Wrong! Use raise
-}
-```
-
-### Function signatures must declare errors
-
-```moonbit
-// ✓ Declares RuntimeError
-fn execute_div(a: UInt, b: UInt) -> UInt raise RuntimeError {
-  if b == 0 { raise RuntimeError::DivisionByZero }
-  a / b
-}
-
-// ✓ Declares ValidationError
-fn validate_binary_op(ctx: ValidationCtx) -> Unit raise ValidationError {
-  if ctx.stack.length() < 2 {
-    raise ValidationError::TypeMismatch("need 2 values")
-  }
-}
-```
-
-## Control Flow & Stack Polymorphism
-
-### Unreachable Code
-
-After `unreachable`, `br`, `return`, or unconditional branches, code is **unreachable**:
-
-```wasm
-(block
-  (br 0)         ;; Branches away
-  (i32.add)      ;; UNREACHABLE - can pop from empty stack (polymorphic)
-)
-```
-
-In unreachable mode (`ctx.is_unreachable = true`):
-- Stack operations succeed even with empty stack (polymorphic)
-- Use `ctx.poly_pop_expect()` instead of direct pop
-- Values popped from empty stack are assumed to match expected type
-
-### Branch Target Types
-
-**Critical distinction**:
-
-```moonbit
-// BLOCK - br targets the END (results)
-Block(block_type, instrs) => {
-  let (params, results) = get_block_type(block_type)
-  ctx.push_control(params, results)  // br uses 'results'
-}
-
-// LOOP - br targets the START (params)
-Loop(block_type, instrs) => {
-  let (params, results) = get_block_type(block_type)
-  ctx.push_control(params, params)   // br uses 'params' (restart loop)
-}
-```
-
-This is why `br 0` inside a loop restarts the loop!
-
-### Conditional Branches (br_if)
-
-`br_if` is special - it doesn't clear the stack:
-
-```moonbit
-// br_if validation:
-BrIf(label) => {
-  let target_types = ctx.get_label_types(label)
-  ctx.poly_pop_expect(I32, "br_if condition")  // Pop condition
-
-  // Check target values are on stack, but DON'T pop them!
-  // They stay for the fallthrough case
-  validate_stack_has_types(target_types)
-
-  // DON'T mark as unreachable (execution continues)
 }
 ```
 
@@ -279,81 +280,47 @@ BrIf(label) => {
 ### 1. Binary operation operand order
 
 ```moonbit
-// ✗ WRONG
-let a = stack.pop()  // This is the SECOND operand!
-let b = stack.pop()  // This is the FIRST operand!
-a - b  // Wrong order!
-
-// ✓ CORRECT
-let b = stack.pop()  // Pop second operand first
-let a = stack.pop()  // Then pop first operand
-a - b  // Correct order
+// Stack: [..., a, b] where a was pushed first, b second
+// For a - b:
+let b = rt.stack.unsafe_get(rt.stack_top - 1)  // Second operand
+let a = rt.stack.unsafe_get(rt.stack_top - 2)  // First operand
+let result = a - b  // Correct order
 ```
 
-Stack is LIFO: `(i32.const 10) (i32.const 3) (i32.sub)` → stack is `[10, 3]` → pop `3`, then `10` → `10 - 3 = 7`
-
-### 2. Validation context isolation
-
-Each block creates a NEW validation context:
+### 2. Stack pointer after operations
 
 ```moonbit
-// ✓ CORRECT - new context for block
-Block(block_type, instrs) => {
-  let block_ctx = ValidationCtx::new()  // Fresh context
+// Binary op: consume 2, produce 1
+rt.stack_top -= 1  // Net effect: -1
+rt.stack.unsafe_set(rt.stack_top - 1, result)
 
-  // But COPY parent's control stack!
-  for frame in ctx.control_stack {
-    block_ctx.control_stack.push(frame)
-  }
-  block_ctx.push_control(params, results)
+// Unary op: consume 1, produce 1
+// stack_top unchanged, just update in place
+rt.stack.unsafe_set(rt.stack_top - 1, result)
+```
 
-  // Validate block body with isolated stack
-  for instr in instrs {
-    validate_instruction(module_, func_type, code, block_ctx, instr)
-  }
+### 3. Don't forget to increment pc
+
+```moonbit
+fn op_some_instr(rt : Runtime) -> Unit {
+  // ... do work ...
+  rt.pc += 1  // Don't forget!
 }
 ```
 
-### 3. Array references in MoonBit
+### 4. Status must be reset between calls
 
-Arrays in tuples are references, not copies:
-
-```moonbit
-let (_, results) = control_stack[idx]
-results  // This is a REFERENCE to the array in the tuple!
-```
-
-If you modify `results`, you modify the original! This can cause subtle bugs.
-
-### 4. Nested expressions with branches
-
-When `br` is inside an operand position:
-
-```wasm
-(i32.add
-  (i32.const 5)
-  (br 0 (i32.const 10))  ;; Branches immediately!
-)
-;; The i32.add NEVER executes - br jumps away
-```
-
-The branch happens during evaluation of the operand, so the outer operation never runs.
+The `call_compiled` function resets status before execution to prevent
+state leakage from previous trapped calls.
 
 ## Debugging Tips
 
 ### 1. Add targeted debug output
 
 ```moonbit
-// In validate.mbt
-BrTable(labels, default_label) => {
-  println("Validating br_table: labels=\{labels}, default=\{default_label}")
-  println("Control stack depth: \{ctx.control_stack.length()}")
-
-  for i, label in labels {
-    let types = ctx.get_label_types(label)
-    println("  Label \{label} expects: \{types}")
-  }
-  // ... rest of validation
+fn op_problematic(rt : Runtime) -> Unit {
+  println("pc=\{rt.pc} stack_top=\{rt.stack_top}")
+  // ... rest of handler
 }
 ```
 
@@ -370,38 +337,14 @@ wasm-tools print test.wasm
 wasm-tools dump test.wasm
 ```
 
-### 3. Test in isolation
+### 3. Compare with reference implementation
 
-Create minimal test cases:
-
-```wasm
-(module
-  (func (export "test") (result i32)
-    (block (result i32)
-      (br_if 0 (i32.const 42) (i32.const 1))
-      (i32.const 99)
-    )
-  )
-)
-```
-
-### 4. Compare with reference implementation
-
-When stuck, check the official WebAssembly spec:
 - https://webassembly.github.io/spec/core/valid/instructions.html (validation)
 - https://webassembly.github.io/spec/core/exec/instructions.html (execution)
 
 ## Performance Notes
 
-- Validation happens ONCE at module load
-- Runtime execution happens MANY times
-- Optimize runtime, not validation
-- Use `Array::unsafe_pop()` in hot paths (after validation ensures safety)
-
-## Known Issues / TODOs
-
-See `TODO.md` for detailed tracking, but key issues:
-
-1. **Nested branch evaluation** - br/br_if inside operand positions don't properly abort outer expression
-2. **br_table type checking** - Disabled due to `get_label_types()` returning inconsistent types
-3. **Stack polymorphism edge cases** - Some unreachable code scenarios not fully handled
+- Stack uses `FixedArray[UInt64]` with tagless representation
+- `unsafe_get`/`unsafe_set` used in hot paths (validation ensures safety)
+- Threaded code avoids instruction dispatch overhead
+- Branch targets pre-computed and embedded as immediates
