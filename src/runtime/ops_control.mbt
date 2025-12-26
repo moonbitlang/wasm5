@@ -1,7 +1,7 @@
 ///|
 /// Local access uses unified stack: stack[bp + idx]
 fn op_local_get(rt : Runtime) -> Runtime {
-  let idx = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
+  let idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let value = rt.stack.unsafe_get(rt.bp + idx)
   rt.stack.unsafe_set(rt.sp, value)
   { ..rt, sp: rt.sp + 1, pc: rt.pc + 2 }
@@ -9,7 +9,7 @@ fn op_local_get(rt : Runtime) -> Runtime {
 
 ///|
 fn op_local_set(rt : Runtime) -> Runtime {
-  let idx = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
+  let idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let stack_top = rt.sp - 1
   let value = rt.stack.unsafe_get(stack_top)
   rt.stack.unsafe_set(rt.bp + idx, value)
@@ -18,7 +18,7 @@ fn op_local_set(rt : Runtime) -> Runtime {
 
 ///|
 fn op_local_tee(rt : Runtime) -> Runtime {
-  let idx = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
+  let idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let value = rt.stack.unsafe_get(rt.sp - 1)
   rt.stack.unsafe_set(rt.bp + idx, value)
   { ..rt, pc: rt.pc + 2 }
@@ -68,7 +68,7 @@ fn get_func_type_or_error(
 
 ///|
 fn op_if(rt : Runtime) -> Runtime {
-  let else_pc = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
+  let else_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let stack_top = rt.sp - 1
   let cond = rt.stack.unsafe_get(stack_top).to_uint()
   if cond != 0U {
@@ -83,9 +83,9 @@ fn op_if(rt : Runtime) -> Runtime {
 
 ///|
 fn op_br(rt : Runtime) -> Runtime {
-  let target_pc = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
-  let arity = rt.ops.unsafe_get(rt.pc + 2).reinterpret_as_int64().to_int()
-  let drop_count = rt.ops.unsafe_get(rt.pc + 3).reinterpret_as_int64().to_int()
+  let target_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let arity = rt.ops.unsafe_get(rt.pc + 2).to_int()
+  let drop_count = rt.ops.unsafe_get(rt.pc + 3).to_int()
 
   // In-place stack shuffle: move arity values down by drop_count positions
   // Stack: [..., drop_values (drop_count), result_values (arity)]
@@ -108,9 +108,9 @@ fn op_br(rt : Runtime) -> Runtime {
 
 ///|
 fn op_br_if(rt : Runtime) -> Runtime {
-  let target_pc = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
-  let arity = rt.ops.unsafe_get(rt.pc + 2).reinterpret_as_int64().to_int()
-  let drop_count = rt.ops.unsafe_get(rt.pc + 3).reinterpret_as_int64().to_int()
+  let target_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let arity = rt.ops.unsafe_get(rt.pc + 2).to_int()
+  let drop_count = rt.ops.unsafe_get(rt.pc + 3).to_int()
   let stack_top = rt.sp - 1
   let cond = rt.stack.unsafe_get(stack_top).to_uint()
   if cond != 0U {
@@ -135,8 +135,8 @@ fn op_br_if(rt : Runtime) -> Runtime {
 
 ///|
 fn op_br_table(rt : Runtime) -> Runtime {
-  let num_labels = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
-  let arity = rt.ops.unsafe_get(rt.pc + 2).reinterpret_as_int64().to_int()
+  let num_labels = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let arity = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let stack_top = rt.sp - 1
   let index = rt.stack.unsafe_get(stack_top).to_uint().reinterpret_as_int()
 
@@ -149,7 +149,7 @@ fn op_br_table(rt : Runtime) -> Runtime {
   // Each label entry is 2 immediates: (target_pc, drop_count)
   // Labels start at pc + 3
   let label_base = rt.pc + 3 + selected * 2
-  let target_pc = rt.ops.unsafe_get(label_base).reinterpret_as_int64().to_int()
+  let target_pc = rt.ops.unsafe_get(label_base).to_int()
   let drop_count = rt.ops
     .unsafe_get(label_base + 1)
     .reinterpret_as_int64()
@@ -173,13 +173,13 @@ fn op_br_table(rt : Runtime) -> Runtime {
 
 ///|
 fn op_br_on_null(rt : Runtime) -> Runtime {
-  let target_pc = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
-  let arity = rt.ops.unsafe_get(rt.pc + 2).reinterpret_as_int64().to_int()
-  let drop_count = rt.ops.unsafe_get(rt.pc + 3).reinterpret_as_int64().to_int()
+  let target_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let arity = rt.ops.unsafe_get(rt.pc + 2).to_int()
+  let drop_count = rt.ops.unsafe_get(rt.pc + 3).to_int()
   // Pop reference value (refs are stored as Int64, -1 = null)
   let stack_top = rt.sp - 1
   let ref_val = rt.stack.unsafe_get(stack_top)
-  let ref_idx = ref_val.reinterpret_as_int64().to_int()
+  let ref_idx = ref_val.to_int()
   let is_null = ref_idx == -1
   if is_null {
     // Ref is consumed (not passed to branch target), just shuffle remaining values
@@ -206,13 +206,13 @@ fn op_br_on_null(rt : Runtime) -> Runtime {
 
 ///|
 fn op_br_on_non_null(rt : Runtime) -> Runtime {
-  let target_pc = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
-  let arity = rt.ops.unsafe_get(rt.pc + 2).reinterpret_as_int64().to_int()
-  let drop_count = rt.ops.unsafe_get(rt.pc + 3).reinterpret_as_int64().to_int()
+  let target_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let arity = rt.ops.unsafe_get(rt.pc + 2).to_int()
+  let drop_count = rt.ops.unsafe_get(rt.pc + 3).to_int()
   // Pop reference value (refs are stored as Int64, -1 = null)
   let stack_top = rt.sp - 1
   let ref_val = rt.stack.unsafe_get(stack_top)
-  let ref_idx = ref_val.reinterpret_as_int64().to_int()
+  let ref_idx = ref_val.to_int()
   let is_non_null = ref_idx != -1
   if is_non_null {
     // Push ref back first - arity values include the ref we just pushed
@@ -241,7 +241,7 @@ fn op_br_on_non_null(rt : Runtime) -> Runtime {
 
 ///|
 fn op_call(rt : Runtime) -> Runtime {
-  let func_idx = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
+  let func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
 
   // Check if calling an imported function
@@ -355,8 +355,8 @@ fn op_return(rt : Runtime) -> Runtime {
 
 ///|
 fn op_call_indirect(rt : Runtime) -> Runtime {
-  let type_idx = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
-  let table_idx = rt.ops.unsafe_get(rt.pc + 2).reinterpret_as_int64().to_int()
+  let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let table_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
 
   // Pop the function index from the stack
   let stack_top = rt.sp - 1
@@ -488,7 +488,7 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
 
 ///|
 fn op_return_call(rt : Runtime) -> Runtime {
-  let func_idx = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
+  let func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
 
   // Check if calling an imported function
@@ -556,8 +556,8 @@ fn op_return_call(rt : Runtime) -> Runtime {
 
 ///|
 fn op_return_call_indirect(rt : Runtime) -> Runtime {
-  let type_idx = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
-  let table_idx = rt.ops.unsafe_get(rt.pc + 2).reinterpret_as_int64().to_int()
+  let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let table_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
 
   // Pop the function index from the stack
   let stack_top = rt.sp - 1
@@ -682,7 +682,7 @@ fn op_return_call_indirect(rt : Runtime) -> Runtime {
 
 ///|
 fn op_call_ref(rt : Runtime) -> Runtime {
-  let type_idx = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
+  let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
 
   // Pop the function reference from the stack (stored as Int64, -1 = null)
   let stack_top = rt.sp - 1
@@ -799,7 +799,7 @@ fn op_call_ref(rt : Runtime) -> Runtime {
 
 ///|
 fn op_return_call_ref(rt : Runtime) -> Runtime {
-  let type_idx = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
+  let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
 
   // Pop the function reference from the stack (stored as Int64, -1 = null)
   let stack_top = rt.sp - 1
@@ -921,14 +921,14 @@ fn op_unreachable(rt : Runtime) -> Runtime {
 
 ///|
 fn op_throw(rt : Runtime) -> Runtime {
-  let tag_idx = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
+  let tag_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   rt.ctx.error_detail = "throw not implemented for tag \{tag_idx}"
   { ..rt, status: Trap }
 }
 
 ///|
 fn op_rethrow(rt : Runtime) -> Runtime {
-  let label_idx = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
+  let label_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   rt.ctx.error_detail = "rethrow not implemented for label \{label_idx}"
   { ..rt, status: Trap }
 }
@@ -956,8 +956,8 @@ fn op_gc_unimplemented(rt : Runtime) -> Runtime {
 
 ///|
 fn op_table_init(rt : Runtime) -> Runtime {
-  let _table_idx = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
-  let _elem_idx = rt.ops.unsafe_get(rt.pc + 2).reinterpret_as_int64().to_int()
+  let _table_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let _elem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let stack_top = rt.sp - 3
   let _n = rt.stack.unsafe_get(rt.sp - 1).to_uint()
   let _src = rt.stack.unsafe_get(rt.sp - 2).to_uint()
@@ -986,14 +986,14 @@ fn op_table_copy(rt : Runtime) -> Runtime {
 
 ///|
 fn op_table_fill(rt : Runtime) -> Runtime {
-  let table_idx = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
+  let table_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   if table_idx < 0 || table_idx >= rt.ctx.tables.length() {
     rt.ctx.error_detail = "table index out of bounds"
     return { ..rt, status: Trap }
   }
   let stack_top = rt.sp - 3
   let n = rt.stack.unsafe_get(rt.sp - 1).to_uint().reinterpret_as_int()
-  let raw_ref = rt.stack.unsafe_get(rt.sp - 2).reinterpret_as_int64().to_int()
+  let raw_ref = rt.stack.unsafe_get(rt.sp - 2).to_int()
   let ref_value : Int? = if raw_ref == -1 { None } else { Some(raw_ref) }
   let dest = rt.stack.unsafe_get(stack_top).to_uint().reinterpret_as_int()
   let table = rt.ctx.tables[table_idx].data
@@ -1010,7 +1010,7 @@ fn op_table_fill(rt : Runtime) -> Runtime {
 ///|
 fn op_elem_drop(rt : Runtime) -> Runtime {
   // Read elem_idx but don't use it (not implemented yet)
-  let _elem_idx = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
+  let _elem_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   // TODO: Implement elem.drop
   { ..rt, pc: rt.pc + 2 }
 }
@@ -1021,7 +1021,7 @@ fn op_elem_drop(rt : Runtime) -> Runtime {
 
 ///|
 fn op_table_size(rt : Runtime) -> Runtime {
-  let table_idx = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
+  let table_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   if table_idx < 0 || table_idx >= rt.ctx.tables.length() {
     rt.ctx.error_detail = "table index out of bounds"
     return { ..rt, status: Trap }
@@ -1033,7 +1033,7 @@ fn op_table_size(rt : Runtime) -> Runtime {
 
 ///|
 fn op_table_get(rt : Runtime) -> Runtime {
-  let table_idx = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
+  let table_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   if table_idx < 0 || table_idx >= rt.ctx.tables.length() {
     rt.ctx.error_detail = "table index out of bounds"
     return { ..rt, status: Trap }
@@ -1056,14 +1056,14 @@ fn op_table_get(rt : Runtime) -> Runtime {
 
 ///|
 fn op_table_set(rt : Runtime) -> Runtime {
-  let table_idx = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
+  let table_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   if table_idx < 0 || table_idx >= rt.ctx.tables.length() {
     rt.ctx.error_detail = "table index out of bounds"
     return { ..rt, status: Trap }
   }
   // Pop ref value - stored as Int64, -1 = null
   let stack_top = rt.sp - 2
-  let raw_ref = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_int64().to_int()
+  let raw_ref = rt.stack.unsafe_get(rt.sp - 1).to_int()
   let ref_value : Int? = if raw_ref == -1 { None } else { Some(raw_ref) }
   let elem_idx = rt.stack.unsafe_get(stack_top).to_uint().reinterpret_as_int()
   let table = rt.ctx.tables[table_idx].data
@@ -1077,7 +1077,7 @@ fn op_table_set(rt : Runtime) -> Runtime {
 
 ///|
 fn op_table_grow(rt : Runtime) -> Runtime {
-  let table_idx = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
+  let table_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   if table_idx < 0 || table_idx >= rt.ctx.tables.length() {
     rt.stack.unsafe_set(rt.sp, 0xFFFFFFFFUL) // -1 indicates failure
     return { ..rt, sp: rt.sp + 1, pc: rt.pc + 2 }
@@ -1085,7 +1085,7 @@ fn op_table_grow(rt : Runtime) -> Runtime {
   let stack_top = rt.sp - 2
   let delta = rt.stack.unsafe_get(rt.sp - 1).to_uint().reinterpret_as_int()
   // Pop ref value - stored as Int64, -1 = null
-  let raw_ref = rt.stack.unsafe_get(stack_top).reinterpret_as_int64().to_int()
+  let raw_ref = rt.stack.unsafe_get(stack_top).to_int()
   let init_value : Int? = if raw_ref == -1 { None } else { Some(raw_ref) }
   let runtime_table = rt.ctx.tables[table_idx]
   let table = runtime_table.data
@@ -1099,7 +1099,7 @@ fn op_table_grow(rt : Runtime) -> Runtime {
   // Check max limit
   match runtime_table.max {
     Some(max) =>
-      if new_size > max.reinterpret_as_int64().to_int() {
+      if new_size > max.to_int() {
         // Would exceed max - return -1 (failure)
         rt.stack.unsafe_set(stack_top, 0xFFFFFFFFUL)
         return { ..rt, sp: stack_top + 1, pc: rt.pc + 2 }
@@ -1123,7 +1123,7 @@ fn op_table_grow(rt : Runtime) -> Runtime {
 fn op_ref_null(rt : Runtime) -> Runtime {
   // ref.null pushes a null reference onto the stack
   // The heap type is encoded in the immediate but we don't need it at runtime
-  let _ = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int() // Skip the heap type encoding
+  let _ = rt.ops.unsafe_get(rt.pc + 1).to_int() // Skip the heap type encoding
   // Push null ref as -1 (Int64)
   rt.stack.unsafe_set(rt.sp, (-1).to_int64().reinterpret_as_uint64())
   { ..rt, sp: rt.sp + 1, pc: rt.pc + 2 }
@@ -1132,7 +1132,7 @@ fn op_ref_null(rt : Runtime) -> Runtime {
 ///|
 fn op_ref_func(rt : Runtime) -> Runtime {
   // ref.func pushes a reference to the given function onto the stack
-  let func_idx = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
+  let func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   // Push func ref as Int64
   rt.stack.unsafe_set(rt.sp, func_idx.to_int64().reinterpret_as_uint64())
   { ..rt, sp: rt.sp + 1, pc: rt.pc + 2 }
@@ -1143,7 +1143,7 @@ fn op_ref_is_null(rt : Runtime) -> Runtime {
   // ref.is_null tests whether a reference is null
   // Refs are stored as Int64, -1 = null
   let stack_top = rt.sp - 1
-  let ref_val = rt.stack.unsafe_get(stack_top).reinterpret_as_int64().to_int()
+  let ref_val = rt.stack.unsafe_get(stack_top).to_int()
   let is_null : UInt64 = if ref_val == -1 { 1UL } else { 0UL }
   rt.stack.unsafe_set(stack_top, is_null)
   { ..rt, pc: rt.pc + 1 }
@@ -1154,8 +1154,8 @@ fn op_ref_eq(rt : Runtime) -> Runtime {
   // ref.eq compares two references for identity equality
   // Refs are stored as Int64, -1 = null
   let stack_top = rt.sp - 2
-  let rhs = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_int64().to_int()
-  let lhs = rt.stack.unsafe_get(stack_top).reinterpret_as_int64().to_int()
+  let rhs = rt.stack.unsafe_get(rt.sp - 1).to_int()
+  let lhs = rt.stack.unsafe_get(stack_top).to_int()
   let eq : UInt64 = if lhs == rhs { 1UL } else { 0UL }
   rt.stack.unsafe_set(stack_top, eq)
   { ..rt, sp: stack_top + 1, pc: rt.pc + 1 }
@@ -1166,7 +1166,7 @@ fn op_ref_as_non_null(rt : Runtime) -> Runtime {
   // ref.as_non_null traps on null references
   // Refs are stored as Int64, -1 = null
   let value = rt.stack.unsafe_get(rt.sp - 1)
-  let ref_val = value.reinterpret_as_int64().to_int()
+  let ref_val = value.to_int()
   if ref_val == -1 {
     rt.ctx.error_detail = "ref.as_non_null: null reference"
     return { ..rt, status: Trap }
@@ -1177,7 +1177,7 @@ fn op_ref_as_non_null(rt : Runtime) -> Runtime {
 
 ///|
 fn op_global_get(rt : Runtime) -> Runtime {
-  let idx = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
+  let idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   // Convert Value to UInt64 for stack
   rt.stack.unsafe_set(rt.sp, value_to_stack(rt.ctx.globals[idx]))
   { ..rt, sp: rt.sp + 1, pc: rt.pc + 2 }
@@ -1185,7 +1185,7 @@ fn op_global_get(rt : Runtime) -> Runtime {
 
 ///|
 fn op_global_set(rt : Runtime) -> Runtime {
-  let idx = rt.ops.unsafe_get(rt.pc + 1).reinterpret_as_int64().to_int()
+  let idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let stack_top = rt.sp - 1
   let raw = rt.stack.unsafe_get(stack_top)
   // Infer the value type from the existing global's tag

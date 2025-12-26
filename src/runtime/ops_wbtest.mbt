@@ -125,7 +125,7 @@ fn rotr32(value : UInt, shift : UInt) -> UInt {
 
 ///|
 fn rotl64(value : UInt64, shift : UInt64) -> UInt64 {
-  let s = (shift & 63UL).reinterpret_as_int64().to_int()
+  let s = (shift & 63UL).to_int()
   if s == 0 {
     value
   } else {
@@ -135,7 +135,7 @@ fn rotl64(value : UInt64, shift : UInt64) -> UInt64 {
 
 ///|
 fn rotr64(value : UInt64, shift : UInt64) -> UInt64 {
-  let s = (shift & 63UL).reinterpret_as_int64().to_int()
+  let s = (shift & 63UL).to_int()
   if s == 0 {
     value
   } else {
@@ -203,7 +203,7 @@ fn popcnt64(value : UInt64) -> UInt {
   let mut count = 0
   let mut v = value
   while v != 0UL {
-    count += (v & 1UL).reinterpret_as_int64().to_int()
+    count += (v & 1UL).to_int()
     v = v >> 1
   }
   count.reinterpret_as_uint()

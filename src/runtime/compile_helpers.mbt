@@ -424,7 +424,7 @@ fn stack_to_value(raw : UInt64, val_type : @core.ValType) -> Value {
     | ExnRef
     | NullExnRef
     | Ref(_, _) => {
-      let idx = raw.reinterpret_as_int64().to_int()
+      let idx = raw.to_int()
       if idx == -1 {
         Value::Ref(None)
       } else {

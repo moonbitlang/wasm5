@@ -364,7 +364,7 @@ pub fn Runtime::load_with_resolver(
   if not(has_imported_memory) && m.mems.length() > 0 {
     let memory_min_pages = m.mems[0].limits.min
     memory_max_pages = m.mems[0].limits.max
-    let memory_size = memory_min_pages.reinterpret_as_int64().to_int() * 65536
+    let memory_size = memory_min_pages.to_int() * 65536
     memory = Array::make(memory_size, b'\x00')
   }
   // Initialize globals
@@ -440,7 +440,7 @@ pub fn Runtime::load_with_resolver(
   }
   // Then add local tables
   for table in m.tables {
-    let table_size = table.limits.min.reinterpret_as_int64().to_int()
+    let table_size = table.limits.min.to_int()
     // Initialize table with default value (null unless table has init expr)
     let init_ref = match table.init {
       Some(init_expr) => {
