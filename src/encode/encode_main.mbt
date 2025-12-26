@@ -1039,6 +1039,31 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
       }
       payload.push(0x0BU.to_byte())
     }
+    Try(block_type, instrs, catches) => {
+      payload.push(0x06U.to_byte())
+      append_bytes(payload, encode_block_type(block_type))
+      for item in instrs {
+        append_bytes(payload, encode_instr(item))
+      }
+      for clause in catches {
+        match clause {
+          @core.TryCatch::Catch(tag_idx, body) => {
+            payload.push(0x07U.to_byte())
+            append_bytes(payload, encode_u32_leb128(tag_idx))
+            for item in body {
+              append_bytes(payload, encode_instr(item))
+            }
+          }
+          @core.TryCatch::CatchAll(body) => {
+            payload.push(0x19U.to_byte())
+            for item in body {
+              append_bytes(payload, encode_instr(item))
+            }
+          }
+        }
+      }
+      payload.push(0x0BU.to_byte())
+    }
     TryTable(block_type, catches, instrs) => {
       payload.push(0x1FU.to_byte())
       append_bytes(payload, encode_block_type(block_type))
@@ -1048,21 +1073,21 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
       )
       for clause in catches {
         match clause {
-          Catch(tag_idx, label_idx) => {
+          @core.CatchClause::Catch(tag_idx, label_idx) => {
             payload.push(0x00U.to_byte())
             append_bytes(payload, encode_u32_leb128(tag_idx))
             append_bytes(payload, encode_u32_leb128(label_idx))
           }
-          CatchRef(tag_idx, label_idx) => {
+          @core.CatchClause::CatchRef(tag_idx, label_idx) => {
             payload.push(0x01U.to_byte())
             append_bytes(payload, encode_u32_leb128(tag_idx))
             append_bytes(payload, encode_u32_leb128(label_idx))
           }
-          CatchAll(label_idx) => {
+          @core.CatchClause::CatchAll(label_idx) => {
             payload.push(0x02U.to_byte())
             append_bytes(payload, encode_u32_leb128(label_idx))
           }
-          CatchAllRef(label_idx) => {
+          @core.CatchClause::CatchAllRef(label_idx) => {
             payload.push(0x03U.to_byte())
             append_bytes(payload, encode_u32_leb128(label_idx))
           }

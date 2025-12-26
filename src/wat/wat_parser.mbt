@@ -19,6 +19,12 @@ priv enum WatCatchClause {
 }
 
 ///|
+priv enum WatTryCatch {
+  Catch(IndexRef, Array[WatInstr])
+  CatchAll(Array[WatInstr])
+}
+
+///|
 priv enum WatInstr {
   Core(@core.Instr)
   CoreMemRef(@core.Instr, IndexRef)
@@ -54,6 +60,7 @@ priv enum WatInstr {
   Block(Bytes?, WatBlockType, Array[WatInstr])
   Loop(Bytes?, WatBlockType, Array[WatInstr])
   If(Bytes?, WatBlockType, Array[WatInstr], Array[WatInstr])
+  Try(Bytes?, WatBlockType, Array[WatInstr], Array[WatTryCatch])
   TryTable(Bytes?, WatBlockType, Array[WatCatchClause], Array[WatInstr])
 }
 
@@ -508,6 +515,97 @@ fn parse_try_table_instr(
 }
 
 ///|
+fn is_try_marker(atom : Bytes) -> Bool {
+  atom == b"catch" || atom == b"catch_all" || atom == b"end"
+}
+
+///|
+fn find_try_marker(items : Array[SExpr], start : Int) -> (Bytes?, Int) {
+  let mut depth = 0
+  let mut i = start
+  while i < items.length() {
+    match items[i] {
+      Atom(atom) =>
+        if atom == b"try" {
+          depth = depth + 1
+        } else if atom == b"end" {
+          if depth == 0 {
+            return (Some(atom), i)
+          }
+          depth = depth - 1
+        } else if is_try_marker(atom) && depth == 0 {
+          return (Some(atom), i)
+        }
+      _ => ()
+    }
+    i = i + 1
+  }
+  (None, items.length())
+}
+
+///|
+fn parse_try_instr(
+  items : Array[SExpr],
+  idx : Int,
+  local_map : Map[Bytes, UInt],
+  labels : Array[Bytes?],
+  type_map : Map[Bytes, UInt],
+) -> (WatInstr, Int) raise WatError {
+  let (label, next_idx) = parse_optional_label(items, idx + 1)
+  let (block_type, body_start) = parse_block_type(items, next_idx, type_map)
+  let nested_labels = push_label(labels, label)
+  let (marker, body_end) = find_try_marker(items, body_start)
+  guard marker is Some(_) else {
+    raise WatError::InvalidSyntax("try missing end")
+  }
+  let body_items = slice_sexprs_range(items, body_start, body_end)
+  let body = parse_instrs(body_items, local_map, nested_labels, type_map)
+  let catches : Array[WatTryCatch] = []
+  let mut cursor = body_end
+  let mut saw_end = false
+  while cursor < items.length() {
+    match items[cursor] {
+      Atom(atom) if atom == b"end" => {
+        saw_end = true
+        cursor = cursor + 1
+        break
+      }
+      Atom(atom) if atom == b"catch" => {
+        let tag_atom = expect_atom_at(items, cursor + 1)
+        let tag_ref = parse_index_ref(tag_atom)
+        let catch_start = cursor + 2
+        let (next_marker, catch_end) = find_try_marker(items, catch_start)
+        guard next_marker is Some(_) else {
+          raise WatError::InvalidSyntax("try missing end")
+        }
+        let catch_items = slice_sexprs_range(items, catch_start, catch_end)
+        let catch_body = parse_instrs(
+          catch_items, local_map, nested_labels, type_map,
+        )
+        catches.push(WatTryCatch::Catch(tag_ref, catch_body))
+        cursor = catch_end
+      }
+      Atom(atom) if atom == b"catch_all" => {
+        let catch_start = cursor + 1
+        let (next_marker, catch_end) = find_try_marker(items, catch_start)
+        guard next_marker is Some(_) else {
+          raise WatError::InvalidSyntax("try missing end")
+        }
+        let catch_items = slice_sexprs_range(items, catch_start, catch_end)
+        let catch_body = parse_instrs(
+          catch_items, local_map, nested_labels, type_map,
+        )
+        catches.push(WatTryCatch::CatchAll(catch_body))
+        cursor = catch_end
+      }
+      _ => raise WatError::InvalidSyntax("try expects catch or end")
+    }
+  }
+  guard saw_end else { raise WatError::InvalidSyntax("try missing end") }
+  (WatInstr::Try(label, block_type, body, catches), cursor)
+}
+
+///|
 fn parse_call_indirect(
   list_items : Array[SExpr],
   type_map : Map[Bytes, UInt],
@@ -878,6 +976,19 @@ fn push_label(labels : Array[Bytes?], label : Bytes?) -> Array[Bytes?] {
 fn slice_sexprs(items : Array[SExpr], start : Int) -> Array[SExpr] {
   let out : Array[SExpr] = []
   for i in start..<items.length() {
+    out.push(items[i])
+  }
+  out
+}
+
+///|
+fn slice_sexprs_range(
+  items : Array[SExpr],
+  start : Int,
+  end_ : Int,
+) -> Array[SExpr] {
+  let out : Array[SExpr] = []
+  for i in start..<end_ {
     out.push(items[i])
   }
   out
@@ -3513,7 +3624,7 @@ fn split_folded_operands(
   let prefix : Array[WatInstr] = []
   let reduced : Array[SExpr] = []
   reduced.push(Atom(op))
-  if op == b"block" || op == b"loop" || op == b"try_table" {
+  if op == b"block" || op == b"loop" || op == b"try" || op == b"try_table" {
     for i in 1..<list_items.length() {
       reduced.push(list_items[i])
     }
@@ -3585,6 +3696,7 @@ fn parse_instr_from_atom(
     None => ()
   }
   match op {
+    b"try" => return parse_try_instr(items, idx, local_map, labels, type_map)
     b"i32.const" => {
       let imm = expect_atom_at(items, idx + 1)
       (
@@ -4561,6 +4673,7 @@ fn is_instruction_op(op : Bytes) -> Bool {
     b"block"
     | b"loop"
     | b"if"
+    | b"try"
     | b"try_table"
     | b"br"
     | b"br_if"
@@ -5899,6 +6012,22 @@ fn append_label_names(
         next_index = append_label_names(entries, then_body, next_index)
         next_index = append_label_names(entries, else_body, next_index)
       }
+      WatInstr::Try(label, _, body, catches) => {
+        match label {
+          Some(name) =>
+            entries.push({ idx: next_index, name: strip_name_prefix(name) })
+          None => ()
+        }
+        next_index = next_index + 1U
+        next_index = append_label_names(entries, body, next_index)
+        for clause in catches {
+          match clause {
+            WatTryCatch::Catch(_, catch_body)
+            | WatTryCatch::CatchAll(catch_body) =>
+              next_index = append_label_names(entries, catch_body, next_index)
+          }
+        }
+      }
       WatInstr::TryTable(label, _, _, body) => {
         match label {
           Some(name) =>
@@ -6841,6 +6970,17 @@ fn seed_typeuses_from_instrs(
         seed_typeuses_from_instrs(then_body, type_defs, type_map, types)
         seed_typeuses_from_instrs(else_body, type_defs, type_map, types)
       }
+      WatInstr::Try(_, block_type, body, catches) => {
+        seed_typeuses_from_block_type(block_type, type_defs, type_map, types)
+        seed_typeuses_from_instrs(body, type_defs, type_map, types)
+        for clause in catches {
+          match clause {
+            WatTryCatch::Catch(_, catch_body)
+            | WatTryCatch::CatchAll(catch_body) =>
+              seed_typeuses_from_instrs(catch_body, type_defs, type_map, types)
+          }
+        }
+      }
       WatInstr::TryTable(_, block_type, _, body) => {
         seed_typeuses_from_block_type(block_type, type_defs, type_map, types)
         seed_typeuses_from_instrs(body, type_defs, type_map, types)
@@ -7170,6 +7310,40 @@ fn resolve_instr(
           tag_map, type_defs, type_map, types,
         ),
       )
+    WatInstr::Try(_, block_type, body, catches) => {
+      let resolved_catches : Array[@core.TryCatch] = []
+      for clause in catches {
+        match clause {
+          WatTryCatch::Catch(tag_ref, catch_body) =>
+            resolved_catches.push(
+              @core.TryCatch::Catch(
+                resolve_index_ref(tag_ref, tag_map, "tag"),
+                resolve_instrs(
+                  catch_body, func_map, table_map, elem_map, mem_map, data_map, global_map,
+                  tag_map, type_defs, type_map, types,
+                ),
+              ),
+            )
+          WatTryCatch::CatchAll(catch_body) =>
+            resolved_catches.push(
+              @core.TryCatch::CatchAll(
+                resolve_instrs(
+                  catch_body, func_map, table_map, elem_map, mem_map, data_map, global_map,
+                  tag_map, type_defs, type_map, types,
+                ),
+              ),
+            )
+        }
+      }
+      @core.Instr::Try(
+        resolve_block_type(block_type, type_defs, type_map, types),
+        resolve_instrs(
+          body, func_map, table_map, elem_map, mem_map, data_map, global_map, tag_map,
+          type_defs, type_map, types,
+        ),
+        resolved_catches,
+      )
+    }
     WatInstr::TryTable(_, block_type, catches, body) => {
       let resolved_catches : Array[@core.CatchClause] = []
       for clause in catches {

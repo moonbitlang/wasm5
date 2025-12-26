@@ -274,6 +274,98 @@ fn validate_instruction_control(
         stack.push(result)
       }
     }
+    Try(block_type, instrs, catches) => {
+      let (params, results) = get_block_type(module_, block_type)
+      for i = params.length() - 1; i >= 0; i = i - 1 {
+        ctx.poly_pop_expect(module_, params[i], "try parameter")
+      }
+      let try_ctx = ValidationCtx::new()
+      for param in params {
+        try_ctx.stack.push(param)
+      }
+      for frame in ctx.control_stack {
+        try_ctx.control_stack.push(frame)
+      }
+      try_ctx.push_control(params, results)
+      for i in 0..<ctx.initialized_locals.length() {
+        try_ctx.initialized_locals.push(ctx.initialized_locals[i])
+      }
+      for block_instr in instrs {
+        validate_instruction(
+          module_, func_type, code, try_ctx, block_instr, import_counts,
+        )
+      }
+      let _ = try_ctx.pop_control()
+      if try_ctx.is_unreachable && try_ctx.stack.length() == 0 {
+        // Unreachable with empty stack - all polymorphic, valid
+      } else if try_ctx.stack.length() != results.length() {
+        raise ValidationError::TypeMismatch(
+          "try: expected \{results.length()} values, got \{try_ctx.stack.length()}",
+        )
+      } else {
+        for i in 0..<results.length() {
+          if not(is_subtype(module_, try_ctx.stack[i], results[i])) {
+            raise ValidationError::TypeMismatch(
+              "try result type mismatch: expected \{results[i]}, got \{try_ctx.stack[i]}",
+            )
+          }
+        }
+      }
+      let total_tags = import_counts.tags + module_.tags.length()
+      for clause in catches {
+        let catch_ctx = ValidationCtx::new()
+        for frame in ctx.control_stack {
+          catch_ctx.control_stack.push(frame)
+        }
+        catch_ctx.push_control(params, results)
+        for i in 0..<ctx.initialized_locals.length() {
+          catch_ctx.initialized_locals.push(ctx.initialized_locals[i])
+        }
+        match clause {
+          @core.TryCatch::Catch(tag_idx, body) => {
+            let tag_int = tag_idx.reinterpret_as_int()
+            if tag_int < 0 || tag_int >= total_tags {
+              raise ValidationError::UnknownTag(tag_int)
+            }
+            let type_idx = get_tag_type_index(module_, tag_int, import_counts)
+            let tag_type = get_func_type_by_index(module_, type_idx, "tag type")
+            for param in tag_type.params {
+              catch_ctx.stack.push(param)
+            }
+            for catch_instr in body {
+              validate_instruction(
+                module_, func_type, code, catch_ctx, catch_instr, import_counts,
+              )
+            }
+          }
+          @core.TryCatch::CatchAll(body) =>
+            for catch_instr in body {
+              validate_instruction(
+                module_, func_type, code, catch_ctx, catch_instr, import_counts,
+              )
+            }
+        }
+        let _ = catch_ctx.pop_control()
+        if catch_ctx.is_unreachable && catch_ctx.stack.length() == 0 {
+          // Unreachable with empty stack - all polymorphic, valid
+        } else if catch_ctx.stack.length() != results.length() {
+          raise ValidationError::TypeMismatch(
+            "try catch: expected \{results.length()} values, got \{catch_ctx.stack.length()}",
+          )
+        } else {
+          for i in 0..<results.length() {
+            if not(is_subtype(module_, catch_ctx.stack[i], results[i])) {
+              raise ValidationError::TypeMismatch(
+                "try catch result type mismatch: expected \{results[i]}, got \{catch_ctx.stack[i]}",
+              )
+            }
+          }
+        }
+      }
+      for result in results {
+        stack.push(result)
+      }
+    }
     TryTable(block_type, catches, instrs) => {
       let (params, results) = get_block_type(module_, block_type)
       for i = params.length() - 1; i >= 0; i = i - 1 {
@@ -293,7 +385,8 @@ fn validate_instruction_control(
       let total_tags = import_counts.tags + module_.tags.length()
       for clause in catches {
         match clause {
-          Catch(tag_idx, label_idx) | CatchRef(tag_idx, label_idx) => {
+          @core.CatchClause::Catch(tag_idx, label_idx)
+          | @core.CatchClause::CatchRef(tag_idx, label_idx) => {
             let tag_int = tag_idx.reinterpret_as_int()
             if tag_int < 0 || tag_int >= total_tags {
               raise ValidationError::UnknownTag(tag_int)
@@ -301,7 +394,8 @@ fn validate_instruction_control(
             let _ = try_ctx.get_label_types(label_idx)
 
           }
-          CatchAll(label_idx) | CatchAllRef(label_idx) => {
+          @core.CatchClause::CatchAll(label_idx)
+          | @core.CatchClause::CatchAllRef(label_idx) => {
             let _ = try_ctx.get_label_types(label_idx)
 
           }
