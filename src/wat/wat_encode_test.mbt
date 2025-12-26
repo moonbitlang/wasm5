@@ -1310,6 +1310,18 @@ async test "wat encoder matches wasm-tools for try_table simple" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for try_table no catches" {
+  let wat =
+    #|(module
+    #|  (func (export "f") (param i32) (result i32)
+    #|    (try_table (result i32)
+    #|      local.get 0
+    #|      i32.const 1
+    #|      i32.add)))
+  assert_wat_matches("try_table_nocatch", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for call_indirect" {
   let wat =
     #|(module
@@ -1635,6 +1647,19 @@ async test "wat encoder matches wasm-tools for label names" {
     #|              i32.const 2))))
     #|      i32.const 3)))
   assert_wat_matches_with_names("label_names", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for try_table label names" {
+  let wat =
+    #|(module
+    #|  (tag $e)
+    #|  (func (export "f") (result i32)
+    #|    (block $out (result i32)
+    #|      (try_table $t (result i32)
+    #|        (catch $e $out)
+    #|        i32.const 0))))
+  assert_wat_matches_with_names("label_names_try_table", wat)
 }
 
 ///|
@@ -2239,6 +2264,55 @@ async test "wat encoder matches wasm-tools for try_table catch_ref" {
     #|        throw $e
     #|        i32.const 7))))
   assert_wat_matches("try_table_catch_ref", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for try_table typeuse" {
+  let wat =
+    #|(module
+    #|  (type $t (func (param i32) (result i32)))
+    #|  (func (export "f") (param i32) (result i32)
+    #|    local.get 0
+    #|    (block $out (result i32)
+    #|      (try_table (type $t) (param i32) (result i32)
+    #|        (catch_all $out)
+    #|        local.get 0
+    #|        i32.const 1
+    #|        i32.add))))
+  assert_wat_matches("try_table_typeuse", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for try_table label depth" {
+  let wat =
+    #|(module
+    #|  (tag $e)
+    #|  (func (export "f") (result i32)
+    #|    (block (result i32)
+    #|      (try_table (result i32)
+    #|        (catch $e 0)
+    #|        (catch_all 0)
+    #|        throw $e
+    #|        i32.const 0))))
+  assert_wat_matches("try_table_label_depth", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for try_table nested try" {
+  let wat =
+    #|(module
+    #|  (tag $e)
+    #|  (func (export "f") (result i32)
+    #|    (block $out (result i32)
+    #|      (try_table (result i32)
+    #|        (catch $e $out)
+    #|        try (result i32)
+    #|          i32.const 0
+    #|        catch_all
+    #|          i32.const 1
+    #|        end
+    #|        i32.const 2))))
+  assert_wat_matches("try_table_nested_try", wat)
 }
 
 ///|
