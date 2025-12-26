@@ -223,31 +223,37 @@ fn get_tag_type_idx(
 }
 
 ///|
+/// Value struct for pop_arguments result (avoids tuple allocation)
+priv struct PopArgs {
+  rt : Runtime
+  args : Array[Value]
+}
+
+///|
 /// Pop function arguments from the stack (converts UInt64 to Value)
-fn Runtime::pop_arguments(
-  self : Runtime,
-  func_type : @core.FuncType,
-) -> Array[Value] {
+fn pop_arguments(rt : Runtime, func_type : @core.FuncType) -> PopArgs {
   let num_params = func_type.params.length()
   let args : Array[Value] = Array::make(num_params, Value::I32(0U))
+  let mut stack_top = rt.sp
   for i = num_params - 1; i >= 0; i = i - 1 {
-    self.stack_top -= 1
-    let raw = self.stack.unsafe_get(self.stack_top)
+    stack_top -= 1
+    let raw = rt.stack.unsafe_get(stack_top)
     args[i] = stack_to_value(raw, func_type.params[i])
   }
-  args
+  { rt: { ..rt, sp: stack_top }, args }
 }
 
 ///|
 /// Push default values for declared locals onto the unified stack.
 /// Params are already on the stack - this only handles declared locals.
-/// Sets status to Trap on error.
-fn Runtime::init_declared_locals(self : Runtime, code : @core.Code) -> Unit {
+/// Returns Runtime with updated sp and status (Trap on error).
+fn init_declared_locals(rt : Runtime, code : @core.Code) -> Runtime {
+  let mut stack_top = rt.sp
   for local_type in code.locals {
     match local_type {
       I32 | I64 | F32 | F64 => {
-        self.stack.unsafe_set(self.stack_top, 0UL)
-        self.stack_top += 1
+        rt.stack.unsafe_set(stack_top, 0UL)
+        stack_top += 1
       }
       FuncRef
       | ExternRef
@@ -262,126 +268,116 @@ fn Runtime::init_declared_locals(self : Runtime, code : @core.Code) -> Unit {
       | StructRef
       | ArrayRef
       | Ref(_, _) => {
-        self.stack.unsafe_set(self.stack_top, (-1L).reinterpret_as_uint64()) // null ref
-        self.stack_top += 1
+        rt.stack.unsafe_set(stack_top, (-1L).reinterpret_as_uint64()) // null ref
+        stack_top += 1
       }
       _ => {
-        self.error_detail = "Unsupported local type: \{local_type}"
-        self.status = Trap
-        return
+        rt.ctx.error_detail = "Unsupported local type: \{local_type}"
+        return { ..rt, sp: stack_top, status: Trap }
       }
     }
   }
+  { ..rt, sp: stack_top }
 }
 
 ///|
 /// Initialize locals for entry point (call_compiled, start function).
 /// Pushes args onto stack, then declared locals, and sets sp/num_locals.
-/// Sets status to Trap on error.
-fn Runtime::initialize_entry_locals(
-  self : Runtime,
+/// Returns Runtime with updated sp, bp, num_locals, and status.
+fn initialize_entry_locals(
+  rt : Runtime,
   args : Array[Value],
   code : @core.Code,
-) -> Unit {
+) -> Runtime {
   // sp points to start of locals (current stack position)
-  self.sp = self.stack_top
+  let sp = rt.sp
+  let mut stack_top = rt.sp
 
   // Push arguments as first locals
   for arg in args {
-    self.stack.unsafe_set(self.stack_top, value_to_stack(arg))
-    self.stack_top += 1
+    rt.stack.unsafe_set(stack_top, value_to_stack(arg))
+    stack_top += 1
   }
 
   // Push default values for declared locals
-  self.init_declared_locals(code)
-  if self.status == Trap {
-    return
+  let rt2 = init_declared_locals({ ..rt, sp: stack_top }, code)
+  if rt2.status == Trap {
+    return { ..rt2, bp: sp }
   }
 
   // Set num_locals
-  self.num_locals = args.length() + code.locals.length()
+  let num_locals = args.length() + code.locals.length()
+  { ..rt2, bp: sp, num_locals }
 }
 
 ///|
 /// Check if two function type signatures match.
-/// Sets status to Trap on mismatch.
+/// Returns Runtime with status set to Trap on mismatch.
 fn check_type_signature_match(
   expected : @core.FuncType,
   actual : @core.FuncType,
   error_msg : String,
   rt : Runtime,
-) -> Unit {
+) -> Runtime {
   if expected.params.length() != actual.params.length() ||
     expected.results.length() != actual.results.length() {
-    rt.error_detail = error_msg
-    rt.status = Trap
-    return
+    rt.ctx.error_detail = error_msg
+    return { ..rt, status: Trap }
   }
   for i in 0..<expected.params.length() {
     if expected.params[i] != actual.params[i] {
-      rt.error_detail = error_msg
-      rt.status = Trap
-      return
+      rt.ctx.error_detail = error_msg
+      return { ..rt, status: Trap }
     }
   }
   for i in 0..<expected.results.length() {
     if expected.results[i] != actual.results[i] {
-      rt.error_detail = error_msg
-      rt.status = Trap
-      return
+      rt.ctx.error_detail = error_msg
+      return { ..rt, status: Trap }
     }
   }
+  rt
 }
 
 ///|
 /// Call an imported function and push results onto the stack (as UInt64)
-fn Runtime::call_imported_function(
-  self : Runtime,
+/// Returns Runtime with updated sp.
+fn call_imported_function(
+  rt : Runtime,
   func_idx : Int,
   args : Array[Value],
   expected_results : Int,
-) -> Unit {
-  let imported_func = self.imported_funcs[func_idx]
+) -> Runtime {
+  let imported_func = rt.ctx.imported_funcs[func_idx]
   let results = (imported_func.func)(args)
   let count = if expected_results < results.length() {
     expected_results
   } else {
     results.length()
   }
+  let mut stack_top = rt.sp
   for i in 0..<count {
-    self.stack.unsafe_set(self.stack_top, value_to_stack(results[i]))
-    self.stack_top += 1
+    rt.stack.unsafe_set(stack_top, value_to_stack(results[i]))
+    stack_top += 1
   }
+  { ..rt, sp: stack_top }
 }
 
 ///|
 /// Handle return from a tail call to imported function.
 /// Results are already on stack, just restore caller state.
-fn Runtime::handle_tail_call_return(self : Runtime) -> Unit {
-  if self.call_stack.length() > 0 {
-    let frame = self.call_stack.unsafe_pop()
-    self.sp = frame.caller_sp
-    self.num_locals = frame.caller_num_locals
-    self.pc = frame.return_pc + 1
+fn handle_tail_call_return(rt : Runtime) -> Runtime {
+  if rt.ctx.call_stack.length() > 0 {
+    let frame = rt.ctx.call_stack.unsafe_pop()
+    {
+      ..rt,
+      bp: frame.caller_sp,
+      num_locals: frame.caller_num_locals,
+      pc: frame.return_pc + 1,
+    }
   } else {
-    self.status = Terminated
+    { ..rt, status: Terminated }
   }
-}
-
-///|
-/// Read immediate i32 value and advance PC
-fn Runtime::read_imm_i32(self : Runtime) -> UInt {
-  self.pc += 1
-  guard self.ops.unsafe_get(self.pc) is ImmediateI32(value)
-  value
-}
-
-///|
-/// Read immediate index value and advance PC
-fn Runtime::read_imm_idx(self : Runtime) -> Int {
-  self.pc += 1
-  guard self.ops.unsafe_get(self.pc) is ImmediateIdx(value)
-  value
 }
 
 // ============================================================================
@@ -427,7 +423,7 @@ fn stack_to_value(raw : UInt64, val_type : @core.ValType) -> Value {
     | ExnRef
     | NullExnRef
     | Ref(_, _) => {
-      let idx = raw.reinterpret_as_int64().to_int()
+      let idx = raw.to_int()
       if idx == -1 {
         Value::Ref(None)
       } else {
@@ -451,6 +447,8 @@ fn value_to_stack(v : Value) -> UInt64 {
   }
 }
 
-// ============================================================================
-// Runtime stack helpers
-// ============================================================================
+///|
+extern "C" fn unsafe_function_to_uint64(f : (Runtime) -> Runtime) -> UInt64 = "unsafe_function_to_uint64"
+
+///|
+extern "C" fn unsafe_uint64_to_function(u : UInt64) -> (Runtime) -> Runtime = "unsafe_uint64_to_function"

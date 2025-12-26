@@ -85,23 +85,23 @@ test "runtime load with resolver" {
     max: Some(2UL),
   })
   let rt = Runtime::load_with_resolver(module_, resolver)
-  assert_eq(rt.memory.length(), 8)
-  assert_eq(rt.memory[0], b'h')
-  assert_eq(rt.memory[1], b'i')
-  assert_eq(rt.globals.length(), 3)
-  assert_eq(rt.globals[0], Value::I32(42U))
-  match rt.globals[1] {
+  assert_eq(rt.ctx.memory.length(), 8)
+  assert_eq(rt.ctx.memory[0], b'h')
+  assert_eq(rt.ctx.memory[1], b'i')
+  assert_eq(rt.ctx.globals.length(), 3)
+  assert_eq(rt.ctx.globals[0], Value::I32(42U))
+  match rt.ctx.globals[1] {
     Value::F64(v) => assert_eq(v, 666.6)
     _ => abort("expected f64 global")
   }
-  assert_eq(rt.globals[2], Value::I32(7U))
-  assert_eq(rt.tables.length(), 3)
-  assert_eq(rt.tables[0].data.length(), 2)
-  assert_eq(rt.tables[1].data.length(), 10)
-  assert_eq(rt.tables[2].data.length(), 1)
-  assert_eq(rt.tables[0].data[0], Some(0))
-  assert_eq(rt.data_segments.length(), 1)
-  assert_eq(rt.data_segments[0][0], b'h')
+  assert_eq(rt.ctx.globals[2], Value::I32(7U))
+  assert_eq(rt.ctx.tables.length(), 3)
+  assert_eq(rt.ctx.tables[0].data.length(), 2)
+  assert_eq(rt.ctx.tables[1].data.length(), 10)
+  assert_eq(rt.ctx.tables[2].data.length(), 1)
+  assert_eq(rt.ctx.tables[0].data[0], Some(0))
+  assert_eq(rt.ctx.data_segments.length(), 1)
+  assert_eq(rt.ctx.data_segments[0][0], b'h')
 }
 
 ///|
@@ -128,8 +128,8 @@ test "runtime load fallback memory" {
     codes: [],
   }
   let rt = Runtime::load_with_resolver(module_, ImportResolver::new())
-  assert_eq(rt.memory.length(), 65536)
-  assert_eq(rt.memory_max, Some(2UL))
+  assert_eq(rt.ctx.memory.length(), 65536)
+  assert_eq(rt.ctx.memory_max, Some(2UL))
 }
 
 ///|
@@ -156,8 +156,8 @@ test "runtime load local memory" {
     codes: [],
   }
   let rt = Runtime::load_with_resolver(module_, ImportResolver::new())
-  assert_eq(rt.memory.length(), 65536)
-  assert_eq(rt.memory_max, None)
+  assert_eq(rt.ctx.memory.length(), 65536)
+  assert_eq(rt.ctx.memory_max, None)
 }
 
 ///|

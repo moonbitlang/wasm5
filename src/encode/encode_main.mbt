@@ -359,10 +359,7 @@ fn encode_subtype(
 }
 
 ///|
-fn encode_type_def(
-  payload : Array[Byte],
-  type_def : @core.TypeDef,
-) -> Unit raise EncodeError {
+fn encode_type_def(payload : Array[Byte], type_def : @core.TypeDef) -> Unit {
   match type_def {
     Func(func_type) => {
       payload.push(0x60U.to_byte())
@@ -536,9 +533,7 @@ fn encode_tag_section(tags : Array[@core.Tag]) -> Array[Byte] {
 }
 
 ///|
-fn encode_export_section(
-  exports : Array[@core.Export],
-) -> Array[Byte] raise EncodeError {
+fn encode_export_section(exports : Array[@core.Export]) -> Array[Byte] {
   guard exports.length() > 0 else { return [] }
   let payload : Array[Byte] = []
   append_bytes(
@@ -858,9 +853,7 @@ fn encode_memory_limits(
 }
 
 ///|
-fn encode_locals(
-  locals : Array[@core.ValType],
-) -> Array[Byte] raise EncodeError {
+fn encode_locals(locals : Array[@core.ValType]) -> Array[Byte] {
   let payload : Array[Byte] = []
   if locals.length() == 0 {
     append_bytes(payload, encode_u32_leb128(0U))
@@ -904,9 +897,7 @@ fn encode_expr(expr : @core.Expr) -> Array[Byte] raise EncodeError {
 }
 
 ///|
-fn encode_block_type(
-  block_type : @core.BlockType,
-) -> Array[Byte] raise EncodeError {
+fn encode_block_type(block_type : @core.BlockType) -> Array[Byte] {
   let payload : Array[Byte] = []
   match block_type {
     Empty => payload.push(0x40U.to_byte())
@@ -990,9 +981,7 @@ fn encode_simd_immediate(
 }
 
 ///|
-fn encode_atomic_immediate(
-  imm : @core.AtomicImmediate,
-) -> Array[Byte] raise EncodeError {
+fn encode_atomic_immediate(imm : @core.AtomicImmediate) -> Array[Byte] {
   let payload : Array[Byte] = []
   match imm {
     None => ()
@@ -1703,13 +1692,12 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
       payload.push(0xFCU.to_byte())
       append_bytes(payload, encode_u32_leb128(7U))
     }
-    _ => raise EncodeError::Unsupported("instruction \{instr}")
   }
   payload
 }
 
 ///|
-fn encode_valtype(val_type : @core.ValType) -> Array[Byte] raise EncodeError {
+fn encode_valtype(val_type : @core.ValType) -> Array[Byte] {
   let payload : Array[Byte] = []
   match val_type {
     I32 => payload.push(0x7FU.to_byte())
@@ -1731,15 +1719,12 @@ fn encode_valtype(val_type : @core.ValType) -> Array[Byte] raise EncodeError {
     NullExnRef => payload.push(0x74U.to_byte())
     Ref(ref_type, nullable) =>
       append_bytes(payload, encode_reftype(ref_type, nullable))
-    _ => raise EncodeError::Unsupported("valtype \{val_type}")
   }
   payload
 }
 
 ///|
-fn encode_storage_type(
-  storage_type : @core.StorageType,
-) -> Array[Byte] raise EncodeError {
+fn encode_storage_type(storage_type : @core.StorageType) -> Array[Byte] {
   let payload : Array[Byte] = []
   match storage_type {
     I8 => payload.push(0x78U.to_byte())

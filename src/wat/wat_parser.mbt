@@ -2687,21 +2687,6 @@ fn append_named_types(
 }
 
 ///|
-fn parse_limits(
-  items : Array[SExpr],
-  start~ : Int,
-) -> @core.Limits raise WatError {
-  let atoms : Array[Bytes] = []
-  for i in start..<items.length() {
-    match items[i] {
-      Atom(atom) => atoms.push(atom)
-      _ => raise WatError::InvalidSyntax("limits must be atoms")
-    }
-  }
-  parse_limits_from_atoms(atoms)
-}
-
-///|
 fn parse_limits_from_atoms(atoms : Array[Bytes]) -> @core.Limits raise WatError {
   guard atoms.length() >= 1 && atoms.length() <= 2 else {
     raise WatError::InvalidSyntax("limits expects 1 or 2 values")

@@ -7,7 +7,7 @@
 /// After compilation, the ops array is converted to FixedArray for runtime.
 pub struct Compiler {
   module_ : @core.Module
-  ops : Array[MInstr]
+  ops : Array[UInt64]
 }
 
 ///|
@@ -17,14 +17,26 @@ pub fn Compiler::new(module_ : @core.Module) -> Compiler {
 }
 
 ///|
-/// Emit an instruction to the ops array
-fn Compiler::emit(self : Compiler, instr : MInstr) -> Unit {
-  self.ops.push(instr)
+/// Emit a function pointer as UInt64
+fn Compiler::emit_fn(self : Compiler, f : (Runtime) -> Runtime) -> Unit {
+  self.ops.push(unsafe_function_to_uint64(f))
+}
+
+///|
+/// Emit an immediate i32 value as UInt64
+fn Compiler::emit_i32(self : Compiler, value : UInt) -> Unit {
+  self.ops.push(value.to_uint64())
+}
+
+///|
+/// Emit an immediate index value as UInt64
+fn Compiler::emit_idx(self : Compiler, value : Int) -> Unit {
+  self.ops.push(value.to_int64().reinterpret_as_uint64())
 }
 
 ///|
 /// Finish compilation and return the FixedArray of instructions
-pub fn Compiler::finish(self : Compiler) -> FixedArray[MInstr] {
+pub fn Compiler::finish(self : Compiler) -> FixedArray[UInt64] {
   FixedArray::from_array(self.ops)
 }
 
@@ -59,12 +71,12 @@ fn Compiler::compile_func(
     self.compile_wasm_instr(ctx, instr)
   }
   // Emit implicit return at function end
-  self.emit(WasmInstr(op_return))
+  self.emit_fn(op_return)
   let end_pc = self.ops.length() - 1 // Points to op_return (before immediate)
-  self.emit(ImmediateIdx(ctx.func_result_count))
+  self.emit_idx(ctx.func_result_count)
   let func_block = ctx.pop_control()
   for slot in func_block.pending_br_patches {
-    self.ops[slot] = ImmediateIdx(end_pc)
+    self.ops[slot] = end_pc.to_int64().reinterpret_as_uint64()
   }
   code.compiled = Some(start_pc)
   // Store max stack height: num_locals + max_operand_depth

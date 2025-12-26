@@ -267,6 +267,6 @@ test "compile emit covers instructions" {
   let instrs = build_compile_instrs()
   let module_ = make_compile_module(instrs)
   let runtime = Runtime::load(module_)
-  runtime.compile()
+  let runtime = runtime.compile()
   assert_eq(runtime.ops.length() > 0, true)
 }

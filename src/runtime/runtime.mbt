@@ -6,10 +6,8 @@ pub suberror RuntimeError {
   MemoryOutOfBounds
   InvalidType(String)
   FunctionNotFound(String)
-  UnimplementedInstruction(String) // Instruction not yet implemented
   Unreachable // Unreachable instruction executed
   FunctionNotCompiled(String) // Function not compiled
-  UnsupportedLocalType(String) // Unsupported local type
   UnsupportedInitExpression(String) // Unsupported init expression
   StackOverflow // Stack capacity exceeded
 } derive(Show)
@@ -18,15 +16,15 @@ pub suberror RuntimeError {
 /// Create a RuntimeError from error_detail string
 /// The detail string should start with an error type prefix
 fn RuntimeError::from_detail(detail : String) -> RuntimeError {
-  if detail.starts_with("division by zero") {
+  if detail.has_prefix("division by zero") {
     RuntimeError::DivisionByZero
-  } else if detail.starts_with("integer overflow") {
+  } else if detail.has_prefix("integer overflow") {
     RuntimeError::IntegerOverflow
-  } else if detail.starts_with("out of bounds") {
+  } else if detail.has_prefix("out of bounds") {
     RuntimeError::MemoryOutOfBounds
-  } else if detail.starts_with("unreachable") {
+  } else if detail.has_prefix("unreachable") {
     RuntimeError::Unreachable
-  } else if detail.starts_with("stack overflow") {
+  } else if detail.has_prefix("stack overflow") {
     RuntimeError::StackOverflow
   } else {
     RuntimeError::InvalidType(detail)
@@ -243,36 +241,30 @@ pub fn ImportResolver::get_memory(
 let initial_stack_capacity : Int = 1024
 
 ///|
-/// Runtime structure that holds a loaded WebAssembly module
+/// Runtime structure for WebAssembly execution.
+/// This is a value type containing hot fields for fast access.
+/// Cold data is accessed through the ctx reference.
 pub struct Runtime {
-  module_ : @core.Module
-  ops : FixedArray[MInstr] // Compiled instructions for execution
+  ops : FixedArray[UInt64] // Compiled instructions (tagless: fn ptrs and immediates as UInt64)
   stack : FixedArray[UInt64] // Unified stack for locals and operand stack (tagless)
-  mut stack_top : Int // Current top of stack (next push position)
-  mut sp : Int // Stack pointer: index of first local in unified stack
-  mut num_locals : Int // Number of locals for current function
-  mut pc : Int
-  mut status : RuntimeStatus // Execution status: Running, Terminated, or Trap
-  call_stack : Array[CallFrame]
-  memory : Array[Byte] // Linear memory
-  memory_max : UInt64? // Maximum memory size in pages (None = no limit)
-  globals : Array[Value] // Global variables
-  tables : Array[RuntimeTable] // Tables with limits
-  imported_funcs : Array[ImportedFunc] // Imported functions
-  data_segments : Array[Array[Byte]] // Data segments for bulk memory ops
-  mut error_detail : String // Error detail for debugging (populated on error)
+  sp : Int // Current top of stack (next push position)
+  bp : Int // Base pointer: index of first local in unified stack
+  num_locals : Int // Number of locals for current function
+  pc : Int // Program counter
+  status : RuntimeStatus // Execution status: Running, Terminated, or Trap
+  ctx : RuntimeContext // Reference to cold data (module, memory, globals, etc.)
 }
 
 ///|
 /// Get the module from the runtime
 pub fn Runtime::get_module(self : Runtime) -> @core.Module {
-  self.module_
+  self.ctx.module_
 }
 
 ///|
 /// Get the globals array from the runtime
 pub fn Runtime::get_globals(self : Runtime) -> Array[Value] {
-  self.globals
+  self.ctx.globals
 }
 
 ///|
@@ -372,7 +364,7 @@ pub fn Runtime::load_with_resolver(
   if not(has_imported_memory) && m.mems.length() > 0 {
     let memory_min_pages = m.mems[0].limits.min
     memory_max_pages = m.mems[0].limits.max
-    let memory_size = memory_min_pages.reinterpret_as_int64().to_int() * 65536
+    let memory_size = memory_min_pages.to_int() * 65536
     memory = Array::make(memory_size, b'\x00')
   }
   // Initialize globals
@@ -448,7 +440,7 @@ pub fn Runtime::load_with_resolver(
   }
   // Then add local tables
   for table in m.tables {
-    let table_size = table.limits.min.reinterpret_as_int64().to_int()
+    let table_size = table.limits.min.to_int()
     // Initialize table with default value (null unless table has init expr)
     let init_ref = match table.init {
       Some(init_expr) => {
@@ -530,23 +522,20 @@ pub fn Runtime::load_with_resolver(
   // Compile all functions before creating Runtime
   let compiler = Compiler::new(m)
   compiler.compile()
+
+  // Create RuntimeContext with cold data
+  let ctx = RuntimeContext::new(
+    m, memory, memory_max_pages, globals, tables, imported_funcs, data_segments,
+  )
   Runtime::{
-    module_: m,
     ops: compiler.finish(),
     stack: FixedArray::make(initial_stack_capacity, 0UL),
-    stack_top: 0,
     sp: 0,
+    bp: 0,
     num_locals: 0,
     pc: 0,
     status: Terminated,
-    call_stack: [],
-    memory,
-    memory_max: memory_max_pages,
-    globals,
-    tables,
-    imported_funcs,
-    data_segments,
-    error_detail: "",
+    ctx,
   }
 }
 

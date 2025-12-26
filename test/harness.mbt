@@ -75,7 +75,7 @@ async fn parse_and_compile(
   let content = file.read_all().binary()
   let module_ = @wasm5_parse.parse(content)
   let runtime = @wasm5_runtime.Runtime::load_with_resolver(module_, resolver)
-  runtime.compile()
+  let runtime = runtime.compile()
   runtime
 }
 
@@ -92,9 +92,13 @@ fn make_import_wrapper(
   ) {
     // Call the registered module's exported function
     let rt = registered.runtime
-    rt.call_compiled(@encoding/utf8.encode(export_name), args) catch {
-      _ => []
+    let (_, results) = rt.call_compiled(
+      @encoding/utf8.encode(export_name),
+      args,
+    ) catch {
+      _ => (rt, [])
     }
+    results
   }
   @wasm5_runtime.ImportedFunc::new(arity, func)
 }
@@ -556,7 +560,10 @@ fn handle_assert_return(
       )
       return
     }
-    let results = rt.call_compiled(@encoding/utf8.encode(fn_name), runtime_args)
+    let (_, results) = rt.call_compiled(
+      @encoding/utf8.encode(fn_name),
+      runtime_args,
+    )
     // Check result count
     if expected.length() != results.length() {
       ctx.fail(
