@@ -2261,6 +2261,38 @@ async test "wat encoder matches wasm-tools for throw_ref" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for try catch" {
+  let wat =
+    #|(module
+    #|  (tag $e (param i32))
+    #|  (func (export "f") (param i32) (result i32)
+    #|    try (result i32)
+    #|      local.get 0
+    #|      throw $e
+    #|      i32.const 0
+    #|    catch $e
+    #|      i32.const 7
+    #|    end))
+  assert_wat_matches("try_catch", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for try catch_all" {
+  let wat =
+    #|(module
+    #|  (tag $e (param i32))
+    #|  (func (export "f") (param i32) (result i32)
+    #|    try (result i32)
+    #|      local.get 0
+    #|      throw $e
+    #|      i32.const 0
+    #|    catch_all
+    #|      i32.const 9
+    #|    end))
+  assert_wat_matches("try_catch_all", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for simd ops" {
   let wat =
     #|(module

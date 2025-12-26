@@ -30,18 +30,31 @@ fn parse_instr_control(parser : Parser, opcode : Byte) -> @core.Instr? raise {
         Some(If(blocktype, then_instrs, []))
       }
     }
-    // Exception handling proposal (skip for compatibility)
+    // Exception handling: try/catch
     0x06 => {
-      // try blocktype - treat as block
       let blocktype = parse_blocktype(parser)
-      let instrs = parse_instrs(parser)
-      let _ = parser.read_byte() // consume 0x0B end marker
-      Some(Block(blocktype, instrs))
-    }
-    0x07 => {
-      // catch tagidx - skip tag index, return nop
-      let _ = parser.read_u32_leb128()
-      Some(Nop)
+      let instrs = parse_instrs_until_try_marker(parser)
+      let catches : Array[@core.TryCatch] = []
+      while true {
+        let marker = parser.read_byte()
+        match marker {
+          0x07 => {
+            let tag_idx = parser.read_u32_leb128()
+            let catch_body = parse_instrs_until_try_marker(parser)
+            catches.push(@core.TryCatch::Catch(tag_idx, catch_body))
+          }
+          0x19 => {
+            let catch_body = parse_instrs_until_try_marker(parser)
+            catches.push(@core.TryCatch::CatchAll(catch_body))
+          }
+          0x0B => break
+          _ =>
+            raise @validate.ValidationError::TypeMismatch(
+              "unexpected try marker: 0x\{marker.to_string()}",
+            )
+        }
+      }
+      Some(Try(blocktype, instrs, catches))
     }
     0x08 => {
       // throw tagidx
