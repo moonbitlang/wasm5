@@ -38,8 +38,8 @@ fn base_runtime(
   for i in 0..<stack_len {
     stack_buf[i] = stack64[i]
   }
+  let ctx = RuntimeContext::new(module_, [], None, [], [], [], [])
   Runtime::{
-    module_,
     ops: FixedArray::from_array(ops),
     stack: stack_buf,
     stack_top: stack_len,
@@ -47,14 +47,7 @@ fn base_runtime(
     num_locals: 0,
     pc: 0,
     status: Running,
-    call_stack: [],
-    memory: [],
-    memory_max: None,
-    globals: [],
-    tables: [],
-    imported_funcs: [],
-    data_segments: [],
-    error_detail: "",
+    ctx,
   }
 }
 
@@ -69,7 +62,7 @@ fn assert_ctrl_stack_eq(got : UInt64, expected : Value) -> Unit {
 ///|
 test "ops control drop and select" {
   let rt_drop = base_runtime(base_module([], [], [], []), [], [Value::I32(1U)])
-  let _ = op_drop(rt_drop)
+  let rt_drop = op_drop(rt_drop)
   assert_ok(rt_drop)
   assert_eq(rt_drop.stack_top, 0)
   let rt_select = base_runtime(base_module([], [], [], []), [], [
@@ -77,7 +70,7 @@ test "ops control drop and select" {
     Value::I32(20U),
     Value::I32(1U),
   ])
-  let _ = op_select(rt_select)
+  let rt_select = op_select(rt_select)
   assert_ok(rt_select)
   assert_ctrl_stack_eq(rt_select.stack[0], Value::I32(10U))
 }
@@ -89,7 +82,7 @@ test "ops control branching" {
     [ImmediateIdx(0), ImmediateIdx(7)],
     [Value::I32(1U)],
   )
-  let _ = op_if(rt_if_true)
+  let rt_if_true = op_if(rt_if_true)
   assert_ok(rt_if_true)
   assert_eq(rt_if_true.pc, 2)
   let rt_if_false = base_runtime(
@@ -97,7 +90,7 @@ test "ops control branching" {
     [ImmediateIdx(0), ImmediateIdx(9)],
     [Value::I32(0U)],
   )
-  let _ = op_if(rt_if_false)
+  let rt_if_false = op_if(rt_if_false)
   assert_ok(rt_if_false)
   assert_eq(rt_if_false.pc, 9)
   let rt_br = base_runtime(
@@ -105,7 +98,7 @@ test "ops control branching" {
     [ImmediateIdx(0), ImmediateIdx(10), ImmediateIdx(1), ImmediateIdx(1)],
     [Value::I32(1U), Value::I32(2U), Value::I32(3U)],
   )
-  let _ = op_br(rt_br)
+  let rt_br = op_br(rt_br)
   assert_ok(rt_br)
   assert_eq(rt_br.pc, 10)
   assert_eq(rt_br.stack_top, 2)
@@ -116,7 +109,7 @@ test "ops control branching" {
     [ImmediateIdx(0), ImmediateIdx(5), ImmediateIdx(1), ImmediateIdx(0)],
     [Value::I32(9U), Value::I32(1U)],
   )
-  let _ = op_br_if(rt_br_if)
+  let rt_br_if = op_br_if(rt_br_if)
   assert_ok(rt_br_if)
   assert_eq(rt_br_if.pc, 5)
   assert_ctrl_stack_eq(rt_br_if.stack[0], Value::I32(9U))
@@ -125,7 +118,7 @@ test "ops control branching" {
     [ImmediateIdx(0), ImmediateIdx(5), ImmediateIdx(1), ImmediateIdx(0)],
     [Value::I32(9U), Value::I32(0U)],
   )
-  let _ = op_br_if(rt_br_if_false)
+  let rt_br_if_false = op_br_if(rt_br_if_false)
   assert_ok(rt_br_if_false)
   assert_eq(rt_br_if_false.pc, 4)
   let rt_br_table = base_runtime(
@@ -143,7 +136,7 @@ test "ops control branching" {
     ],
     [Value::I32(7U), Value::I32(1U)],
   )
-  let _ = op_br_table(rt_br_table)
+  let rt_br_table = op_br_table(rt_br_table)
   assert_ok(rt_br_table)
   assert_eq(rt_br_table.pc, 20)
   let rt_br_table_default = base_runtime(
@@ -161,7 +154,7 @@ test "ops control branching" {
     ],
     [Value::I32(7U), Value::I32(5U)],
   )
-  let _ = op_br_table(rt_br_table_default)
+  let rt_br_table_default = op_br_table(rt_br_table_default)
   assert_ok(rt_br_table_default)
   assert_eq(rt_br_table_default.pc, 30)
   let rt_br_on_null = base_runtime(
@@ -169,7 +162,7 @@ test "ops control branching" {
     [ImmediateIdx(0), ImmediateIdx(8), ImmediateIdx(0), ImmediateIdx(0)],
     [Value::Ref(None)],
   )
-  let _ = op_br_on_null(rt_br_on_null)
+  let rt_br_on_null = op_br_on_null(rt_br_on_null)
   assert_ok(rt_br_on_null)
   assert_eq(rt_br_on_null.pc, 8)
   let rt_br_on_non_null = base_runtime(
@@ -177,7 +170,7 @@ test "ops control branching" {
     [ImmediateIdx(0), ImmediateIdx(4), ImmediateIdx(0), ImmediateIdx(0)],
     [Value::Ref(Some(1))],
   )
-  let _ = op_br_on_non_null(rt_br_on_non_null)
+  let rt_br_on_non_null = op_br_on_non_null(rt_br_on_non_null)
   assert_ok(rt_br_on_non_null)
   assert_eq(rt_br_on_non_null.pc, 4)
 }
@@ -185,8 +178,16 @@ test "ops control branching" {
 ///|
 test "ops control table grow and globals" {
   let module_local = base_module([], [], [], [])
+  let ctx_table_size = RuntimeContext::new(
+    module_local,
+    [],
+    None,
+    [],
+    [RuntimeTable::{ data: [None, None], max: Some(3UL) }],
+    [],
+    [],
+  )
   let rt_table_size = Runtime::{
-    module_: module_local,
     ops: FixedArray::from_array([ImmediateIdx(0), ImmediateIdx(0)]),
     stack: FixedArray::make(64, 0UL),
     stack_top: 0,
@@ -194,23 +195,24 @@ test "ops control table grow and globals" {
     num_locals: 0,
     pc: 0,
     status: Running,
-    call_stack: [],
-    memory: [],
-    memory_max: None,
-    globals: [],
-    tables: [RuntimeTable::{ data: [None, None], max: Some(3UL) }],
-    imported_funcs: [],
-    data_segments: [],
-    error_detail: "",
+    ctx: ctx_table_size,
   }
-  let _ = op_table_size(rt_table_size)
+  let rt_table_size = op_table_size(rt_table_size)
   assert_ok(rt_table_size)
   assert_ctrl_stack_eq(rt_table_size.stack.unsafe_get(0), Value::I32(2U))
   let stack_grow = FixedArray::make(64, 0UL)
   stack_grow[0] = 0xFFFFFFFF_FFFFFFFFUL // Ref(None)=-1
   stack_grow[1] = 1UL // I32(1)
+  let ctx_table_grow = RuntimeContext::new(
+    module_local,
+    [],
+    None,
+    [],
+    [RuntimeTable::{ data: [None], max: Some(3UL) }],
+    [],
+    [],
+  )
   let rt_table_grow = Runtime::{
-    module_: module_local,
     ops: FixedArray::from_array([ImmediateIdx(0), ImmediateIdx(0)]),
     stack: stack_grow,
     stack_top: 2,
@@ -218,22 +220,23 @@ test "ops control table grow and globals" {
     num_locals: 0,
     pc: 0,
     status: Running,
-    call_stack: [],
-    memory: [],
-    memory_max: None,
-    globals: [],
-    tables: [RuntimeTable::{ data: [None], max: Some(3UL) }],
-    imported_funcs: [],
-    data_segments: [],
-    error_detail: "",
+    ctx: ctx_table_grow,
   }
-  let _ = op_table_grow(rt_table_grow)
+  let rt_table_grow = op_table_grow(rt_table_grow)
   assert_ok(rt_table_grow)
   assert_ctrl_stack_eq(rt_table_grow.stack.unsafe_get(0), Value::I32(1U))
   let stack_global = FixedArray::make(64, 0UL)
   stack_global[0] = 9UL
+  let ctx_global = RuntimeContext::new(
+    module_local,
+    [],
+    None,
+    [Value::I32(1U)],
+    [],
+    [],
+    [],
+  )
   let rt_global = Runtime::{
-    module_: module_local,
     ops: FixedArray::from_array([ImmediateIdx(0), ImmediateIdx(0)]),
     stack: stack_global,
     stack_top: 1,
@@ -241,20 +244,12 @@ test "ops control table grow and globals" {
     num_locals: 0,
     pc: 0,
     status: Running,
-    call_stack: [],
-    memory: [],
-    memory_max: None,
-    globals: [Value::I32(1U)],
-    tables: [],
-    imported_funcs: [],
-    data_segments: [],
-    error_detail: "",
+    ctx: ctx_global,
   }
-  let _ = op_global_set(rt_global)
+  let rt_global = op_global_set(rt_global)
   assert_ok(rt_global)
-  rt_global.stack_top = 0
-  rt_global.pc = 0
-  let _ = op_global_get(rt_global)
+  let rt_global = { ..rt_global, stack_top: 0, pc: 0 }
+  let rt_global = op_global_get(rt_global)
   assert_ok(rt_global)
   assert_ctrl_stack_eq(rt_global.stack.unsafe_get(0), Value::I32(9U))
 }
@@ -267,35 +262,35 @@ test "ops control reference ops" {
     [ImmediateIdx(0), ImmediateIdx(0)],
     [],
   )
-  let _ = op_ref_null(rt_ref_null)
+  let rt_ref_null = op_ref_null(rt_ref_null)
   assert_ok(rt_ref_null)
   assert_ctrl_stack_eq(rt_ref_null.stack[0], Value::Ref(None))
   let rt_ref_is_null = base_runtime(module_local, [], [Value::Ref(None)])
-  let _ = op_ref_is_null(rt_ref_is_null)
+  let rt_ref_is_null = op_ref_is_null(rt_ref_is_null)
   assert_ok(rt_ref_is_null)
   assert_ctrl_stack_eq(rt_ref_is_null.stack[0], Value::I32(1U))
   let rt_ref_eq_same = base_runtime(module_local, [], [
     Value::Ref(Some(1)),
     Value::Ref(Some(1)),
   ])
-  let _ = op_ref_eq(rt_ref_eq_same)
+  let rt_ref_eq_same = op_ref_eq(rt_ref_eq_same)
   assert_ok(rt_ref_eq_same)
   assert_ctrl_stack_eq(rt_ref_eq_same.stack[0], Value::I32(1U))
   let rt_ref_eq_diff = base_runtime(module_local, [], [
     Value::Ref(Some(1)),
     Value::Ref(Some(2)),
   ])
-  let _ = op_ref_eq(rt_ref_eq_diff)
+  let rt_ref_eq_diff = op_ref_eq(rt_ref_eq_diff)
   assert_ok(rt_ref_eq_diff)
   assert_ctrl_stack_eq(rt_ref_eq_diff.stack[0], Value::I32(0U))
   let rt_ref_as_non_null = base_runtime(module_local, [], [Value::Ref(Some(0))])
-  let _ = op_ref_as_non_null(rt_ref_as_non_null)
+  let rt_ref_as_non_null = op_ref_as_non_null(rt_ref_as_non_null)
   assert_ok(rt_ref_as_non_null)
   assert_ctrl_stack_eq(rt_ref_as_non_null.stack[0], Value::Ref(Some(0)))
   let rt_ref_as_non_null_null = base_runtime(module_local, [], [
     Value::Ref(None),
   ])
-  let _ = op_ref_as_non_null(rt_ref_as_non_null_null)
+  let rt_ref_as_non_null_null = op_ref_as_non_null(rt_ref_as_non_null_null)
   assert_trap(rt_ref_as_non_null_null)
 }
 
@@ -307,21 +302,21 @@ test "ops control table bulk stubs" {
     [ImmediateIdx(0), ImmediateIdx(0), ImmediateIdx(0)],
     [Value::I32(0U), Value::I32(0U), Value::I32(0U)],
   )
-  let _ = op_table_init(rt_table_init)
+  let rt_table_init = op_table_init(rt_table_init)
   assert_ok(rt_table_init)
   let rt_table_copy = base_runtime(
     module_local,
     [ImmediateIdx(0), ImmediateIdx(0), ImmediateIdx(0)],
     [Value::I32(0U), Value::I32(0U), Value::I32(0U)],
   )
-  let _ = op_table_copy(rt_table_copy)
+  let rt_table_copy = op_table_copy(rt_table_copy)
   assert_ok(rt_table_copy)
   let rt_elem_drop = base_runtime(
     module_local,
     [ImmediateIdx(0), ImmediateIdx(0)],
     [],
   )
-  let _ = op_elem_drop(rt_elem_drop)
+  let rt_elem_drop = op_elem_drop(rt_elem_drop)
   assert_ok(rt_elem_drop)
 }
 
@@ -329,8 +324,8 @@ test "ops control table bulk stubs" {
 test "ops control nop and unreachable" {
   let module_local = base_module([], [], [], [])
   let rt_nop = base_runtime(module_local, [], [])
-  let _ = op_nop(rt_nop)
+  let rt_nop = op_nop(rt_nop)
   assert_ok(rt_nop)
-  let _ = op_unreachable(rt_nop)
+  let rt_nop = op_unreachable(rt_nop)
   assert_trap(rt_nop)
 }

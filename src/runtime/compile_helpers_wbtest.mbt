@@ -12,7 +12,7 @@ fn make_code(locals : Array[@core.ValType]) -> @core.Code {
 test "compile helpers initialize entry locals" {
   let rt = make_runtime([], [], 0)
   let code = make_code([I32, Ref(Func, true)])
-  rt.initialize_entry_locals([Value::I32(9U)], code)
+  let rt = initialize_entry_locals(rt, [Value::I32(9U)], code)
   assert_ok(rt)
   // Check unified stack: [arg0=9, local0=0, local1=null_ref]
   assert_eq(rt.stack_top, 3)
@@ -27,7 +27,7 @@ test "compile helpers initialize entry locals" {
 test "compile helpers init declared locals unsupported" {
   let rt = make_runtime([], [], 0)
   let code = make_code([V128])
-  rt.init_declared_locals(code)
+  let rt = init_declared_locals(rt, code)
   assert_trap(rt)
 }
 
@@ -36,7 +36,7 @@ test "compile helpers type signature mismatch" {
   let expected : @core.FuncType = { params: [I32], results: [] }
   let actual : @core.FuncType = { params: [], results: [] }
   let rt = make_runtime([], [], 0)
-  check_type_signature_match(expected, actual, "bad", rt)
+  let rt = check_type_signature_match(expected, actual, "bad", rt)
   assert_trap(rt)
 }
 
@@ -74,27 +74,26 @@ test "compile helpers func type lookup with non func imports" {
 
 ///|
 test "compile helpers imported func result truncation" {
+  let ctx = RuntimeContext::new(
+    empty_module(),
+    [],
+    None,
+    [],
+    [],
+    [ImportedFunc::new(0U, fn(_args) { [Value::I32(1U), Value::I32(2U)] })],
+    [],
+  )
   let rt = Runtime::{
-    module_: empty_module(),
-    ops: [],
+    ops: FixedArray::from_array([]),
     stack: FixedArray::make(64, 0UL),
     stack_top: 0,
     sp: 0,
     num_locals: 0,
     pc: 0,
     status: Terminated,
-    call_stack: [],
-    memory: [],
-    memory_max: None,
-    globals: [],
-    tables: [],
-    imported_funcs: [
-      ImportedFunc::new(0U, fn(_args) { [Value::I32(1U), Value::I32(2U)] }),
-    ],
-    data_segments: [],
-    error_detail: "",
+    ctx,
   }
-  rt.call_imported_function(0, [], 1)
+  let rt = call_imported_function(rt, 0, [], 1)
   assert_eq(rt.stack_top, 1)
   assert_eq(rt.stack.unsafe_get(0), 1UL)
 }
@@ -102,20 +101,18 @@ test "compile helpers imported func result truncation" {
 ///|
 test "compile helpers tail call return branches" {
   let rt = make_runtime([], [], 0)
-  rt.status = Running
-  rt.sp = 5
-  rt.num_locals = 3
-  rt.call_stack.push(CallFrame::{
+  let rt = { ..rt, status: Running, sp: 5, num_locals: 3 }
+  rt.ctx.call_stack.push(CallFrame::{
     return_pc: 3,
     caller_sp: 10,
     caller_num_locals: 2,
   })
-  let _ = rt.handle_tail_call_return()
+  let rt = handle_tail_call_return(rt)
   assert_eq(rt.pc, 4)
   assert_eq(rt.sp, 10)
   assert_eq(rt.num_locals, 2)
   let rt_empty = make_runtime([], [], 0)
-  rt_empty.status = Running
-  let _ = rt_empty.handle_tail_call_return()
+  let rt_empty = { ..rt_empty, status: Running }
+  let rt_empty = handle_tail_call_return(rt_empty)
   assert_eq(rt_empty.status, Terminated)
 }

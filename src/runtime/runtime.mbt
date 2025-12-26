@@ -243,36 +243,30 @@ pub fn ImportResolver::get_memory(
 let initial_stack_capacity : Int = 1024
 
 ///|
-/// Runtime structure that holds a loaded WebAssembly module
+/// Runtime structure for WebAssembly execution.
+/// This is a value type containing hot fields for fast access.
+/// Cold data is accessed through the ctx reference.
 pub struct Runtime {
-  module_ : @core.Module
   ops : FixedArray[MInstr] // Compiled instructions for execution
   stack : FixedArray[UInt64] // Unified stack for locals and operand stack (tagless)
-  mut stack_top : Int // Current top of stack (next push position)
-  mut sp : Int // Stack pointer: index of first local in unified stack
-  mut num_locals : Int // Number of locals for current function
-  mut pc : Int
-  mut status : RuntimeStatus // Execution status: Running, Terminated, or Trap
-  call_stack : Array[CallFrame]
-  memory : Array[Byte] // Linear memory
-  memory_max : UInt64? // Maximum memory size in pages (None = no limit)
-  globals : Array[Value] // Global variables
-  tables : Array[RuntimeTable] // Tables with limits
-  imported_funcs : Array[ImportedFunc] // Imported functions
-  data_segments : Array[Array[Byte]] // Data segments for bulk memory ops
-  mut error_detail : String // Error detail for debugging (populated on error)
+  stack_top : Int // Current top of stack (next push position)
+  sp : Int // Stack pointer: index of first local in unified stack
+  num_locals : Int // Number of locals for current function
+  pc : Int // Program counter
+  status : RuntimeStatus // Execution status: Running, Terminated, or Trap
+  ctx : RuntimeContext // Reference to cold data (module, memory, globals, etc.)
 }
 
 ///|
 /// Get the module from the runtime
 pub fn Runtime::get_module(self : Runtime) -> @core.Module {
-  self.module_
+  self.ctx.module_
 }
 
 ///|
 /// Get the globals array from the runtime
 pub fn Runtime::get_globals(self : Runtime) -> Array[Value] {
-  self.globals
+  self.ctx.globals
 }
 
 ///|
@@ -530,8 +524,19 @@ pub fn Runtime::load_with_resolver(
   // Compile all functions before creating Runtime
   let compiler = Compiler::new(m)
   compiler.compile()
+
+  // Create RuntimeContext with cold data
+  let ctx = RuntimeContext::new(
+    m,
+    memory,
+    memory_max_pages,
+    globals,
+    tables,
+    imported_funcs,
+    data_segments,
+  )
+
   Runtime::{
-    module_: m,
     ops: compiler.finish(),
     stack: FixedArray::make(initial_stack_capacity, 0UL),
     stack_top: 0,
@@ -539,14 +544,7 @@ pub fn Runtime::load_with_resolver(
     num_locals: 0,
     pc: 0,
     status: Terminated,
-    call_stack: [],
-    memory,
-    memory_max: memory_max_pages,
-    globals,
-    tables,
-    imported_funcs,
-    data_segments,
-    error_detail: "",
+    ctx,
   }
 }
 
