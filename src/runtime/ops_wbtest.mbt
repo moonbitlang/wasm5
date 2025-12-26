@@ -953,30 +953,6 @@ test "compile context stack ops and errors" {
 }
 
 ///|
-test "panic pop helpers wrong types" {
-  let rt_i64 = make_runtime([Value::I32(1U)], [], 0)
-  ignore(pop_i64(rt_i64))
-}
-
-///|
-test "panic pop helpers wrong pair types" {
-  let rt = make_runtime([Value::I32(1U), Value::I64(2UL)], [], 0)
-  ignore(pop_two_i64(rt))
-}
-
-///|
 test "panic retcode ok to_error" {
   ignore(RetCode::OK.to_error("x"))
-}
-
-///|
-test "panic pop helpers wrong float types" {
-  let rt_f32 = make_runtime([Value::I32(1U)], [], 0)
-  ignore(pop_f32(rt_f32))
-}
-
-///|
-test "panic pop helpers wrong f64 type" {
-  let rt_f64 = make_runtime([Value::I32(1U)], [], 0)
-  ignore(pop_f64(rt_f64))
 }
