@@ -2343,6 +2343,78 @@ async test "wat encoder matches wasm-tools for try delegate nested" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for try multi-catch" {
+  let wat =
+    #|(module
+    #|  (tag $e (param i32 i64))
+    #|  (tag $f)
+    #|  (func (export "f") (param i32) (result i32)
+    #|    try (result i32)
+    #|      local.get 0
+    #|      throw $f
+    #|      i32.const 0
+    #|    catch $e
+    #|      drop
+    #|      drop
+    #|      i32.const 1
+    #|    catch $f
+    #|      i32.const 2
+    #|    catch_all
+    #|      i32.const 3
+    #|    end))
+  assert_wat_matches("try_multi_catch", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for try with param result" {
+  let wat =
+    #|(module
+    #|  (func (export "f") (param i32) (result i32)
+    #|    local.get 0
+    #|    try (param i32) (result i32)
+    #|      local.get 0
+    #|      i32.const 1
+    #|      i32.add
+    #|    catch_all
+    #|      i32.const 0
+    #|    end))
+  assert_wat_matches("try_param_result", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for try typeuse" {
+  let wat =
+    #|(module
+    #|  (type $t (func (param i32) (result i32)))
+    #|  (func (export "f") (param i32) (result i32)
+    #|    local.get 0
+    #|    try (type $t) (param i32) (result i32)
+    #|      local.get 0
+    #|      i32.const 2
+    #|      i32.add
+    #|    catch_all
+    #|      i32.const 0
+    #|    end))
+  assert_wat_matches("try_typeuse", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for try multi-value result" {
+  let wat =
+    #|(module
+    #|  (tag $e)
+    #|  (func (export "f") (result i64 i32)
+    #|    try (result i64 i32)
+    #|      i64.const 1
+    #|      i32.const 2
+    #|    catch_all
+    #|      i64.const 3
+    #|      i32.const 4
+    #|    end))
+  assert_wat_matches("try_multi_value", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for simd ops" {
   let wat =
     #|(module
