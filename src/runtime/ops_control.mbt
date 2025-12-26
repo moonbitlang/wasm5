@@ -1,31 +1,31 @@
 ///|
 /// Local access uses unified stack: stack[sp + idx]
-fn op_local_get(rt : Runtime) -> RetCode {
+fn op_local_get(rt : Runtime) -> Unit {
   let idx = rt.read_imm_idx()
   let value = rt.stack.unsafe_get(rt.sp + idx)
   rt.stack.unsafe_set(rt.stack_top, value)
   rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_local_set(rt : Runtime) -> RetCode {
+fn op_local_set(rt : Runtime) -> Unit {
   let idx = rt.read_imm_idx()
   rt.stack_top -= 1
   let value = rt.stack.unsafe_get(rt.stack_top)
   rt.stack.unsafe_set(rt.sp + idx, value)
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_local_tee(rt : Runtime) -> RetCode {
+fn op_local_tee(rt : Runtime) -> Unit {
   let idx = rt.read_imm_idx()
   let value = rt.stack.unsafe_get(rt.stack_top - 1)
   rt.stack.unsafe_set(rt.sp + idx, value)
   rt.pc += 1
-  OK
+  ()
 }
 
 // ============================================================================
@@ -33,14 +33,14 @@ fn op_local_tee(rt : Runtime) -> RetCode {
 // ============================================================================
 
 ///|
-fn op_drop(rt : Runtime) -> RetCode {
+fn op_drop(rt : Runtime) -> Unit {
   rt.stack_top -= 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_select(rt : Runtime) -> RetCode {
+fn op_select(rt : Runtime) -> Unit {
   rt.stack_top -= 1
   let cond = rt.stack.unsafe_get(rt.stack_top).to_uint()
   rt.stack_top -= 1
@@ -50,7 +50,7 @@ fn op_select(rt : Runtime) -> RetCode {
   rt.stack.unsafe_set(rt.stack_top, if cond != 0U { val1 } else { val2 })
   rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
@@ -77,7 +77,7 @@ fn get_func_type_or_error(
 // ============================================================================
 
 ///|
-fn op_if(rt : Runtime) -> RetCode {
+fn op_if(rt : Runtime) -> Unit {
   let else_pc = rt.read_imm_idx()
   rt.stack_top -= 1
   let cond = rt.stack.unsafe_get(rt.stack_top).to_uint()
@@ -86,14 +86,14 @@ fn op_if(rt : Runtime) -> RetCode {
   } else {
     rt.pc = else_pc
   }
-  OK
+  ()
 }
 
 // NOTE: op_else, op_end_block, op_push_block_target, op_push_loop_target removed
 // Branch targets are now computed at compile time and embedded directly in branch instructions
 
 ///|
-fn op_br(rt : Runtime) -> RetCode {
+fn op_br(rt : Runtime) -> Unit {
   let target_pc = rt.read_imm_idx()
   let arity = rt.read_imm_idx()
   let drop_count = rt.read_imm_idx()
@@ -115,13 +115,12 @@ fn op_br(rt : Runtime) -> RetCode {
 
   // Trim stack to remove drop_count values
   rt.stack_top -= drop_count
-
   rt.pc = target_pc
-  OK
+  ()
 }
 
 ///|
-fn op_br_if(rt : Runtime) -> RetCode {
+fn op_br_if(rt : Runtime) -> Unit {
   let target_pc = rt.read_imm_idx()
   let arity = rt.read_imm_idx()
   let drop_count = rt.read_imm_idx()
@@ -142,16 +141,15 @@ fn op_br_if(rt : Runtime) -> RetCode {
 
     // Trim stack to remove drop_count values
     rt.stack_top -= drop_count
-
     rt.pc = target_pc
   } else {
     rt.pc += 1
   }
-  OK
+  ()
 }
 
 ///|
-fn op_br_table(rt : Runtime) -> RetCode {
+fn op_br_table(rt : Runtime) -> Unit {
   let num_labels = rt.read_imm_idx()
   let arity = rt.read_imm_idx()
   rt.stack_top -= 1
@@ -187,13 +185,12 @@ fn op_br_table(rt : Runtime) -> RetCode {
 
   // Trim stack to remove drop_count values
   rt.stack_top -= drop_count
-
   rt.pc = target_pc
-  OK
+  ()
 }
 
 ///|
-fn op_br_on_null(rt : Runtime) -> RetCode {
+fn op_br_on_null(rt : Runtime) -> Unit {
   let target_pc = rt.read_imm_idx()
   let arity = rt.read_imm_idx()
   let drop_count = rt.read_imm_idx()
@@ -218,7 +215,6 @@ fn op_br_on_null(rt : Runtime) -> RetCode {
 
     // Trim stack to remove drop_count values
     rt.stack_top -= drop_count
-
     rt.pc = target_pc
   } else {
     // Not null - push back the value and continue
@@ -226,11 +222,11 @@ fn op_br_on_null(rt : Runtime) -> RetCode {
     rt.stack_top += 1
     rt.pc += 1
   }
-  OK
+  ()
 }
 
 ///|
-fn op_br_on_non_null(rt : Runtime) -> RetCode {
+fn op_br_on_non_null(rt : Runtime) -> Unit {
   let target_pc = rt.read_imm_idx()
   let arity = rt.read_imm_idx()
   let drop_count = rt.read_imm_idx()
@@ -258,17 +254,16 @@ fn op_br_on_non_null(rt : Runtime) -> RetCode {
 
     // Trim stack to remove drop_count values
     rt.stack_top -= drop_count
-
     rt.pc = target_pc
   } else {
     // Null - don't push anything, continue
     rt.pc += 1
   }
-  OK
+  ()
 }
 
 ///|
-fn op_call(rt : Runtime) -> RetCode {
+fn op_call(rt : Runtime) -> Unit {
   let func_idx = rt.read_imm_idx()
   let num_imported_funcs = count_imported_funcs(rt.module_)
 
@@ -278,16 +273,20 @@ fn op_call(rt : Runtime) -> RetCode {
     let type_idx = get_func_type_idx(rt.module_, func_idx, num_imported_funcs)
     if type_idx < 0 {
       rt.error_detail = "call: invalid imported function index"
-      return InvalidType
+      rt.status = Trap
+      return
     }
     let func_type = match get_func_type_or_error(rt, type_idx, "call") {
       Some(found) => found
-      None => return InvalidType
+      None => {
+        rt.status = Trap
+        return
+      }
     }
     let args = rt.pop_arguments(func_type)
     rt.call_imported_function(func_idx, args, func_type.results.length())
     rt.pc += 1
-    return OK
+    return
   }
 
   // Adjust index for local functions
@@ -295,12 +294,16 @@ fn op_call(rt : Runtime) -> RetCode {
   let type_idx = rt.module_.funcs[local_func_idx].reinterpret_as_int()
   let func_type = match get_func_type_or_error(rt, type_idx, "call") {
     Some(found) => found
-    None => return InvalidType
+    None => {
+      rt.status = Trap
+      return
+    }
   }
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     rt.error_detail = "Function not compiled: \{func_idx}"
-    return FunctionNotCompiled
+    rt.status = Trap
+    return
   }
 
   // Unified stack: arguments are already on stack, they become callee's first locals
@@ -311,7 +314,8 @@ fn op_call(rt : Runtime) -> RetCode {
   // Check stack capacity for the callee
   if new_sp + code.max_stack_height > rt.stack.length() {
     rt.error_detail = "Stack overflow: need \{code.max_stack_height} slots"
-    return StackOverflow
+    rt.status = Trap
+    return
   }
 
   // Save caller's frame
@@ -322,20 +326,20 @@ fn op_call(rt : Runtime) -> RetCode {
   })
 
   // Push default values for declared locals (not params - they're already on stack)
-  let init_result = rt.init_declared_locals(code)
-  if init_result != OK {
-    return init_result
+  rt.init_declared_locals(code)
+  if rt.status == Trap {
+    return
   }
 
   // Update frame state
   rt.sp = new_sp
   rt.num_locals = num_params + code.locals.length()
   rt.pc = callee_pc
-  OK
+  ()
 }
 
 ///|
-fn op_return(rt : Runtime) -> RetCode {
+fn op_return(rt : Runtime) -> Unit {
   // Read result count from immediate (emitted at compile time)
   let num_return_values = rt.read_imm_idx()
 
@@ -352,11 +356,10 @@ fn op_return(rt : Runtime) -> RetCode {
 
   // Trim stack to keep only return values at frame position
   rt.stack_top = rt.sp + num_return_values
-
   if rt.call_stack.length() == 0 {
     // Entry function returning - results are now at stack[0..num_return_values)
-    rt.running = false
-    return OK
+    rt.status = Terminated
+    return
   }
 
   // Restore caller's state
@@ -364,34 +367,40 @@ fn op_return(rt : Runtime) -> RetCode {
   rt.sp = frame.caller_sp
   rt.num_locals = frame.caller_num_locals
   rt.pc = frame.return_pc + 1
-  OK
+  ()
 }
 
 ///|
-fn op_call_indirect(rt : Runtime) -> RetCode {
+fn op_call_indirect(rt : Runtime) -> Unit {
   let type_idx = rt.read_imm_idx()
   let table_idx = rt.read_imm_idx()
 
   // Pop the function index from the stack
   rt.stack_top -= 1
-  let elem_idx = rt.stack.unsafe_get(rt.stack_top).to_uint().reinterpret_as_int()
+  let elem_idx = rt.stack
+    .unsafe_get(rt.stack_top)
+    .to_uint()
+    .reinterpret_as_int()
 
   // Check table bounds
   if table_idx < 0 || table_idx >= rt.tables.length() {
     rt.error_detail = "call_indirect: invalid table index"
-    return InvalidType
+    rt.status = Trap
+    return
   }
   let table = rt.tables[table_idx].data
   if elem_idx < 0 || elem_idx >= table.length() {
     rt.error_detail = "undefined element"
-    return InvalidType
+    rt.status = Trap
+    return
   }
 
   // Get function reference from table
   let func_ref = table[elem_idx]
   guard func_ref is Some(func_idx) else {
     rt.error_detail = "uninitialized element"
-    return InvalidType
+    rt.status = Trap
+    return
   }
   let num_imported_funcs = count_imported_funcs(rt.module_)
 
@@ -399,7 +408,10 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
   let expected_type = match
     get_func_type_or_error(rt, type_idx, "call_indirect") {
     Some(found) => found
-    None => return InvalidType
+    None => {
+      rt.status = Trap
+      return
+    }
   }
 
   // Check if calling an imported function
@@ -412,25 +424,29 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
     )
     if actual_type_idx < 0 {
       rt.error_detail = "call_indirect: invalid imported function index"
-      return InvalidType
+      rt.status = Trap
+      return
     }
     let actual_type = match
       get_func_type_or_error(rt, actual_type_idx, "call_indirect") {
       Some(found) => found
-      None => return InvalidType
+      None => {
+        rt.status = Trap
+        return
+      }
     }
 
     // Check type signature matches
-    let check_result = check_type_signature_match(
+    check_type_signature_match(
       expected_type, actual_type, "indirect call type mismatch", rt,
     )
-    if check_result != OK {
-      return check_result
+    if rt.status == Trap {
+      return
     }
     let args = rt.pop_arguments(actual_type)
     rt.call_imported_function(func_idx, args, expected_type.results.length())
     rt.pc += 1
-    return OK
+    return
   }
 
   // Adjust to local function index
@@ -439,7 +455,8 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
   // Check function index bounds
   if local_func_idx < 0 || local_func_idx >= rt.module_.codes.length() {
     rt.error_detail = "call_indirect: invalid function index"
-    return InvalidType
+    rt.status = Trap
+    return
   }
 
   // Get the actual function type
@@ -447,20 +464,24 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
   let actual_type = match
     get_func_type_or_error(rt, actual_type_idx, "call_indirect") {
     Some(found) => found
-    None => return InvalidType
+    None => {
+      rt.status = Trap
+      return
+    }
   }
 
   // Check type signature matches
-  let check_result = check_type_signature_match(
+  check_type_signature_match(
     expected_type, actual_type, "indirect call type mismatch", rt,
   )
-  if check_result != OK {
-    return check_result
+  if rt.status == Trap {
+    return
   }
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     rt.error_detail = "Function not compiled: \{func_idx}"
-    return FunctionNotCompiled
+    rt.status = Trap
+    return
   }
 
   // Unified stack: arguments are already on stack, they become callee's first locals
@@ -470,7 +491,8 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
   // Check stack capacity for the callee
   if new_sp + code.max_stack_height > rt.stack.length() {
     rt.error_detail = "Stack overflow: need \{code.max_stack_height} slots"
-    return StackOverflow
+    rt.status = Trap
+    return
   }
 
   // Save caller's frame
@@ -481,20 +503,20 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
   })
 
   // Push default values for declared locals
-  let init_result = rt.init_declared_locals(code)
-  if init_result != OK {
-    return init_result
+  rt.init_declared_locals(code)
+  if rt.status == Trap {
+    return
   }
 
   // Update frame state
   rt.sp = new_sp
   rt.num_locals = num_params + code.locals.length()
   rt.pc = callee_pc
-  OK
+  ()
 }
 
 ///|
-fn op_return_call(rt : Runtime) -> RetCode {
+fn op_return_call(rt : Runtime) -> Unit {
   let func_idx = rt.read_imm_idx()
   let num_imported_funcs = count_imported_funcs(rt.module_)
 
@@ -504,11 +526,15 @@ fn op_return_call(rt : Runtime) -> RetCode {
     let type_idx = get_func_type_idx(rt.module_, func_idx, num_imported_funcs)
     if type_idx < 0 {
       rt.error_detail = "return_call: invalid imported function index"
-      return InvalidType
+      rt.status = Trap
+      return
     }
     let func_type = match get_func_type_or_error(rt, type_idx, "return_call") {
       Some(found) => found
-      None => return InvalidType
+      None => {
+        rt.status = Trap
+        return
+      }
     }
     let args = rt.pop_arguments(func_type)
     rt.call_imported_function(func_idx, args, func_type.results.length())
@@ -520,12 +546,16 @@ fn op_return_call(rt : Runtime) -> RetCode {
   let type_idx = rt.module_.funcs[local_func_idx].reinterpret_as_int()
   let func_type = match get_func_type_or_error(rt, type_idx, "return_call") {
     Some(found) => found
-    None => return InvalidType
+    None => {
+      rt.status = Trap
+      return
+    }
   }
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     rt.error_detail = "Function not compiled: \{func_idx}"
-    return FunctionNotCompiled
+    rt.status = Trap
+    return
   }
   // Tail call: reuse current frame
   // Move arguments in-place from stack top to sp position
@@ -543,42 +573,48 @@ fn op_return_call(rt : Runtime) -> RetCode {
   rt.stack_top = rt.sp + num_params
 
   // Push default values for declared locals
-  let init_result = rt.init_declared_locals(code)
-  if init_result != OK {
-    return init_result
+  rt.init_declared_locals(code)
+  if rt.status == Trap {
+    return
   }
 
   // Update num_locals (sp stays same)
   rt.num_locals = num_params + code.locals.length()
   rt.pc = callee_pc
-  OK
+  ()
 }
 
 ///|
-fn op_return_call_indirect(rt : Runtime) -> RetCode {
+fn op_return_call_indirect(rt : Runtime) -> Unit {
   let type_idx = rt.read_imm_idx()
   let table_idx = rt.read_imm_idx()
 
   // Pop the function index from the stack
   rt.stack_top -= 1
-  let elem_idx = rt.stack.unsafe_get(rt.stack_top).to_uint().reinterpret_as_int()
+  let elem_idx = rt.stack
+    .unsafe_get(rt.stack_top)
+    .to_uint()
+    .reinterpret_as_int()
 
   // Check table bounds
   if table_idx < 0 || table_idx >= rt.tables.length() {
     rt.error_detail = "return_call_indirect: invalid table index"
-    return InvalidType
+    rt.status = Trap
+    return
   }
   let table = rt.tables[table_idx].data
   if elem_idx < 0 || elem_idx >= table.length() {
     rt.error_detail = "undefined element"
-    return InvalidType
+    rt.status = Trap
+    return
   }
 
   // Get function reference from table
   let func_ref = table[elem_idx]
   guard func_ref is Some(func_idx) else {
     rt.error_detail = "uninitialized element"
-    return InvalidType
+    rt.status = Trap
+    return
   }
   let num_imported_funcs = count_imported_funcs(rt.module_)
 
@@ -586,7 +622,10 @@ fn op_return_call_indirect(rt : Runtime) -> RetCode {
   let expected_type = match
     get_func_type_or_error(rt, type_idx, "return_call_indirect") {
     Some(found) => found
-    None => return InvalidType
+    None => {
+      rt.status = Trap
+      return
+    }
   }
 
   // Check if calling an imported function
@@ -599,20 +638,24 @@ fn op_return_call_indirect(rt : Runtime) -> RetCode {
     )
     if actual_type_idx < 0 {
       rt.error_detail = "return_call_indirect: invalid imported function index"
-      return InvalidType
+      rt.status = Trap
+      return
     }
     let actual_type = match
       get_func_type_or_error(rt, actual_type_idx, "return_call_indirect") {
       Some(found) => found
-      None => return InvalidType
+      None => {
+        rt.status = Trap
+        return
+      }
     }
 
     // Check type signature matches
-    let check_result = check_type_signature_match(
+    check_type_signature_match(
       expected_type, actual_type, "indirect call type mismatch", rt,
     )
-    if check_result != OK {
-      return check_result
+    if rt.status == Trap {
+      return
     }
     let args = rt.pop_arguments(actual_type)
     rt.call_imported_function(func_idx, args, expected_type.results.length())
@@ -625,7 +668,8 @@ fn op_return_call_indirect(rt : Runtime) -> RetCode {
   // Check function index bounds
   if local_func_idx < 0 || local_func_idx >= rt.module_.codes.length() {
     rt.error_detail = "return_call_indirect: invalid function index"
-    return InvalidType
+    rt.status = Trap
+    return
   }
 
   // Get the actual function type
@@ -633,20 +677,24 @@ fn op_return_call_indirect(rt : Runtime) -> RetCode {
   let actual_type = match
     get_func_type_or_error(rt, actual_type_idx, "return_call_indirect") {
     Some(found) => found
-    None => return InvalidType
+    None => {
+      rt.status = Trap
+      return
+    }
   }
 
   // Check type signature matches
-  let check_result = check_type_signature_match(
+  check_type_signature_match(
     expected_type, actual_type, "indirect call type mismatch", rt,
   )
-  if check_result != OK {
-    return check_result
+  if rt.status == Trap {
+    return
   }
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     rt.error_detail = "Function not compiled: \{func_idx}"
-    return FunctionNotCompiled
+    rt.status = Trap
+    return
   }
 
   // Tail call: reuse current frame
@@ -665,26 +713,31 @@ fn op_return_call_indirect(rt : Runtime) -> RetCode {
   rt.stack_top = rt.sp + num_params
 
   // Push default values for declared locals
-  let init_result = rt.init_declared_locals(code)
-  if init_result != OK {
-    return init_result
+  rt.init_declared_locals(code)
+  if rt.status == Trap {
+    return
   }
 
   // Update num_locals (sp stays same)
   rt.num_locals = num_params + code.locals.length()
   rt.pc = callee_pc
-  OK
+  ()
 }
 
 ///|
-fn op_call_ref(rt : Runtime) -> RetCode {
+fn op_call_ref(rt : Runtime) -> Unit {
   let type_idx = rt.read_imm_idx()
 
   // Pop the function reference from the stack (stored as Int64, -1 = null)
-  rt.stack_top -= 1; let func_ref_raw = rt.stack.unsafe_get(rt.stack_top).reinterpret_as_int64().to_int()
+  rt.stack_top -= 1
+  let func_ref_raw = rt.stack
+    .unsafe_get(rt.stack_top)
+    .reinterpret_as_int64()
+    .to_int()
   if func_ref_raw == -1 {
     rt.error_detail = "call_ref: null function reference"
-    return InvalidType
+    rt.status = Trap
+    return
   }
   let func_idx = func_ref_raw
   let num_imported_funcs = count_imported_funcs(rt.module_)
@@ -692,7 +745,10 @@ fn op_call_ref(rt : Runtime) -> RetCode {
   // Get the expected function type
   let func_type = match get_func_type_or_error(rt, type_idx, "call_ref") {
     Some(found) => found
-    None => return InvalidType
+    None => {
+      rt.status = Trap
+      return
+    }
   }
 
   // Check if calling an imported function
@@ -705,51 +761,60 @@ fn op_call_ref(rt : Runtime) -> RetCode {
     )
     if actual_type_idx < 0 {
       rt.error_detail = "call_ref: invalid imported function index"
-      return InvalidType
+      rt.status = Trap
+      return
     }
     let actual_type = match
       get_func_type_or_error(rt, actual_type_idx, "call_ref") {
       Some(found) => found
-      None => return InvalidType
+      None => {
+        rt.status = Trap
+        return
+      }
     }
 
     // Check type signature matches
-    let check_result = check_type_signature_match(
+    check_type_signature_match(
       func_type, actual_type, "call_ref: type mismatch", rt,
     )
-    if check_result != OK {
-      return check_result
+    if rt.status == Trap {
+      return
     }
     let args = rt.pop_arguments(func_type)
     rt.call_imported_function(func_idx, args, func_type.results.length())
     rt.pc += 1
-    return OK
+    return
   }
 
   // Adjust index for local functions
   let local_func_idx = func_idx - num_imported_funcs
   if local_func_idx < 0 || local_func_idx >= rt.module_.codes.length() {
     rt.error_detail = "call_ref: invalid function index"
-    return InvalidType
+    rt.status = Trap
+    return
   }
   let actual_type_idx = rt.module_.funcs[local_func_idx].reinterpret_as_int()
   let actual_type = match
     get_func_type_or_error(rt, actual_type_idx, "call_ref") {
     Some(found) => found
-    None => return InvalidType
+    None => {
+      rt.status = Trap
+      return
+    }
   }
 
   // Check type signature matches
-  let check_result = check_type_signature_match(
+  check_type_signature_match(
     func_type, actual_type, "call_ref: type mismatch", rt,
   )
-  if check_result != OK {
-    return check_result
+  if rt.status == Trap {
+    return
   }
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     rt.error_detail = "Function not compiled: \{func_idx}"
-    return FunctionNotCompiled
+    rt.status = Trap
+    return
   }
 
   // Unified stack: arguments are already on stack, they become callee's first locals
@@ -759,7 +824,8 @@ fn op_call_ref(rt : Runtime) -> RetCode {
   // Check stack capacity for the callee
   if new_sp + code.max_stack_height > rt.stack.length() {
     rt.error_detail = "Stack overflow: need \{code.max_stack_height} slots"
-    return StackOverflow
+    rt.status = Trap
+    return
   }
 
   // Save caller's frame
@@ -770,27 +836,32 @@ fn op_call_ref(rt : Runtime) -> RetCode {
   })
 
   // Push default values for declared locals
-  let init_result = rt.init_declared_locals(code)
-  if init_result != OK {
-    return init_result
+  rt.init_declared_locals(code)
+  if rt.status == Trap {
+    return
   }
 
   // Update frame state
   rt.sp = new_sp
   rt.num_locals = num_params + code.locals.length()
   rt.pc = callee_pc
-  OK
+  ()
 }
 
 ///|
-fn op_return_call_ref(rt : Runtime) -> RetCode {
+fn op_return_call_ref(rt : Runtime) -> Unit {
   let type_idx = rt.read_imm_idx()
 
   // Pop the function reference from the stack (stored as Int64, -1 = null)
-  rt.stack_top -= 1; let func_ref_raw = rt.stack.unsafe_get(rt.stack_top).reinterpret_as_int64().to_int()
+  rt.stack_top -= 1
+  let func_ref_raw = rt.stack
+    .unsafe_get(rt.stack_top)
+    .reinterpret_as_int64()
+    .to_int()
   if func_ref_raw == -1 {
     rt.error_detail = "return_call_ref: null function reference"
-    return InvalidType
+    rt.status = Trap
+    return
   }
   let func_idx = func_ref_raw
   let num_imported_funcs = count_imported_funcs(rt.module_)
@@ -799,7 +870,10 @@ fn op_return_call_ref(rt : Runtime) -> RetCode {
   let func_type = match
     get_func_type_or_error(rt, type_idx, "return_call_ref") {
     Some(found) => found
-    None => return InvalidType
+    None => {
+      rt.status = Trap
+      return
+    }
   }
 
   // Check if calling an imported function
@@ -812,20 +886,24 @@ fn op_return_call_ref(rt : Runtime) -> RetCode {
     )
     if actual_type_idx < 0 {
       rt.error_detail = "return_call_ref: invalid imported function index"
-      return InvalidType
+      rt.status = Trap
+      return
     }
     let actual_type = match
       get_func_type_or_error(rt, actual_type_idx, "return_call_ref") {
       Some(found) => found
-      None => return InvalidType
+      None => {
+        rt.status = Trap
+        return
+      }
     }
 
     // Check type signature matches
-    let check_result = check_type_signature_match(
+    check_type_signature_match(
       func_type, actual_type, "return_call_ref: type mismatch", rt,
     )
-    if check_result != OK {
-      return check_result
+    if rt.status == Trap {
+      return
     }
     let args = rt.pop_arguments(func_type)
     rt.call_imported_function(func_idx, args, func_type.results.length())
@@ -836,26 +914,31 @@ fn op_return_call_ref(rt : Runtime) -> RetCode {
   let local_func_idx = func_idx - num_imported_funcs
   if local_func_idx < 0 || local_func_idx >= rt.module_.codes.length() {
     rt.error_detail = "return_call_ref: invalid function index"
-    return InvalidType
+    rt.status = Trap
+    return
   }
   let actual_type_idx = rt.module_.funcs[local_func_idx].reinterpret_as_int()
   let actual_type = match
     get_func_type_or_error(rt, actual_type_idx, "return_call_ref") {
     Some(found) => found
-    None => return InvalidType
+    None => {
+      rt.status = Trap
+      return
+    }
   }
 
   // Check type signature matches
-  let check_result = check_type_signature_match(
+  check_type_signature_match(
     func_type, actual_type, "return_call_ref: type mismatch", rt,
   )
-  if check_result != OK {
-    return check_result
+  if rt.status == Trap {
+    return
   }
   let code = rt.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     rt.error_detail = "Function not compiled: \{func_idx}"
-    return FunctionNotCompiled
+    rt.status = Trap
+    return
   }
 
   // Tail call: reuse current frame
@@ -874,65 +957,66 @@ fn op_return_call_ref(rt : Runtime) -> RetCode {
   rt.stack_top = rt.sp + num_params
 
   // Push default values for declared locals
-  let init_result = rt.init_declared_locals(code)
-  if init_result != OK {
-    return init_result
+  rt.init_declared_locals(code)
+  if rt.status == Trap {
+    return
   }
 
   // Update num_locals (sp stays same)
   rt.num_locals = num_params + code.locals.length()
   rt.pc = callee_pc
-  OK
+  ()
 }
 
 ///|
-fn op_nop(rt : Runtime) -> RetCode {
+fn op_nop(rt : Runtime) -> Unit {
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_unreachable(_rt : Runtime) -> RetCode {
-  return Unreachable
+fn op_unreachable(rt : Runtime) -> Unit {
+  rt.error_detail = "unreachable"
+  rt.status = Trap
 }
 
 ///|
-fn op_throw(rt : Runtime) -> RetCode {
+fn op_throw(rt : Runtime) -> Unit {
   let tag_idx = rt.read_imm_idx()
   rt.error_detail = "throw not implemented for tag \{tag_idx}"
-  InvalidType
+  rt.status = Trap
 }
 
 ///|
-fn op_rethrow(rt : Runtime) -> RetCode {
+fn op_rethrow(rt : Runtime) -> Unit {
   let label_idx = rt.read_imm_idx()
   rt.error_detail = "rethrow not implemented for label \{label_idx}"
-  InvalidType
+  rt.status = Trap
 }
 
 ///|
-fn op_simd_unimplemented(rt : Runtime) -> RetCode {
+fn op_simd_unimplemented(rt : Runtime) -> Unit {
   rt.error_detail = "simd instruction not implemented"
-  InvalidType
+  rt.status = Trap
 }
 
 ///|
-fn op_atomic_unimplemented(rt : Runtime) -> RetCode {
+fn op_atomic_unimplemented(rt : Runtime) -> Unit {
   rt.error_detail = "atomic instruction not implemented"
-  InvalidType
+  rt.status = Trap
 }
 
 ///|
-fn op_gc_unimplemented(rt : Runtime) -> RetCode {
+fn op_gc_unimplemented(rt : Runtime) -> Unit {
   rt.error_detail = "gc instruction not implemented"
-  InvalidType
+  rt.status = Trap
 }
 // =============================================================================
 // Table bulk operations (stub implementations)
 // =============================================================================
 
 ///|
-fn op_table_init(rt : Runtime) -> RetCode {
+fn op_table_init(rt : Runtime) -> Unit {
   let _table_idx = rt.read_imm_idx()
   let _elem_idx = rt.read_imm_idx()
   rt.stack_top -= 1
@@ -943,11 +1027,11 @@ fn op_table_init(rt : Runtime) -> RetCode {
   let _dest = rt.stack.unsafe_get(rt.stack_top).to_uint()
   // TODO: Implement table.init
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_table_copy(rt : Runtime) -> RetCode {
+fn op_table_copy(rt : Runtime) -> Unit {
   let _dst_table_idx = rt.read_imm_idx()
   let _src_table_idx = rt.read_imm_idx()
   rt.stack_top -= 1
@@ -958,41 +1042,46 @@ fn op_table_copy(rt : Runtime) -> RetCode {
   let _dest = rt.stack.unsafe_get(rt.stack_top).to_uint()
   // TODO: Implement table.copy
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_table_fill(rt : Runtime) -> RetCode {
+fn op_table_fill(rt : Runtime) -> Unit {
   let table_idx = rt.read_imm_idx()
   if table_idx < 0 || table_idx >= rt.tables.length() {
     rt.error_detail = "table index out of bounds"
-    return InvalidType
+    rt.status = Trap
+    return
   }
   rt.stack_top -= 1
   let n = rt.stack.unsafe_get(rt.stack_top).to_uint().reinterpret_as_int()
   rt.stack_top -= 1
-  let raw_ref = rt.stack.unsafe_get(rt.stack_top).reinterpret_as_int64().to_int()
+  let raw_ref = rt.stack
+    .unsafe_get(rt.stack_top)
+    .reinterpret_as_int64()
+    .to_int()
   let ref_value : Int? = if raw_ref == -1 { None } else { Some(raw_ref) }
   rt.stack_top -= 1
   let dest = rt.stack.unsafe_get(rt.stack_top).to_uint().reinterpret_as_int()
   let table = rt.tables[table_idx].data
   if dest < 0 || n < 0 || dest + n > table.length() {
     rt.error_detail = "table fill out of bounds"
-    return InvalidType
+    rt.status = Trap
+    return
   }
   for i = 0; i < n; i = i + 1 {
     table[dest + i] = ref_value
   }
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_elem_drop(rt : Runtime) -> RetCode {
+fn op_elem_drop(rt : Runtime) -> Unit {
   let _elem_idx = rt.read_imm_idx()
   // TODO: Implement elem.drop
   rt.pc += 1
-  OK
+  ()
 }
 
 // =============================================================================
@@ -1000,32 +1089,38 @@ fn op_elem_drop(rt : Runtime) -> RetCode {
 // =============================================================================
 
 ///|
-fn op_table_size(rt : Runtime) -> RetCode {
+fn op_table_size(rt : Runtime) -> Unit {
   let table_idx = rt.read_imm_idx()
   if table_idx < 0 || table_idx >= rt.tables.length() {
     rt.error_detail = "table index out of bounds"
-    return InvalidType
+    rt.status = Trap
+    return
   }
   let size = rt.tables[table_idx].data.length()
   rt.stack.unsafe_set(rt.stack_top, size.reinterpret_as_uint().to_uint64())
   rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_table_get(rt : Runtime) -> RetCode {
+fn op_table_get(rt : Runtime) -> Unit {
   let table_idx = rt.read_imm_idx()
   if table_idx < 0 || table_idx >= rt.tables.length() {
     rt.error_detail = "table index out of bounds"
-    return InvalidType
+    rt.status = Trap
+    return
   }
   rt.stack_top -= 1
-  let elem_idx = rt.stack.unsafe_get(rt.stack_top).to_uint().reinterpret_as_int()
+  let elem_idx = rt.stack
+    .unsafe_get(rt.stack_top)
+    .to_uint()
+    .reinterpret_as_int()
   let table = rt.tables[table_idx].data
   if elem_idx < 0 || elem_idx >= table.length() {
     rt.error_detail = "table element index out of bounds"
-    return InvalidType
+    rt.status = Trap
+    return
   }
   // Return the function reference (or null) - stored as Int64, -1 = null
   let ref_val = match table[elem_idx] {
@@ -1035,46 +1130,57 @@ fn op_table_get(rt : Runtime) -> RetCode {
   rt.stack.unsafe_set(rt.stack_top, ref_val.reinterpret_as_uint64())
   rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_table_set(rt : Runtime) -> RetCode {
+fn op_table_set(rt : Runtime) -> Unit {
   let table_idx = rt.read_imm_idx()
   if table_idx < 0 || table_idx >= rt.tables.length() {
     rt.error_detail = "table index out of bounds"
-    return InvalidType
+    rt.status = Trap
+    return
   }
   // Pop ref value - stored as Int64, -1 = null
   rt.stack_top -= 1
-  let raw_ref = rt.stack.unsafe_get(rt.stack_top).reinterpret_as_int64().to_int()
+  let raw_ref = rt.stack
+    .unsafe_get(rt.stack_top)
+    .reinterpret_as_int64()
+    .to_int()
   let ref_value : Int? = if raw_ref == -1 { None } else { Some(raw_ref) }
   rt.stack_top -= 1
-  let elem_idx = rt.stack.unsafe_get(rt.stack_top).to_uint().reinterpret_as_int()
+  let elem_idx = rt.stack
+    .unsafe_get(rt.stack_top)
+    .to_uint()
+    .reinterpret_as_int()
   let table = rt.tables[table_idx].data
   if elem_idx < 0 || elem_idx >= table.length() {
     rt.error_detail = "table element index out of bounds"
-    return InvalidType
+    rt.status = Trap
+    return
   }
   table[elem_idx] = ref_value
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_table_grow(rt : Runtime) -> RetCode {
+fn op_table_grow(rt : Runtime) -> Unit {
   let table_idx = rt.read_imm_idx()
   if table_idx < 0 || table_idx >= rt.tables.length() {
     rt.stack.unsafe_set(rt.stack_top, 0xFFFFFFFFUL) // -1 indicates failure
     rt.stack_top += 1
     rt.pc += 1
-    return OK
+    return
   }
   rt.stack_top -= 1
   let delta = rt.stack.unsafe_get(rt.stack_top).to_uint().reinterpret_as_int()
   // Pop ref value - stored as Int64, -1 = null
   rt.stack_top -= 1
-  let raw_ref = rt.stack.unsafe_get(rt.stack_top).reinterpret_as_int64().to_int()
+  let raw_ref = rt.stack
+    .unsafe_get(rt.stack_top)
+    .reinterpret_as_int64()
+    .to_int()
   let init_value : Int? = if raw_ref == -1 { None } else { Some(raw_ref) }
   let runtime_table = rt.tables[table_idx]
   let table = runtime_table.data
@@ -1083,7 +1189,7 @@ fn op_table_grow(rt : Runtime) -> RetCode {
     rt.stack.unsafe_set(rt.stack_top, 0xFFFFFFFFUL) // -1 indicates failure
     rt.stack_top += 1
     rt.pc += 1
-    return OK
+    return
   }
   let new_size = old_size + delta
 
@@ -1095,7 +1201,7 @@ fn op_table_grow(rt : Runtime) -> RetCode {
         rt.stack.unsafe_set(rt.stack_top, 0xFFFFFFFFUL)
         rt.stack_top += 1
         rt.pc += 1
-        return OK
+        return
       }
     None => () // No max limit
   }
@@ -1107,7 +1213,7 @@ fn op_table_grow(rt : Runtime) -> RetCode {
   rt.stack.unsafe_set(rt.stack_top, old_size.reinterpret_as_uint().to_uint64())
   rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 // =============================================================================
@@ -1115,7 +1221,7 @@ fn op_table_grow(rt : Runtime) -> RetCode {
 // =============================================================================
 
 ///|
-fn op_ref_null(rt : Runtime) -> RetCode {
+fn op_ref_null(rt : Runtime) -> Unit {
   // ref.null pushes a null reference onto the stack
   // The heap type is encoded in the immediate but we don't need it at runtime
   let _ = rt.read_imm_idx() // Skip the heap type encoding
@@ -1123,35 +1229,38 @@ fn op_ref_null(rt : Runtime) -> RetCode {
   rt.stack.unsafe_set(rt.stack_top, (-1).to_int64().reinterpret_as_uint64())
   rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_ref_func(rt : Runtime) -> RetCode {
+fn op_ref_func(rt : Runtime) -> Unit {
   // ref.func pushes a reference to the given function onto the stack
   let func_idx = rt.read_imm_idx()
   // Push func ref as Int64
   rt.stack.unsafe_set(rt.stack_top, func_idx.to_int64().reinterpret_as_uint64())
   rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_ref_is_null(rt : Runtime) -> RetCode {
+fn op_ref_is_null(rt : Runtime) -> Unit {
   // ref.is_null tests whether a reference is null
   // Refs are stored as Int64, -1 = null
   rt.stack_top -= 1
-  let ref_val = rt.stack.unsafe_get(rt.stack_top).reinterpret_as_int64().to_int()
+  let ref_val = rt.stack
+    .unsafe_get(rt.stack_top)
+    .reinterpret_as_int64()
+    .to_int()
   let is_null : UInt64 = if ref_val == -1 { 1UL } else { 0UL }
   rt.stack.unsafe_set(rt.stack_top, is_null)
   rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_ref_eq(rt : Runtime) -> RetCode {
+fn op_ref_eq(rt : Runtime) -> Unit {
   // ref.eq compares two references for identity equality
   // Refs are stored as Int64, -1 = null
   rt.stack_top -= 1
@@ -1162,11 +1271,11 @@ fn op_ref_eq(rt : Runtime) -> RetCode {
   rt.stack.unsafe_set(rt.stack_top, eq)
   rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_ref_as_non_null(rt : Runtime) -> RetCode {
+fn op_ref_as_non_null(rt : Runtime) -> Unit {
   // ref.as_non_null traps on null references
   // Refs are stored as Int64, -1 = null
   rt.stack_top -= 1
@@ -1174,27 +1283,28 @@ fn op_ref_as_non_null(rt : Runtime) -> RetCode {
   let ref_val = value.reinterpret_as_int64().to_int()
   if ref_val == -1 {
     rt.error_detail = "ref.as_non_null: null reference"
-    return InvalidType
+    rt.status = Trap
+    return
   }
   // Push back the non-null reference
   rt.stack.unsafe_set(rt.stack_top, value)
   rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_global_get(rt : Runtime) -> RetCode {
+fn op_global_get(rt : Runtime) -> Unit {
   let idx = rt.read_imm_idx()
   // Convert Value to UInt64 for stack
   rt.stack.unsafe_set(rt.stack_top, value_to_stack(rt.globals[idx]))
   rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_global_set(rt : Runtime) -> RetCode {
+fn op_global_set(rt : Runtime) -> Unit {
   let idx = rt.read_imm_idx()
   rt.stack_top -= 1
   let raw = rt.stack.unsafe_get(rt.stack_top)
@@ -1209,5 +1319,5 @@ fn op_global_set(rt : Runtime) -> RetCode {
   }
   rt.globals[idx] = stack_to_value(raw, val_type)
   rt.pc += 1
-  OK
+  ()
 }

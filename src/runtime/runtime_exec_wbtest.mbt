@@ -50,8 +50,16 @@ test "runtime execute error branches" {
     _ => saw_unimpl = true
   }
   assert_eq(saw_unimpl, true)
-  let rt_err = make_runtime([], [WasmInstr(fn(_rt) { InvalidType })], 0)
-  rt_err.error_detail = "bad"
+  let rt_err = make_runtime(
+    [],
+    [
+      WasmInstr(fn(rt) {
+        rt.error_detail = "bad"
+        rt.status = Trap
+      }),
+    ],
+    0,
+  )
   let mut saw_invalid = false
   rt_err.execute() catch {
     _ => saw_invalid = true

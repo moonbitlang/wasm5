@@ -22,11 +22,12 @@ pub fn Runtime::compile(self : Runtime) -> Unit raise RuntimeError {
         // Clear stack and call_stack before setting up locals
         self.stack_top = 0
         self.call_stack.clear()
+        self.status = Terminated // Reset status
 
         // Initialize entry locals (start function has no parameters)
-        let init_result = self.initialize_entry_locals([], code)
-        if init_result != OK {
-          raise init_result.to_error(self.error_detail)
+        self.initialize_entry_locals([], code)
+        if self.status == Trap {
+          raise RuntimeError::from_detail(self.error_detail)
         }
         self.pc = start_pc
 
@@ -46,17 +47,17 @@ pub fn Runtime::compile(self : Runtime) -> Unit raise RuntimeError {
 
 ///|
 fn Runtime::execute(self : Runtime) -> Unit raise RuntimeError {
-  self.running = true
-  while self.running {
+  self.status = Running
+  while self.status == Running {
     guard self.ops.unsafe_get(self.pc) is WasmInstr(f) else {
       raise RuntimeError::UnimplementedInstruction(
         "Expected instruction at PC \{self.pc}",
       )
     }
-    let ret = f(self)
-    if ret != OK {
-      raise ret.to_error(self.error_detail)
-    }
+    f(self)
+  }
+  if self.status == Trap {
+    raise RuntimeError::from_detail(self.error_detail)
   }
 }
 
@@ -103,11 +104,12 @@ pub fn Runtime::call_compiled(
   // Clear stack and call_stack before setting up entry frame
   self.stack_top = 0
   self.call_stack.clear()
+  self.status = Terminated // Reset status in case previous call trapped
 
   // Initialize entry locals (pushes args and locals onto stack, sets sp/num_locals)
-  let init_result = self.initialize_entry_locals(args, code)
-  if init_result != OK {
-    raise init_result.to_error(self.error_detail)
+  self.initialize_entry_locals(args, code)
+  if self.status == Trap {
+    raise RuntimeError::from_detail(self.error_detail)
   }
   self.pc = start_pc
   self.execute()

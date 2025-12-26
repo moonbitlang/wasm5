@@ -241,7 +241,8 @@ fn Runtime::pop_arguments(
 ///|
 /// Push default values for declared locals onto the unified stack.
 /// Params are already on the stack - this only handles declared locals.
-fn Runtime::init_declared_locals(self : Runtime, code : @core.Code) -> RetCode {
+/// Sets status to Trap on error.
+fn Runtime::init_declared_locals(self : Runtime, code : @core.Code) -> Unit {
   for local_type in code.locals {
     match local_type {
       I32 | I64 | F32 | F64 => {
@@ -266,21 +267,22 @@ fn Runtime::init_declared_locals(self : Runtime, code : @core.Code) -> RetCode {
       }
       _ => {
         self.error_detail = "Unsupported local type: \{local_type}"
-        return UnsupportedLocalType
+        self.status = Trap
+        return
       }
     }
   }
-  OK
 }
 
 ///|
 /// Initialize locals for entry point (call_compiled, start function).
 /// Pushes args onto stack, then declared locals, and sets sp/num_locals.
+/// Sets status to Trap on error.
 fn Runtime::initialize_entry_locals(
   self : Runtime,
   args : Array[Value],
   code : @core.Code,
-) -> RetCode {
+) -> Unit {
   // sp points to start of locals (current stack position)
   self.sp = self.stack_top
 
@@ -291,42 +293,44 @@ fn Runtime::initialize_entry_locals(
   }
 
   // Push default values for declared locals
-  let result = self.init_declared_locals(code)
-  if result != OK {
-    return result
+  self.init_declared_locals(code)
+  if self.status == Trap {
+    return
   }
 
   // Set num_locals
   self.num_locals = args.length() + code.locals.length()
-  OK
 }
 
 ///|
-/// Check if two function type signatures match
+/// Check if two function type signatures match.
+/// Sets status to Trap on mismatch.
 fn check_type_signature_match(
   expected : @core.FuncType,
   actual : @core.FuncType,
   error_msg : String,
   rt : Runtime,
-) -> RetCode {
+) -> Unit {
   if expected.params.length() != actual.params.length() ||
     expected.results.length() != actual.results.length() {
     rt.error_detail = error_msg
-    return InvalidType
+    rt.status = Trap
+    return
   }
   for i in 0..<expected.params.length() {
     if expected.params[i] != actual.params[i] {
       rt.error_detail = error_msg
-      return InvalidType
+      rt.status = Trap
+      return
     }
   }
   for i in 0..<expected.results.length() {
     if expected.results[i] != actual.results[i] {
       rt.error_detail = error_msg
-      return InvalidType
+      rt.status = Trap
+      return
     }
   }
-  OK
 }
 
 ///|
@@ -353,16 +357,15 @@ fn Runtime::call_imported_function(
 ///|
 /// Handle return from a tail call to imported function.
 /// Results are already on stack, just restore caller state.
-fn Runtime::handle_tail_call_return(self : Runtime) -> RetCode {
+fn Runtime::handle_tail_call_return(self : Runtime) -> Unit {
   if self.call_stack.length() > 0 {
     let frame = self.call_stack.unsafe_pop()
     self.sp = frame.caller_sp
     self.num_locals = frame.caller_num_locals
     self.pc = frame.return_pc + 1
   } else {
-    self.running = false
+    self.status = Terminated
   }
-  OK
 }
 
 ///|

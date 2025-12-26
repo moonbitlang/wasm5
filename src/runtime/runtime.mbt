@@ -15,6 +15,25 @@ pub suberror RuntimeError {
 } derive(Show)
 
 ///|
+/// Create a RuntimeError from error_detail string
+/// The detail string should start with an error type prefix
+fn RuntimeError::from_detail(detail : String) -> RuntimeError {
+  if detail.starts_with("division by zero") {
+    RuntimeError::DivisionByZero
+  } else if detail.starts_with("integer overflow") {
+    RuntimeError::IntegerOverflow
+  } else if detail.starts_with("out of bounds") {
+    RuntimeError::MemoryOutOfBounds
+  } else if detail.starts_with("unreachable") {
+    RuntimeError::Unreachable
+  } else if detail.starts_with("stack overflow") {
+    RuntimeError::StackOverflow
+  } else {
+    RuntimeError::InvalidType(detail)
+  }
+}
+
+///|
 /// Runtime value type
 pub(all) enum Value {
   I32(UInt)
@@ -233,7 +252,7 @@ pub struct Runtime {
   mut sp : Int // Stack pointer: index of first local in unified stack
   mut num_locals : Int // Number of locals for current function
   mut pc : Int
-  mut running : Bool // Execution loop control flag
+  mut status : RuntimeStatus // Execution status: Running, Terminated, or Trap
   call_stack : Array[CallFrame]
   memory : Array[Byte] // Linear memory
   memory_max : UInt64? // Maximum memory size in pages (None = no limit)
@@ -511,7 +530,6 @@ pub fn Runtime::load_with_resolver(
   // Compile all functions before creating Runtime
   let compiler = Compiler::new(m)
   compiler.compile()
-
   Runtime::{
     module_: m,
     ops: compiler.finish(),
@@ -520,7 +538,7 @@ pub fn Runtime::load_with_resolver(
     sp: 0,
     num_locals: 0,
     pc: 0,
-    running: false,
+    status: Terminated,
     call_stack: [],
     memory,
     memory_max: memory_max_pages,

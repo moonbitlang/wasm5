@@ -578,8 +578,7 @@ fn handle_assert_return(
       }
     }
   } catch {
-    e =>
-      ctx.fail(line, "assert_return", "[\{fn_name}] error: \{e}")
+    e => ctx.fail(line, "assert_return", "[\{fn_name}] error: \{e}")
   }
 }
 
