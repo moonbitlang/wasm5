@@ -1638,6 +1638,20 @@ async test "wat encoder matches wasm-tools for label names" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for try label names" {
+  let wat =
+    #|(module
+    #|  (tag $e)
+    #|  (func (export "f") (result i32)
+    #|    try $t (result i32)
+    #|      i32.const 0
+    #|    catch_all
+    #|      i32.const 1
+    #|    end))
+  assert_wat_matches_with_names("label_names_try", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for field names" {
   let wat =
     #|(module
@@ -2412,6 +2426,76 @@ async test "wat encoder matches wasm-tools for try multi-value result" {
     #|      i32.const 4
     #|    end))
   assert_wat_matches("try_multi_value", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for try without catches" {
+  let wat =
+    #|(module
+    #|  (func (export "f") (param i32) (result i32)
+    #|    try (result i32)
+    #|      local.get 0
+    #|      i32.const 1
+    #|      i32.add
+    #|    end))
+  assert_wat_matches("try_nocatch", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for empty try" {
+  let wat =
+    #|(module
+    #|  (func (export "f")
+    #|    try
+    #|    end))
+  assert_wat_matches("try_empty", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for try typeuse only" {
+  let wat =
+    #|(module
+    #|  (type $t (func (param i32) (result i32)))
+    #|  (func (export "f") (param i32) (result i32)
+    #|    local.get 0
+    #|    try (type $t)
+    #|      i32.const 1
+    #|      i32.add
+    #|    catch_all
+    #|      i32.const 0
+    #|    end))
+  assert_wat_matches("try_typeuse_only", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for try nested in catch" {
+  let wat =
+    #|(module
+    #|  (tag $e)
+    #|  (func (export "f") (result i32)
+    #|    try (result i32)
+    #|      i32.const 0
+    #|    catch $e
+    #|      try (result i32)
+    #|        i32.const 1
+    #|      catch_all
+    #|        i32.const 2
+    #|      end
+    #|    end))
+  assert_wat_matches("try_nested_catch", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for try delegate depth 1" {
+  let wat =
+    #|(module
+    #|  (func (export "f") (result i32)
+    #|    (block $outer (result i32)
+    #|      (block $mid (result i32)
+    #|        try (result i32)
+    #|          i32.const 1
+    #|        delegate 1))))
+  assert_wat_matches("try_delegate_depth1", wat)
 }
 
 ///|
