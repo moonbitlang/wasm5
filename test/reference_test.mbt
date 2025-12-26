@@ -34,24 +34,37 @@ async fn run_harness(filename : String) -> Unit {
     let grouped = group_failures_by_type(file_failures)
 
     // Print header
-    println("\n╔══════════════════════════════════════════════════════════════════╗")
+    println(
+      "\n╔══════════════════════════════════════════════════════════════════╗",
+    )
     println("║ TEST FAILURES: \{filename}")
-    println("╚══════════════════════════════════════════════════════════════════╝")
+    println(
+      "╚══════════════════════════════════════════════════════════════════╝",
+    )
 
     // Print failures grouped by type
     for test_type, failures in grouped {
-      println("\n┌─ \{test_type} (\{failures.length()} failures) ─────────────────────")
+      println(
+        "\n┌─ \{test_type} (\{failures.length()} failures) ─────────────────────",
+      )
       for failure in failures {
         println(format_failure_detail(failure))
       }
-      println("└────────────────────────────────────────────────────────────────")
+      println(
+        "└────────────────────────────────────────────────────────────────",
+      )
     }
 
     // Print summary
-    println("\n╔══════════════════════════════════════════════════════════════════╗")
-    println("║ SUMMARY: \{file_failures.length()} failure(s), \{file_skipped} skipped")
-    println("╚══════════════════════════════════════════════════════════════════╝\n")
-
+    println(
+      "\n╔══════════════════════════════════════════════════════════════════╗",
+    )
+    println(
+      "║ SUMMARY: \{file_failures.length()} failure(s), \{file_skipped} skipped",
+    )
+    println(
+      "╚══════════════════════════════════════════════════════════════════╝\n",
+    )
     fail("\{file_failures.length()} failure(s) in \{filename}")
   }
   if file_skipped > 0 {

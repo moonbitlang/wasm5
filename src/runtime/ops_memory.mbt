@@ -6,33 +6,44 @@
 // =============================================================================
 
 ///|
-fn op_i32_load(rt : Runtime) -> RetCode {
+fn op_i32_load(rt : Runtime) -> Unit {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
   // Use 64-bit arithmetic to detect overflow
   // Base address is treated as unsigned 32-bit value
-  let base = rt.pop_i32().to_uint64()
+  rt.stack_top -= 1
+  let base = rt.stack.unsafe_get(rt.stack_top)
   let effective_addr = base + offset
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_uint()
   let b1 = rt.memory[addr + 1].to_uint()
   let b2 = rt.memory[addr + 2].to_uint()
   let b3 = rt.memory[addr + 3].to_uint()
-  push_i32(rt, b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
+  rt.stack.unsafe_set(
+    rt.stack_top,
+    (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)).to_uint64(),
+  )
+  rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_i32_store(rt : Runtime) -> RetCode {
+fn op_i32_store(rt : Runtime) -> Unit {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
-  let value = rt.pop_i32()
-  let base = rt.pop_i32().to_uint64()
+  rt.stack_top -= 1
+  let value = rt.stack.unsafe_get(rt.stack_top).to_uint()
+  rt.stack_top -= 1
+  let base = rt.stack.unsafe_get(rt.stack_top)
   let effective_addr = base + offset
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFU).to_byte()
@@ -40,49 +51,60 @@ fn op_i32_store(rt : Runtime) -> RetCode {
   rt.memory[addr + 2] = ((value >> 16) & 0xFFU).to_byte()
   rt.memory[addr + 3] = ((value >> 24) & 0xFFU).to_byte()
   rt.pc += 1
-  OK
+  ()
 }
 
 // Additional memory load operations
 
 ///|
-fn op_i32_load8_s(rt : Runtime) -> RetCode {
+fn op_i32_load8_s(rt : Runtime) -> Unit {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
-  let base = rt.pop_i32().to_uint64()
+  rt.stack_top -= 1
+  let base = rt.stack.unsafe_get(rt.stack_top)
   let effective_addr = base + offset
   if effective_addr + 1UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b = rt.memory[addr].to_int()
   // Sign extend from 8 bits
   let value = if b >= 128 { b - 256 } else { b }
-  push_i32(rt, value.reinterpret_as_uint())
+  rt.stack.unsafe_set(rt.stack_top, value.reinterpret_as_uint().to_uint64())
+  rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_i32_load8_u(rt : Runtime) -> RetCode {
+fn op_i32_load8_u(rt : Runtime) -> Unit {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
-  let base = rt.pop_i32().to_uint64()
+  rt.stack_top -= 1
+  let base = rt.stack.unsafe_get(rt.stack_top)
   let effective_addr = base + offset
   if effective_addr + 1UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
-  push_i32(rt, rt.memory[addr].to_uint())
+  rt.stack.unsafe_set(rt.stack_top, rt.memory[addr].to_uint().to_uint64())
+  rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_i32_load16_s(rt : Runtime) -> RetCode {
+fn op_i32_load16_s(rt : Runtime) -> Unit {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
-  let base = rt.pop_i32().to_uint64()
+  rt.stack_top -= 1
+  let base = rt.stack.unsafe_get(rt.stack_top)
   let effective_addr = base + offset
   if effective_addr + 2UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_int()
@@ -90,34 +112,42 @@ fn op_i32_load16_s(rt : Runtime) -> RetCode {
   let value16 = b0 | (b1 << 8)
   // Sign extend from 16 bits
   let value = if value16 >= 32768 { value16 - 65536 } else { value16 }
-  push_i32(rt, value.reinterpret_as_uint())
+  rt.stack.unsafe_set(rt.stack_top, value.reinterpret_as_uint().to_uint64())
+  rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_i32_load16_u(rt : Runtime) -> RetCode {
+fn op_i32_load16_u(rt : Runtime) -> Unit {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
-  let base = rt.pop_i32().to_uint64()
+  rt.stack_top -= 1
+  let base = rt.stack.unsafe_get(rt.stack_top)
   let effective_addr = base + offset
   if effective_addr + 2UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_uint()
   let b1 = rt.memory[addr + 1].to_uint()
-  push_i32(rt, b0 | (b1 << 8))
+  rt.stack.unsafe_set(rt.stack_top, (b0 | (b1 << 8)).to_uint64())
+  rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_i64_load(rt : Runtime) -> RetCode {
+fn op_i64_load(rt : Runtime) -> Unit {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
-  let base = rt.pop_i32().to_uint64()
+  rt.stack_top -= 1
+  let base = rt.stack.unsafe_get(rt.stack_top)
   let effective_addr = base + offset
   if effective_addr + 8UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_uint64()
@@ -128,8 +158,8 @@ fn op_i64_load(rt : Runtime) -> RetCode {
   let b5 = rt.memory[addr + 5].to_uint64()
   let b6 = rt.memory[addr + 6].to_uint64()
   let b7 = rt.memory[addr + 7].to_uint64()
-  push_i64(
-    rt,
+  rt.stack.unsafe_set(
+    rt.stack_top,
     b0 |
     (b1 << 8) |
     (b2 << 16) |
@@ -139,18 +169,23 @@ fn op_i64_load(rt : Runtime) -> RetCode {
     (b6 << 48) |
     (b7 << 56),
   )
+  rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_i64_store(rt : Runtime) -> RetCode {
+fn op_i64_store(rt : Runtime) -> Unit {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
-  let value = rt.pop_i64()
-  let base = rt.pop_i32().to_uint64()
+  rt.stack_top -= 1
+  let value = rt.stack.unsafe_get(rt.stack_top)
+  rt.stack_top -= 1
+  let base = rt.stack.unsafe_get(rt.stack_top)
   let effective_addr = base + offset
   if effective_addr + 8UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFUL).to_byte()
@@ -162,47 +197,58 @@ fn op_i64_store(rt : Runtime) -> RetCode {
   rt.memory[addr + 6] = ((value >> 48) & 0xFFUL).to_byte()
   rt.memory[addr + 7] = ((value >> 56) & 0xFFUL).to_byte()
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_i64_load8_s(rt : Runtime) -> RetCode {
+fn op_i64_load8_s(rt : Runtime) -> Unit {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
-  let base = rt.pop_i32().to_uint64()
+  rt.stack_top -= 1
+  let base = rt.stack.unsafe_get(rt.stack_top)
   let effective_addr = base + offset
   if effective_addr + 1UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b = rt.memory[addr].to_int64()
   // Sign extend from 8 bits
   let value = if b >= 128L { b - 256L } else { b }
-  push_i64(rt, value.reinterpret_as_uint64())
+  rt.stack.unsafe_set(rt.stack_top, value.reinterpret_as_uint64())
+  rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_i64_load8_u(rt : Runtime) -> RetCode {
+fn op_i64_load8_u(rt : Runtime) -> Unit {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
-  let base = rt.pop_i32().to_uint64()
+  rt.stack_top -= 1
+  let base = rt.stack.unsafe_get(rt.stack_top)
   let effective_addr = base + offset
   if effective_addr + 1UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
-  push_i64(rt, rt.memory[addr].to_uint64())
+  rt.stack.unsafe_set(rt.stack_top, rt.memory[addr].to_uint64())
+  rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_i64_load16_s(rt : Runtime) -> RetCode {
+fn op_i64_load16_s(rt : Runtime) -> Unit {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
-  let base = rt.pop_i32().to_uint64()
+  rt.stack_top -= 1
+  let base = rt.stack.unsafe_get(rt.stack_top)
   let effective_addr = base + offset
   if effective_addr + 2UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_int64()
@@ -210,34 +256,42 @@ fn op_i64_load16_s(rt : Runtime) -> RetCode {
   let value16 = b0 | (b1 << 8)
   // Sign extend from 16 bits
   let value = if value16 >= 32768L { value16 - 65536L } else { value16 }
-  push_i64(rt, value.reinterpret_as_uint64())
+  rt.stack.unsafe_set(rt.stack_top, value.reinterpret_as_uint64())
+  rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_i64_load16_u(rt : Runtime) -> RetCode {
+fn op_i64_load16_u(rt : Runtime) -> Unit {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
-  let base = rt.pop_i32().to_uint64()
+  rt.stack_top -= 1
+  let base = rt.stack.unsafe_get(rt.stack_top)
   let effective_addr = base + offset
   if effective_addr + 2UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_uint64()
   let b1 = rt.memory[addr + 1].to_uint64()
-  push_i64(rt, b0 | (b1 << 8))
+  rt.stack.unsafe_set(rt.stack_top, b0 | (b1 << 8))
+  rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_i64_load32_s(rt : Runtime) -> RetCode {
+fn op_i64_load32_s(rt : Runtime) -> Unit {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
-  let base = rt.pop_i32().to_uint64()
+  rt.stack_top -= 1
+  let base = rt.stack.unsafe_get(rt.stack_top)
   let effective_addr = base + offset
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_int64()
@@ -251,36 +305,44 @@ fn op_i64_load32_s(rt : Runtime) -> RetCode {
   } else {
     value32
   }
-  push_i64(rt, value.reinterpret_as_uint64())
+  rt.stack.unsafe_set(rt.stack_top, value.reinterpret_as_uint64())
+  rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_i64_load32_u(rt : Runtime) -> RetCode {
+fn op_i64_load32_u(rt : Runtime) -> Unit {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
-  let base = rt.pop_i32().to_uint64()
+  rt.stack_top -= 1
+  let base = rt.stack.unsafe_get(rt.stack_top)
   let effective_addr = base + offset
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_uint64()
   let b1 = rt.memory[addr + 1].to_uint64()
   let b2 = rt.memory[addr + 2].to_uint64()
   let b3 = rt.memory[addr + 3].to_uint64()
-  push_i64(rt, b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
+  rt.stack.unsafe_set(rt.stack_top, b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
+  rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_f32_load(rt : Runtime) -> RetCode {
+fn op_f32_load(rt : Runtime) -> Unit {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
-  let base = rt.pop_i32().to_uint64()
+  rt.stack_top -= 1
+  let base = rt.stack.unsafe_get(rt.stack_top)
   let effective_addr = base + offset
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_uint()
@@ -288,18 +350,22 @@ fn op_f32_load(rt : Runtime) -> RetCode {
   let b2 = rt.memory[addr + 2].to_uint()
   let b3 = rt.memory[addr + 3].to_uint()
   let bits = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
-  push_f32(rt, Float::reinterpret_from_uint(bits))
+  rt.stack.unsafe_set(rt.stack_top, bits.to_uint64())
+  rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_f64_load(rt : Runtime) -> RetCode {
+fn op_f64_load(rt : Runtime) -> Unit {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
-  let base = rt.pop_i32().to_uint64()
+  rt.stack_top -= 1
+  let base = rt.stack.unsafe_get(rt.stack_top)
   let effective_addr = base + offset
   if effective_addr + 8UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   let b0 = rt.memory[addr].to_uint64()
@@ -318,19 +384,24 @@ fn op_f64_load(rt : Runtime) -> RetCode {
     (b5 << 40) |
     (b6 << 48) |
     (b7 << 56)
-  push_f64(rt, bits.reinterpret_as_double())
+  rt.stack.unsafe_set(rt.stack_top, bits)
+  rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_f32_store(rt : Runtime) -> RetCode {
+fn op_f32_store(rt : Runtime) -> Unit {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
-  let value = rt.pop_f32().reinterpret_as_uint()
-  let base = rt.pop_i32().to_uint64()
+  rt.stack_top -= 1
+  let value = rt.stack.unsafe_get(rt.stack_top).to_uint()
+  rt.stack_top -= 1
+  let base = rt.stack.unsafe_get(rt.stack_top)
   let effective_addr = base + offset
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFU).to_byte()
@@ -338,17 +409,21 @@ fn op_f32_store(rt : Runtime) -> RetCode {
   rt.memory[addr + 2] = ((value >> 16) & 0xFFU).to_byte()
   rt.memory[addr + 3] = ((value >> 24) & 0xFFU).to_byte()
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_f64_store(rt : Runtime) -> RetCode {
+fn op_f64_store(rt : Runtime) -> Unit {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
-  let value = rt.pop_f64().reinterpret_as_uint64()
-  let base = rt.pop_i32().to_uint64()
+  rt.stack_top -= 1
+  let value = rt.stack.unsafe_get(rt.stack_top)
+  rt.stack_top -= 1
+  let base = rt.stack.unsafe_get(rt.stack_top)
   let effective_addr = base + offset
   if effective_addr + 8UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFUL).to_byte()
@@ -360,81 +435,101 @@ fn op_f64_store(rt : Runtime) -> RetCode {
   rt.memory[addr + 6] = ((value >> 48) & 0xFFUL).to_byte()
   rt.memory[addr + 7] = ((value >> 56) & 0xFFUL).to_byte()
   rt.pc += 1
-  OK
+  ()
 }
 
 // Narrow store operations
 
 ///|
-fn op_i32_store8(rt : Runtime) -> RetCode {
+fn op_i32_store8(rt : Runtime) -> Unit {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
-  let value = rt.pop_i32()
-  let base = rt.pop_i32().to_uint64()
+  rt.stack_top -= 1
+  let value = rt.stack.unsafe_get(rt.stack_top).to_uint()
+  rt.stack_top -= 1
+  let base = rt.stack.unsafe_get(rt.stack_top)
   let effective_addr = base + offset
   if effective_addr + 1UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFU).to_byte()
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_i32_store16(rt : Runtime) -> RetCode {
+fn op_i32_store16(rt : Runtime) -> Unit {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
-  let value = rt.pop_i32()
-  let base = rt.pop_i32().to_uint64()
+  rt.stack_top -= 1
+  let value = rt.stack.unsafe_get(rt.stack_top).to_uint()
+  rt.stack_top -= 1
+  let base = rt.stack.unsafe_get(rt.stack_top)
   let effective_addr = base + offset
   if effective_addr + 2UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFU).to_byte()
   rt.memory[addr + 1] = ((value >> 8) & 0xFFU).to_byte()
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_i64_store8(rt : Runtime) -> RetCode {
+fn op_i64_store8(rt : Runtime) -> Unit {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
-  let value = rt.pop_i64()
-  let base = rt.pop_i32().to_uint64()
+  rt.stack_top -= 1
+  let value = rt.stack.unsafe_get(rt.stack_top)
+  rt.stack_top -= 1
+  let base = rt.stack.unsafe_get(rt.stack_top)
   let effective_addr = base + offset
   if effective_addr + 1UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFUL).to_byte()
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_i64_store16(rt : Runtime) -> RetCode {
+fn op_i64_store16(rt : Runtime) -> Unit {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
-  let value = rt.pop_i64()
-  let base = rt.pop_i32().to_uint64()
+  rt.stack_top -= 1
+  let value = rt.stack.unsafe_get(rt.stack_top)
+  rt.stack_top -= 1
+  let base = rt.stack.unsafe_get(rt.stack_top)
   let effective_addr = base + offset
   if effective_addr + 2UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFUL).to_byte()
   rt.memory[addr + 1] = ((value >> 8) & 0xFFUL).to_byte()
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_i64_store32(rt : Runtime) -> RetCode {
+fn op_i64_store32(rt : Runtime) -> Unit {
   let offset = rt.read_imm_idx().reinterpret_as_uint().to_uint64()
-  let value = rt.pop_i64()
-  let base = rt.pop_i32().to_uint64()
+  rt.stack_top -= 1
+  let value = rt.stack.unsafe_get(rt.stack_top)
+  rt.stack_top -= 1
+  let base = rt.stack.unsafe_get(rt.stack_top)
   let effective_addr = base + offset
   if effective_addr + 4UL > rt.memory.length().reinterpret_as_uint().to_uint64() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
   let addr = effective_addr.reinterpret_as_int64().to_int()
   rt.memory[addr] = (value & 0xFFUL).to_byte()
@@ -442,7 +537,7 @@ fn op_i64_store32(rt : Runtime) -> RetCode {
   rt.memory[addr + 2] = ((value >> 16) & 0xFFUL).to_byte()
   rt.memory[addr + 3] = ((value >> 24) & 0xFFUL).to_byte()
   rt.pc += 1
-  OK
+  ()
 }
 
 // Memory size and grow operations
@@ -452,24 +547,33 @@ fn op_i64_store32(rt : Runtime) -> RetCode {
 let wasm_page_size : Int = 65536
 
 ///|
-fn op_memory_size(rt : Runtime) -> RetCode {
+fn op_memory_size(rt : Runtime) -> Unit {
   // Return current memory size in pages
   let size_in_pages = rt.memory.length() / wasm_page_size
-  push_i32(rt, size_in_pages.reinterpret_as_uint())
+  rt.stack.unsafe_set(
+    rt.stack_top,
+    size_in_pages.reinterpret_as_uint().to_uint64(),
+  )
+  rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_memory_grow(rt : Runtime) -> RetCode {
-  let delta_pages = rt.pop_i32().reinterpret_as_int()
+fn op_memory_grow(rt : Runtime) -> Unit {
+  rt.stack_top -= 1
+  let delta_pages = rt.stack
+    .unsafe_get(rt.stack_top)
+    .to_uint()
+    .reinterpret_as_int()
   let old_size_pages = rt.memory.length() / wasm_page_size
 
   // Check for overflow or negative delta
   if delta_pages < 0 {
-    push_i32(rt, 0xFFFFFFFFU) // -1 indicates failure
+    rt.stack.unsafe_set(rt.stack_top, 0xFFFFFFFFUL) // -1 indicates failure
+    rt.stack_top += 1
     rt.pc += 1
-    return OK
+    return
   }
   let new_size_pages = old_size_pages + delta_pages
 
@@ -480,9 +584,10 @@ fn op_memory_grow(rt : Runtime) -> RetCode {
     None => 65536 // No limit specified in module
   }
   if new_size_pages > max_pages {
-    push_i32(rt, 0xFFFFFFFFU) // -1 indicates failure
+    rt.stack.unsafe_set(rt.stack_top, 0xFFFFFFFFUL) // -1 indicates failure
+    rt.stack_top += 1
     rt.pc += 1
-    return OK
+    return
   }
 
   // Grow the memory by appending zero bytes
@@ -492,9 +597,13 @@ fn op_memory_grow(rt : Runtime) -> RetCode {
   }
 
   // Return old size in pages (success)
-  push_i32(rt, old_size_pages.reinterpret_as_uint())
+  rt.stack.unsafe_set(
+    rt.stack_top,
+    old_size_pages.reinterpret_as_uint().to_uint64(),
+  )
+  rt.stack_top += 1
   rt.pc += 1
-  OK
+  ()
 }
 
 // =============================================================================
@@ -502,10 +611,13 @@ fn op_memory_grow(rt : Runtime) -> RetCode {
 // =============================================================================
 
 ///|
-fn op_memory_copy(rt : Runtime) -> RetCode {
-  let n = rt.pop_i32().reinterpret_as_int()
-  let src = rt.pop_i32().reinterpret_as_int()
-  let dest = rt.pop_i32().reinterpret_as_int()
+fn op_memory_copy(rt : Runtime) -> Unit {
+  rt.stack_top -= 1
+  let n = rt.stack.unsafe_get(rt.stack_top).to_uint().reinterpret_as_int()
+  rt.stack_top -= 1
+  let src = rt.stack.unsafe_get(rt.stack_top).to_uint().reinterpret_as_int()
+  rt.stack_top -= 1
+  let dest = rt.stack.unsafe_get(rt.stack_top).to_uint().reinterpret_as_int()
 
   // Check bounds
   if src < 0 ||
@@ -513,7 +625,9 @@ fn op_memory_copy(rt : Runtime) -> RetCode {
     n < 0 ||
     src + n > rt.memory.length() ||
     dest + n > rt.memory.length() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
 
   // Handle overlapping regions correctly
@@ -531,18 +645,24 @@ fn op_memory_copy(rt : Runtime) -> RetCode {
     }
   }
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_memory_fill(rt : Runtime) -> RetCode {
-  let n = rt.pop_i32().reinterpret_as_int()
-  let val = rt.pop_i32().reinterpret_as_int() & 0xFF // Truncate to byte
-  let dest = rt.pop_i32().reinterpret_as_int()
+fn op_memory_fill(rt : Runtime) -> Unit {
+  rt.stack_top -= 1
+  let n = rt.stack.unsafe_get(rt.stack_top).to_uint().reinterpret_as_int()
+  rt.stack_top -= 1
+  let val = rt.stack.unsafe_get(rt.stack_top).to_uint().reinterpret_as_int() &
+    0xFF // Truncate to byte
+  rt.stack_top -= 1
+  let dest = rt.stack.unsafe_get(rt.stack_top).to_uint().reinterpret_as_int()
 
   // Check bounds
   if dest < 0 || n < 0 || dest + n > rt.memory.length() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
 
   // Fill memory
@@ -551,20 +671,24 @@ fn op_memory_fill(rt : Runtime) -> RetCode {
     rt.memory[dest + i] = byte_val
   }
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_memory_init(rt : Runtime) -> RetCode {
+fn op_memory_init(rt : Runtime) -> Unit {
   let data_idx = rt.read_imm_idx()
-  let n = rt.pop_i32().reinterpret_as_int()
-  let src = rt.pop_i32().reinterpret_as_int()
-  let dest = rt.pop_i32().reinterpret_as_int()
+  rt.stack_top -= 1
+  let n = rt.stack.unsafe_get(rt.stack_top).to_uint().reinterpret_as_int()
+  rt.stack_top -= 1
+  let src = rt.stack.unsafe_get(rt.stack_top).to_uint().reinterpret_as_int()
+  rt.stack_top -= 1
+  let dest = rt.stack.unsafe_get(rt.stack_top).to_uint().reinterpret_as_int()
 
   // Check data segment index
   if data_idx < 0 || data_idx >= rt.data_segments.length() {
     rt.error_detail = "unknown data segment"
-    return InvalidType
+    rt.status = Trap
+    return
   }
   let data = rt.data_segments[data_idx]
 
@@ -574,7 +698,9 @@ fn op_memory_init(rt : Runtime) -> RetCode {
     n < 0 ||
     src + n > data.length() ||
     dest + n > rt.memory.length() {
-    return MemoryOutOfBounds
+    rt.error_detail = "out of bounds memory access"
+    rt.status = Trap
+    return
   }
 
   // Copy from data segment to memory
@@ -582,21 +708,22 @@ fn op_memory_init(rt : Runtime) -> RetCode {
     rt.memory[dest + i] = data[src + i]
   }
   rt.pc += 1
-  OK
+  ()
 }
 
 ///|
-fn op_data_drop(rt : Runtime) -> RetCode {
+fn op_data_drop(rt : Runtime) -> Unit {
   let data_idx = rt.read_imm_idx()
 
   // Check data segment index
   if data_idx < 0 || data_idx >= rt.data_segments.length() {
     rt.error_detail = "unknown data segment"
-    return InvalidType
+    rt.status = Trap
+    return
   }
 
   // Drop the data segment (make it empty)
   rt.data_segments[data_idx] = []
   rt.pc += 1
-  OK
+  ()
 }

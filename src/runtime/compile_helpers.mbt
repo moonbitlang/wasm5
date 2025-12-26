@@ -241,7 +241,8 @@ fn Runtime::pop_arguments(
 ///|
 /// Push default values for declared locals onto the unified stack.
 /// Params are already on the stack - this only handles declared locals.
-fn Runtime::init_declared_locals(self : Runtime, code : @core.Code) -> RetCode {
+/// Sets status to Trap on error.
+fn Runtime::init_declared_locals(self : Runtime, code : @core.Code) -> Unit {
   for local_type in code.locals {
     match local_type {
       I32 | I64 | F32 | F64 => {
@@ -266,21 +267,22 @@ fn Runtime::init_declared_locals(self : Runtime, code : @core.Code) -> RetCode {
       }
       _ => {
         self.error_detail = "Unsupported local type: \{local_type}"
-        return UnsupportedLocalType
+        self.status = Trap
+        return
       }
     }
   }
-  OK
 }
 
 ///|
 /// Initialize locals for entry point (call_compiled, start function).
 /// Pushes args onto stack, then declared locals, and sets sp/num_locals.
+/// Sets status to Trap on error.
 fn Runtime::initialize_entry_locals(
   self : Runtime,
   args : Array[Value],
   code : @core.Code,
-) -> RetCode {
+) -> Unit {
   // sp points to start of locals (current stack position)
   self.sp = self.stack_top
 
@@ -291,42 +293,44 @@ fn Runtime::initialize_entry_locals(
   }
 
   // Push default values for declared locals
-  let result = self.init_declared_locals(code)
-  if result != OK {
-    return result
+  self.init_declared_locals(code)
+  if self.status == Trap {
+    return
   }
 
   // Set num_locals
   self.num_locals = args.length() + code.locals.length()
-  OK
 }
 
 ///|
-/// Check if two function type signatures match
+/// Check if two function type signatures match.
+/// Sets status to Trap on mismatch.
 fn check_type_signature_match(
   expected : @core.FuncType,
   actual : @core.FuncType,
   error_msg : String,
   rt : Runtime,
-) -> RetCode {
+) -> Unit {
   if expected.params.length() != actual.params.length() ||
     expected.results.length() != actual.results.length() {
     rt.error_detail = error_msg
-    return InvalidType
+    rt.status = Trap
+    return
   }
   for i in 0..<expected.params.length() {
     if expected.params[i] != actual.params[i] {
       rt.error_detail = error_msg
-      return InvalidType
+      rt.status = Trap
+      return
     }
   }
   for i in 0..<expected.results.length() {
     if expected.results[i] != actual.results[i] {
       rt.error_detail = error_msg
-      return InvalidType
+      rt.status = Trap
+      return
     }
   }
-  OK
 }
 
 ///|
@@ -353,16 +357,15 @@ fn Runtime::call_imported_function(
 ///|
 /// Handle return from a tail call to imported function.
 /// Results are already on stack, just restore caller state.
-fn Runtime::handle_tail_call_return(self : Runtime) -> RetCode {
+fn Runtime::handle_tail_call_return(self : Runtime) -> Unit {
   if self.call_stack.length() > 0 {
     let frame = self.call_stack.unsafe_pop()
     self.sp = frame.caller_sp
     self.num_locals = frame.caller_num_locals
     self.pc = frame.return_pc + 1
   } else {
-    self.running = false
+    self.status = Terminated
   }
-  OK
 }
 
 ///|
@@ -397,125 +400,6 @@ fn Runtime::read_imm_idx(self : Runtime) -> Int {
 //   - Unified locals and operand stack
 //   - Arguments stay in place during calls (zero-copy)
 // ============================================================================
-
-///|
-/// Value pair for binary i32 operations
-#valtype
-priv struct TwoI32(UInt, UInt)
-
-///|
-/// Value pair for binary i64 operations
-#valtype
-priv struct TwoI64(UInt64, UInt64)
-
-///|
-/// Value pair for binary f32 operations
-#valtype
-priv struct TwoF32(Float, Float)
-
-///|
-/// Value pair for binary f64 operations
-#valtype
-priv struct TwoF64(Double, Double)
-
-// ============================================================================
-// Stack pop operations (UInt64 -> typed value)
-// Uses indexed access with stack_top for O(1) operations on FixedArray
-// ============================================================================
-
-///|
-fn pop_i32(rt : Runtime) -> UInt {
-  rt.stack_top -= 1
-  (rt.stack.unsafe_get(rt.stack_top) & 0xFFFFFFFFUL).to_uint()
-}
-
-///|
-fn pop_two_i32(rt : Runtime) -> TwoI32 {
-  let b = pop_i32(rt)
-  let a = pop_i32(rt)
-  TwoI32(a, b)
-}
-
-///|
-fn pop_i64(rt : Runtime) -> UInt64 {
-  rt.stack_top -= 1
-  rt.stack.unsafe_get(rt.stack_top)
-}
-
-///|
-fn pop_two_i64(rt : Runtime) -> TwoI64 {
-  let b = pop_i64(rt)
-  let a = pop_i64(rt)
-  TwoI64(a, b)
-}
-
-///|
-fn pop_f32(rt : Runtime) -> Float {
-  rt.stack_top -= 1
-  let bits = (rt.stack.unsafe_get(rt.stack_top) & 0xFFFFFFFFUL).to_uint()
-  Float::reinterpret_from_uint(bits)
-}
-
-///|
-fn pop_two_f32(rt : Runtime) -> TwoF32 {
-  let b = pop_f32(rt)
-  let a = pop_f32(rt)
-  TwoF32(a, b)
-}
-
-///|
-fn pop_f64(rt : Runtime) -> Double {
-  rt.stack_top -= 1
-  rt.stack.unsafe_get(rt.stack_top).reinterpret_as_double()
-}
-
-///|
-fn pop_two_f64(rt : Runtime) -> TwoF64 {
-  let b = pop_f64(rt)
-  let a = pop_f64(rt)
-  TwoF64(a, b)
-}
-
-///|
-fn pop_ref(rt : Runtime) -> Int {
-  rt.stack_top -= 1
-  rt.stack.unsafe_get(rt.stack_top).reinterpret_as_int64().to_int()
-}
-
-// ============================================================================
-// Stack push operations (typed value -> UInt64)
-// Uses indexed access with stack_top for O(1) operations on FixedArray
-// ============================================================================
-
-///|
-fn push_i32(rt : Runtime, v : UInt) -> Unit {
-  rt.stack.unsafe_set(rt.stack_top, v.to_uint64())
-  rt.stack_top += 1
-}
-
-///|
-fn push_i64(rt : Runtime, v : UInt64) -> Unit {
-  rt.stack.unsafe_set(rt.stack_top, v)
-  rt.stack_top += 1
-}
-
-///|
-fn push_f32(rt : Runtime, v : Float) -> Unit {
-  rt.stack.unsafe_set(rt.stack_top, v.reinterpret_as_uint().to_uint64())
-  rt.stack_top += 1
-}
-
-///|
-fn push_f64(rt : Runtime, v : Double) -> Unit {
-  rt.stack.unsafe_set(rt.stack_top, v.reinterpret_as_uint64())
-  rt.stack_top += 1
-}
-
-///|
-fn push_ref(rt : Runtime, v : Int) -> Unit {
-  rt.stack.unsafe_set(rt.stack_top, v.to_int64().reinterpret_as_uint64())
-  rt.stack_top += 1
-}
 
 // ============================================================================
 // Value conversion helpers (for imported function interface)
@@ -570,47 +454,3 @@ fn value_to_stack(v : Value) -> UInt64 {
 // ============================================================================
 // Runtime stack helpers
 // ============================================================================
-
-///|
-fn Runtime::pop_two_i32(self : Runtime) -> (UInt, UInt) {
-  let TwoI32(a, b) = pop_two_i32(self)
-  (a, b)
-}
-
-///|
-fn Runtime::pop_i32(self : Runtime) -> UInt {
-  pop_i32(self)
-}
-
-///|
-fn Runtime::pop_two_i64(self : Runtime) -> (UInt64, UInt64) {
-  let TwoI64(a, b) = pop_two_i64(self)
-  (a, b)
-}
-
-///|
-fn Runtime::pop_i64(self : Runtime) -> UInt64 {
-  pop_i64(self)
-}
-
-///|
-fn Runtime::pop_f32(self : Runtime) -> Float {
-  pop_f32(self)
-}
-
-///|
-fn Runtime::pop_two_f32(self : Runtime) -> (Float, Float) {
-  let TwoF32(a, b) = pop_two_f32(self)
-  (a, b)
-}
-
-///|
-fn Runtime::pop_f64(self : Runtime) -> Double {
-  pop_f64(self)
-}
-
-///|
-fn Runtime::pop_two_f64(self : Runtime) -> (Double, Double) {
-  let TwoF64(a, b) = pop_two_f64(self)
-  (a, b)
-}

@@ -1,38 +1,15 @@
 ///|
-/// Return code for operations - simple integer enum for efficient ABI
-pub enum RetCode {
-  OK = 0
-  DivisionByZero = 1
-  IntegerOverflow = 2
-  MemoryOutOfBounds = 3
-  Unreachable = 4
-  InvalidType = 5
-  FunctionNotCompiled = 6
-  UnsupportedLocalType = 7
-  StackOverflow = 8
-} derive(Eq)
-
-///|
-/// Convert RetCode to RuntimeError using error_detail from Runtime
-fn RetCode::to_error(self : RetCode, detail : String) -> RuntimeError {
-  match self {
-    OK => abort("OK is not an error")
-    DivisionByZero => RuntimeError::DivisionByZero
-    IntegerOverflow => RuntimeError::IntegerOverflow
-    MemoryOutOfBounds => RuntimeError::MemoryOutOfBounds
-    Unreachable => RuntimeError::Unreachable
-    InvalidType => RuntimeError::InvalidType(detail)
-    FunctionNotCompiled => RuntimeError::FunctionNotCompiled(detail)
-    UnsupportedLocalType => RuntimeError::UnsupportedLocalType(detail)
-    StackOverflow => RuntimeError::StackOverflow
-  }
-}
+/// Runtime execution status
+pub enum RuntimeStatus {
+  Running
+  Terminated
+  Trap
+} derive(Eq, Show)
 
 ///|
 /// Intermediate instruction for threaded interpreter
-/// Operations return RetCode (0 = OK, non-zero = error)
 pub enum MInstr {
-  WasmInstr((Runtime) -> RetCode)
+  WasmInstr((Runtime) -> Unit)
   ImmediateI32(UInt)
   ImmediateIdx(Int)
 }
