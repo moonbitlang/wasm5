@@ -53,7 +53,7 @@ fn parse_instr_control(parser : Parser, opcode : Byte) -> @core.Instr? raise {
       let label_idx = parser.read_u32_leb128()
       Some(Rethrow(label_idx))
     }
-    0x0A => Some(Nop) // catch_all - just nop
+    0x0A => Some(ThrowRef)
     0x0B => Some(Nop) // delegate - should not be reached as instruction
     0x0C => Some(Br(parser.read_u32_leb128()))
     0x0D => Some(BrIf(parser.read_u32_leb128()))

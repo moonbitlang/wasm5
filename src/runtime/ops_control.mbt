@@ -889,6 +889,12 @@ fn op_throw(rt : Runtime) -> RetCode {
 }
 
 ///|
+fn op_throw_ref(rt : Runtime) -> RetCode {
+  rt.error_detail = "throw_ref not implemented"
+  InvalidType
+}
+
+///|
 fn op_rethrow(rt : Runtime) -> RetCode {
   let label_idx = rt.read_imm_idx()
   rt.error_detail = "rethrow not implemented for label \{label_idx}"

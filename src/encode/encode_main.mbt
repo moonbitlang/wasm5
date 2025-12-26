@@ -1117,6 +1117,7 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
       payload.push(0x08U.to_byte())
       append_bytes(payload, encode_u32_leb128(idx))
     }
+    ThrowRef => payload.push(0x0AU.to_byte())
     Rethrow(idx) => {
       payload.push(0x09U.to_byte())
       append_bytes(payload, encode_u32_leb128(idx))

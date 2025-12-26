@@ -197,6 +197,7 @@ pub(all) enum Instr {
   CallRef(UInt)
   ReturnCallRef(UInt)
   Throw(UInt)
+  ThrowRef
   Rethrow(UInt)
   Simd(SimdInstr)
   Atomic(AtomicInstr)

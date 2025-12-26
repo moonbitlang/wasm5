@@ -2244,6 +2244,23 @@ async test "wat encoder matches wasm-tools for rethrow" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for throw_ref" {
+  let wat =
+    #|(module
+    #|  (tag $e (param i32))
+    #|  (func (export "f") (param i32) (result i32)
+    #|    (block $out (result i32)
+    #|      (try_table (result i32)
+    #|        (catch_ref $e $out)
+    #|        local.get 0
+    #|        throw $e
+    #|        i32.const 0)
+    #|      throw_ref
+    #|      i32.const 1)))
+  assert_wat_matches("throw_ref", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for simd ops" {
   let wat =
     #|(module
