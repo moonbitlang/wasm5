@@ -342,7 +342,7 @@ fn table_index_type(table_type : @core.TableType) -> @core.ValType {
 /// - Constant instructions: i32.const, i64.const, f32.const, f64.const
 /// - Reference instructions: ref.null, ref.func
 /// - @core.Global access: global.get
-/// - Arithmetic: i32.add, i32.sub, i32.mul, i64.add, i64.sub, i64.mul
+/// - Numeric instructions (integer/float ops, conversions, sign-extend, trunc-sat)
 fn validate_const_expr_instructions(
   expr : @core.Expr,
 ) -> Unit raise ValidationError {
@@ -355,12 +355,150 @@ fn validate_const_expr_instructions(
       | RefNull(_)
       | RefFunc(_)
       | GlobalGet(_)
+      | I32Eqz
+      | I32Eq
+      | I32Ne
+      | I32LtS
+      | I32LtU
+      | I32GtS
+      | I32GtU
+      | I32LeS
+      | I32LeU
+      | I32GeS
+      | I32GeU
+      | I32Clz
+      | I32Ctz
+      | I32Popcnt
       | I32Add
       | I32Sub
       | I32Mul
+      | I32DivS
+      | I32DivU
+      | I32RemS
+      | I32RemU
+      | I32And
+      | I32Or
+      | I32Xor
+      | I32Shl
+      | I32ShrS
+      | I32ShrU
+      | I32Rotl
+      | I32Rotr
+      | I64Eqz
+      | I64Eq
+      | I64Ne
+      | I64LtS
+      | I64LtU
+      | I64GtS
+      | I64GtU
+      | I64LeS
+      | I64LeU
+      | I64GeS
+      | I64GeU
+      | I64Clz
+      | I64Ctz
+      | I64Popcnt
       | I64Add
       | I64Sub
-      | I64Mul => () // Valid constant expression instructions
+      | I64Mul
+      | I64DivS
+      | I64DivU
+      | I64RemS
+      | I64RemU
+      | I64And
+      | I64Or
+      | I64Xor
+      | I64Shl
+      | I64ShrS
+      | I64ShrU
+      | I64Rotl
+      | I64Rotr
+      | F32Eq
+      | F32Ne
+      | F32Lt
+      | F32Gt
+      | F32Le
+      | F32Ge
+      | F32Abs
+      | F32Neg
+      | F32Ceil
+      | F32Floor
+      | F32Trunc
+      | F32Nearest
+      | F32Sqrt
+      | F32Add
+      | F32Sub
+      | F32Mul
+      | F32Div
+      | F32Min
+      | F32Max
+      | F32Copysign
+      | F64Eq
+      | F64Ne
+      | F64Lt
+      | F64Gt
+      | F64Le
+      | F64Ge
+      | F64Abs
+      | F64Neg
+      | F64Ceil
+      | F64Floor
+      | F64Trunc
+      | F64Nearest
+      | F64Sqrt
+      | F64Add
+      | F64Sub
+      | F64Mul
+      | F64Div
+      | F64Min
+      | F64Max
+      | F64Copysign
+      | I32WrapI64
+      | I32TruncF32S
+      | I32TruncF32U
+      | I32TruncF64S
+      | I32TruncF64U
+      | I64ExtendI32S
+      | I64ExtendI32U
+      | I64TruncF32S
+      | I64TruncF32U
+      | I64TruncF64S
+      | I64TruncF64U
+      | F32ConvertI32S
+      | F32ConvertI32U
+      | F32ConvertI64S
+      | F32ConvertI64U
+      | F32DemoteF64
+      | F64ConvertI32S
+      | F64ConvertI32U
+      | F64ConvertI64S
+      | F64ConvertI64U
+      | F64PromoteF32
+      | I32ReinterpretF32
+      | I64ReinterpretF64
+      | F32ReinterpretI32
+      | F64ReinterpretI64
+      | I32Extend8S
+      | I32Extend16S
+      | I64Extend8S
+      | I64Extend16S
+      | I64Extend32S
+      | I32TruncSatF32S
+      | I32TruncSatF32U
+      | I32TruncSatF64S
+      | I32TruncSatF64U
+      | I64TruncSatF32S
+      | I64TruncSatF32U
+      | I64TruncSatF64S
+      | I64TruncSatF64U => () // Valid constant expression instructions
+      Simd(simd) =>
+        match simd.imm {
+          V128Const(_) => ()
+          _ =>
+            raise ValidationError::ConstantExpressionRequired(
+              "invalid instruction in constant expression: \{instr}",
+            )
+        }
       _ =>
         raise ValidationError::ConstantExpressionRequired(
           "invalid instruction in constant expression: \{instr}",

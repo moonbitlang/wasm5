@@ -540,6 +540,67 @@ pub fn Runtime::load_with_resolver(
 }
 
 ///|
+fn pop_i32_value(
+  stack : Array[Value],
+  context : String,
+) -> UInt raise RuntimeError {
+  match stack.unsafe_pop() {
+    I32(v) => v
+    _ =>
+      raise RuntimeError::UnsupportedInitExpression(
+        "type mismatch in \{context}",
+      )
+  }
+}
+
+///|
+fn pop_i64_value(
+  stack : Array[Value],
+  context : String,
+) -> UInt64 raise RuntimeError {
+  match stack.unsafe_pop() {
+    I64(v) => v
+    _ =>
+      raise RuntimeError::UnsupportedInitExpression(
+        "type mismatch in \{context}",
+      )
+  }
+}
+
+///|
+fn pop_f32_value(
+  stack : Array[Value],
+  context : String,
+) -> Float raise RuntimeError {
+  match stack.unsafe_pop() {
+    F32(v) => v
+    _ =>
+      raise RuntimeError::UnsupportedInitExpression(
+        "type mismatch in \{context}",
+      )
+  }
+}
+
+///|
+fn pop_f64_value(
+  stack : Array[Value],
+  context : String,
+) -> Double raise RuntimeError {
+  match stack.unsafe_pop() {
+    F64(v) => v
+    _ =>
+      raise RuntimeError::UnsupportedInitExpression(
+        "type mismatch in \{context}",
+      )
+  }
+}
+
+///|
+fn push_i32_bool(stack : Array[Value], value : Bool) -> Unit {
+  stack.push(I32(if value { 1U } else { 0U }))
+}
+
+///|
 fn eval_const_expr(
   expr : @core.Expr,
   globals : Array[Value],
@@ -567,73 +628,938 @@ fn eval_const_expr(
         }
         stack.push(globals[idx_int])
       }
-      // i32 arithmetic operations
+      I32Eqz => {
+        let a = pop_i32_value(stack, "i32.eqz")
+        push_i32_bool(stack, a == 0U)
+      }
+      I32Eq => {
+        let b = pop_i32_value(stack, "i32.eq")
+        let a = pop_i32_value(stack, "i32.eq")
+        push_i32_bool(stack, a == b)
+      }
+      I32Ne => {
+        let b = pop_i32_value(stack, "i32.ne")
+        let a = pop_i32_value(stack, "i32.ne")
+        push_i32_bool(stack, a != b)
+      }
+      I32LtS => {
+        let b = pop_i32_value(stack, "i32.lt_s")
+        let a = pop_i32_value(stack, "i32.lt_s")
+        push_i32_bool(stack, a.reinterpret_as_int() < b.reinterpret_as_int())
+      }
+      I32LtU => {
+        let b = pop_i32_value(stack, "i32.lt_u")
+        let a = pop_i32_value(stack, "i32.lt_u")
+        push_i32_bool(stack, a < b)
+      }
+      I32GtS => {
+        let b = pop_i32_value(stack, "i32.gt_s")
+        let a = pop_i32_value(stack, "i32.gt_s")
+        push_i32_bool(stack, a.reinterpret_as_int() > b.reinterpret_as_int())
+      }
+      I32GtU => {
+        let b = pop_i32_value(stack, "i32.gt_u")
+        let a = pop_i32_value(stack, "i32.gt_u")
+        push_i32_bool(stack, a > b)
+      }
+      I32LeS => {
+        let b = pop_i32_value(stack, "i32.le_s")
+        let a = pop_i32_value(stack, "i32.le_s")
+        push_i32_bool(stack, a.reinterpret_as_int() <= b.reinterpret_as_int())
+      }
+      I32LeU => {
+        let b = pop_i32_value(stack, "i32.le_u")
+        let a = pop_i32_value(stack, "i32.le_u")
+        push_i32_bool(stack, a <= b)
+      }
+      I32GeS => {
+        let b = pop_i32_value(stack, "i32.ge_s")
+        let a = pop_i32_value(stack, "i32.ge_s")
+        push_i32_bool(stack, a.reinterpret_as_int() >= b.reinterpret_as_int())
+      }
+      I32GeU => {
+        let b = pop_i32_value(stack, "i32.ge_u")
+        let a = pop_i32_value(stack, "i32.ge_u")
+        push_i32_bool(stack, a >= b)
+      }
+      I32Clz => {
+        let a = pop_i32_value(stack, "i32.clz")
+        stack.push(I32(a.clz().reinterpret_as_uint()))
+      }
+      I32Ctz => {
+        let a = pop_i32_value(stack, "i32.ctz")
+        stack.push(I32(a.ctz().reinterpret_as_uint()))
+      }
+      I32Popcnt => {
+        let a = pop_i32_value(stack, "i32.popcnt")
+        stack.push(I32(a.popcnt().reinterpret_as_uint()))
+      }
       I32Add => {
-        let b = stack.unsafe_pop()
-        let a = stack.unsafe_pop()
-        match (a, b) {
-          (I32(av), I32(bv)) => stack.push(I32(av + bv))
-          _ =>
-            raise RuntimeError::UnsupportedInitExpression(
-              "type mismatch in i32.add",
-            )
-        }
+        let b = pop_i32_value(stack, "i32.add")
+        let a = pop_i32_value(stack, "i32.add")
+        stack.push(I32(a + b))
       }
       I32Sub => {
-        let b = stack.unsafe_pop()
-        let a = stack.unsafe_pop()
-        match (a, b) {
-          (I32(av), I32(bv)) => stack.push(I32(av - bv))
-          _ =>
-            raise RuntimeError::UnsupportedInitExpression(
-              "type mismatch in i32.sub",
-            )
-        }
+        let b = pop_i32_value(stack, "i32.sub")
+        let a = pop_i32_value(stack, "i32.sub")
+        stack.push(I32(a - b))
       }
       I32Mul => {
-        let b = stack.unsafe_pop()
-        let a = stack.unsafe_pop()
-        match (a, b) {
-          (I32(av), I32(bv)) => stack.push(I32(av * bv))
-          _ =>
-            raise RuntimeError::UnsupportedInitExpression(
-              "type mismatch in i32.mul",
-            )
+        let b = pop_i32_value(stack, "i32.mul")
+        let a = pop_i32_value(stack, "i32.mul")
+        stack.push(I32(a * b))
+      }
+      I32DivS => {
+        let b = pop_i32_value(stack, "i32.div_s")
+        let a = pop_i32_value(stack, "i32.div_s")
+        if b == 0U {
+          raise RuntimeError::DivisionByZero
+        }
+        if a == 0x80000000U && b == 0xFFFFFFFFU {
+          raise RuntimeError::IntegerOverflow
+        }
+        let result = (a.reinterpret_as_int() / b.reinterpret_as_int()).reinterpret_as_uint()
+        stack.push(I32(result))
+      }
+      I32DivU => {
+        let b = pop_i32_value(stack, "i32.div_u")
+        let a = pop_i32_value(stack, "i32.div_u")
+        if b == 0U {
+          raise RuntimeError::DivisionByZero
+        }
+        stack.push(I32(a / b))
+      }
+      I32RemS => {
+        let b = pop_i32_value(stack, "i32.rem_s")
+        let a = pop_i32_value(stack, "i32.rem_s")
+        if b == 0U {
+          raise RuntimeError::DivisionByZero
+        }
+        if a == 0x80000000U && b == 0xFFFFFFFFU {
+          stack.push(I32(0U))
+        } else {
+          let result = (a.reinterpret_as_int() % b.reinterpret_as_int()).reinterpret_as_uint()
+          stack.push(I32(result))
         }
       }
-      // i64 arithmetic operations
-      I64Add => {
-        let b = stack.unsafe_pop()
-        let a = stack.unsafe_pop()
-        match (a, b) {
-          (I64(av), I64(bv)) => stack.push(I64(av + bv))
-          _ =>
-            raise RuntimeError::UnsupportedInitExpression(
-              "type mismatch in i64.add",
-            )
+      I32RemU => {
+        let b = pop_i32_value(stack, "i32.rem_u")
+        let a = pop_i32_value(stack, "i32.rem_u")
+        if b == 0U {
+          raise RuntimeError::DivisionByZero
         }
+        stack.push(I32(a % b))
+      }
+      I32And => {
+        let b = pop_i32_value(stack, "i32.and")
+        let a = pop_i32_value(stack, "i32.and")
+        stack.push(I32(a & b))
+      }
+      I32Or => {
+        let b = pop_i32_value(stack, "i32.or")
+        let a = pop_i32_value(stack, "i32.or")
+        stack.push(I32(a | b))
+      }
+      I32Xor => {
+        let b = pop_i32_value(stack, "i32.xor")
+        let a = pop_i32_value(stack, "i32.xor")
+        stack.push(I32(a ^ b))
+      }
+      I32Shl => {
+        let b = pop_i32_value(stack, "i32.shl")
+        let a = pop_i32_value(stack, "i32.shl")
+        let shift = (b & 0x1FU).reinterpret_as_int()
+        stack.push(I32(a << shift))
+      }
+      I32ShrS => {
+        let b = pop_i32_value(stack, "i32.shr_s")
+        let a = pop_i32_value(stack, "i32.shr_s")
+        let shift = (b & 0x1FU).reinterpret_as_int()
+        let result = (a.reinterpret_as_int() >> shift).reinterpret_as_uint()
+        stack.push(I32(result))
+      }
+      I32ShrU => {
+        let b = pop_i32_value(stack, "i32.shr_u")
+        let a = pop_i32_value(stack, "i32.shr_u")
+        let shift = (b & 0x1FU).reinterpret_as_int()
+        stack.push(I32(a >> shift))
+      }
+      I32Rotl => {
+        let b = pop_i32_value(stack, "i32.rotl")
+        let a = pop_i32_value(stack, "i32.rotl")
+        let rotation = (b & 0x1FU).reinterpret_as_int()
+        let result = (a << rotation) | (a >> (32 - rotation))
+        stack.push(I32(result))
+      }
+      I32Rotr => {
+        let b = pop_i32_value(stack, "i32.rotr")
+        let a = pop_i32_value(stack, "i32.rotr")
+        let rotation = (b & 0x1FU).reinterpret_as_int()
+        let result = (a >> rotation) | (a << (32 - rotation))
+        stack.push(I32(result))
+      }
+      I32Extend8S => {
+        let a = pop_i32_value(stack, "i32.extend8_s")
+        let byte = a & 0xFFU
+        let result = if (byte & 0x80U) != 0U {
+          byte | 0xFFFFFF00U
+        } else {
+          byte
+        }
+        stack.push(I32(result))
+      }
+      I32Extend16S => {
+        let a = pop_i32_value(stack, "i32.extend16_s")
+        let half = a & 0xFFFFU
+        let result = if (half & 0x8000U) != 0U {
+          half | 0xFFFF0000U
+        } else {
+          half
+        }
+        stack.push(I32(result))
+      }
+      I64Eqz => {
+        let a = pop_i64_value(stack, "i64.eqz")
+        push_i32_bool(stack, a == 0UL)
+      }
+      I64Eq => {
+        let b = pop_i64_value(stack, "i64.eq")
+        let a = pop_i64_value(stack, "i64.eq")
+        push_i32_bool(stack, a == b)
+      }
+      I64Ne => {
+        let b = pop_i64_value(stack, "i64.ne")
+        let a = pop_i64_value(stack, "i64.ne")
+        push_i32_bool(stack, a != b)
+      }
+      I64LtS => {
+        let b = pop_i64_value(stack, "i64.lt_s")
+        let a = pop_i64_value(stack, "i64.lt_s")
+        push_i32_bool(
+          stack,
+          a.reinterpret_as_int64() < b.reinterpret_as_int64(),
+        )
+      }
+      I64LtU => {
+        let b = pop_i64_value(stack, "i64.lt_u")
+        let a = pop_i64_value(stack, "i64.lt_u")
+        push_i32_bool(stack, a < b)
+      }
+      I64GtS => {
+        let b = pop_i64_value(stack, "i64.gt_s")
+        let a = pop_i64_value(stack, "i64.gt_s")
+        push_i32_bool(
+          stack,
+          a.reinterpret_as_int64() > b.reinterpret_as_int64(),
+        )
+      }
+      I64GtU => {
+        let b = pop_i64_value(stack, "i64.gt_u")
+        let a = pop_i64_value(stack, "i64.gt_u")
+        push_i32_bool(stack, a > b)
+      }
+      I64LeS => {
+        let b = pop_i64_value(stack, "i64.le_s")
+        let a = pop_i64_value(stack, "i64.le_s")
+        push_i32_bool(
+          stack,
+          a.reinterpret_as_int64() <= b.reinterpret_as_int64(),
+        )
+      }
+      I64LeU => {
+        let b = pop_i64_value(stack, "i64.le_u")
+        let a = pop_i64_value(stack, "i64.le_u")
+        push_i32_bool(stack, a <= b)
+      }
+      I64GeS => {
+        let b = pop_i64_value(stack, "i64.ge_s")
+        let a = pop_i64_value(stack, "i64.ge_s")
+        push_i32_bool(
+          stack,
+          a.reinterpret_as_int64() >= b.reinterpret_as_int64(),
+        )
+      }
+      I64GeU => {
+        let b = pop_i64_value(stack, "i64.ge_u")
+        let a = pop_i64_value(stack, "i64.ge_u")
+        push_i32_bool(stack, a >= b)
+      }
+      I64Clz => {
+        let a = pop_i64_value(stack, "i64.clz")
+        stack.push(I64(a.clz().to_uint64()))
+      }
+      I64Ctz => {
+        let a = pop_i64_value(stack, "i64.ctz")
+        stack.push(I64(a.ctz().to_uint64()))
+      }
+      I64Popcnt => {
+        let a = pop_i64_value(stack, "i64.popcnt")
+        stack.push(I64(a.popcnt().to_uint64()))
+      }
+      I64Add => {
+        let b = pop_i64_value(stack, "i64.add")
+        let a = pop_i64_value(stack, "i64.add")
+        stack.push(I64(a + b))
       }
       I64Sub => {
-        let b = stack.unsafe_pop()
-        let a = stack.unsafe_pop()
-        match (a, b) {
-          (I64(av), I64(bv)) => stack.push(I64(av - bv))
-          _ =>
-            raise RuntimeError::UnsupportedInitExpression(
-              "type mismatch in i64.sub",
-            )
-        }
+        let b = pop_i64_value(stack, "i64.sub")
+        let a = pop_i64_value(stack, "i64.sub")
+        stack.push(I64(a - b))
       }
       I64Mul => {
-        let b = stack.unsafe_pop()
-        let a = stack.unsafe_pop()
-        match (a, b) {
-          (I64(av), I64(bv)) => stack.push(I64(av * bv))
-          _ =>
-            raise RuntimeError::UnsupportedInitExpression(
-              "type mismatch in i64.mul",
-            )
+        let b = pop_i64_value(stack, "i64.mul")
+        let a = pop_i64_value(stack, "i64.mul")
+        stack.push(I64(a * b))
+      }
+      I64DivS => {
+        let b = pop_i64_value(stack, "i64.div_s")
+        let a = pop_i64_value(stack, "i64.div_s")
+        if b == 0UL {
+          raise RuntimeError::DivisionByZero
         }
+        if a == 0x8000000000000000UL && b == 0xFFFFFFFFFFFFFFFFUL {
+          raise RuntimeError::IntegerOverflow
+        }
+        let result = (a.reinterpret_as_int64() / b.reinterpret_as_int64()).reinterpret_as_uint64()
+        stack.push(I64(result))
+      }
+      I64DivU => {
+        let b = pop_i64_value(stack, "i64.div_u")
+        let a = pop_i64_value(stack, "i64.div_u")
+        if b == 0UL {
+          raise RuntimeError::DivisionByZero
+        }
+        stack.push(I64(a / b))
+      }
+      I64RemS => {
+        let b = pop_i64_value(stack, "i64.rem_s")
+        let a = pop_i64_value(stack, "i64.rem_s")
+        if b == 0UL {
+          raise RuntimeError::DivisionByZero
+        }
+        if a == 0x8000000000000000UL && b == 0xFFFFFFFFFFFFFFFFUL {
+          stack.push(I64(0UL))
+        } else {
+          let result = (a.reinterpret_as_int64() % b.reinterpret_as_int64()).reinterpret_as_uint64()
+          stack.push(I64(result))
+        }
+      }
+      I64RemU => {
+        let b = pop_i64_value(stack, "i64.rem_u")
+        let a = pop_i64_value(stack, "i64.rem_u")
+        if b == 0UL {
+          raise RuntimeError::DivisionByZero
+        }
+        stack.push(I64(a % b))
+      }
+      I64And => {
+        let b = pop_i64_value(stack, "i64.and")
+        let a = pop_i64_value(stack, "i64.and")
+        stack.push(I64(a & b))
+      }
+      I64Or => {
+        let b = pop_i64_value(stack, "i64.or")
+        let a = pop_i64_value(stack, "i64.or")
+        stack.push(I64(a | b))
+      }
+      I64Xor => {
+        let b = pop_i64_value(stack, "i64.xor")
+        let a = pop_i64_value(stack, "i64.xor")
+        stack.push(I64(a ^ b))
+      }
+      I64Shl => {
+        let b = pop_i64_value(stack, "i64.shl")
+        let a = pop_i64_value(stack, "i64.shl")
+        let shift = (b & 0x3FUL).to_int()
+        stack.push(I64(a << shift))
+      }
+      I64ShrS => {
+        let b = pop_i64_value(stack, "i64.shr_s")
+        let a = pop_i64_value(stack, "i64.shr_s")
+        let shift = (b & 0x3FUL).to_int()
+        let result = (a.reinterpret_as_int64() >> shift).reinterpret_as_uint64()
+        stack.push(I64(result))
+      }
+      I64ShrU => {
+        let b = pop_i64_value(stack, "i64.shr_u")
+        let a = pop_i64_value(stack, "i64.shr_u")
+        let shift = (b & 0x3FUL).to_int()
+        stack.push(I64(a >> shift))
+      }
+      I64Rotl => {
+        let b = pop_i64_value(stack, "i64.rotl")
+        let a = pop_i64_value(stack, "i64.rotl")
+        let rotation = (b & 0x3FUL).to_int()
+        let result = (a << rotation) | (a >> (64 - rotation))
+        stack.push(I64(result))
+      }
+      I64Rotr => {
+        let b = pop_i64_value(stack, "i64.rotr")
+        let a = pop_i64_value(stack, "i64.rotr")
+        let rotation = (b & 0x3FUL).to_int()
+        let result = (a >> rotation) | (a << (64 - rotation))
+        stack.push(I64(result))
+      }
+      I64Extend8S => {
+        let a = pop_i64_value(stack, "i64.extend8_s")
+        let byte = a & 0xFFUL
+        let result = if (byte & 0x80UL) != 0UL {
+          byte | 0xFFFFFFFFFFFFFF00UL
+        } else {
+          byte
+        }
+        stack.push(I64(result))
+      }
+      I64Extend16S => {
+        let a = pop_i64_value(stack, "i64.extend16_s")
+        let half = a & 0xFFFFUL
+        let result = if (half & 0x8000UL) != 0UL {
+          half | 0xFFFFFFFFFFFF0000UL
+        } else {
+          half
+        }
+        stack.push(I64(result))
+      }
+      I64Extend32S => {
+        let a = pop_i64_value(stack, "i64.extend32_s")
+        let word = a & 0xFFFFFFFFUL
+        let result = if (word & 0x80000000UL) != 0UL {
+          word | 0xFFFFFFFF00000000UL
+        } else {
+          word
+        }
+        stack.push(I64(result))
+      }
+      F32Eq => {
+        let b = pop_f32_value(stack, "f32.eq")
+        let a = pop_f32_value(stack, "f32.eq")
+        push_i32_bool(stack, a == b)
+      }
+      F32Ne => {
+        let b = pop_f32_value(stack, "f32.ne")
+        let a = pop_f32_value(stack, "f32.ne")
+        push_i32_bool(stack, a != b)
+      }
+      F32Lt => {
+        let b = pop_f32_value(stack, "f32.lt")
+        let a = pop_f32_value(stack, "f32.lt")
+        push_i32_bool(stack, a < b)
+      }
+      F32Gt => {
+        let b = pop_f32_value(stack, "f32.gt")
+        let a = pop_f32_value(stack, "f32.gt")
+        push_i32_bool(stack, a > b)
+      }
+      F32Le => {
+        let b = pop_f32_value(stack, "f32.le")
+        let a = pop_f32_value(stack, "f32.le")
+        push_i32_bool(stack, a <= b)
+      }
+      F32Ge => {
+        let b = pop_f32_value(stack, "f32.ge")
+        let a = pop_f32_value(stack, "f32.ge")
+        push_i32_bool(stack, a >= b)
+      }
+      F32Abs => {
+        let a = pop_f32_value(stack, "f32.abs")
+        stack.push(F32(a.abs()))
+      }
+      F32Neg => {
+        let a = pop_f32_value(stack, "f32.neg")
+        stack.push(F32(-a))
+      }
+      F32Ceil => {
+        let a = pop_f32_value(stack, "f32.ceil")
+        stack.push(F32(canonicalize_f32(a.ceil())))
+      }
+      F32Floor => {
+        let a = pop_f32_value(stack, "f32.floor")
+        stack.push(F32(canonicalize_f32(a.floor())))
+      }
+      F32Trunc => {
+        let a = pop_f32_value(stack, "f32.trunc")
+        stack.push(F32(canonicalize_f32(a.trunc())))
+      }
+      F32Nearest => {
+        let a = pop_f32_value(stack, "f32.nearest")
+        stack.push(F32(canonicalize_f32(rintf(a))))
+      }
+      F32Sqrt => {
+        let a = pop_f32_value(stack, "f32.sqrt")
+        stack.push(F32(canonicalize_f32(a.sqrt())))
+      }
+      F32Add => {
+        let b = pop_f32_value(stack, "f32.add")
+        let a = pop_f32_value(stack, "f32.add")
+        stack.push(F32(canonicalize_f32(a + b)))
+      }
+      F32Sub => {
+        let b = pop_f32_value(stack, "f32.sub")
+        let a = pop_f32_value(stack, "f32.sub")
+        stack.push(F32(canonicalize_f32(a - b)))
+      }
+      F32Mul => {
+        let b = pop_f32_value(stack, "f32.mul")
+        let a = pop_f32_value(stack, "f32.mul")
+        stack.push(F32(canonicalize_f32(a * b)))
+      }
+      F32Div => {
+        let b = pop_f32_value(stack, "f32.div")
+        let a = pop_f32_value(stack, "f32.div")
+        stack.push(F32(canonicalize_f32(a / b)))
+      }
+      F32Min => {
+        let b = pop_f32_value(stack, "f32.min")
+        let a = pop_f32_value(stack, "f32.min")
+        let result = if a.is_nan() || b.is_nan() {
+          canonical_nan_f32
+        } else if a < b {
+          a
+        } else if b < a {
+          b
+        } else {
+          let a_bits = a.reinterpret_as_uint()
+          let b_bits = b.reinterpret_as_uint()
+          let sign_mask = 0x8000_0000U
+          if (a_bits & sign_mask) != 0U || (b_bits & sign_mask) != 0U {
+            if (a_bits & sign_mask) != 0U {
+              a
+            } else {
+              b
+            }
+          } else {
+            a
+          }
+        }
+        stack.push(F32(result))
+      }
+      F32Max => {
+        let b = pop_f32_value(stack, "f32.max")
+        let a = pop_f32_value(stack, "f32.max")
+        let result = if a.is_nan() || b.is_nan() {
+          canonical_nan_f32
+        } else if a > b {
+          a
+        } else if b > a {
+          b
+        } else {
+          let a_bits = a.reinterpret_as_uint()
+          let b_bits = b.reinterpret_as_uint()
+          let sign_mask = 0x8000_0000U
+          if (a_bits & sign_mask) == 0U || (b_bits & sign_mask) == 0U {
+            if (a_bits & sign_mask) == 0U {
+              a
+            } else {
+              b
+            }
+          } else {
+            a
+          }
+        }
+        stack.push(F32(result))
+      }
+      F32Copysign => {
+        let b = pop_f32_value(stack, "f32.copysign")
+        let a = pop_f32_value(stack, "f32.copysign")
+        let a_bits = a.reinterpret_as_uint()
+        let b_bits = b.reinterpret_as_uint()
+        let sign_mask = 0x8000_0000U
+        let result_bits = (a_bits & sign_mask.lnot()) | (b_bits & sign_mask)
+        stack.push(F32(Float::reinterpret_from_uint(result_bits)))
+      }
+      F64Eq => {
+        let b = pop_f64_value(stack, "f64.eq")
+        let a = pop_f64_value(stack, "f64.eq")
+        push_i32_bool(stack, a == b)
+      }
+      F64Ne => {
+        let b = pop_f64_value(stack, "f64.ne")
+        let a = pop_f64_value(stack, "f64.ne")
+        push_i32_bool(stack, a != b)
+      }
+      F64Lt => {
+        let b = pop_f64_value(stack, "f64.lt")
+        let a = pop_f64_value(stack, "f64.lt")
+        push_i32_bool(stack, a < b)
+      }
+      F64Gt => {
+        let b = pop_f64_value(stack, "f64.gt")
+        let a = pop_f64_value(stack, "f64.gt")
+        push_i32_bool(stack, a > b)
+      }
+      F64Le => {
+        let b = pop_f64_value(stack, "f64.le")
+        let a = pop_f64_value(stack, "f64.le")
+        push_i32_bool(stack, a <= b)
+      }
+      F64Ge => {
+        let b = pop_f64_value(stack, "f64.ge")
+        let a = pop_f64_value(stack, "f64.ge")
+        push_i32_bool(stack, a >= b)
+      }
+      F64Abs => {
+        let a = pop_f64_value(stack, "f64.abs")
+        stack.push(F64(a.abs()))
+      }
+      F64Neg => {
+        let a = pop_f64_value(stack, "f64.neg")
+        stack.push(F64(-a))
+      }
+      F64Ceil => {
+        let a = pop_f64_value(stack, "f64.ceil")
+        stack.push(F64(canonicalize_f64(a.ceil())))
+      }
+      F64Floor => {
+        let a = pop_f64_value(stack, "f64.floor")
+        stack.push(F64(canonicalize_f64(a.floor())))
+      }
+      F64Trunc => {
+        let a = pop_f64_value(stack, "f64.trunc")
+        stack.push(F64(canonicalize_f64(a.trunc())))
+      }
+      F64Nearest => {
+        let a = pop_f64_value(stack, "f64.nearest")
+        stack.push(F64(canonicalize_f64(rint(a))))
+      }
+      F64Sqrt => {
+        let a = pop_f64_value(stack, "f64.sqrt")
+        stack.push(F64(canonicalize_f64(a.sqrt())))
+      }
+      F64Add => {
+        let b = pop_f64_value(stack, "f64.add")
+        let a = pop_f64_value(stack, "f64.add")
+        stack.push(F64(canonicalize_f64(a + b)))
+      }
+      F64Sub => {
+        let b = pop_f64_value(stack, "f64.sub")
+        let a = pop_f64_value(stack, "f64.sub")
+        stack.push(F64(canonicalize_f64(a - b)))
+      }
+      F64Mul => {
+        let b = pop_f64_value(stack, "f64.mul")
+        let a = pop_f64_value(stack, "f64.mul")
+        stack.push(F64(canonicalize_f64(a * b)))
+      }
+      F64Div => {
+        let b = pop_f64_value(stack, "f64.div")
+        let a = pop_f64_value(stack, "f64.div")
+        stack.push(F64(canonicalize_f64(a / b)))
+      }
+      F64Min => {
+        let b = pop_f64_value(stack, "f64.min")
+        let a = pop_f64_value(stack, "f64.min")
+        let result = if a.is_nan() || b.is_nan() {
+          canonical_nan_f64
+        } else if a < b {
+          a
+        } else if b < a {
+          b
+        } else {
+          let a_bits = a.reinterpret_as_uint64()
+          let b_bits = b.reinterpret_as_uint64()
+          let sign_mask = 0x8000_0000_0000_0000UL
+          if (a_bits & sign_mask) != 0UL || (b_bits & sign_mask) != 0UL {
+            if (a_bits & sign_mask) != 0UL {
+              a
+            } else {
+              b
+            }
+          } else {
+            a
+          }
+        }
+        stack.push(F64(result))
+      }
+      F64Max => {
+        let b = pop_f64_value(stack, "f64.max")
+        let a = pop_f64_value(stack, "f64.max")
+        let result = if a.is_nan() || b.is_nan() {
+          canonical_nan_f64
+        } else if a > b {
+          a
+        } else if b > a {
+          b
+        } else {
+          let a_bits = a.reinterpret_as_uint64()
+          let b_bits = b.reinterpret_as_uint64()
+          let sign_mask = 0x8000_0000_0000_0000UL
+          if (a_bits & sign_mask) == 0UL || (b_bits & sign_mask) == 0UL {
+            if (a_bits & sign_mask) == 0UL {
+              a
+            } else {
+              b
+            }
+          } else {
+            a
+          }
+        }
+        stack.push(F64(result))
+      }
+      F64Copysign => {
+        let b = pop_f64_value(stack, "f64.copysign")
+        let a = pop_f64_value(stack, "f64.copysign")
+        let a_bits = a.reinterpret_as_uint64()
+        let b_bits = b.reinterpret_as_uint64()
+        let sign_mask = 0x8000_0000_0000_0000UL
+        let result_bits = (a_bits & sign_mask.lnot()) | (b_bits & sign_mask)
+        stack.push(F64(result_bits.reinterpret_as_double()))
+      }
+      I32WrapI64 => {
+        let v = pop_i64_value(stack, "i32.wrap_i64")
+        stack.push(I32((v & 0xFFFFFFFFUL).to_uint()))
+      }
+      I32TruncF32S => {
+        let a = pop_f32_value(stack, "i32.trunc_f32_s")
+        if a.is_nan() {
+          raise RuntimeError::IntegerOverflow
+        }
+        if a >= 2147483648.0 || a < -2147483648.0 {
+          raise RuntimeError::IntegerOverflow
+        }
+        stack.push(I32(a.to_int().reinterpret_as_uint()))
+      }
+      I32TruncF32U => {
+        let a = pop_f32_value(stack, "i32.trunc_f32_u")
+        if a.is_nan() {
+          raise RuntimeError::IntegerOverflow
+        }
+        if a >= 4294967296.0 || a <= -1.0 {
+          raise RuntimeError::IntegerOverflow
+        }
+        stack.push(I32(a.to_double().to_uint64().to_uint()))
+      }
+      I32TruncF64S => {
+        let a = pop_f64_value(stack, "i32.trunc_f64_s")
+        if a.is_nan() {
+          raise RuntimeError::IntegerOverflow
+        }
+        if a >= 2147483648.0 || a <= -2147483649.0 {
+          raise RuntimeError::IntegerOverflow
+        }
+        stack.push(I32(a.to_int().reinterpret_as_uint()))
+      }
+      I32TruncF64U => {
+        let a = pop_f64_value(stack, "i32.trunc_f64_u")
+        if a.is_nan() {
+          raise RuntimeError::IntegerOverflow
+        }
+        if a >= 4294967296.0 || a <= -1.0 {
+          raise RuntimeError::IntegerOverflow
+        }
+        stack.push(I32(a.to_uint64().to_uint()))
+      }
+      I64ExtendI32S => {
+        let a = pop_i32_value(stack, "i64.extend_i32_s")
+        let result = a.reinterpret_as_int().to_int64().reinterpret_as_uint64()
+        stack.push(I64(result))
+      }
+      I64ExtendI32U => {
+        let a = pop_i32_value(stack, "i64.extend_i32_u")
+        stack.push(I64(a.to_uint64()))
+      }
+      I64TruncF32S => {
+        let a = pop_f32_value(stack, "i64.trunc_f32_s").to_double()
+        if a.is_nan() {
+          raise RuntimeError::IntegerOverflow
+        }
+        if a >= 9223372036854775808.0 || a < -9223372036854775808.0 {
+          raise RuntimeError::IntegerOverflow
+        }
+        stack.push(I64(a.to_int64().reinterpret_as_uint64()))
+      }
+      I64TruncF32U => {
+        let a = pop_f32_value(stack, "i64.trunc_f32_u")
+        if a.is_nan() {
+          raise RuntimeError::IntegerOverflow
+        }
+        let a_double = a.to_double()
+        if a_double >= 18446744073709551616.0 || a_double <= -1.0 {
+          raise RuntimeError::IntegerOverflow
+        }
+        stack.push(I64(u64_from_f32(a)))
+      }
+      I64TruncF64S => {
+        let a = pop_f64_value(stack, "i64.trunc_f64_s")
+        if a.is_nan() {
+          raise RuntimeError::IntegerOverflow
+        }
+        if a >= 9223372036854775808.0 || a < -9223372036854775808.0 {
+          raise RuntimeError::IntegerOverflow
+        }
+        stack.push(I64(a.to_int64().reinterpret_as_uint64()))
+      }
+      I64TruncF64U => {
+        let a = pop_f64_value(stack, "i64.trunc_f64_u")
+        if a.is_nan() {
+          raise RuntimeError::IntegerOverflow
+        }
+        if a >= 18446744073709551616.0 || a <= -1.0 {
+          raise RuntimeError::IntegerOverflow
+        }
+        stack.push(I64(u64_from_f64(a)))
+      }
+      F32ConvertI32S => {
+        let a = pop_i32_value(stack, "f32.convert_i32_s").reinterpret_as_int()
+        stack.push(F32(Float::from_int(a)))
+      }
+      F32ConvertI32U => {
+        let a = pop_i32_value(stack, "f32.convert_i32_u")
+        stack.push(F32(Float::from_double(a.to_double())))
+      }
+      F32ConvertI64S => {
+        let a = pop_i64_value(stack, "f32.convert_i64_s").reinterpret_as_int64()
+        stack.push(F32(f32_from_i64(a)))
+      }
+      F32ConvertI64U => {
+        let a = pop_i64_value(stack, "f32.convert_i64_u")
+        stack.push(F32(f32_from_u64(a)))
+      }
+      F32DemoteF64 => {
+        let a = pop_f64_value(stack, "f32.demote_f64")
+        let result = Float::from_double(a)
+        stack.push(F32(canonicalize_f32(result)))
+      }
+      F64ConvertI32S => {
+        let a = pop_i32_value(stack, "f64.convert_i32_s").reinterpret_as_int()
+        stack.push(F64(a.to_double()))
+      }
+      F64ConvertI32U => {
+        let a = pop_i32_value(stack, "f64.convert_i32_u")
+        stack.push(F64(a.to_double()))
+      }
+      F64ConvertI64S => {
+        let a = pop_i64_value(stack, "f64.convert_i64_s").reinterpret_as_int64()
+        stack.push(F64(a.to_double()))
+      }
+      F64ConvertI64U => {
+        let a = pop_i64_value(stack, "f64.convert_i64_u")
+        stack.push(F64(a.to_double()))
+      }
+      F64PromoteF32 => {
+        let a = pop_f32_value(stack, "f64.promote_f32")
+        let result = a.to_double()
+        stack.push(F64(canonicalize_f64(result)))
+      }
+      I32ReinterpretF32 => {
+        let a = pop_f32_value(stack, "i32.reinterpret_f32")
+        stack.push(I32(a.reinterpret_as_uint()))
+      }
+      I64ReinterpretF64 => {
+        let a = pop_f64_value(stack, "i64.reinterpret_f64")
+        stack.push(I64(a.reinterpret_as_uint64()))
+      }
+      F32ReinterpretI32 => {
+        let a = pop_i32_value(stack, "f32.reinterpret_i32")
+        stack.push(F32(Float::reinterpret_from_uint(a)))
+      }
+      F64ReinterpretI64 => {
+        let a = pop_i64_value(stack, "f64.reinterpret_i64")
+        stack.push(F64(a.reinterpret_as_double()))
+      }
+      I32TruncSatF32S => {
+        let a = pop_f32_value(stack, "i32.trunc_sat_f32_s")
+        let result = if a.is_nan() {
+          0U
+        } else if a >= 2147483648.0 {
+          0x7FFFFFFFU
+        } else if a < -2147483648.0 {
+          0x80000000U
+        } else {
+          a.to_int().reinterpret_as_uint()
+        }
+        stack.push(I32(result))
+      }
+      I32TruncSatF32U => {
+        let a = pop_f32_value(stack, "i32.trunc_sat_f32_u")
+        let result = if a.is_nan() {
+          0U
+        } else if a >= 4294967296.0 {
+          0xFFFFFFFFU
+        } else if a <= -1.0 {
+          0U
+        } else {
+          a.to_double().to_uint64().to_uint()
+        }
+        stack.push(I32(result))
+      }
+      I32TruncSatF64S => {
+        let a = pop_f64_value(stack, "i32.trunc_sat_f64_s")
+        let result = if a.is_nan() {
+          0U
+        } else if a >= 2147483648.0 {
+          0x7FFFFFFFU
+        } else if a < -2147483648.0 {
+          0x80000000U
+        } else {
+          a.to_int().reinterpret_as_uint()
+        }
+        stack.push(I32(result))
+      }
+      I32TruncSatF64U => {
+        let a = pop_f64_value(stack, "i32.trunc_sat_f64_u")
+        let result = if a.is_nan() {
+          0U
+        } else if a >= 4294967296.0 {
+          0xFFFFFFFFU
+        } else if a <= -1.0 {
+          0U
+        } else {
+          a.to_uint64().to_uint()
+        }
+        stack.push(I32(result))
+      }
+      I64TruncSatF32S => {
+        let a = pop_f32_value(stack, "i64.trunc_sat_f32_s").to_double()
+        let result = if a.is_nan() {
+          0UL
+        } else if a >= 9223372036854775808.0 {
+          0x7FFFFFFFFFFFFFFFUL
+        } else if a < -9223372036854775808.0 {
+          0x8000000000000000UL
+        } else {
+          a.to_int64().reinterpret_as_uint64()
+        }
+        stack.push(I64(result))
+      }
+      I64TruncSatF32U => {
+        let a = pop_f32_value(stack, "i64.trunc_sat_f32_u")
+        let a_double = a.to_double()
+        let result = if a.is_nan() {
+          0UL
+        } else if a_double >= 18446744073709551616.0 {
+          0xFFFFFFFFFFFFFFFFUL
+        } else if a_double <= -1.0 {
+          0UL
+        } else {
+          u64_from_f32(a)
+        }
+        stack.push(I64(result))
+      }
+      I64TruncSatF64S => {
+        let a = pop_f64_value(stack, "i64.trunc_sat_f64_s")
+        let result = if a.is_nan() {
+          0UL
+        } else if a >= 9223372036854775808.0 {
+          0x7FFFFFFFFFFFFFFFUL
+        } else if a < -9223372036854775808.0 {
+          0x8000000000000000UL
+        } else {
+          a.to_int64().reinterpret_as_uint64()
+        }
+        stack.push(I64(result))
+      }
+      I64TruncSatF64U => {
+        let a = pop_f64_value(stack, "i64.trunc_sat_f64_u")
+        let result = if a.is_nan() {
+          0UL
+        } else if a >= 18446744073709551616.0 {
+          0xFFFFFFFFFFFFFFFFUL
+        } else if a <= -1.0 {
+          0UL
+        } else {
+          u64_from_f64(a)
+        }
+        stack.push(I64(result))
       }
       _ =>
         raise RuntimeError::UnsupportedInitExpression(
