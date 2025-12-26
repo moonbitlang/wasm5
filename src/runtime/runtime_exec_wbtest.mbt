@@ -44,26 +44,13 @@ test "runtime compile start function" {
 
 ///|
 test "runtime execute error branches" {
-  let rt_unimpl = make_runtime([], [ImmediateI32(0U)], 0)
-  let rt_unimpl = { ..rt_unimpl, status: Running }
-  let mut saw_unimpl = false
-  let _ = execute(rt_unimpl) catch {
-    _ => {
-      saw_unimpl = true
-      rt_unimpl
-    }
+  // Test that Trap status causes RuntimeError
+  fn trap_func(rt : Runtime) -> Runtime {
+    rt.ctx.error_detail = "bad"
+    { ..rt, status: Trap }
   }
-  assert_eq(saw_unimpl, true)
-  let rt_err = make_runtime(
-    [],
-    [
-      WasmInstr(fn(rt) {
-        rt.ctx.error_detail = "bad"
-        { ..rt, status: Trap }
-      }),
-    ],
-    0,
-  )
+
+  let rt_err = make_runtime([], [unsafe_function_to_uint64(trap_func)], 0)
   let rt_err = { ..rt_err, status: Running }
   let mut saw_invalid = false
   let _ = execute(rt_err) catch {

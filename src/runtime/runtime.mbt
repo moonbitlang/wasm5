@@ -6,7 +6,6 @@ pub suberror RuntimeError {
   MemoryOutOfBounds
   InvalidType(String)
   FunctionNotFound(String)
-  UnimplementedInstruction(String) // Instruction not yet implemented
   Unreachable // Unreachable instruction executed
   FunctionNotCompiled(String) // Function not compiled
   UnsupportedInitExpression(String) // Unsupported init expression
@@ -246,7 +245,7 @@ let initial_stack_capacity : Int = 1024
 /// This is a value type containing hot fields for fast access.
 /// Cold data is accessed through the ctx reference.
 pub struct Runtime {
-  ops : FixedArray[MInstr] // Compiled instructions for execution
+  ops : FixedArray[UInt64] // Compiled instructions (tagless: fn ptrs and immediates as UInt64)
   stack : FixedArray[UInt64] // Unified stack for locals and operand stack (tagless)
   sp : Int // Current top of stack (next push position)
   bp : Int // Base pointer: index of first local in unified stack

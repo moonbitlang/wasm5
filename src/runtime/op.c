@@ -18,3 +18,10 @@ uint64_t u64_from_f64(double d) {
   return (uint64_t)(d);
 }
 
+uint64_t unsafe_function_to_uint64(void* func_ptr) {
+  return (uint64_t)(func_ptr);
+}
+
+void* unsafe_uint64_to_function(uint64_t u) {
+  return (void*)(u);
+}

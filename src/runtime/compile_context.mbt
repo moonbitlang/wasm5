@@ -6,13 +6,10 @@ pub enum RuntimeStatus {
   Trap
 } derive(Eq, Show)
 
-///|
-/// Intermediate instruction for threaded interpreter
-pub enum MInstr {
-  WasmInstr((Runtime) -> Runtime)
-  ImmediateI32(UInt)
-  ImmediateIdx(Int)
-}
+// MInstr is now represented as FixedArray[UInt64]:
+// - Function pointers: stored via unsafe_function_to_uint64
+// - ImmediateI32: stored as value.to_uint64()
+// - ImmediateIdx: stored as value.to_int64().reinterpret_as_uint64()
 
 ///|
 /// Call frame for function calls

@@ -19,9 +19,21 @@ fn empty_module() -> @core.Module {
 }
 
 ///|
+/// Convert Int to UInt64 for immediate index values in tests
+fn idx(value : Int) -> UInt64 {
+  value.to_int64().reinterpret_as_uint64()
+}
+
+///|
+/// Convert UInt to UInt64 for immediate i32 values in tests
+fn imm(value : UInt) -> UInt64 {
+  value.to_uint64()
+}
+
+///|
 fn make_runtime(
   stack : Array[Value],
-  ops : Array[MInstr],
+  ops : Array[UInt64],
   memory_size : Int,
 ) -> Runtime {
   // Convert Value array to UInt64 array and allocate fixed buffer
@@ -209,7 +221,7 @@ fn f64_bits(value : Double) -> UInt64 {
 
 ///|
 test "ops i32 const and arithmetic" {
-  let rt_const = make_runtime([], [ImmediateI32(0U), ImmediateI32(123U)], 0)
+  let rt_const = make_runtime([], [imm(0U), imm(123U)], 0)
   let rt_const = op_i32_const(rt_const)
   assert_ok(rt_const)
   assert_stack_elem_eq(rt_const.stack[0], Value::I32(123U))
@@ -304,7 +316,7 @@ test "ops i32 compare and unary" {
 test "ops i64 const and arithmetic" {
   let rt_const = make_runtime(
     [],
-    [ImmediateI32(0U), ImmediateI32(3U), ImmediateI32(2U)],
+    [imm(0U), imm(3U), imm(2U)],
     0,
   )
   let rt_const = op_i64_const(rt_const)
@@ -429,7 +441,7 @@ test "ops i32 error paths" {
 test "ops float const and arithmetic" {
   let rt_f32_const = make_runtime(
     [],
-    [ImmediateI32(0U), ImmediateI32(0x3F800000U)],
+    [imm(0U), imm(0x3F800000U)],
     0,
   )
   let rt_f32_const = op_f32_const(rt_f32_const)
@@ -437,7 +449,7 @@ test "ops float const and arithmetic" {
   assert_stack_elem_eq(rt_f32_const.stack[0], Value::F32(1.0))
   let rt_f64_const = make_runtime(
     [],
-    [ImmediateI32(0U), ImmediateI32(0x00000000U), ImmediateI32(0x3FF00000U)],
+    [imm(0U), imm(0x00000000U), imm(0x3FF00000U)],
     0,
   )
   let rt_f64_const = op_f64_const(rt_f64_const)
@@ -731,7 +743,7 @@ test "ops trunc sat f64 edge cases" {
 
 ///|
 test "ops memory load/store and size" {
-  let ops = [ImmediateIdx(0), ImmediateIdx(0)]
+  let ops = [idx(0), idx(0)]
   let rt = make_runtime([], ops, 16)
   let rt = push_value(rt, Value::I32(0U))
   let rt = push_value(rt, Value::I32(0x11223344U))
@@ -797,16 +809,16 @@ test "ops memory load/store and size" {
 
 ///|
 test "ops memory out of bounds and bulk ops" {
-  let rt_oob = make_runtime([], [ImmediateIdx(0), ImmediateIdx(8)], 8)
+  let rt_oob = make_runtime([], [idx(0), idx(8)], 8)
   let rt_oob = push_value(rt_oob, Value::I32(0U))
   let rt_oob = op_i32_load(rt_oob)
   assert_trap(rt_oob)
-  let rt_oob_store = make_runtime([], [ImmediateIdx(0), ImmediateIdx(8)], 8)
+  let rt_oob_store = make_runtime([], [idx(0), idx(8)], 8)
   let rt_oob_store = push_value(rt_oob_store, Value::I32(0U))
   let rt_oob_store = push_value(rt_oob_store, Value::I32(1U))
   let rt_oob_store = op_i32_store(rt_oob_store)
   assert_trap(rt_oob_store)
-  let rt_i64 = make_runtime([], [ImmediateIdx(0), ImmediateIdx(0)], 16)
+  let rt_i64 = make_runtime([], [idx(0), idx(0)], 16)
   let rt_i64 = push_value(rt_i64, Value::I32(0U))
   let rt_i64 = push_value(rt_i64, Value::I64(0x1122334455667788UL))
   let rt_i64 = op_i64_store(rt_i64)
@@ -852,7 +864,7 @@ test "ops memory out of bounds and bulk ops" {
     [[1U.to_byte(), 2U.to_byte(), 3U.to_byte()]],
   )
   let rt_init = Runtime::{
-    ops: FixedArray::from_array([ImmediateIdx(0), ImmediateIdx(0)]),
+    ops: FixedArray::from_array([idx(0), idx(0)]),
     stack: stack_init,
     sp: 3,
     bp: 0,
@@ -875,7 +887,7 @@ test "ops memory out of bounds and bulk ops" {
     [[1U.to_byte()]],
   )
   let rt_drop = Runtime::{
-    ops: FixedArray::from_array([ImmediateIdx(0), ImmediateIdx(0)]),
+    ops: FixedArray::from_array([idx(0), idx(0)]),
     stack: FixedArray::make(64, 0UL),
     sp: 0,
     bp: 0,

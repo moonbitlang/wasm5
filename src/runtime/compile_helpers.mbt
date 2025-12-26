@@ -401,16 +401,16 @@ priv struct ReadIdx {
 /// Read immediate i32 value and advance PC
 fn read_imm_i32(rt : Runtime) -> ReadI32 {
   let pc = rt.pc + 1
-  guard rt.ops.unsafe_get(pc) is ImmediateI32(value)
-  { rt: { ..rt, pc, }, value }
+  let value = rt.ops.unsafe_get(pc).to_uint()
+  { rt: { ..rt, pc }, value }
 }
 
 ///|
 /// Read immediate index value and advance PC
 fn read_imm_idx(rt : Runtime) -> ReadIdx {
   let pc = rt.pc + 1
-  guard rt.ops.unsafe_get(pc) is ImmediateIdx(value)
-  { rt: { ..rt, pc, }, value }
+  let value = rt.ops.unsafe_get(pc).reinterpret_as_int64().to_int()
+  { rt: { ..rt, pc }, value }
 }
 
 // ============================================================================
@@ -480,6 +480,8 @@ fn value_to_stack(v : Value) -> UInt64 {
   }
 }
 
-// ============================================================================
-// Runtime stack helpers
-// ============================================================================
+///|
+extern "C" fn unsafe_function_to_uint64(f : (Runtime) -> Runtime) -> UInt64 = "unsafe_function_to_uint64"
+
+///|
+extern "C" fn unsafe_uint64_to_function(u : UInt64) -> (Runtime) -> Runtime = "unsafe_uint64_to_function"

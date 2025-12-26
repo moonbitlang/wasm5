@@ -50,11 +50,7 @@ pub fn Runtime::compile(self : Runtime) -> Runtime raise RuntimeError {
 fn execute(rt : Runtime) -> Runtime raise RuntimeError {
   let mut rt : Runtime = { ..rt, status: Running }
   while rt.status == Running {
-    guard rt.ops.unsafe_get(rt.pc) is WasmInstr(f) else {
-      raise RuntimeError::UnimplementedInstruction(
-        "Expected instruction at PC \{rt.pc}",
-      )
-    }
+    let f = unsafe_uint64_to_function(rt.ops.unsafe_get(rt.pc))
     rt = f(rt)
   }
   if rt.status == Trap {
