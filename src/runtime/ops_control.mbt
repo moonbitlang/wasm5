@@ -240,38 +240,9 @@ fn op_br_on_non_null(rt : Runtime) -> Runtime {
 }
 
 ///|
-fn op_call(rt : Runtime) -> Runtime {
-  let func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
-
-  // Check if calling an imported function
-  if func_idx < num_imported_funcs {
-    // Get the imported function's type from the import descriptor
-    let type_idx = get_func_type_idx(
-      rt.ctx.module_,
-      func_idx,
-      num_imported_funcs,
-    )
-    if type_idx < 0 {
-      rt.ctx.error_detail = "call: invalid imported function index"
-      return { ..rt, status: Trap }
-    }
-    let func_type = match get_func_type_or_error(rt, type_idx, "call") {
-      Some(found) => found
-      None => return { ..rt, status: Trap }
-    }
-    let { rt, args } = pop_arguments(rt, func_type)
-    let rt = call_imported_function(
-      rt,
-      func_idx,
-      args,
-      func_type.results.length(),
-    )
-    return { ..rt, pc: rt.pc + 2 }
-  }
-
-  // Adjust index for local functions
-  let local_func_idx = func_idx - num_imported_funcs
+/// Call a local (module-defined) function. Immediate is local_func_idx (already adjusted).
+fn op_call_local(rt : Runtime) -> Runtime {
+  let local_func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let type_idx = rt.ctx.module_.funcs[local_func_idx].reinterpret_as_int()
   let func_type = match get_func_type_or_error(rt, type_idx, "call") {
     Some(found) => found
@@ -279,12 +250,11 @@ fn op_call(rt : Runtime) -> Runtime {
   }
   let code = rt.ctx.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
-    rt.ctx.error_detail = "Function not compiled: \{func_idx}"
+    rt.ctx.error_detail = "Function not compiled: local[\{local_func_idx}]"
     return { ..rt, status: Trap }
   }
 
   // Unified stack: arguments are already on stack, they become callee's first locals
-  // new_sp points to where arguments start (they stay in place!)
   let num_params = func_type.params.length()
   let new_sp = rt.sp - num_params
 
@@ -314,6 +284,30 @@ fn op_call(rt : Runtime) -> Runtime {
     num_locals: num_params + code.locals.length(),
     pc: callee_pc,
   }
+}
+
+///|
+/// Call an imported function. Immediate is the original func_idx.
+fn op_call_import(rt : Runtime) -> Runtime {
+  let func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
+  let type_idx = get_func_type_idx(rt.ctx.module_, func_idx, num_imported_funcs)
+  if type_idx < 0 {
+    rt.ctx.error_detail = "call: invalid imported function index"
+    return { ..rt, status: Trap }
+  }
+  let func_type = match get_func_type_or_error(rt, type_idx, "call") {
+    Some(found) => found
+    None => return { ..rt, status: Trap }
+  }
+  let { rt, args } = pop_arguments(rt, func_type)
+  let rt = call_imported_function(
+    rt,
+    func_idx,
+    args,
+    func_type.results.length(),
+  )
+  { ..rt, pc: rt.pc + 2 }
 }
 
 ///|
@@ -487,38 +481,9 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
 }
 
 ///|
-fn op_return_call(rt : Runtime) -> Runtime {
-  let func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
-
-  // Check if calling an imported function
-  if func_idx < num_imported_funcs {
-    // Get the imported function's type from the import descriptor
-    let type_idx = get_func_type_idx(
-      rt.ctx.module_,
-      func_idx,
-      num_imported_funcs,
-    )
-    if type_idx < 0 {
-      rt.ctx.error_detail = "return_call: invalid imported function index"
-      return { ..rt, status: Trap }
-    }
-    let func_type = match get_func_type_or_error(rt, type_idx, "return_call") {
-      Some(found) => found
-      None => return { ..rt, status: Trap }
-    }
-    let { rt, args } = pop_arguments(rt, func_type)
-    let rt = call_imported_function(
-      rt,
-      func_idx,
-      args,
-      func_type.results.length(),
-    )
-    return handle_tail_call_return(rt)
-  }
-
-  // Adjust index for local functions
-  let local_func_idx = func_idx - num_imported_funcs
+/// Tail call a local (module-defined) function. Immediate is local_func_idx.
+fn op_return_call_local(rt : Runtime) -> Runtime {
+  let local_func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let type_idx = rt.ctx.module_.funcs[local_func_idx].reinterpret_as_int()
   let func_type = match get_func_type_or_error(rt, type_idx, "return_call") {
     Some(found) => found
@@ -526,22 +491,23 @@ fn op_return_call(rt : Runtime) -> Runtime {
   }
   let code = rt.ctx.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
-    rt.ctx.error_detail = "Function not compiled: \{func_idx}"
+    rt.ctx.error_detail = "Function not compiled: local[\{local_func_idx}]"
     return { ..rt, status: Trap }
   }
+
   // Tail call: reuse current frame
-  // Move arguments in-place from stack top to sp position
+  // Move arguments in-place from stack top to bp position
   let num_params = func_type.params.length()
   let args_start = rt.sp - num_params
 
-  // Copy arguments to sp position (they become new locals)
+  // Copy arguments to bp position (they become new locals)
   if num_params > 0 && args_start > rt.bp {
     for i = 0; i < num_params; i = i + 1 {
       rt.stack.unsafe_set(rt.bp + i, rt.stack.unsafe_get(args_start + i))
     }
   }
 
-  // Trim stack to sp + num_params
+  // Trim stack to bp + num_params
   let rt = { ..rt, sp: rt.bp + num_params }
 
   // Push default values for declared locals
@@ -550,8 +516,32 @@ fn op_return_call(rt : Runtime) -> Runtime {
     return rt
   }
 
-  // Update num_locals (sp stays same)
+  // Update num_locals
   { ..rt, num_locals: num_params + code.locals.length(), pc: callee_pc }
+}
+
+///|
+/// Tail call an imported function. Immediate is the original func_idx.
+fn op_return_call_import(rt : Runtime) -> Runtime {
+  let func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
+  let type_idx = get_func_type_idx(rt.ctx.module_, func_idx, num_imported_funcs)
+  if type_idx < 0 {
+    rt.ctx.error_detail = "return_call: invalid imported function index"
+    return { ..rt, status: Trap }
+  }
+  let func_type = match get_func_type_or_error(rt, type_idx, "return_call") {
+    Some(found) => found
+    None => return { ..rt, status: Trap }
+  }
+  let { rt, args } = pop_arguments(rt, func_type)
+  let rt = call_imported_function(
+    rt,
+    func_idx,
+    args,
+    func_type.results.length(),
+  )
+  handle_tail_call_return(rt)
 }
 
 ///|

@@ -921,8 +921,15 @@ fn Compiler::compile_wasm_instr(
           ctx.push_type(result_type)
         }
       }
-      self.emit_fn(op_call)
-      self.emit_idx(func_idx_int)
+
+      // Emit appropriate op based on whether function is imported or local
+      if func_idx_int < num_imported {
+        self.emit_fn(op_call_import)
+        self.emit_idx(func_idx_int)
+      } else {
+        self.emit_fn(op_call_local)
+        self.emit_idx(func_idx_int - num_imported) // Emit local_func_idx
+      }
     }
     Return => {
       self.emit_fn(op_return)
@@ -1450,8 +1457,15 @@ fn Compiler::compile_wasm_instr(
         let func_type = require_func_type(self.module_, type_idx, "return_call")
         ctx.pop_types(func_type.params.length())
       }
-      self.emit_fn(op_return_call)
-      self.emit_idx(func_idx_int)
+
+      // Emit appropriate op based on whether function is imported or local
+      if func_idx_int < num_imported {
+        self.emit_fn(op_return_call_import)
+        self.emit_idx(func_idx_int)
+      } else {
+        self.emit_fn(op_return_call_local)
+        self.emit_idx(func_idx_int - num_imported) // Emit local_func_idx
+      }
     }
     ReturnCallIndirect(type_idx, table_idx) => {
       // Pop table index (i32)
