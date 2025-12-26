@@ -2212,6 +2212,22 @@ async test "wat encoder matches wasm-tools for try_table type order" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for try_table catch_ref" {
+  let wat =
+    #|(module
+    #|  (tag $e (param i32))
+    #|  (func (export "f") (param i32) (result i32)
+    #|    (block $out (result i32)
+    #|      (try_table (result i32)
+    #|        (catch_ref $e $out)
+    #|        (catch_all_ref $out)
+    #|        local.get 0
+    #|        throw $e
+    #|        i32.const 7))))
+  assert_wat_matches("try_table_catch_ref", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for simd ops" {
   let wat =
     #|(module
