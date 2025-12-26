@@ -546,6 +546,104 @@ test "wat parser rejects try_table catch_all_ref without label" {
 }
 
 ///|
+test "wat parser rejects try delegate unknown label" {
+  let wat =
+    #|(module
+    #|  (func (result i32)
+    #|    (block $out (result i32)
+    #|      try (result i32)
+    #|        i32.const 0
+    #|      delegate $missing)))
+  let mut saw_error = false
+  let _ = wat_to_module(wat) catch {
+    _ => {
+      saw_error = true
+      empty_module()
+    }
+  }
+  assert_eq(saw_error, true)
+}
+
+///|
+test "wat parser rejects try delegate label depth out of range" {
+  let wat =
+    #|(module
+    #|  (func (result i32)
+    #|    try (result i32)
+    #|      i32.const 0
+    #|    delegate 1))
+  let mut saw_error = false
+  let _ = wat_to_module(wat) catch {
+    _ => {
+      saw_error = true
+      empty_module()
+    }
+  }
+  assert_eq(saw_error, true)
+}
+
+///|
+test "wat parser rejects try_table catch label depth out of range" {
+  let wat =
+    #|(module
+    #|  (tag $e)
+    #|  (func (result i32)
+    #|    (block (result i32)
+    #|      (try_table (result i32)
+    #|        (catch $e 1)
+    #|        i32.const 0))))
+  let mut saw_error = false
+  let _ = wat_to_module(wat) catch {
+    _ => {
+      saw_error = true
+      empty_module()
+    }
+  }
+  assert_eq(saw_error, true)
+}
+
+///|
+test "wat parser rejects try_table catch unknown label" {
+  let wat =
+    #|(module
+    #|  (tag $e)
+    #|  (func (result i32)
+    #|    (block $out (result i32)
+    #|      (try_table (result i32)
+    #|        (catch $e $missing)
+    #|        i32.const 0))))
+  let mut saw_error = false
+  let _ = wat_to_module(wat) catch {
+    _ => {
+      saw_error = true
+      empty_module()
+    }
+  }
+  assert_eq(saw_error, true)
+}
+
+///|
+test "wat parser rejects rethrow label depth out of range" {
+  let wat =
+    #|(module
+    #|  (tag $e)
+    #|  (func (result i32)
+    #|    (block (result i32)
+    #|      (try_table (result i32)
+    #|        (catch $e 0)
+    #|        i32.const 0)
+    #|      rethrow 1)))
+  let mut saw_error = false
+  let _ = wat_to_module(wat) catch {
+    _ => {
+      saw_error = true
+      empty_module()
+    }
+  }
+  assert_eq(saw_error, true)
+}
+
+///|
 async test "wat encoder matches wasm-tools for data" {
   let wat =
     #|(module (memory (export "mem") 1) (data (i32.const 0) "hi"))
