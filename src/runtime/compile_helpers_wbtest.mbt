@@ -1,6 +1,6 @@
 ///|
 fn make_code(locals : Array[@core.ValType]) -> @core.Code {
-  { locals, body: @core.Expr::{ instrs: [] }, compiled: None }
+  { locals, body: @core.Expr::{ instrs: [] }, compiled: None, max_stack_height: 0 }
 }
 
 ///|
@@ -9,10 +9,10 @@ test "compile helpers initialize entry locals" {
   let code = make_code([I32, Ref(Func, true)])
   assert_ok(rt.initialize_entry_locals([Value::I32(9U)], code))
   // Check unified stack: [arg0=9, local0=0, local1=null_ref]
-  assert_eq(rt.stack.length(), 3)
-  assert_eq(rt.stack[0], 9UL) // arg
-  assert_eq(rt.stack[1], 0UL) // i32 local
-  assert_eq(rt.stack[2], (-1L).reinterpret_as_uint64()) // null ref
+  assert_eq(rt.stack_top, 3)
+  assert_eq(rt.stack.unsafe_get(0), 9UL) // arg
+  assert_eq(rt.stack.unsafe_get(1), 0UL) // i32 local
+  assert_eq(rt.stack.unsafe_get(2), (-1L).reinterpret_as_uint64()) // null ref
   assert_eq(rt.sp, 0)
   assert_eq(rt.num_locals, 3)
 }
@@ -72,7 +72,8 @@ test "compile helpers imported func result truncation" {
   let rt = Runtime::{
     module_: empty_module(),
     ops: [],
-    stack: [],
+    stack: FixedArray::make(64, 0UL),
+    stack_top: 0,
     sp: 0,
     num_locals: 0,
     pc: 0,
@@ -89,7 +90,8 @@ test "compile helpers imported func result truncation" {
     error_detail: "",
   }
   rt.call_imported_function(0, [], 1)
-  assert_eq(rt.stack, [1UL])
+  assert_eq(rt.stack_top, 1)
+  assert_eq(rt.stack.unsafe_get(0), 1UL)
 }
 
 ///|

@@ -5426,6 +5426,7 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
       locals: func.locals,
       body: @core.Expr::{ instrs, },
       compiled: None,
+      max_stack_height: 0,
     }
     codes.push(code)
   }

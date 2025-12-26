@@ -32,13 +32,14 @@ test "runtime compile start function" {
     locals: [I32],
     body: @core.Expr::{ instrs: [] },
     compiled: None,
+    max_stack_height: 0,
   }
   let module_ = module_with([func_type], [0U], [code], [], [], Some(0U))
   let rt = Runtime::load_with_resolver(module_, ImportResolver::new())
   rt.compile()
   assert_eq(rt.ops.length() > 0, true)
   // Stack is cleared after start function execution (unified stack model)
-  assert_eq(rt.stack.length(), 0)
+  assert_eq(rt.stack_top, 0)
 }
 
 ///|
@@ -122,6 +123,7 @@ test "runtime call compiled local errors" {
     locals: [V128],
     body: @core.Expr::{ instrs: [] },
     compiled: Some(0),
+    max_stack_height: 0,
   }
   let module_bad = module_with(
     [Func(func_type)],

@@ -831,10 +831,12 @@ fn Compiler::compile_wasm_instr(
     }
     BrOnNonNull(label) => {
       // br_on_non_null: branch if ref is not null
-      ctx.pop_type() // Pop the reference type
+      // Calculate arity and drop_count BEFORE popping the ref type,
+      // because at runtime the ref will be pushed back before the shuffle
       let label_int = label.reinterpret_as_int()
       let arity = ctx.get_branch_arity(label_int)
       let drop_count = ctx.calc_drop_count(label_int, arity)
+      ctx.pop_type() // Pop the reference type
       self.emit(WasmInstr(op_br_on_non_null))
       let target_pc_slot = self.ops.length()
       if ctx.is_loop_target(label_int) {

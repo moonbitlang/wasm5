@@ -550,7 +550,9 @@ fn handle_assert_return(
     let runtime_args = parse_args(args)
     guard ctx.runtime is Some(rt) else {
       ctx.fail(
-        line, "assert_return", "no module loaded (previous module failed to load)",
+        line,
+        "assert_return",
+        "[\{fn_name}] no module loaded (previous module failed to load)",
       )
       return
     }
@@ -560,7 +562,7 @@ fn handle_assert_return(
       ctx.fail(
         line,
         "assert_return",
-        "expected \{expected.length()} results, got \{results.length()}",
+        "[\{fn_name}] expected \{expected.length()} results, got \{results.length()}",
       )
       return
     }
@@ -571,12 +573,13 @@ fn handle_assert_return(
         ctx.fail(
           line,
           "assert_return",
-          "at result \{idx}: expected \{format_expected_with_bits(expected_value)}, got \{format_value_with_bits(results[idx])}",
+          "[\{fn_name}] result \{idx}: expected \{format_expected_with_bits(expected_value)}, got \{format_value_with_bits(results[idx])}",
         )
       }
     }
   } catch {
-    e => ctx.fail(line, "assert_return", "Test failed with error: \{e}")
+    e =>
+      ctx.fail(line, "assert_return", "[\{fn_name}] error: \{e}")
   }
 }
 
@@ -591,13 +594,15 @@ fn handle_assert_trap(
 ) -> Unit {
   let runtime_args = parse_args(args) catch {
     e => {
-      ctx.fail(line, "assert_trap", "Failed to parse args: \{e}")
+      ctx.fail(line, "assert_trap", "[\{fn_name}] failed to parse args: \{e}")
       return
     }
   }
   guard ctx.runtime is Some(rt) else {
     ctx.fail(
-      line, "assert_trap", "no module loaded (previous module failed to load)",
+      line,
+      "assert_trap",
+      "[\{fn_name}] no module loaded (previous module failed to load)",
     )
     return
   }
@@ -606,7 +611,7 @@ fn handle_assert_trap(
     ctx.fail(
       line,
       "assert_trap",
-      "expected trap '\{expected_error}' but no error occurred",
+      "[\{fn_name}] expected trap '\{expected_error}' but no error occurred",
     )
   } catch {
     @wasm5_runtime.RuntimeError::DivisionByZero =>
@@ -614,7 +619,7 @@ fn handle_assert_trap(
         ctx.fail(
           line,
           "assert_trap",
-          "expected trap '\{expected_error}' but got DivisionByZero",
+          "[\{fn_name}] expected '\{expected_error}' but got DivisionByZero",
         )
       }
     @wasm5_runtime.RuntimeError::IntegerOverflow =>
@@ -626,7 +631,7 @@ fn handle_assert_trap(
         ctx.fail(
           line,
           "assert_trap",
-          "expected trap '\{expected_error}' but got IntegerOverflow",
+          "[\{fn_name}] expected '\{expected_error}' but got IntegerOverflow",
         )
       }
     @wasm5_runtime.RuntimeError::MemoryOutOfBounds =>
@@ -634,7 +639,7 @@ fn handle_assert_trap(
         ctx.fail(
           line,
           "assert_trap",
-          "expected trap '\{expected_error}' but got MemoryOutOfBounds",
+          "[\{fn_name}] expected '\{expected_error}' but got MemoryOutOfBounds",
         )
       }
     @wasm5_runtime.RuntimeError::Unreachable =>
@@ -642,7 +647,7 @@ fn handle_assert_trap(
         ctx.fail(
           line,
           "assert_trap",
-          "expected trap '\{expected_error}' but got Unreachable",
+          "[\{fn_name}] expected '\{expected_error}' but got Unreachable",
         )
       }
     @wasm5_runtime.RuntimeError::InvalidType(msg) =>
@@ -652,7 +657,7 @@ fn handle_assert_trap(
           ctx.fail(
             line,
             "assert_trap",
-            "expected trap '\{expected_error}' but got table out of bounds",
+            "[\{fn_name}] expected '\{expected_error}' but got table out of bounds",
           )
         }
       } else if msg.contains("undefined element") {
@@ -660,7 +665,7 @@ fn handle_assert_trap(
           ctx.fail(
             line,
             "assert_trap",
-            "expected trap '\{expected_error}' but got undefined element",
+            "[\{fn_name}] expected '\{expected_error}' but got undefined element",
           )
         }
       } else if msg.contains("uninitialized element") {
@@ -668,7 +673,7 @@ fn handle_assert_trap(
           ctx.fail(
             line,
             "assert_trap",
-            "expected trap '\{expected_error}' but got uninitialized element",
+            "[\{fn_name}] expected '\{expected_error}' but got uninitialized element",
           )
         }
       } else if msg.contains("indirect call type mismatch") {
@@ -676,7 +681,7 @@ fn handle_assert_trap(
           ctx.fail(
             line,
             "assert_trap",
-            "expected trap '\{expected_error}' but got indirect call type mismatch",
+            "[\{fn_name}] expected '\{expected_error}' but got indirect call type mismatch",
           )
         }
       } else if msg.contains("null") && msg.contains("function reference") {
@@ -684,21 +689,21 @@ fn handle_assert_trap(
           ctx.fail(
             line,
             "assert_trap",
-            "expected trap '\{expected_error}' but got null function reference",
+            "[\{fn_name}] expected '\{expected_error}' but got null function reference",
           )
         }
       } else {
         ctx.fail(
           line,
           "assert_trap",
-          "expected trap '\{expected_error}' but got: InvalidType(\{msg})",
+          "[\{fn_name}] expected '\{expected_error}' but got: InvalidType(\{msg})",
         )
       }
     e =>
       ctx.fail(
         line,
         "assert_trap",
-        "expected trap '\{expected_error}' but got: \{e}",
+        "[\{fn_name}] expected '\{expected_error}' but got: \{e}",
       )
   }
 }

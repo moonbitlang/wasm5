@@ -2,8 +2,9 @@
 /// Local access uses unified stack: stack[sp + idx]
 fn op_local_get(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
-  let value = rt.stack[rt.sp + idx]
-  rt.stack.push(value)
+  let value = rt.stack.unsafe_get(rt.sp + idx)
+  rt.stack.unsafe_set(rt.stack_top, value)
+  rt.stack_top += 1
   rt.pc += 1
   OK
 }
@@ -11,8 +12,9 @@ fn op_local_get(rt : Runtime) -> RetCode {
 ///|
 fn op_local_set(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
-  let value = rt.stack.unsafe_pop()
-  rt.stack[rt.sp + idx] = value
+  rt.stack_top -= 1
+  let value = rt.stack.unsafe_get(rt.stack_top)
+  rt.stack.unsafe_set(rt.sp + idx, value)
   rt.pc += 1
   OK
 }
@@ -20,8 +22,8 @@ fn op_local_set(rt : Runtime) -> RetCode {
 ///|
 fn op_local_tee(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
-  let value = rt.stack[rt.stack.length() - 1]
-  rt.stack[rt.sp + idx] = value
+  let value = rt.stack.unsafe_get(rt.stack_top - 1)
+  rt.stack.unsafe_set(rt.sp + idx, value)
   rt.pc += 1
   OK
 }
@@ -32,7 +34,7 @@ fn op_local_tee(rt : Runtime) -> RetCode {
 
 ///|
 fn op_drop(rt : Runtime) -> RetCode {
-  let _ = rt.stack.unsafe_pop()
+  rt.stack_top -= 1
   rt.pc += 1
   OK
 }
@@ -40,9 +42,12 @@ fn op_drop(rt : Runtime) -> RetCode {
 ///|
 fn op_select(rt : Runtime) -> RetCode {
   let cond = rt.pop_i32()
-  let val2 = rt.stack.unsafe_pop()
-  let val1 = rt.stack.unsafe_pop()
-  rt.stack.push(if cond != 0U { val1 } else { val2 })
+  rt.stack_top -= 1
+  let val2 = rt.stack.unsafe_get(rt.stack_top)
+  rt.stack_top -= 1
+  let val1 = rt.stack.unsafe_get(rt.stack_top)
+  rt.stack.unsafe_set(rt.stack_top, if cond != 0U { val1 } else { val2 })
+  rt.stack_top += 1
   rt.pc += 1
   OK
 }
@@ -95,19 +100,19 @@ fn op_br(rt : Runtime) -> RetCode {
   // Stack: [..., drop_values (drop_count), result_values (arity)]
   // Want:  [..., result_values (arity)]
   if drop_count > 0 && arity > 0 {
-    let result_start = rt.stack.length() - arity
+    let result_start = rt.stack_top - arity
     let target_start = result_start - drop_count
     // Copy forward is safe since target_start < result_start
     for i = 0; i < arity; i = i + 1 {
-      rt.stack[target_start + i] = rt.stack[result_start + i]
+      rt.stack.unsafe_set(
+        target_start + i,
+        rt.stack.unsafe_get(result_start + i),
+      )
     }
   }
 
   // Trim stack to remove drop_count values
-  let target_len = rt.stack.length() - drop_count
-  while rt.stack.length() > target_len {
-    let _ = rt.stack.unsafe_pop()
-  }
+  rt.stack_top -= drop_count
 
   rt.pc = target_pc
   OK
@@ -122,18 +127,18 @@ fn op_br_if(rt : Runtime) -> RetCode {
   if cond != 0U {
     // In-place stack shuffle: move arity values down by drop_count positions
     if drop_count > 0 && arity > 0 {
-      let result_start = rt.stack.length() - arity
+      let result_start = rt.stack_top - arity
       let target_start = result_start - drop_count
       for i = 0; i < arity; i = i + 1 {
-        rt.stack[target_start + i] = rt.stack[result_start + i]
+        rt.stack.unsafe_set(
+          target_start + i,
+          rt.stack.unsafe_get(result_start + i),
+        )
       }
     }
 
     // Trim stack to remove drop_count values
-    let target_len = rt.stack.length() - drop_count
-    while rt.stack.length() > target_len {
-      let _ = rt.stack.unsafe_pop()
-    }
+    rt.stack_top -= drop_count
 
     rt.pc = target_pc
   } else {
@@ -166,18 +171,18 @@ fn op_br_table(rt : Runtime) -> RetCode {
 
   // In-place stack shuffle: move arity values down by drop_count positions
   if drop_count > 0 && arity > 0 {
-    let result_start = rt.stack.length() - arity
+    let result_start = rt.stack_top - arity
     let target_start = result_start - drop_count
     for i = 0; i < arity; i = i + 1 {
-      rt.stack[target_start + i] = rt.stack[result_start + i]
+      rt.stack.unsafe_set(
+        target_start + i,
+        rt.stack.unsafe_get(result_start + i),
+      )
     }
   }
 
   // Trim stack to remove drop_count values
-  let target_len = rt.stack.length() - drop_count
-  while rt.stack.length() > target_len {
-    let _ = rt.stack.unsafe_pop()
-  }
+  rt.stack_top -= drop_count
 
   rt.pc = target_pc
   OK
@@ -189,30 +194,32 @@ fn op_br_on_null(rt : Runtime) -> RetCode {
   let arity = rt.read_imm_idx()
   let drop_count = rt.read_imm_idx()
   // Pop reference value (refs are stored as Int64, -1 = null)
-  let ref_val = rt.stack.unsafe_pop()
+  rt.stack_top -= 1
+  let ref_val = rt.stack.unsafe_get(rt.stack_top)
   let ref_idx = ref_val.reinterpret_as_int64().to_int()
   let is_null = ref_idx == -1
   if is_null {
     // Ref is consumed (not passed to branch target), just shuffle remaining values
     // In-place stack shuffle: move arity values down by drop_count positions
     if drop_count > 0 && arity > 0 {
-      let result_start = rt.stack.length() - arity
+      let result_start = rt.stack_top - arity
       let target_start = result_start - drop_count
       for i = 0; i < arity; i = i + 1 {
-        rt.stack[target_start + i] = rt.stack[result_start + i]
+        rt.stack.unsafe_set(
+          target_start + i,
+          rt.stack.unsafe_get(result_start + i),
+        )
       }
     }
 
     // Trim stack to remove drop_count values
-    let target_len = rt.stack.length() - drop_count
-    while rt.stack.length() > target_len {
-      let _ = rt.stack.unsafe_pop()
-    }
+    rt.stack_top -= drop_count
 
     rt.pc = target_pc
   } else {
     // Not null - push back the value and continue
-    rt.stack.push(ref_val)
+    rt.stack.unsafe_set(rt.stack_top, ref_val)
+    rt.stack_top += 1
     rt.pc += 1
   }
   OK
@@ -224,27 +231,29 @@ fn op_br_on_non_null(rt : Runtime) -> RetCode {
   let arity = rt.read_imm_idx()
   let drop_count = rt.read_imm_idx()
   // Pop reference value (refs are stored as Int64, -1 = null)
-  let ref_val = rt.stack.unsafe_pop()
+  rt.stack_top -= 1
+  let ref_val = rt.stack.unsafe_get(rt.stack_top)
   let ref_idx = ref_val.reinterpret_as_int64().to_int()
   let is_non_null = ref_idx != -1
   if is_non_null {
     // Push ref back first - arity values include the ref we just pushed
-    rt.stack.push(ref_val)
+    rt.stack.unsafe_set(rt.stack_top, ref_val)
+    rt.stack_top += 1
 
     // In-place stack shuffle: move arity values down by drop_count positions
     if drop_count > 0 && arity > 0 {
-      let result_start = rt.stack.length() - arity
+      let result_start = rt.stack_top - arity
       let target_start = result_start - drop_count
       for i = 0; i < arity; i = i + 1 {
-        rt.stack[target_start + i] = rt.stack[result_start + i]
+        rt.stack.unsafe_set(
+          target_start + i,
+          rt.stack.unsafe_get(result_start + i),
+        )
       }
     }
 
     // Trim stack to remove drop_count values
-    let target_len = rt.stack.length() - drop_count
-    while rt.stack.length() > target_len {
-      let _ = rt.stack.unsafe_pop()
-    }
+    rt.stack_top -= drop_count
 
     rt.pc = target_pc
   } else {
@@ -293,7 +302,13 @@ fn op_call(rt : Runtime) -> RetCode {
   // Unified stack: arguments are already on stack, they become callee's first locals
   // new_sp points to where arguments start (they stay in place!)
   let num_params = func_type.params.length()
-  let new_sp = rt.stack.length() - num_params
+  let new_sp = rt.stack_top - num_params
+
+  // Check stack capacity for the callee
+  if new_sp + code.max_stack_height > rt.stack.length() {
+    rt.error_detail = "Stack overflow: need \{code.max_stack_height} slots"
+    return StackOverflow
+  }
 
   // Save caller's frame
   rt.call_stack.push(CallFrame::{
@@ -324,19 +339,16 @@ fn op_return(rt : Runtime) -> RetCode {
   // Return values are the top num_return_values values on the stack
   // Copy them in-place to: stack[sp .. sp + num_return_values)
   // Then trim stack to sp + num_return_values
-  let return_start = rt.stack.length() - num_return_values
+  let return_start = rt.stack_top - num_return_values
 
   // Copy return values to start of frame
   for i = 0; i < num_return_values; i = i + 1 {
-    rt.stack[rt.sp + i] = rt.stack[return_start + i]
+    rt.stack.unsafe_set(rt.sp + i, rt.stack.unsafe_get(return_start + i))
   }
 
   // Trim stack to keep only return values at frame position
-  let target_len = rt.sp + num_return_values
-  while rt.stack.length() > target_len {
-    let _ = rt.stack.unsafe_pop()
+  rt.stack_top = rt.sp + num_return_values
 
-  }
   if rt.call_stack.length() == 0 {
     // Entry function returning - results are now at stack[0..num_return_values)
     rt.running = false
@@ -448,7 +460,13 @@ fn op_call_indirect(rt : Runtime) -> RetCode {
 
   // Unified stack: arguments are already on stack, they become callee's first locals
   let num_params = actual_type.params.length()
-  let new_sp = rt.stack.length() - num_params
+  let new_sp = rt.stack_top - num_params
+
+  // Check stack capacity for the callee
+  if new_sp + code.max_stack_height > rt.stack.length() {
+    rt.error_detail = "Stack overflow: need \{code.max_stack_height} slots"
+    return StackOverflow
+  }
 
   // Save caller's frame
   rt.call_stack.push(CallFrame::{
@@ -507,21 +525,17 @@ fn op_return_call(rt : Runtime) -> RetCode {
   // Tail call: reuse current frame
   // Move arguments in-place from stack top to sp position
   let num_params = func_type.params.length()
-  let args_start = rt.stack.length() - num_params
+  let args_start = rt.stack_top - num_params
 
   // Copy arguments to sp position (they become new locals)
   if num_params > 0 && args_start > rt.sp {
     for i = 0; i < num_params; i = i + 1 {
-      rt.stack[rt.sp + i] = rt.stack[args_start + i]
+      rt.stack.unsafe_set(rt.sp + i, rt.stack.unsafe_get(args_start + i))
     }
   }
 
   // Trim stack to sp + num_params
-  let target_len = rt.sp + num_params
-  while rt.stack.length() > target_len {
-    let _ = rt.stack.unsafe_pop()
-
-  }
+  rt.stack_top = rt.sp + num_params
 
   // Push default values for declared locals
   let init_result = rt.init_declared_locals(code)
@@ -632,21 +646,17 @@ fn op_return_call_indirect(rt : Runtime) -> RetCode {
   // Tail call: reuse current frame
   // Move arguments in-place from stack top to sp position
   let num_params = actual_type.params.length()
-  let args_start = rt.stack.length() - num_params
+  let args_start = rt.stack_top - num_params
 
   // Copy arguments to sp position (they become new locals)
   if num_params > 0 && args_start > rt.sp {
     for i = 0; i < num_params; i = i + 1 {
-      rt.stack[rt.sp + i] = rt.stack[args_start + i]
+      rt.stack.unsafe_set(rt.sp + i, rt.stack.unsafe_get(args_start + i))
     }
   }
 
   // Trim stack to sp + num_params
-  let target_len = rt.sp + num_params
-  while rt.stack.length() > target_len {
-    let _ = rt.stack.unsafe_pop()
-
-  }
+  rt.stack_top = rt.sp + num_params
 
   // Push default values for declared locals
   let init_result = rt.init_declared_locals(code)
@@ -665,7 +675,7 @@ fn op_call_ref(rt : Runtime) -> RetCode {
   let type_idx = rt.read_imm_idx()
 
   // Pop the function reference from the stack (stored as Int64, -1 = null)
-  let func_ref_raw = rt.stack.unsafe_pop().reinterpret_as_int64().to_int()
+  rt.stack_top -= 1; let func_ref_raw = rt.stack.unsafe_get(rt.stack_top).reinterpret_as_int64().to_int()
   if func_ref_raw == -1 {
     rt.error_detail = "call_ref: null function reference"
     return InvalidType
@@ -738,7 +748,13 @@ fn op_call_ref(rt : Runtime) -> RetCode {
 
   // Unified stack: arguments are already on stack, they become callee's first locals
   let num_params = func_type.params.length()
-  let new_sp = rt.stack.length() - num_params
+  let new_sp = rt.stack_top - num_params
+
+  // Check stack capacity for the callee
+  if new_sp + code.max_stack_height > rt.stack.length() {
+    rt.error_detail = "Stack overflow: need \{code.max_stack_height} slots"
+    return StackOverflow
+  }
 
   // Save caller's frame
   rt.call_stack.push(CallFrame::{
@@ -765,7 +781,7 @@ fn op_return_call_ref(rt : Runtime) -> RetCode {
   let type_idx = rt.read_imm_idx()
 
   // Pop the function reference from the stack (stored as Int64, -1 = null)
-  let func_ref_raw = rt.stack.unsafe_pop().reinterpret_as_int64().to_int()
+  rt.stack_top -= 1; let func_ref_raw = rt.stack.unsafe_get(rt.stack_top).reinterpret_as_int64().to_int()
   if func_ref_raw == -1 {
     rt.error_detail = "return_call_ref: null function reference"
     return InvalidType
@@ -839,21 +855,17 @@ fn op_return_call_ref(rt : Runtime) -> RetCode {
   // Tail call: reuse current frame
   // Move arguments in-place from stack top to sp position
   let num_params = func_type.params.length()
-  let args_start = rt.stack.length() - num_params
+  let args_start = rt.stack_top - num_params
 
   // Copy arguments to sp position (they become new locals)
   if num_params > 0 && args_start > rt.sp {
     for i = 0; i < num_params; i = i + 1 {
-      rt.stack[rt.sp + i] = rt.stack[args_start + i]
+      rt.stack.unsafe_set(rt.sp + i, rt.stack.unsafe_get(args_start + i))
     }
   }
 
   // Trim stack to sp + num_params
-  let target_len = rt.sp + num_params
-  while rt.stack.length() > target_len {
-    let _ = rt.stack.unsafe_pop()
-
-  }
+  rt.stack_top = rt.sp + num_params
 
   // Push default values for declared locals
   let init_result = rt.init_declared_locals(code)
@@ -945,7 +957,7 @@ fn op_table_fill(rt : Runtime) -> RetCode {
     return InvalidType
   }
   let n = rt.pop_i32().reinterpret_as_int()
-  let raw_ref = rt.stack.unsafe_pop().reinterpret_as_int64().to_int()
+  rt.stack_top -= 1; let raw_ref = rt.stack.unsafe_get(rt.stack_top).reinterpret_as_int64().to_int()
   let ref_value : Int? = if raw_ref == -1 { None } else { Some(raw_ref) }
   let dest = rt.pop_i32().reinterpret_as_int()
   let table = rt.tables[table_idx].data
@@ -980,7 +992,7 @@ fn op_table_size(rt : Runtime) -> RetCode {
     return InvalidType
   }
   let size = rt.tables[table_idx].data.length()
-  push_i32(rt.stack, size.reinterpret_as_uint())
+  push_i32(rt, size.reinterpret_as_uint())
   rt.pc += 1
   OK
 }
@@ -1003,7 +1015,8 @@ fn op_table_get(rt : Runtime) -> RetCode {
     Some(idx) => idx.to_int64()
     None => (-1).to_int64()
   }
-  rt.stack.push(ref_val.reinterpret_as_uint64())
+  rt.stack.unsafe_set(rt.stack_top, ref_val.reinterpret_as_uint64())
+  rt.stack_top += 1
   rt.pc += 1
   OK
 }
@@ -1016,7 +1029,7 @@ fn op_table_set(rt : Runtime) -> RetCode {
     return InvalidType
   }
   // Pop ref value - stored as Int64, -1 = null
-  let raw_ref = rt.stack.unsafe_pop().reinterpret_as_int64().to_int()
+  rt.stack_top -= 1; let raw_ref = rt.stack.unsafe_get(rt.stack_top).reinterpret_as_int64().to_int()
   let ref_value : Int? = if raw_ref == -1 { None } else { Some(raw_ref) }
   let elem_idx = rt.pop_i32().reinterpret_as_int()
   let table = rt.tables[table_idx].data
@@ -1033,19 +1046,19 @@ fn op_table_set(rt : Runtime) -> RetCode {
 fn op_table_grow(rt : Runtime) -> RetCode {
   let table_idx = rt.read_imm_idx()
   if table_idx < 0 || table_idx >= rt.tables.length() {
-    push_i32(rt.stack, 0xFFFFFFFFU) // -1 indicates failure
+    push_i32(rt, 0xFFFFFFFFU) // -1 indicates failure
     rt.pc += 1
     return OK
   }
   let delta = rt.pop_i32().reinterpret_as_int()
   // Pop ref value - stored as Int64, -1 = null
-  let raw_ref = rt.stack.unsafe_pop().reinterpret_as_int64().to_int()
+  rt.stack_top -= 1; let raw_ref = rt.stack.unsafe_get(rt.stack_top).reinterpret_as_int64().to_int()
   let init_value : Int? = if raw_ref == -1 { None } else { Some(raw_ref) }
   let runtime_table = rt.tables[table_idx]
   let table = runtime_table.data
   let old_size = table.length()
   if delta < 0 {
-    push_i32(rt.stack, 0xFFFFFFFFU) // -1 indicates failure
+    push_i32(rt, 0xFFFFFFFFU) // -1 indicates failure
     rt.pc += 1
     return OK
   }
@@ -1056,7 +1069,7 @@ fn op_table_grow(rt : Runtime) -> RetCode {
     Some(max) =>
       if new_size > max.reinterpret_as_int64().to_int() {
         // Would exceed max - return -1 (failure)
-        push_i32(rt.stack, 0xFFFFFFFFU)
+        push_i32(rt, 0xFFFFFFFFU)
         rt.pc += 1
         return OK
       }
@@ -1067,7 +1080,7 @@ fn op_table_grow(rt : Runtime) -> RetCode {
   for i = 0; i < delta; i = i + 1 {
     table.push(init_value)
   }
-  push_i32(rt.stack, old_size.reinterpret_as_uint())
+  push_i32(rt, old_size.reinterpret_as_uint())
   rt.pc += 1
   OK
 }
@@ -1082,7 +1095,7 @@ fn op_ref_null(rt : Runtime) -> RetCode {
   // The heap type is encoded in the immediate but we don't need it at runtime
   let _ = rt.read_imm_idx() // Skip the heap type encoding
   // Push null ref as -1 (Int64)
-  push_ref(rt.stack, -1)
+  push_ref(rt, -1)
   rt.pc += 1
   OK
 }
@@ -1092,7 +1105,7 @@ fn op_ref_func(rt : Runtime) -> RetCode {
   // ref.func pushes a reference to the given function onto the stack
   let func_idx = rt.read_imm_idx()
   // Push func ref as Int64
-  push_ref(rt.stack, func_idx)
+  push_ref(rt, func_idx)
   rt.pc += 1
   OK
 }
@@ -1101,9 +1114,10 @@ fn op_ref_func(rt : Runtime) -> RetCode {
 fn op_ref_is_null(rt : Runtime) -> RetCode {
   // ref.is_null tests whether a reference is null
   // Refs are stored as Int64, -1 = null
-  let ref_val = rt.stack.unsafe_pop().reinterpret_as_int64().to_int()
+  rt.stack_top -= 1
+  let ref_val = rt.stack.unsafe_get(rt.stack_top).reinterpret_as_int64().to_int()
   let is_null : UInt = if ref_val == -1 { 1U } else { 0U }
-  push_i32(rt.stack, is_null)
+  push_i32(rt, is_null)
   rt.pc += 1
   OK
 }
@@ -1112,10 +1126,12 @@ fn op_ref_is_null(rt : Runtime) -> RetCode {
 fn op_ref_eq(rt : Runtime) -> RetCode {
   // ref.eq compares two references for identity equality
   // Refs are stored as Int64, -1 = null
-  let rhs = rt.stack.unsafe_pop().reinterpret_as_int64().to_int()
-  let lhs = rt.stack.unsafe_pop().reinterpret_as_int64().to_int()
+  rt.stack_top -= 1
+  let rhs = rt.stack.unsafe_get(rt.stack_top).reinterpret_as_int64().to_int()
+  rt.stack_top -= 1
+  let lhs = rt.stack.unsafe_get(rt.stack_top).reinterpret_as_int64().to_int()
   let eq : UInt = if lhs == rhs { 1U } else { 0U }
-  push_i32(rt.stack, eq)
+  push_i32(rt, eq)
   rt.pc += 1
   OK
 }
@@ -1124,14 +1140,16 @@ fn op_ref_eq(rt : Runtime) -> RetCode {
 fn op_ref_as_non_null(rt : Runtime) -> RetCode {
   // ref.as_non_null traps on null references
   // Refs are stored as Int64, -1 = null
-  let value = rt.stack.unsafe_pop()
+  rt.stack_top -= 1
+  let value = rt.stack.unsafe_get(rt.stack_top)
   let ref_val = value.reinterpret_as_int64().to_int()
   if ref_val == -1 {
     rt.error_detail = "ref.as_non_null: null reference"
     return InvalidType
   }
   // Push back the non-null reference
-  rt.stack.push(value)
+  rt.stack.unsafe_set(rt.stack_top, value)
+  rt.stack_top += 1
   rt.pc += 1
   OK
 }
@@ -1140,7 +1158,8 @@ fn op_ref_as_non_null(rt : Runtime) -> RetCode {
 fn op_global_get(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
   // Convert Value to UInt64 for stack
-  rt.stack.push(value_to_stack(rt.globals[idx]))
+  rt.stack.unsafe_set(rt.stack_top, value_to_stack(rt.globals[idx]))
+  rt.stack_top += 1
   rt.pc += 1
   OK
 }
@@ -1148,7 +1167,8 @@ fn op_global_get(rt : Runtime) -> RetCode {
 ///|
 fn op_global_set(rt : Runtime) -> RetCode {
   let idx = rt.read_imm_idx()
-  let raw = rt.stack.unsafe_pop()
+  rt.stack_top -= 1
+  let raw = rt.stack.unsafe_get(rt.stack_top)
   // Infer the value type from the existing global's tag
   // (handles both imported and defined globals without index adjustment)
   let val_type : @core.ValType = match rt.globals[idx] {

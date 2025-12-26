@@ -1,7 +1,7 @@
 ///|
 fn op_f32_eq(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
-  push_i32(rt.stack, if a == b { 1U } else { 0U })
+  push_i32(rt, if a == b { 1U } else { 0U })
   rt.pc += 1
   OK
 }
@@ -9,7 +9,7 @@ fn op_f32_eq(rt : Runtime) -> RetCode {
 ///|
 fn op_f32_ne(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
-  push_i32(rt.stack, if a != b { 1U } else { 0U })
+  push_i32(rt, if a != b { 1U } else { 0U })
   rt.pc += 1
   OK
 }
@@ -17,7 +17,7 @@ fn op_f32_ne(rt : Runtime) -> RetCode {
 ///|
 fn op_f32_lt(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
-  push_i32(rt.stack, if a < b { 1U } else { 0U })
+  push_i32(rt, if a < b { 1U } else { 0U })
   rt.pc += 1
   OK
 }
@@ -25,7 +25,7 @@ fn op_f32_lt(rt : Runtime) -> RetCode {
 ///|
 fn op_f32_gt(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
-  push_i32(rt.stack, if a > b { 1U } else { 0U })
+  push_i32(rt, if a > b { 1U } else { 0U })
   rt.pc += 1
   OK
 }
@@ -33,7 +33,7 @@ fn op_f32_gt(rt : Runtime) -> RetCode {
 ///|
 fn op_f32_le(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
-  push_i32(rt.stack, if a <= b { 1U } else { 0U })
+  push_i32(rt, if a <= b { 1U } else { 0U })
   rt.pc += 1
   OK
 }
@@ -41,7 +41,7 @@ fn op_f32_le(rt : Runtime) -> RetCode {
 ///|
 fn op_f32_ge(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
-  push_i32(rt.stack, if a >= b { 1U } else { 0U })
+  push_i32(rt, if a >= b { 1U } else { 0U })
   rt.pc += 1
   OK
 }
@@ -49,7 +49,7 @@ fn op_f32_ge(rt : Runtime) -> RetCode {
 ///|
 fn op_f64_eq(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
-  push_i32(rt.stack, if a == b { 1U } else { 0U })
+  push_i32(rt, if a == b { 1U } else { 0U })
   rt.pc += 1
   OK
 }
@@ -57,7 +57,7 @@ fn op_f64_eq(rt : Runtime) -> RetCode {
 ///|
 fn op_f64_ne(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
-  push_i32(rt.stack, if a != b { 1U } else { 0U })
+  push_i32(rt, if a != b { 1U } else { 0U })
   rt.pc += 1
   OK
 }
@@ -65,7 +65,7 @@ fn op_f64_ne(rt : Runtime) -> RetCode {
 ///|
 fn op_f64_lt(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
-  push_i32(rt.stack, if a < b { 1U } else { 0U })
+  push_i32(rt, if a < b { 1U } else { 0U })
   rt.pc += 1
   OK
 }
@@ -73,7 +73,7 @@ fn op_f64_lt(rt : Runtime) -> RetCode {
 ///|
 fn op_f64_gt(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
-  push_i32(rt.stack, if a > b { 1U } else { 0U })
+  push_i32(rt, if a > b { 1U } else { 0U })
   rt.pc += 1
   OK
 }
@@ -81,7 +81,7 @@ fn op_f64_gt(rt : Runtime) -> RetCode {
 ///|
 fn op_f64_le(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
-  push_i32(rt.stack, if a <= b { 1U } else { 0U })
+  push_i32(rt, if a <= b { 1U } else { 0U })
   rt.pc += 1
   OK
 }
@@ -89,7 +89,7 @@ fn op_f64_le(rt : Runtime) -> RetCode {
 ///|
 fn op_f64_ge(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
-  push_i32(rt.stack, if a >= b { 1U } else { 0U })
+  push_i32(rt, if a >= b { 1U } else { 0U })
   rt.pc += 1
   OK
 }
@@ -99,7 +99,7 @@ fn op_f64_ge(rt : Runtime) -> RetCode {
 ///|
 fn op_f32_neg(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
-  push_f32(rt.stack, -a)
+  push_f32(rt, -a)
   rt.pc += 1
   OK
 }
@@ -107,7 +107,7 @@ fn op_f32_neg(rt : Runtime) -> RetCode {
 ///|
 fn op_f32_abs(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
-  push_f32(rt.stack, a.abs())
+  push_f32(rt, a.abs())
   rt.pc += 1
   OK
 }
@@ -115,7 +115,7 @@ fn op_f32_abs(rt : Runtime) -> RetCode {
 ///|
 fn op_f32_sqrt(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
-  push_f32(rt.stack, canonicalize_f32(a.sqrt()))
+  push_f32(rt, canonicalize_f32(a.sqrt()))
   rt.pc += 1
   OK
 }
@@ -123,7 +123,7 @@ fn op_f32_sqrt(rt : Runtime) -> RetCode {
 ///|
 fn op_f32_ceil(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
-  push_f32(rt.stack, canonicalize_f32(a.ceil()))
+  push_f32(rt, canonicalize_f32(a.ceil()))
   rt.pc += 1
   OK
 }
@@ -131,7 +131,7 @@ fn op_f32_ceil(rt : Runtime) -> RetCode {
 ///|
 fn op_f32_floor(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
-  push_f32(rt.stack, canonicalize_f32(a.floor()))
+  push_f32(rt, canonicalize_f32(a.floor()))
   rt.pc += 1
   OK
 }
@@ -139,7 +139,7 @@ fn op_f32_floor(rt : Runtime) -> RetCode {
 ///|
 fn op_f32_trunc(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
-  push_f32(rt.stack, canonicalize_f32(a.trunc()))
+  push_f32(rt, canonicalize_f32(a.trunc()))
   rt.pc += 1
   OK
 }
@@ -147,7 +147,7 @@ fn op_f32_trunc(rt : Runtime) -> RetCode {
 ///|
 fn op_f32_nearest(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
-  push_f32(rt.stack, canonicalize_f32(rintf(a)))
+  push_f32(rt, canonicalize_f32(rintf(a)))
   rt.pc += 1
   OK
 }
@@ -155,7 +155,7 @@ fn op_f32_nearest(rt : Runtime) -> RetCode {
 ///|
 fn op_f64_neg(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
-  push_f64(rt.stack, -a)
+  push_f64(rt, -a)
   rt.pc += 1
   OK
 }
@@ -165,7 +165,7 @@ fn op_f64_neg(rt : Runtime) -> RetCode {
 ///|
 fn op_f32_add(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
-  push_f32(rt.stack, canonicalize_f32(a + b))
+  push_f32(rt, canonicalize_f32(a + b))
   rt.pc += 1
   OK
 }
@@ -173,7 +173,7 @@ fn op_f32_add(rt : Runtime) -> RetCode {
 ///|
 fn op_f32_sub(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
-  push_f32(rt.stack, canonicalize_f32(a - b))
+  push_f32(rt, canonicalize_f32(a - b))
   rt.pc += 1
   OK
 }
@@ -181,7 +181,7 @@ fn op_f32_sub(rt : Runtime) -> RetCode {
 ///|
 fn op_f32_mul(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
-  push_f32(rt.stack, canonicalize_f32(a * b))
+  push_f32(rt, canonicalize_f32(a * b))
   rt.pc += 1
   OK
 }
@@ -189,7 +189,7 @@ fn op_f32_mul(rt : Runtime) -> RetCode {
 ///|
 fn op_f32_div(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f32()
-  push_f32(rt.stack, canonicalize_f32(a / b))
+  push_f32(rt, canonicalize_f32(a / b))
   rt.pc += 1
   OK
 }
@@ -221,7 +221,7 @@ fn op_f32_min(rt : Runtime) -> RetCode {
       a // Both positive, return either
     }
   }
-  push_f32(rt.stack, result)
+  push_f32(rt, result)
   rt.pc += 1
   OK
 }
@@ -253,7 +253,7 @@ fn op_f32_max(rt : Runtime) -> RetCode {
       a // Both negative, return either
     }
   }
-  push_f32(rt.stack, result)
+  push_f32(rt, result)
   rt.pc += 1
   OK
 }
@@ -265,7 +265,7 @@ fn op_f32_copysign(rt : Runtime) -> RetCode {
   let b_bits = b.reinterpret_as_uint()
   let sign_mask = 0x8000_0000U
   let result_bits = (a_bits & sign_mask.lnot()) | (b_bits & sign_mask)
-  push_f32(rt.stack, Float::reinterpret_from_uint(result_bits))
+  push_f32(rt, Float::reinterpret_from_uint(result_bits))
   rt.pc += 1
   OK
 }
@@ -273,7 +273,7 @@ fn op_f32_copysign(rt : Runtime) -> RetCode {
 ///|
 fn op_f64_add(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
-  push_f64(rt.stack, canonicalize_f64(a + b))
+  push_f64(rt, canonicalize_f64(a + b))
   rt.pc += 1
   OK
 }
@@ -281,7 +281,7 @@ fn op_f64_add(rt : Runtime) -> RetCode {
 ///|
 fn op_f64_sub(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
-  push_f64(rt.stack, canonicalize_f64(a - b))
+  push_f64(rt, canonicalize_f64(a - b))
   rt.pc += 1
   OK
 }
@@ -289,7 +289,7 @@ fn op_f64_sub(rt : Runtime) -> RetCode {
 ///|
 fn op_f64_mul(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
-  push_f64(rt.stack, canonicalize_f64(a * b))
+  push_f64(rt, canonicalize_f64(a * b))
   rt.pc += 1
   OK
 }
@@ -297,7 +297,7 @@ fn op_f64_mul(rt : Runtime) -> RetCode {
 ///|
 fn op_f64_div(rt : Runtime) -> RetCode {
   let (a, b) = rt.pop_two_f64()
-  push_f64(rt.stack, canonicalize_f64(a / b))
+  push_f64(rt, canonicalize_f64(a / b))
   rt.pc += 1
   OK
 }
@@ -329,7 +329,7 @@ fn op_f64_min(rt : Runtime) -> RetCode {
       a // Both positive, return either
     }
   }
-  push_f64(rt.stack, result)
+  push_f64(rt, result)
   rt.pc += 1
   OK
 }
@@ -361,7 +361,7 @@ fn op_f64_max(rt : Runtime) -> RetCode {
       a // Both negative, return either
     }
   }
-  push_f64(rt.stack, result)
+  push_f64(rt, result)
   rt.pc += 1
   OK
 }
@@ -373,7 +373,7 @@ fn op_f64_copysign(rt : Runtime) -> RetCode {
   let b_bits = b.reinterpret_as_uint64()
   let sign_mask = 0x8000_0000_0000_0000UL
   let result_bits = (a_bits & sign_mask.lnot()) | (b_bits & sign_mask)
-  push_f64(rt.stack, result_bits.reinterpret_as_double())
+  push_f64(rt, result_bits.reinterpret_as_double())
   rt.pc += 1
   OK
 }
@@ -383,7 +383,7 @@ fn op_f64_copysign(rt : Runtime) -> RetCode {
 ///|
 fn op_f64_abs(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
-  push_f64(rt.stack, a.abs())
+  push_f64(rt, a.abs())
   rt.pc += 1
   OK
 }
@@ -391,7 +391,7 @@ fn op_f64_abs(rt : Runtime) -> RetCode {
 ///|
 fn op_f64_sqrt(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
-  push_f64(rt.stack, canonicalize_f64(a.sqrt()))
+  push_f64(rt, canonicalize_f64(a.sqrt()))
   rt.pc += 1
   OK
 }
@@ -399,7 +399,7 @@ fn op_f64_sqrt(rt : Runtime) -> RetCode {
 ///|
 fn op_f64_ceil(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
-  push_f64(rt.stack, canonicalize_f64(a.ceil()))
+  push_f64(rt, canonicalize_f64(a.ceil()))
   rt.pc += 1
   OK
 }
@@ -407,7 +407,7 @@ fn op_f64_ceil(rt : Runtime) -> RetCode {
 ///|
 fn op_f64_floor(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
-  push_f64(rt.stack, canonicalize_f64(a.floor()))
+  push_f64(rt, canonicalize_f64(a.floor()))
   rt.pc += 1
   OK
 }
@@ -415,7 +415,7 @@ fn op_f64_floor(rt : Runtime) -> RetCode {
 ///|
 fn op_f64_trunc(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
-  push_f64(rt.stack, canonicalize_f64(a.trunc()))
+  push_f64(rt, canonicalize_f64(a.trunc()))
   rt.pc += 1
   OK
 }
@@ -423,7 +423,7 @@ fn op_f64_trunc(rt : Runtime) -> RetCode {
 ///|
 fn op_f64_nearest(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
-  push_f64(rt.stack, canonicalize_f64(rint(a)))
+  push_f64(rt, canonicalize_f64(rint(a)))
   rt.pc += 1
   OK
 }
@@ -433,7 +433,7 @@ fn op_f64_nearest(rt : Runtime) -> RetCode {
 ///|
 fn op_f64_convert_i64_u(rt : Runtime) -> RetCode {
   let a = rt.pop_i64()
-  push_f64(rt.stack, a.to_double())
+  push_f64(rt, a.to_double())
   rt.pc += 1
   OK
 }
@@ -441,7 +441,7 @@ fn op_f64_convert_i64_u(rt : Runtime) -> RetCode {
 ///|
 fn op_f64_convert_i64_s(rt : Runtime) -> RetCode {
   let a = rt.pop_i64().reinterpret_as_int64()
-  push_f64(rt.stack, a.to_double())
+  push_f64(rt, a.to_double())
   rt.pc += 1
   OK
 }
@@ -449,7 +449,7 @@ fn op_f64_convert_i64_s(rt : Runtime) -> RetCode {
 ///|
 fn op_f64_convert_i32_u(rt : Runtime) -> RetCode {
   let a = rt.pop_i32()
-  push_f64(rt.stack, a.to_double())
+  push_f64(rt, a.to_double())
   rt.pc += 1
   OK
 }
@@ -457,7 +457,7 @@ fn op_f64_convert_i32_u(rt : Runtime) -> RetCode {
 ///|
 fn op_f64_convert_i32_s(rt : Runtime) -> RetCode {
   let a = rt.pop_i32().reinterpret_as_int()
-  push_f64(rt.stack, a.to_double())
+  push_f64(rt, a.to_double())
   rt.pc += 1
   OK
 }
@@ -467,7 +467,7 @@ fn op_f64_promote_f32(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
   let result = a.to_double()
   // Canonicalize NaN to ensure positive canonical NaN
-  push_f64(rt.stack, canonicalize_f64(result))
+  push_f64(rt, canonicalize_f64(result))
   rt.pc += 1
   OK
 }
@@ -477,7 +477,7 @@ fn op_f32_demote_f64(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
   let result = Float::from_double(a)
   // Canonicalize NaN to ensure positive canonical NaN
-  push_f32(rt.stack, canonicalize_f32(result))
+  push_f32(rt, canonicalize_f32(result))
   rt.pc += 1
   OK
 }
@@ -485,7 +485,7 @@ fn op_f32_demote_f64(rt : Runtime) -> RetCode {
 ///|
 fn op_f32_convert_i32_s(rt : Runtime) -> RetCode {
   let a = rt.pop_i32().reinterpret_as_int()
-  push_f32(rt.stack, Float::from_int(a))
+  push_f32(rt, Float::from_int(a))
   rt.pc += 1
   OK
 }
@@ -493,7 +493,7 @@ fn op_f32_convert_i32_s(rt : Runtime) -> RetCode {
 ///|
 fn op_f32_convert_i32_u(rt : Runtime) -> RetCode {
   let a = rt.pop_i32()
-  push_f32(rt.stack, Float::from_double(a.to_double()))
+  push_f32(rt, Float::from_double(a.to_double()))
   rt.pc += 1
   OK
 }
@@ -513,7 +513,7 @@ extern "C" fn u64_from_f64(a : Double) -> UInt64 = "u64_from_f64"
 ///|
 fn op_f32_convert_i64_s(rt : Runtime) -> RetCode {
   let a = rt.pop_i64().reinterpret_as_int64()
-  push_f32(rt.stack, f32_from_i64(a))
+  push_f32(rt, f32_from_i64(a))
   rt.pc += 1
   OK
 }
@@ -521,7 +521,7 @@ fn op_f32_convert_i64_s(rt : Runtime) -> RetCode {
 ///|
 fn op_f32_convert_i64_u(rt : Runtime) -> RetCode {
   let a = rt.pop_i64()
-  push_f32(rt.stack, f32_from_u64(a))
+  push_f32(rt, f32_from_u64(a))
   rt.pc += 1
   OK
 }
@@ -538,7 +538,7 @@ fn op_i64_trunc_f64_s(rt : Runtime) -> RetCode {
   if a >= 9223372036854775808.0 || a < -9223372036854775808.0 {
     return IntegerOverflow
   }
-  push_i64(rt.stack, a.to_int64().reinterpret_as_uint64())
+  push_i64(rt, a.to_int64().reinterpret_as_uint64())
   rt.pc += 1
   OK
 }
@@ -554,7 +554,7 @@ fn op_i64_trunc_f64_u(rt : Runtime) -> RetCode {
     return IntegerOverflow
   }
   // Use C function for proper conversion at precision boundaries
-  push_i64(rt.stack, u64_from_f64(a))
+  push_i64(rt, u64_from_f64(a))
   rt.pc += 1
   OK
 }
@@ -569,7 +569,7 @@ fn op_i32_trunc_f32_s(rt : Runtime) -> RetCode {
   if a >= 2147483648.0 || a < -2147483648.0 {
     return IntegerOverflow
   }
-  push_i32(rt.stack, a.to_int().reinterpret_as_uint())
+  push_i32(rt, a.to_int().reinterpret_as_uint())
   rt.pc += 1
   OK
 }
@@ -584,7 +584,7 @@ fn op_i32_trunc_f32_u(rt : Runtime) -> RetCode {
   if a >= 4294967296.0 || a <= -1.0 {
     return IntegerOverflow
   }
-  push_i32(rt.stack, a.to_double().to_uint64().to_uint())
+  push_i32(rt, a.to_double().to_uint64().to_uint())
   rt.pc += 1
   OK
 }
@@ -599,7 +599,7 @@ fn op_i32_trunc_f64_s(rt : Runtime) -> RetCode {
   if a >= 2147483648.0 || a <= -2147483649.0 {
     return IntegerOverflow
   }
-  push_i32(rt.stack, a.to_int().reinterpret_as_uint())
+  push_i32(rt, a.to_int().reinterpret_as_uint())
   rt.pc += 1
   OK
 }
@@ -614,7 +614,7 @@ fn op_i32_trunc_f64_u(rt : Runtime) -> RetCode {
   if a >= 4294967296.0 || a <= -1.0 {
     return IntegerOverflow
   }
-  push_i32(rt.stack, a.to_uint64().to_uint())
+  push_i32(rt, a.to_uint64().to_uint())
   rt.pc += 1
   OK
 }
@@ -629,7 +629,7 @@ fn op_i64_trunc_f32_s(rt : Runtime) -> RetCode {
   if a >= 9223372036854775808.0 || a < -9223372036854775808.0 {
     return IntegerOverflow
   }
-  push_i64(rt.stack, a.to_int64().reinterpret_as_uint64())
+  push_i64(rt, a.to_int64().reinterpret_as_uint64())
   rt.pc += 1
   OK
 }
@@ -646,7 +646,7 @@ fn op_i64_trunc_f32_u(rt : Runtime) -> RetCode {
     return IntegerOverflow
   }
   // Use C function for proper conversion at precision boundaries
-  push_i64(rt.stack, u64_from_f32(a))
+  push_i64(rt, u64_from_f32(a))
   rt.pc += 1
   OK
 }
@@ -671,7 +671,7 @@ fn op_i32_trunc_sat_f32_s(rt : Runtime) -> RetCode {
   } else {
     a.to_int().reinterpret_as_uint()
   }
-  push_i32(rt.stack, result)
+  push_i32(rt, result)
   rt.pc += 1
   OK
 }
@@ -690,7 +690,7 @@ fn op_i32_trunc_sat_f32_u(rt : Runtime) -> RetCode {
   } else {
     a.to_double().to_uint64().to_uint()
   }
-  push_i32(rt.stack, result)
+  push_i32(rt, result)
   rt.pc += 1
   OK
 }
@@ -709,7 +709,7 @@ fn op_i32_trunc_sat_f64_s(rt : Runtime) -> RetCode {
   } else {
     a.to_int().reinterpret_as_uint()
   }
-  push_i32(rt.stack, result)
+  push_i32(rt, result)
   rt.pc += 1
   OK
 }
@@ -728,7 +728,7 @@ fn op_i32_trunc_sat_f64_u(rt : Runtime) -> RetCode {
   } else {
     a.to_uint64().to_uint()
   }
-  push_i32(rt.stack, result)
+  push_i32(rt, result)
   rt.pc += 1
   OK
 }
@@ -747,7 +747,7 @@ fn op_i64_trunc_sat_f32_s(rt : Runtime) -> RetCode {
   } else {
     a.to_int64().reinterpret_as_uint64()
   }
-  push_i64(rt.stack, result)
+  push_i64(rt, result)
   rt.pc += 1
   OK
 }
@@ -768,7 +768,7 @@ fn op_i64_trunc_sat_f32_u(rt : Runtime) -> RetCode {
     // Use C function for proper conversion at precision boundaries
     u64_from_f32(a)
   }
-  push_i64(rt.stack, result)
+  push_i64(rt, result)
   rt.pc += 1
   OK
 }
@@ -787,7 +787,7 @@ fn op_i64_trunc_sat_f64_s(rt : Runtime) -> RetCode {
   } else {
     a.to_int64().reinterpret_as_uint64()
   }
-  push_i64(rt.stack, result)
+  push_i64(rt, result)
   rt.pc += 1
   OK
 }
@@ -807,7 +807,7 @@ fn op_i64_trunc_sat_f64_u(rt : Runtime) -> RetCode {
     // Use C function for proper conversion at precision boundaries
     u64_from_f64(a)
   }
-  push_i64(rt.stack, result)
+  push_i64(rt, result)
   rt.pc += 1
   OK
 }
@@ -817,7 +817,7 @@ fn op_i64_trunc_sat_f64_u(rt : Runtime) -> RetCode {
 ///|
 fn op_i32_reinterpret_f32(rt : Runtime) -> RetCode {
   let a = rt.pop_f32()
-  push_i32(rt.stack, a.reinterpret_as_uint())
+  push_i32(rt, a.reinterpret_as_uint())
   rt.pc += 1
   OK
 }
@@ -825,7 +825,7 @@ fn op_i32_reinterpret_f32(rt : Runtime) -> RetCode {
 ///|
 fn op_i64_reinterpret_f64(rt : Runtime) -> RetCode {
   let a = rt.pop_f64()
-  push_i64(rt.stack, a.reinterpret_as_uint64())
+  push_i64(rt, a.reinterpret_as_uint64())
   rt.pc += 1
   OK
 }
@@ -833,7 +833,7 @@ fn op_i64_reinterpret_f64(rt : Runtime) -> RetCode {
 ///|
 fn op_f32_reinterpret_i32(rt : Runtime) -> RetCode {
   let a = rt.pop_i32()
-  push_f32(rt.stack, Float::reinterpret_from_uint(a))
+  push_f32(rt, Float::reinterpret_from_uint(a))
   rt.pc += 1
   OK
 }
@@ -841,7 +841,7 @@ fn op_f32_reinterpret_i32(rt : Runtime) -> RetCode {
 ///|
 fn op_f64_reinterpret_i64(rt : Runtime) -> RetCode {
   let a = rt.pop_i64()
-  push_f64(rt.stack, a.reinterpret_as_double())
+  push_f64(rt, a.reinterpret_as_double())
   rt.pc += 1
   OK
 }

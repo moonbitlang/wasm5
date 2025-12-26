@@ -67,6 +67,9 @@ fn Compiler::compile_func(
     self.ops[slot] = ImmediateIdx(end_pc)
   }
   code.compiled = Some(start_pc)
+  // Store max stack height: num_locals + max_operand_depth
+  let num_locals = func_type.params.length() + code.locals.length()
+  code.max_stack_height = num_locals + ctx.max_stack_depth
 }
 
 ///|

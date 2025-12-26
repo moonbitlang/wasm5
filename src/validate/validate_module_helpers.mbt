@@ -185,6 +185,7 @@ fn validate_module_global_initializers(
       locals: [],
       body: global.init,
       compiled: None,
+      max_stack_height: 0,
     }
     for instr in global.init.instrs {
       validate_instruction(
@@ -338,6 +339,7 @@ fn validate_module_tables(
             locals: [],
             body: init_expr,
             compiled: None,
+            max_stack_height: 0,
           }
           for instr in init_expr.instrs {
             validate_instruction(
@@ -381,6 +383,7 @@ fn validate_module_tables(
             locals: [],
             body: init_expr,
             compiled: None,
+            max_stack_height: 0,
           }
           for instr in init_expr.instrs {
             validate_instruction(

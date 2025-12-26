@@ -1,12 +1,57 @@
 ///|
+/// Group failures by test type for better reporting
+fn group_failures_by_type(
+  failures : Array[TestFailure],
+) -> Map[String, Array[TestFailure]] {
+  let grouped : Map[String, Array[TestFailure]] = {}
+  for failure in failures {
+    match grouped.get(failure.test_type) {
+      Some(arr) => arr.push(failure)
+      None => grouped[failure.test_type] = [failure]
+    }
+  }
+  grouped
+}
+
+///|
+/// Format a single failure with additional context
+fn format_failure_detail(failure : TestFailure) -> String {
+  let location = if failure.line >= 0 {
+    "\{failure.source_file}:\{failure.line}"
+  } else {
+    failure.source_file
+  }
+  "  [\{failure.test_type}] \{location}\n    → \{failure.message}"
+}
+
+///|
 async fn run_harness(filename : String) -> Unit {
   let (file_failures, file_skipped) = process_wast_file(
     "test/reference_tests/", filename,
   )
   if file_failures.length() > 0 {
-    for failure in file_failures {
-      println(failure)
+    // Group failures by type for organized output
+    let grouped = group_failures_by_type(file_failures)
+
+    // Print header
+    println("\n╔══════════════════════════════════════════════════════════════════╗")
+    println("║ TEST FAILURES: \{filename}")
+    println("╚══════════════════════════════════════════════════════════════════╝")
+
+    // Print failures grouped by type
+    for test_type, failures in grouped {
+      println("\n┌─ \{test_type} (\{failures.length()} failures) ─────────────────────")
+      for failure in failures {
+        println(format_failure_detail(failure))
+      }
+      println("└────────────────────────────────────────────────────────────────")
     }
+
+    // Print summary
+    println("\n╔══════════════════════════════════════════════════════════════════╗")
+    println("║ SUMMARY: \{file_failures.length()} failure(s), \{file_skipped} skipped")
+    println("╚══════════════════════════════════════════════════════════════════╝\n")
+
     fail("\{file_failures.length()} failure(s) in \{filename}")
   }
   if file_skipped > 0 {

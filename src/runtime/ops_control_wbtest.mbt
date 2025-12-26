@@ -29,12 +29,20 @@ fn base_runtime(
   ops : Array[MInstr],
   stack : Array[Value],
 ) -> Runtime {
-  // Convert Value arrays to UInt64
+  // Convert Value arrays to UInt64 and allocate fixed buffer
   let stack64 = stack.map(value_to_stack)
+  let stack_len = stack64.length()
+  // Allocate buffer with some capacity, copy values
+  let capacity = if stack_len < 64 { 64 } else { stack_len * 2 }
+  let stack_buf = FixedArray::make(capacity, 0UL)
+  for i in 0..<stack_len {
+    stack_buf[i] = stack64[i]
+  }
   Runtime::{
     module_,
     ops: FixedArray::from_array(ops),
-    stack: stack64,
+    stack: stack_buf,
+    stack_top: stack_len,
     sp: 0,
     num_locals: 0,
     pc: 0,
@@ -62,7 +70,7 @@ fn assert_ctrl_stack_eq(got : UInt64, expected : Value) -> Unit {
 test "ops control drop and select" {
   let rt_drop = base_runtime(base_module([], [], [], []), [], [Value::I32(1U)])
   assert_ok(op_drop(rt_drop))
-  assert_eq(rt_drop.stack.length(), 0)
+  assert_eq(rt_drop.stack_top, 0)
   let rt_select = base_runtime(base_module([], [], [], []), [], [
     Value::I32(10U),
     Value::I32(20U),
@@ -95,7 +103,9 @@ test "ops control branching" {
   )
   assert_ok(op_br(rt_br))
   assert_eq(rt_br.pc, 10)
-  assert_eq(rt_br.stack, [1UL, 3UL])
+  assert_eq(rt_br.stack_top, 2)
+  assert_eq(rt_br.stack.unsafe_get(0), 1UL)
+  assert_eq(rt_br.stack.unsafe_get(1), 3UL)
   let rt_br_if = base_runtime(
     base_module([], [], [], []),
     [ImmediateIdx(0), ImmediateIdx(5), ImmediateIdx(1), ImmediateIdx(0)],
@@ -166,8 +176,9 @@ test "ops control table grow and globals" {
   let module_local = base_module([], [], [], [])
   let rt_table_size = Runtime::{
     module_: module_local,
-    ops: [ImmediateIdx(0), ImmediateIdx(0)],
-    stack: [],
+    ops: FixedArray::from_array([ImmediateIdx(0), ImmediateIdx(0)]),
+    stack: FixedArray::make(64, 0UL),
+    stack_top: 0,
     sp: 0,
     num_locals: 0,
     pc: 0,
@@ -182,11 +193,15 @@ test "ops control table grow and globals" {
     error_detail: "",
   }
   assert_ok(op_table_size(rt_table_size))
-  assert_ctrl_stack_eq(rt_table_size.stack[0], Value::I32(2U))
+  assert_ctrl_stack_eq(rt_table_size.stack.unsafe_get(0), Value::I32(2U))
+  let stack_grow = FixedArray::make(64, 0UL)
+  stack_grow[0] = 0xFFFFFFFF_FFFFFFFFUL // Ref(None)=-1
+  stack_grow[1] = 1UL // I32(1)
   let rt_table_grow = Runtime::{
     module_: module_local,
-    ops: [ImmediateIdx(0), ImmediateIdx(0)],
-    stack: [0xFFFFFFFF_FFFFFFFFUL, 1UL], // Ref(None)=-1, I32(1)
+    ops: FixedArray::from_array([ImmediateIdx(0), ImmediateIdx(0)]),
+    stack: stack_grow,
+    stack_top: 2,
     sp: 0,
     num_locals: 0,
     pc: 0,
@@ -201,11 +216,14 @@ test "ops control table grow and globals" {
     error_detail: "",
   }
   assert_ok(op_table_grow(rt_table_grow))
-  assert_ctrl_stack_eq(rt_table_grow.stack[0], Value::I32(1U))
+  assert_ctrl_stack_eq(rt_table_grow.stack.unsafe_get(0), Value::I32(1U))
+  let stack_global = FixedArray::make(64, 0UL)
+  stack_global[0] = 9UL
   let rt_global = Runtime::{
     module_: module_local,
-    ops: [ImmediateIdx(0), ImmediateIdx(0)],
-    stack: [9UL],
+    ops: FixedArray::from_array([ImmediateIdx(0), ImmediateIdx(0)]),
+    stack: stack_global,
+    stack_top: 1,
     sp: 0,
     num_locals: 0,
     pc: 0,
@@ -220,10 +238,10 @@ test "ops control table grow and globals" {
     error_detail: "",
   }
   assert_ok(op_global_set(rt_global))
-  rt_global.stack.clear()
+  rt_global.stack_top = 0
   rt_global.pc = 0
   assert_ok(op_global_get(rt_global))
-  assert_ctrl_stack_eq(rt_global.stack[0], Value::I32(9U))
+  assert_ctrl_stack_eq(rt_global.stack.unsafe_get(0), Value::I32(9U))
 }
 
 ///|

@@ -9,6 +9,7 @@ pub enum RetCode {
   InvalidType = 5
   FunctionNotCompiled = 6
   UnsupportedLocalType = 7
+  StackOverflow = 8
 } derive(Eq)
 
 ///|
@@ -23,6 +24,7 @@ fn RetCode::to_error(self : RetCode, detail : String) -> RuntimeError {
     InvalidType => RuntimeError::InvalidType(detail)
     FunctionNotCompiled => RuntimeError::FunctionNotCompiled(detail)
     UnsupportedLocalType => RuntimeError::UnsupportedLocalType(detail)
+    StackOverflow => RuntimeError::StackOverflow
   }
 }
 
@@ -71,16 +73,21 @@ pub struct CompileCtx {
   type_stack : Array[@core.ValType]
   control_stack : Array[CompileBlock]
   func_result_count : Int // Number of results the function returns
+  mut max_stack_depth : Int // Maximum operand stack depth seen
 }
 
 ///|
 fn CompileCtx::new(func_result_count : Int) -> CompileCtx {
-  { type_stack: [], control_stack: [], func_result_count }
+  { type_stack: [], control_stack: [], func_result_count, max_stack_depth: 0 }
 }
 
 ///|
 fn CompileCtx::push_type(self : CompileCtx, t : @core.ValType) -> Unit {
   self.type_stack.push(t)
+  // Track maximum stack depth
+  if self.type_stack.length() > self.max_stack_depth {
+    self.max_stack_depth = self.type_stack.length()
+  }
 }
 
 ///|

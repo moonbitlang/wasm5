@@ -11,6 +11,7 @@ pub suberror RuntimeError {
   FunctionNotCompiled(String) // Function not compiled
   UnsupportedLocalType(String) // Unsupported local type
   UnsupportedInitExpression(String) // Unsupported init expression
+  StackOverflow // Stack capacity exceeded
 } derive(Show)
 
 ///|
@@ -219,11 +220,16 @@ pub fn ImportResolver::get_memory(
 }
 
 ///|
+/// Initial stack capacity (can grow as needed)
+let initial_stack_capacity : Int = 1024
+
+///|
 /// Runtime structure that holds a loaded WebAssembly module
 pub struct Runtime {
   module_ : @core.Module
   ops : FixedArray[MInstr] // Compiled instructions for execution
-  stack : Array[UInt64] // Unified stack for locals and operand stack (tagless)
+  stack : FixedArray[UInt64] // Unified stack for locals and operand stack (tagless)
+  mut stack_top : Int // Current top of stack (next push position)
   mut sp : Int // Stack pointer: index of first local in unified stack
   mut num_locals : Int // Number of locals for current function
   mut pc : Int
@@ -509,7 +515,8 @@ pub fn Runtime::load_with_resolver(
   Runtime::{
     module_: m,
     ops: compiler.finish(),
-    stack: [],
+    stack: FixedArray::make(initial_stack_capacity, 0UL),
+    stack_top: 0,
     sp: 0,
     num_locals: 0,
     pc: 0,
