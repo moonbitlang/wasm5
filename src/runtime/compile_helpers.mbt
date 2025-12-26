@@ -365,18 +365,17 @@ fn call_imported_function(
 
 ///|
 /// Handle return from a tail call to imported function.
-/// Results are already on stack, just restore caller state.
+/// Results are already on stack at sp, copy to bp and set Returned status.
+/// Uses native stack approach - caller's execute_call will restore caller state.
 fn handle_tail_call_return(rt : Runtime) -> Runtime {
-  if rt.ctx.call_stack.length() > 0 {
-    let frame = rt.ctx.call_stack.unsafe_pop()
-    {
-      ..rt,
-      bp: frame.caller_sp,
-      num_locals: frame.caller_num_locals,
-      pc: frame.return_pc + 1,
-    }
-  } else {
+  // Results are at stack[rt.bp..rt.sp) - they're already in place for tail calls
+  // Just signal return to let native stack unwind
+  if rt.bp == 0 {
+    // Entry function - terminate
     { ..rt, status: Terminated }
+  } else {
+    // Nested call - let native stack restore caller state
+    { ..rt, status: Returned }
   }
 }
 

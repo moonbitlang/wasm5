@@ -241,6 +241,7 @@ fn op_br_on_non_null(rt : Runtime) -> Runtime {
 
 ///|
 /// Call a local (module-defined) function. Immediate is local_func_idx (already adjusted).
+/// Uses native stack: recursively calls execute() for the callee.
 fn op_call_local(rt : Runtime) -> Runtime {
   let local_func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let type_idx = rt.ctx.module_.funcs[local_func_idx].reinterpret_as_int()
@@ -256,20 +257,18 @@ fn op_call_local(rt : Runtime) -> Runtime {
 
   // Unified stack: arguments are already on stack, they become callee's first locals
   let num_params = func_type.params.length()
-  let new_sp = rt.sp - num_params
+  let new_bp = rt.sp - num_params
 
   // Check stack capacity for the callee
-  if new_sp + code.max_stack_height > rt.stack.length() {
+  if new_bp + code.max_stack_height > rt.stack.length() {
     rt.ctx.error_detail = "Stack overflow: need \{code.max_stack_height} slots"
     return { ..rt, status: Trap }
   }
 
-  // Save caller's frame (return_pc points to last immediate so return uses +1)
-  rt.ctx.call_stack.push(CallFrame::{
-    return_pc: rt.pc + 1,
-    caller_sp: rt.bp,
-    caller_num_locals: rt.num_locals,
-  })
+  // Save caller state on native stack (not call_stack)
+  let caller_bp = rt.bp
+  let caller_num_locals = rt.num_locals
+  let return_pc = rt.pc + 2 // Next instruction after call
 
   // Push default values for declared locals (not params - they're already on stack)
   let rt = init_declared_locals(rt, code)
@@ -277,13 +276,21 @@ fn op_call_local(rt : Runtime) -> Runtime {
     return rt
   }
 
-  // Update frame state
-  {
+  // Set up callee frame
+  let rt = {
     ..rt,
-    bp: new_sp,
+    bp: new_bp,
     num_locals: num_params + code.locals.length(),
-    pc: callee_pc,
   }
+
+  // Recursively execute callee using native stack
+  let rt = execute_call(rt, callee_pc, caller_bp, caller_num_locals, return_pc) catch {
+    err => {
+      rt.ctx.error_detail = err.to_string()
+      return { ..rt, status: Trap }
+    }
+  }
+  rt
 }
 
 ///|
@@ -311,6 +318,9 @@ fn op_call_import(rt : Runtime) -> Runtime {
 }
 
 ///|
+/// Return from a function. Uses native stack approach.
+/// Copies return values to bp position and sets Returned status.
+/// The caller's execute_call will restore caller state.
 fn op_return(rt : Runtime) -> Runtime {
   // Read result count from immediate (emitted at compile time)
   let num_return_values = rt.ops
@@ -320,8 +330,7 @@ fn op_return(rt : Runtime) -> Runtime {
 
   // Unified stack return:
   // Return values are the top num_return_values values on the stack
-  // Copy them in-place to: stack[sp .. sp + num_return_values)
-  // Then trim stack to sp + num_return_values
+  // Copy them in-place to: stack[bp .. bp + num_return_values)
   let return_start = rt.sp - num_return_values
 
   // Copy return values to start of frame
@@ -331,23 +340,20 @@ fn op_return(rt : Runtime) -> Runtime {
 
   // Trim stack to keep only return values at frame position
   let stack_top = rt.bp + num_return_values
-  if rt.ctx.call_stack.length() == 0 {
-    // Entry function returning - results are now at stack[0..num_return_values)
-    return { ..rt, sp: stack_top, status: Terminated }
-  }
 
-  // Restore caller's state
-  let frame = rt.ctx.call_stack.unsafe_pop()
-  {
-    ..rt,
-    sp: stack_top,
-    bp: frame.caller_sp,
-    num_locals: frame.caller_num_locals,
-    pc: frame.return_pc + 1,
+  // Check if this is the entry function (bp == 0) or a nested call
+  if rt.bp == 0 {
+    // Entry function returning - results are now at stack[0..num_return_values)
+    { ..rt, sp: stack_top, status: Terminated }
+  } else {
+    // Nested call returning - let native stack unwind
+    // Caller's execute_call will restore bp, num_locals, pc
+    { ..rt, sp: stack_top, status: Returned }
   }
 }
 
 ///|
+/// Call a function indirectly via table. Uses native stack approach.
 fn op_call_indirect(rt : Runtime) -> Runtime {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let table_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
@@ -450,20 +456,18 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
 
   // Unified stack: arguments are already on stack, they become callee's first locals
   let num_params = actual_type.params.length()
-  let new_sp = rt.sp - num_params
+  let new_bp = rt.sp - num_params
 
   // Check stack capacity for the callee
-  if new_sp + code.max_stack_height > rt.stack.length() {
+  if new_bp + code.max_stack_height > rt.stack.length() {
     rt.ctx.error_detail = "Stack overflow: need \{code.max_stack_height} slots"
     return { ..rt, status: Trap }
   }
 
-  // Save caller's frame (return_pc points to last immediate so return uses +1)
-  rt.ctx.call_stack.push(CallFrame::{
-    return_pc: rt.pc + 2,
-    caller_sp: rt.bp,
-    caller_num_locals: rt.num_locals,
-  })
+  // Save caller state on native stack
+  let caller_bp = rt.bp
+  let caller_num_locals = rt.num_locals
+  let return_pc = rt.pc + 3 // Next instruction after call_indirect
 
   // Push default values for declared locals
   let rt = init_declared_locals(rt, code)
@@ -471,13 +475,21 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
     return rt
   }
 
-  // Update frame state
-  {
+  // Set up callee frame
+  let rt = {
     ..rt,
-    bp: new_sp,
+    bp: new_bp,
     num_locals: num_params + code.locals.length(),
-    pc: callee_pc,
   }
+
+  // Recursively execute callee using native stack
+  let rt = execute_call(rt, callee_pc, caller_bp, caller_num_locals, return_pc) catch {
+    err => {
+      rt.ctx.error_detail = err.to_string()
+      return { ..rt, status: Trap }
+    }
+  }
+  rt
 }
 
 ///|
@@ -671,6 +683,7 @@ fn op_return_call_indirect(rt : Runtime) -> Runtime {
 }
 
 ///|
+/// Call a function via reference. Uses native stack approach.
 fn op_call_ref(rt : Runtime) -> Runtime {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
 
@@ -757,20 +770,18 @@ fn op_call_ref(rt : Runtime) -> Runtime {
 
   // Unified stack: arguments are already on stack, they become callee's first locals
   let num_params = func_type.params.length()
-  let new_sp = rt.sp - num_params
+  let new_bp = rt.sp - num_params
 
   // Check stack capacity for the callee
-  if new_sp + code.max_stack_height > rt.stack.length() {
+  if new_bp + code.max_stack_height > rt.stack.length() {
     rt.ctx.error_detail = "Stack overflow: need \{code.max_stack_height} slots"
     return { ..rt, status: Trap }
   }
 
-  // Save caller's frame (return_pc points to last immediate so return uses +1)
-  rt.ctx.call_stack.push(CallFrame::{
-    return_pc: rt.pc + 1,
-    caller_sp: rt.bp,
-    caller_num_locals: rt.num_locals,
-  })
+  // Save caller state on native stack
+  let caller_bp = rt.bp
+  let caller_num_locals = rt.num_locals
+  let return_pc = rt.pc + 2 // Next instruction after call_ref
 
   // Push default values for declared locals
   let rt = init_declared_locals(rt, code)
@@ -778,13 +789,21 @@ fn op_call_ref(rt : Runtime) -> Runtime {
     return rt
   }
 
-  // Update frame state
-  {
+  // Set up callee frame
+  let rt = {
     ..rt,
-    bp: new_sp,
+    bp: new_bp,
     num_locals: num_params + code.locals.length(),
-    pc: callee_pc,
   }
+
+  // Recursively execute callee using native stack
+  let rt = execute_call(rt, callee_pc, caller_bp, caller_num_locals, return_pc) catch {
+    err => {
+      rt.ctx.error_detail = err.to_string()
+      return { ..rt, status: Trap }
+    }
+  }
+  rt
 }
 
 ///|

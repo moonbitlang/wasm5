@@ -100,21 +100,18 @@ test "compile helpers imported func result truncation" {
 
 ///|
 test "compile helpers tail call return branches" {
+  // Test nested call (bp != 0) - should set Returned status
   let rt = make_runtime([], [], 0)
   let rt = { ..rt, status: Running, bp: 5, num_locals: 3 }
-  rt.ctx.call_stack.push(CallFrame::{
-    return_pc: 3,
-    caller_sp: 10,
-    caller_num_locals: 2,
-  })
   let rt = handle_tail_call_return(rt)
-  assert_eq(rt.pc, 4)
-  assert_eq(rt.bp, 10)
-  assert_eq(rt.num_locals, 2)
-  let rt_empty = make_runtime([], [], 0)
-  let rt_empty = { ..rt_empty, status: Running }
-  let rt_empty = handle_tail_call_return(rt_empty)
-  assert_eq(rt_empty.status, Terminated)
+  assert_eq(rt.status, Returned)
+  assert_eq(rt.bp, 5) // bp unchanged - caller's execute_call will restore
+
+  // Test entry function (bp == 0) - should set Terminated status
+  let rt_entry = make_runtime([], [], 0)
+  let rt_entry = { ..rt_entry, status: Running, bp: 0 }
+  let rt_entry = handle_tail_call_return(rt_entry)
+  assert_eq(rt_entry.status, Terminated)
 }
 
 ///|
