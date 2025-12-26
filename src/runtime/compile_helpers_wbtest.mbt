@@ -110,12 +110,12 @@ test "compile helpers tail call return branches" {
     caller_sp: 10,
     caller_num_locals: 2,
   })
-  rt.handle_tail_call_return()
+  let _ = rt.handle_tail_call_return()
   assert_eq(rt.pc, 4)
   assert_eq(rt.sp, 10)
   assert_eq(rt.num_locals, 2)
   let rt_empty = make_runtime([], [], 0)
   rt_empty.status = Running
-  rt_empty.handle_tail_call_return()
+  let _ = rt_empty.handle_tail_call_return()
   assert_eq(rt_empty.status, Terminated)
 }

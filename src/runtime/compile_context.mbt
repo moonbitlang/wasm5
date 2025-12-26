@@ -9,7 +9,7 @@ pub enum RuntimeStatus {
 ///|
 /// Intermediate instruction for threaded interpreter
 pub enum MInstr {
-  WasmInstr((Runtime) -> Unit)
+  WasmInstr((Runtime) -> Runtime)
   ImmediateI32(UInt)
   ImmediateIdx(Int)
 }

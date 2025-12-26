@@ -47,15 +47,22 @@ pub fn Runtime::compile(self : Runtime) -> Unit raise RuntimeError {
 
 ///|
 fn Runtime::execute(self : Runtime) -> Unit raise RuntimeError {
-  self.status = Running
-  while self.status == Running {
-    guard self.ops.unsafe_get(self.pc) is WasmInstr(f) else {
+  let mut rt : Runtime = { ..self, status: Running }
+  while rt.status == Running {
+    guard rt.ops.unsafe_get(rt.pc) is WasmInstr(f) else {
       raise RuntimeError::UnimplementedInstruction(
-        "Expected instruction at PC \{self.pc}",
+        "Expected instruction at PC \{rt.pc}",
       )
     }
-    f(self)
+    rt = f(rt)
   }
+  // Copy final state back to self
+  self.stack_top = rt.stack_top
+  self.sp = rt.sp
+  self.num_locals = rt.num_locals
+  self.pc = rt.pc
+  self.status = rt.status
+  self.error_detail = rt.error_detail
   if self.status == Trap {
     raise RuntimeError::from_detail(self.error_detail)
   }

@@ -357,7 +357,7 @@ fn Runtime::call_imported_function(
 ///|
 /// Handle return from a tail call to imported function.
 /// Results are already on stack, just restore caller state.
-fn Runtime::handle_tail_call_return(self : Runtime) -> Unit {
+fn Runtime::handle_tail_call_return(self : Runtime) -> Runtime {
   if self.call_stack.length() > 0 {
     let frame = self.call_stack.unsafe_pop()
     self.sp = frame.caller_sp
@@ -366,6 +366,7 @@ fn Runtime::handle_tail_call_return(self : Runtime) -> Unit {
   } else {
     self.status = Terminated
   }
+  self
 }
 
 ///|

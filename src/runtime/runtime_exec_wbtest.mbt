@@ -56,6 +56,7 @@ test "runtime execute error branches" {
       WasmInstr(fn(rt) {
         rt.error_detail = "bad"
         rt.status = Trap
+        rt
       }),
     ],
     0,
