@@ -35,6 +35,7 @@ fn parse_instr_control(parser : Parser, opcode : Byte) -> @core.Instr? raise {
       let blocktype = parse_blocktype(parser)
       let instrs = parse_instrs_until_try_marker(parser)
       let catches : Array[@core.TryCatch] = []
+      let mut delegate_label : UInt? = None
       while true {
         let marker = parser.read_byte()
         match marker {
@@ -42,6 +43,11 @@ fn parse_instr_control(parser : Parser, opcode : Byte) -> @core.Instr? raise {
             let tag_idx = parser.read_u32_leb128()
             let catch_body = parse_instrs_until_try_marker(parser)
             catches.push(@core.TryCatch::Catch(tag_idx, catch_body))
+          }
+          0x18 => {
+            let label_idx = parser.read_u32_leb128()
+            delegate_label = Some(label_idx)
+            break
           }
           0x19 => {
             let catch_body = parse_instrs_until_try_marker(parser)
@@ -54,7 +60,17 @@ fn parse_instr_control(parser : Parser, opcode : Byte) -> @core.Instr? raise {
             )
         }
       }
-      Some(Try(blocktype, instrs, catches))
+      match delegate_label {
+        Some(label_idx) => {
+          guard catches.length() == 0 else {
+            raise @validate.ValidationError::TypeMismatch(
+              "try: delegate cannot follow catches",
+            )
+          }
+          Some(TryDelegate(blocktype, instrs, label_idx))
+        }
+        None => Some(Try(blocktype, instrs, catches))
+      }
     }
     0x08 => {
       // throw tagidx
@@ -67,7 +83,7 @@ fn parse_instr_control(parser : Parser, opcode : Byte) -> @core.Instr? raise {
       Some(Rethrow(label_idx))
     }
     0x0A => Some(ThrowRef)
-    0x0B => Some(Nop) // delegate - should not be reached as instruction
+    0x0B => Some(Nop) // end marker - should not be reached as instruction
     0x0C => Some(Br(parser.read_u32_leb128()))
     0x0D => Some(BrIf(parser.read_u32_leb128()))
     0x0E => {

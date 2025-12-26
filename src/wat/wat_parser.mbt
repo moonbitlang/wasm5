@@ -61,6 +61,7 @@ priv enum WatInstr {
   Loop(Bytes?, WatBlockType, Array[WatInstr])
   If(Bytes?, WatBlockType, Array[WatInstr], Array[WatInstr])
   Try(Bytes?, WatBlockType, Array[WatInstr], Array[WatTryCatch])
+  TryDelegate(Bytes?, WatBlockType, Array[WatInstr], UInt)
   TryTable(Bytes?, WatBlockType, Array[WatCatchClause], Array[WatInstr])
 }
 
@@ -516,7 +517,10 @@ fn parse_try_table_instr(
 
 ///|
 fn is_try_marker(atom : Bytes) -> Bool {
-  atom == b"catch" || atom == b"catch_all" || atom == b"end"
+  atom == b"catch" ||
+  atom == b"catch_all" ||
+  atom == b"delegate" ||
+  atom == b"end"
 }
 
 ///|
@@ -529,6 +533,11 @@ fn find_try_marker(items : Array[SExpr], start : Int) -> (Bytes?, Int) {
         if atom == b"try" {
           depth = depth + 1
         } else if atom == b"end" {
+          if depth == 0 {
+            return (Some(atom), i)
+          }
+          depth = depth - 1
+        } else if atom == b"delegate" {
           if depth == 0 {
             return (Some(atom), i)
           }
@@ -565,6 +574,17 @@ fn parse_try_instr(
   let mut saw_end = false
   while cursor < items.length() {
     match items[cursor] {
+      Atom(atom) if atom == b"delegate" => {
+        guard catches.length() == 0 else {
+          raise WatError::InvalidSyntax("try delegate cannot follow catches")
+        }
+        let label_atom = expect_atom_at(items, cursor + 1)
+        let label_idx = resolve_label_ref(label_atom, labels)
+        return (
+          WatInstr::TryDelegate(label, block_type, body, label_idx),
+          cursor + 2,
+        )
+      }
       Atom(atom) if atom == b"end" => {
         saw_end = true
         cursor = cursor + 1
@@ -6013,6 +6033,15 @@ fn append_label_names(
           }
         }
       }
+      WatInstr::TryDelegate(label, _, body, _) => {
+        match label {
+          Some(name) =>
+            entries.push({ idx: next_index, name: strip_name_prefix(name) })
+          None => ()
+        }
+        next_index = next_index + 1U
+        next_index = append_label_names(entries, body, next_index)
+      }
       WatInstr::TryTable(label, _, _, body) => {
         match label {
           Some(name) =>
@@ -6967,6 +6996,10 @@ fn seed_typeuses_from_instrs(
           }
         }
       }
+      WatInstr::TryDelegate(_, block_type, body, _) => {
+        seed_typeuses_from_block_type(block_type, type_defs, type_map, types)
+        seed_typeuses_from_instrs(body, type_defs, type_map, types)
+      }
       WatInstr::TryTable(_, block_type, _, body) => {
         seed_typeuses_from_block_type(block_type, type_defs, type_map, types)
         seed_typeuses_from_instrs(body, type_defs, type_map, types)
@@ -7330,6 +7363,15 @@ fn resolve_instr(
         resolved_catches,
       )
     }
+    WatInstr::TryDelegate(_, block_type, body, label_idx) =>
+      @core.Instr::TryDelegate(
+        resolve_block_type(block_type, type_defs, type_map, types),
+        resolve_instrs(
+          body, func_map, table_map, elem_map, mem_map, data_map, global_map, tag_map,
+          type_defs, type_map, types,
+        ),
+        label_idx,
+      )
     WatInstr::TryTable(_, block_type, catches, body) => {
       let resolved_catches : Array[@core.CatchClause] = []
       for clause in catches {

@@ -909,6 +909,20 @@ fn Compiler::compile_wasm_instr(
       ctx.truncate_stack(block.stack_height_at_entry)
       ctx.push_types(block.results)
     }
+    TryDelegate(block_type, instrs, _label_idx) => {
+      let (params, results) = get_compile_block_type(self.module_, block_type)
+      ctx.push_control(BlockKind, params, results, 0)
+      for instr in instrs {
+        self.compile_wasm_instr(ctx, instr)
+      }
+      let end_pc = self.ops.length()
+      let block = ctx.pop_control()
+      for slot in block.pending_br_patches {
+        self.ops[slot] = ImmediateIdx(end_pc)
+      }
+      ctx.truncate_stack(block.stack_height_at_entry)
+      ctx.push_types(block.results)
+    }
     TryTable(block_type, _catches, instrs) => {
       let (params, results) = get_compile_block_type(self.module_, block_type)
       ctx.push_control(BlockKind, params, results, 0)

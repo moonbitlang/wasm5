@@ -771,6 +771,23 @@ fn instr_uses_bulk_memory(instr : @core.Instr) -> Bool {
     Loop(_, body) => instrs_use_bulk_memory(body)
     If(_, then_body, else_body) =>
       instrs_use_bulk_memory(then_body) || instrs_use_bulk_memory(else_body)
+    Try(_, body, catches) => {
+      if instrs_use_bulk_memory(body) {
+        return true
+      }
+      for clause in catches {
+        match clause {
+          @core.TryCatch::Catch(_, catch_body)
+          | @core.TryCatch::CatchAll(catch_body) =>
+            if instrs_use_bulk_memory(catch_body) {
+              return true
+            }
+        }
+      }
+      false
+    }
+    TryDelegate(_, body, _) => instrs_use_bulk_memory(body)
+    TryTable(_, _, body) => instrs_use_bulk_memory(body)
     _ => false
   }
 }
@@ -1052,6 +1069,15 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
         }
       }
       payload.push(0x0BU.to_byte())
+    }
+    TryDelegate(block_type, instrs, label_idx) => {
+      payload.push(0x06U.to_byte())
+      append_bytes(payload, encode_block_type(block_type))
+      for item in instrs {
+        append_bytes(payload, encode_instr(item))
+      }
+      payload.push(0x18U.to_byte())
+      append_bytes(payload, encode_u32_leb128(label_idx))
     }
     TryTable(block_type, catches, instrs) => {
       payload.push(0x1FU.to_byte())

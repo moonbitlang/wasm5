@@ -184,6 +184,7 @@ pub(all) enum Instr {
   Loop(BlockType, Array[Instr])
   If(BlockType, Array[Instr], Array[Instr])
   Try(BlockType, Array[Instr], Array[TryCatch])
+  TryDelegate(BlockType, Array[Instr], UInt)
   TryTable(BlockType, Array[CatchClause], Array[Instr])
   Br(UInt)
   BrIf(UInt)
