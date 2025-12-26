@@ -507,6 +507,45 @@ test "wat parser rejects try_table catch_all without label" {
 }
 
 ///|
+test "wat parser rejects try_table catch_ref without label" {
+  let wat =
+    #|(module
+    #|  (tag $e)
+    #|  (func (result i32)
+    #|    (block (result i32)
+    #|      (try_table (result i32)
+    #|        (catch_ref $e)
+    #|        i32.const 0))))
+  let mut saw_error = false
+  let _ = wat_to_module(wat) catch {
+    _ => {
+      saw_error = true
+      empty_module()
+    }
+  }
+  assert_eq(saw_error, true)
+}
+
+///|
+test "wat parser rejects try_table catch_all_ref without label" {
+  let wat =
+    #|(module
+    #|  (func (result i32)
+    #|    (block (result i32)
+    #|      (try_table (result i32)
+    #|        (catch_all_ref)
+    #|        i32.const 0))))
+  let mut saw_error = false
+  let _ = wat_to_module(wat) catch {
+    _ => {
+      saw_error = true
+      empty_module()
+    }
+  }
+  assert_eq(saw_error, true)
+}
+
+///|
 async test "wat encoder matches wasm-tools for data" {
   let wat =
     #|(module (memory (export "mem") 1) (data (i32.const 0) "hi"))
@@ -2364,6 +2403,24 @@ async test "wat encoder matches wasm-tools for try_table catch_ref" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for try_table multi-catch" {
+  let wat =
+    #|(module
+    #|  (tag $e (param i32))
+    #|  (tag $f (param i32))
+    #|  (func (export "f") (param i32) (result i32)
+    #|    (block $out (result i32)
+    #|      (try_table (result i32)
+    #|        (catch $e $out)
+    #|        (catch_ref $f $out)
+    #|        (catch_all_ref $out)
+    #|        local.get 0
+    #|        throw $e
+    #|        i32.const 5))))
+  assert_wat_matches("try_table_multi_catch", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for try_table catch_ref label depth" {
   let wat =
     #|(module
@@ -2459,6 +2516,22 @@ async test "wat encoder matches wasm-tools for rethrow" {
     #|        i32.const 0)
     #|      rethrow $handler)))
   assert_wat_matches("rethrow", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for rethrow label depth" {
+  let wat =
+    #|(module
+    #|  (tag $e (param i32))
+    #|  (func (export "f") (param i32) (result i32)
+    #|    (block (result i32)
+    #|      (try_table (result i32)
+    #|        (catch $e 0)
+    #|        local.get 0
+    #|        throw $e
+    #|        i32.const 0)
+    #|      rethrow 0)))
+  assert_wat_matches("rethrow_depth", wat)
 }
 
 ///|
