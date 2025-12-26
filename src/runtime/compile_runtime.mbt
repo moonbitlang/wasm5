@@ -49,11 +49,11 @@ pub fn Runtime::compile(self : Runtime) -> Runtime raise RuntimeError {
 ///|
 fn execute(rt : Runtime) -> Runtime raise RuntimeError {
   let mut rt : Runtime = { ..rt, status: Running }
-  while rt.status == Running {
+  while rt.status is Running {
     let f = unsafe_uint64_to_function(rt.ops.unsafe_get(rt.pc))
     rt = f(rt)
   }
-  if rt.status == Trap {
+  if rt.status is Trap {
     raise RuntimeError::from_detail(rt.ctx.error_detail)
   }
   rt

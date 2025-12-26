@@ -224,7 +224,6 @@ fn get_tag_type_idx(
 
 ///|
 /// Value struct for pop_arguments result (avoids tuple allocation)
-#valtype
 priv struct PopArgs {
   rt : Runtime
   args : Array[Value]
