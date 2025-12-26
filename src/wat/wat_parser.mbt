@@ -5679,6 +5679,7 @@ fn parse_simple_op(op : Bytes) -> @core.Instr? {
     b"drop" => Some(@core.Instr::Drop)
     b"select" => Some(@core.Instr::Select)
     b"return" => Some(@core.Instr::Return)
+    b"throw_ref" => Some(@core.Instr::ThrowRef)
     b"ref.is_null" => Some(@core.Instr::RefIsNull)
     b"ref.eq" => Some(@core.Instr::RefEq)
     b"ref.as_non_null" => Some(@core.Instr::RefAsNonNull)

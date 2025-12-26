@@ -368,6 +368,7 @@ pub(all) enum Instr {
   CallRef(UInt) // typed function references
   ReturnCallRef(UInt) // typed function references
   Throw(UInt) // exception handling
+  ThrowRef // exception handling
   Rethrow(UInt) // exception handling
   Simd(SimdInstr) // SIMD instructions
   Atomic(AtomicInstr) // Atomic instructions (threads)

@@ -618,6 +618,10 @@ fn Compiler::compile_wasm_instr(
       self.emit_fn(op_throw)
       self.emit_idx(tag_idx_int)
     }
+    ThrowRef => {
+      ctx.pop_type()
+      self.emit(WasmInstr(op_throw_ref))
+    }
     Rethrow(label_idx) => {
       self.emit_fn(op_rethrow)
       self.emit_idx(label_idx.reinterpret_as_int())

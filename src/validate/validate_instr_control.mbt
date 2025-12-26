@@ -607,6 +607,10 @@ fn validate_instruction_control(
       }
       ctx.mark_unreachable()
     }
+    ThrowRef => {
+      ctx.poly_pop_expect(module_, ExnRef, "throw_ref")
+      ctx.mark_unreachable()
+    }
     Rethrow(label_idx) => {
       let _ = ctx.get_label_types(label_idx)
       ctx.mark_unreachable()

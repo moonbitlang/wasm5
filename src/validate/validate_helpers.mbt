@@ -572,6 +572,8 @@ fn is_subtype(
     (Ref(ht1, false), Ref(ht2, true)) => ht1 == ht2
     // Ref(Extern, _) is compatible with ExternRef (nullable externref)
     (Ref(Extern, _), ExternRef) => true
+    // Ref(Exn, _) is compatible with ExnRef (nullable exnref)
+    (Ref(Exn, _), ExnRef) => true
     // Ref(Func, _) is compatible with FuncRef (nullable funcref)
     (Ref(Func, _), FuncRef) => true
     // Ref(I31, _) is compatible with i31ref
@@ -610,8 +612,6 @@ fn is_subtype(
     (FuncRef, Ref(Func, true)) => true
     // Ref(Any, _) is compatible with AnyRef
     (Ref(Any, _), AnyRef) => true
-    // Ref(Exn, _) is compatible with ExnRef
-    (Ref(Exn, _), ExnRef) => true
     // Any reference is subtype of AnyRef
     (Ref(_, _), AnyRef) => true
 
