@@ -312,6 +312,7 @@ pub(all) enum Instr {
   Loop(BlockType, Array[Instr])
   If(BlockType, Array[Instr], Array[Instr])
   Try(BlockType, Array[Instr], Array[TryCatch]) // Exception handling
+  TryDelegate(BlockType, Array[Instr], UInt) // Exception handling
   TryTable(BlockType, Array[CatchClause], Array[Instr]) // Exception handling
   Br(UInt)
   BrIf(UInt)

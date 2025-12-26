@@ -366,6 +366,48 @@ fn validate_instruction_control(
         stack.push(result)
       }
     }
+    TryDelegate(block_type, instrs, label_idx) => {
+      let (params, results) = get_block_type(module_, block_type)
+      for i = params.length() - 1; i >= 0; i = i - 1 {
+        ctx.poly_pop_expect(module_, params[i], "try parameter")
+      }
+      let try_ctx = ValidationCtx::new()
+      for param in params {
+        try_ctx.stack.push(param)
+      }
+      for frame in ctx.control_stack {
+        try_ctx.control_stack.push(frame)
+      }
+      try_ctx.push_control(params, results)
+      for i in 0..<ctx.initialized_locals.length() {
+        try_ctx.initialized_locals.push(ctx.initialized_locals[i])
+      }
+      for block_instr in instrs {
+        validate_instruction(
+          module_, func_type, code, try_ctx, block_instr, import_counts,
+        )
+      }
+      let _ = try_ctx.pop_control()
+      if try_ctx.is_unreachable && try_ctx.stack.length() == 0 {
+        // Unreachable with empty stack - all polymorphic, valid
+      } else if try_ctx.stack.length() != results.length() {
+        raise ValidationError::TypeMismatch(
+          "try: expected \{results.length()} values, got \{try_ctx.stack.length()}",
+        )
+      } else {
+        for i in 0..<results.length() {
+          if not(is_subtype(module_, try_ctx.stack[i], results[i])) {
+            raise ValidationError::TypeMismatch(
+              "try result type mismatch: expected \{results[i]}, got \{try_ctx.stack[i]}",
+            )
+          }
+        }
+      }
+      let _ = ctx.get_label_types(label_idx)
+      for result in results {
+        stack.push(result)
+      }
+    }
     TryTable(block_type, catches, instrs) => {
       let (params, results) = get_block_type(module_, block_type)
       for i = params.length() - 1; i >= 0; i = i - 1 {
