@@ -208,6 +208,14 @@ test "eval const expr values" {
   assert_eq(eval_const_expr(i64_mul, []), Value::I64(12UL))
   let ref_expr = make_expr([RefFunc(2U)])
   assert_eq(eval_const_expr(ref_expr, []), Value::Ref(Some(2)))
+  let ref_is_null = make_expr([RefNull(Func), RefIsNull])
+  assert_eq(eval_const_expr(ref_is_null, []), Value::I32(1U))
+  let ref_eq = make_expr([RefNull(Func), RefNull(Func), RefEq])
+  assert_eq(eval_const_expr(ref_eq, []), Value::I32(1U))
+  let ref_as_non_null = make_expr([RefFunc(1U), RefAsNonNull])
+  assert_eq(eval_const_expr(ref_as_non_null, []), Value::Ref(Some(1)))
+  let ref_i31 = make_expr([I32Const(42U), RefI31])
+  assert_eq(eval_const_expr(ref_i31, []), Value::Ref(Some(42)))
 }
 
 ///|

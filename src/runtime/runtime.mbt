@@ -577,6 +577,20 @@ fn pop_f64_value(
 }
 
 ///|
+fn pop_ref_value(
+  stack : Array[Value],
+  context : String,
+) -> Int? raise RuntimeError {
+  match stack.unsafe_pop() {
+    Ref(v) => v
+    _ =>
+      raise RuntimeError::UnsupportedInitExpression(
+        "type mismatch in \{context}",
+      )
+  }
+}
+
+///|
 fn push_i32_bool(stack : Array[Value], value : Bool) -> Unit {
   stack.push(I32(if value { 1U } else { 0U }))
 }
@@ -608,6 +622,67 @@ fn eval_const_expr(
           )
         }
         stack.push(globals[idx_int])
+      }
+      RefIsNull => {
+        let ref_value = pop_ref_value(stack, "ref.is_null")
+        match ref_value {
+          None => push_i32_bool(stack, true)
+          Some(_) => push_i32_bool(stack, false)
+        }
+      }
+      RefEq => {
+        let rhs = pop_ref_value(stack, "ref.eq")
+        let lhs = pop_ref_value(stack, "ref.eq")
+        let eq = match lhs {
+          None =>
+            match rhs {
+              None => true
+              Some(_) => false
+            }
+          Some(lhs_idx) =>
+            match rhs {
+              Some(rhs_idx) => lhs_idx == rhs_idx
+              None => false
+            }
+        }
+        push_i32_bool(stack, eq)
+      }
+      RefAsNonNull => {
+        let ref_value = pop_ref_value(stack, "ref.as_non_null")
+        match ref_value {
+          Some(idx) => stack.push(Ref(Some(idx)))
+          None =>
+            raise RuntimeError::UnsupportedInitExpression(
+              "ref.as_non_null on null reference",
+            )
+        }
+      }
+      RefTest(_ref_type, nullable) => {
+        let ref_value = pop_ref_value(stack, "ref.test")
+        let matches = match ref_value {
+          None => nullable
+          Some(_) => true
+        }
+        push_i32_bool(stack, matches)
+      }
+      RefCast(_ref_type, nullable) => {
+        let ref_value = pop_ref_value(stack, "ref.cast")
+        match ref_value {
+          None =>
+            if nullable {
+              stack.push(Ref(None))
+            } else {
+              raise RuntimeError::UnsupportedInitExpression(
+                "ref.cast on null reference",
+              )
+            }
+          Some(idx) => stack.push(Ref(Some(idx)))
+        }
+      }
+      RefI31 => {
+        let value = pop_i32_value(stack, "ref.i31")
+        let masked = value & 0x7FFFFFFFU
+        stack.push(Ref(Some(masked.reinterpret_as_int())))
       }
       I32Eqz => {
         let a = pop_i32_value(stack, "i32.eqz")

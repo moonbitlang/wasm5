@@ -7084,6 +7084,12 @@ fn resolve_const_instrs(
           | F32Const(_)
           | F64Const(_)
           | RefNull(_)
+          | RefIsNull
+          | RefEq
+          | RefAsNonNull
+          | RefTest(_, _)
+          | RefCast(_, _)
+          | RefI31
           | I32Eqz
           | I32Eq
           | I32Ne
