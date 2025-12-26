@@ -92,7 +92,10 @@ fn make_import_wrapper(
   ) {
     // Call the registered module's exported function
     let rt = registered.runtime
-    let (_, results) = rt.call_compiled(@encoding/utf8.encode(export_name), args) catch {
+    let (_, results) = rt.call_compiled(
+      @encoding/utf8.encode(export_name),
+      args,
+    ) catch {
       _ => (rt, [])
     }
     results
@@ -557,7 +560,10 @@ fn handle_assert_return(
       )
       return
     }
-    let (_, results) = rt.call_compiled(@encoding/utf8.encode(fn_name), runtime_args)
+    let (_, results) = rt.call_compiled(
+      @encoding/utf8.encode(fn_name),
+      runtime_args,
+    )
     // Check result count
     if expected.length() != results.length() {
       ctx.fail(

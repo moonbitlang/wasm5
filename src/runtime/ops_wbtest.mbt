@@ -54,22 +54,6 @@ fn make_runtime(
 }
 
 ///|
-fn assert_stack_eq(stack : Array[UInt64], expected : Array[Value]) -> Unit {
-  if stack.length() != expected.length() {
-    abort(
-      "stack length mismatch: got \{stack.length()}, expected \{expected.length()}",
-    )
-  }
-  for i in 0..<stack.length() {
-    let got = stack[i]
-    let exp = value_to_stack(expected[i])
-    if got != exp {
-      abort("stack[\{i}] mismatch: got \{got}, expected \{exp}")
-    }
-  }
-}
-
-///|
 fn assert_stack_elem_eq(got : UInt64, expected : Value) -> Unit {
   let exp = value_to_stack(expected)
   if got != exp {

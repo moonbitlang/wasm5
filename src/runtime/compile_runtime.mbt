@@ -33,9 +33,7 @@ pub fn Runtime::compile(self : Runtime) -> Runtime raise RuntimeError {
 
         // Execute start function, ignoring runtime errors
         // (e.g., calls to unimplemented imported functions)
-        let rt = try {
-          execute(rt)
-        } catch {
+        let rt = execute(rt) catch {
           _ => rt // Ignore runtime errors in start function
         }
 

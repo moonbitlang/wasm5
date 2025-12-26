@@ -95,7 +95,10 @@ fn op_br(rt : Runtime) -> Runtime {
     let target_start = result_start - drop_count
     // Copy forward is safe since target_start < result_start
     for i = 0; i < arity; i = i + 1 {
-      rt.stack.unsafe_set(target_start + i, rt.stack.unsafe_get(result_start + i))
+      rt.stack.unsafe_set(
+        target_start + i,
+        rt.stack.unsafe_get(result_start + i),
+      )
     }
   }
 
@@ -116,7 +119,10 @@ fn op_br_if(rt : Runtime) -> Runtime {
       let result_start = stack_top - arity
       let target_start = result_start - drop_count
       for i = 0; i < arity; i = i + 1 {
-        rt.stack.unsafe_set(target_start + i, rt.stack.unsafe_get(result_start + i))
+        rt.stack.unsafe_set(
+          target_start + i,
+          rt.stack.unsafe_get(result_start + i),
+        )
       }
     }
 
@@ -157,7 +163,10 @@ fn op_br_table(rt : Runtime) -> Runtime {
     let result_start = stack_top - arity
     let target_start = result_start - drop_count
     for i = 0; i < arity; i = i + 1 {
-      rt.stack.unsafe_set(target_start + i, rt.stack.unsafe_get(result_start + i))
+      rt.stack.unsafe_set(
+        target_start + i,
+        rt.stack.unsafe_get(result_start + i),
+      )
     }
   }
 
@@ -182,7 +191,10 @@ fn op_br_on_null(rt : Runtime) -> Runtime {
       let result_start = stack_top - arity
       let target_start = result_start - drop_count
       for i = 0; i < arity; i = i + 1 {
-        rt.stack.unsafe_set(target_start + i, rt.stack.unsafe_get(result_start + i))
+        rt.stack.unsafe_set(
+          target_start + i,
+          rt.stack.unsafe_get(result_start + i),
+        )
       }
     }
 
@@ -215,7 +227,10 @@ fn op_br_on_non_null(rt : Runtime) -> Runtime {
       let result_start = stack_top - arity
       let target_start = result_start - drop_count
       for i = 0; i < arity; i = i + 1 {
-        rt.stack.unsafe_set(target_start + i, rt.stack.unsafe_get(result_start + i))
+        rt.stack.unsafe_set(
+          target_start + i,
+          rt.stack.unsafe_get(result_start + i),
+        )
       }
     }
 
@@ -235,7 +250,11 @@ fn op_call(rt : Runtime) -> Runtime {
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
     // Get the imported function's type from the import descriptor
-    let type_idx = get_func_type_idx(rt.ctx.module_, func_idx, num_imported_funcs)
+    let type_idx = get_func_type_idx(
+      rt.ctx.module_,
+      func_idx,
+      num_imported_funcs,
+    )
     if type_idx < 0 {
       rt.ctx.error_detail = "call: invalid imported function index"
       return { ..rt, status: Trap }
@@ -245,7 +264,12 @@ fn op_call(rt : Runtime) -> Runtime {
       None => return { ..rt, status: Trap }
     }
     let (rt, args) = pop_arguments(rt, func_type)
-    let rt = call_imported_function(rt, func_idx, args, func_type.results.length())
+    let rt = call_imported_function(
+      rt,
+      func_idx,
+      args,
+      func_type.results.length(),
+    )
     return { ..rt, pc: rt.pc + 1 }
   }
 
@@ -287,7 +311,12 @@ fn op_call(rt : Runtime) -> Runtime {
   }
 
   // Update frame state
-  { ..rt, sp: new_sp, num_locals: num_params + code.locals.length(), pc: callee_pc }
+  {
+    ..rt,
+    sp: new_sp,
+    num_locals: num_params + code.locals.length(),
+    pc: callee_pc,
+  }
 }
 
 ///|
@@ -315,7 +344,13 @@ fn op_return(rt : Runtime) -> Runtime {
 
   // Restore caller's state
   let frame = rt.ctx.call_stack.unsafe_pop()
-  { ..rt, stack_top, sp: frame.caller_sp, num_locals: frame.caller_num_locals, pc: frame.return_pc + 1 }
+  {
+    ..rt,
+    stack_top,
+    sp: frame.caller_sp,
+    num_locals: frame.caller_num_locals,
+    pc: frame.return_pc + 1,
+  }
 }
 
 ///|
@@ -326,7 +361,7 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
   // Pop the function index from the stack
   let stack_top = rt.stack_top - 1
   let elem_idx = rt.stack.unsafe_get(stack_top).to_uint().reinterpret_as_int()
-  let rt = { ..rt, stack_top }
+  let rt = { ..rt, stack_top, }
 
   // Check table bounds
   if table_idx < 0 || table_idx >= rt.ctx.tables.length() {
@@ -348,7 +383,8 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
   let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
 
   // Get the expected type
-  let expected_type = match get_func_type_or_error(rt, type_idx, "call_indirect") {
+  let expected_type = match
+    get_func_type_or_error(rt, type_idx, "call_indirect") {
     Some(found) => found
     None => return { ..rt, status: Trap }
   }
@@ -356,23 +392,35 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
     // Get the imported function's type from the import descriptor
-    let actual_type_idx = get_func_type_idx(rt.ctx.module_, func_idx, num_imported_funcs)
+    let actual_type_idx = get_func_type_idx(
+      rt.ctx.module_,
+      func_idx,
+      num_imported_funcs,
+    )
     if actual_type_idx < 0 {
       rt.ctx.error_detail = "call_indirect: invalid imported function index"
       return { ..rt, status: Trap }
     }
-    let actual_type = match get_func_type_or_error(rt, actual_type_idx, "call_indirect") {
+    let actual_type = match
+      get_func_type_or_error(rt, actual_type_idx, "call_indirect") {
       Some(found) => found
       None => return { ..rt, status: Trap }
     }
 
     // Check type signature matches
-    let rt = check_type_signature_match(expected_type, actual_type, "indirect call type mismatch", rt)
+    let rt = check_type_signature_match(
+      expected_type, actual_type, "indirect call type mismatch", rt,
+    )
     if rt.status == Trap {
       return rt
     }
     let (rt, args) = pop_arguments(rt, actual_type)
-    let rt = call_imported_function(rt, func_idx, args, expected_type.results.length())
+    let rt = call_imported_function(
+      rt,
+      func_idx,
+      args,
+      expected_type.results.length(),
+    )
     return { ..rt, pc: rt.pc + 1 }
   }
 
@@ -387,13 +435,16 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
 
   // Get the actual function type
   let actual_type_idx = rt.ctx.module_.funcs[local_func_idx].reinterpret_as_int()
-  let actual_type = match get_func_type_or_error(rt, actual_type_idx, "call_indirect") {
+  let actual_type = match
+    get_func_type_or_error(rt, actual_type_idx, "call_indirect") {
     Some(found) => found
     None => return { ..rt, status: Trap }
   }
 
   // Check type signature matches
-  let rt = check_type_signature_match(expected_type, actual_type, "indirect call type mismatch", rt)
+  let rt = check_type_signature_match(
+    expected_type, actual_type, "indirect call type mismatch", rt,
+  )
   if rt.status == Trap {
     return rt
   }
@@ -427,7 +478,12 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
   }
 
   // Update frame state
-  { ..rt, sp: new_sp, num_locals: num_params + code.locals.length(), pc: callee_pc }
+  {
+    ..rt,
+    sp: new_sp,
+    num_locals: num_params + code.locals.length(),
+    pc: callee_pc,
+  }
 }
 
 ///|
@@ -438,7 +494,11 @@ fn op_return_call(rt : Runtime) -> Runtime {
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
     // Get the imported function's type from the import descriptor
-    let type_idx = get_func_type_idx(rt.ctx.module_, func_idx, num_imported_funcs)
+    let type_idx = get_func_type_idx(
+      rt.ctx.module_,
+      func_idx,
+      num_imported_funcs,
+    )
     if type_idx < 0 {
       rt.ctx.error_detail = "return_call: invalid imported function index"
       return { ..rt, status: Trap }
@@ -448,7 +508,12 @@ fn op_return_call(rt : Runtime) -> Runtime {
       None => return { ..rt, status: Trap }
     }
     let (rt, args) = pop_arguments(rt, func_type)
-    let rt = call_imported_function(rt, func_idx, args, func_type.results.length())
+    let rt = call_imported_function(
+      rt,
+      func_idx,
+      args,
+      func_type.results.length(),
+    )
     return handle_tail_call_return(rt)
   }
 
@@ -497,7 +562,7 @@ fn op_return_call_indirect(rt : Runtime) -> Runtime {
   // Pop the function index from the stack
   let stack_top = rt.stack_top - 1
   let elem_idx = rt.stack.unsafe_get(stack_top).to_uint().reinterpret_as_int()
-  let rt = { ..rt, stack_top }
+  let rt = { ..rt, stack_top, }
 
   // Check table bounds
   if table_idx < 0 || table_idx >= rt.ctx.tables.length() {
@@ -519,7 +584,8 @@ fn op_return_call_indirect(rt : Runtime) -> Runtime {
   let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
 
   // Get the expected type
-  let expected_type = match get_func_type_or_error(rt, type_idx, "return_call_indirect") {
+  let expected_type = match
+    get_func_type_or_error(rt, type_idx, "return_call_indirect") {
     Some(found) => found
     None => return { ..rt, status: Trap }
   }
@@ -527,23 +593,35 @@ fn op_return_call_indirect(rt : Runtime) -> Runtime {
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
     // Get the imported function's type from the import descriptor
-    let actual_type_idx = get_func_type_idx(rt.ctx.module_, func_idx, num_imported_funcs)
+    let actual_type_idx = get_func_type_idx(
+      rt.ctx.module_,
+      func_idx,
+      num_imported_funcs,
+    )
     if actual_type_idx < 0 {
       rt.ctx.error_detail = "return_call_indirect: invalid imported function index"
       return { ..rt, status: Trap }
     }
-    let actual_type = match get_func_type_or_error(rt, actual_type_idx, "return_call_indirect") {
+    let actual_type = match
+      get_func_type_or_error(rt, actual_type_idx, "return_call_indirect") {
       Some(found) => found
       None => return { ..rt, status: Trap }
     }
 
     // Check type signature matches
-    let rt = check_type_signature_match(expected_type, actual_type, "indirect call type mismatch", rt)
+    let rt = check_type_signature_match(
+      expected_type, actual_type, "indirect call type mismatch", rt,
+    )
     if rt.status == Trap {
       return rt
     }
     let (rt, args) = pop_arguments(rt, actual_type)
-    let rt = call_imported_function(rt, func_idx, args, expected_type.results.length())
+    let rt = call_imported_function(
+      rt,
+      func_idx,
+      args,
+      expected_type.results.length(),
+    )
     return handle_tail_call_return(rt)
   }
 
@@ -558,13 +636,16 @@ fn op_return_call_indirect(rt : Runtime) -> Runtime {
 
   // Get the actual function type
   let actual_type_idx = rt.ctx.module_.funcs[local_func_idx].reinterpret_as_int()
-  let actual_type = match get_func_type_or_error(rt, actual_type_idx, "return_call_indirect") {
+  let actual_type = match
+    get_func_type_or_error(rt, actual_type_idx, "return_call_indirect") {
     Some(found) => found
     None => return { ..rt, status: Trap }
   }
 
   // Check type signature matches
-  let rt = check_type_signature_match(expected_type, actual_type, "indirect call type mismatch", rt)
+  let rt = check_type_signature_match(
+    expected_type, actual_type, "indirect call type mismatch", rt,
+  )
   if rt.status == Trap {
     return rt
   }
@@ -605,8 +686,11 @@ fn op_call_ref(rt : Runtime) -> Runtime {
 
   // Pop the function reference from the stack (stored as Int64, -1 = null)
   let stack_top = rt.stack_top - 1
-  let func_ref_raw = rt.stack.unsafe_get(stack_top).reinterpret_as_int64().to_int()
-  let rt = { ..rt, stack_top }
+  let func_ref_raw = rt.stack
+    .unsafe_get(stack_top)
+    .reinterpret_as_int64()
+    .to_int()
+  let rt = { ..rt, stack_top, }
   if func_ref_raw == -1 {
     rt.ctx.error_detail = "call_ref: null function reference"
     return { ..rt, status: Trap }
@@ -623,23 +707,35 @@ fn op_call_ref(rt : Runtime) -> Runtime {
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
     // Get the imported function's type from the import descriptor
-    let actual_type_idx = get_func_type_idx(rt.ctx.module_, func_idx, num_imported_funcs)
+    let actual_type_idx = get_func_type_idx(
+      rt.ctx.module_,
+      func_idx,
+      num_imported_funcs,
+    )
     if actual_type_idx < 0 {
       rt.ctx.error_detail = "call_ref: invalid imported function index"
       return { ..rt, status: Trap }
     }
-    let actual_type = match get_func_type_or_error(rt, actual_type_idx, "call_ref") {
+    let actual_type = match
+      get_func_type_or_error(rt, actual_type_idx, "call_ref") {
       Some(found) => found
       None => return { ..rt, status: Trap }
     }
 
     // Check type signature matches
-    let rt = check_type_signature_match(func_type, actual_type, "call_ref: type mismatch", rt)
+    let rt = check_type_signature_match(
+      func_type, actual_type, "call_ref: type mismatch", rt,
+    )
     if rt.status == Trap {
       return rt
     }
     let (rt, args) = pop_arguments(rt, func_type)
-    let rt = call_imported_function(rt, func_idx, args, func_type.results.length())
+    let rt = call_imported_function(
+      rt,
+      func_idx,
+      args,
+      func_type.results.length(),
+    )
     return { ..rt, pc: rt.pc + 1 }
   }
 
@@ -650,13 +746,16 @@ fn op_call_ref(rt : Runtime) -> Runtime {
     return { ..rt, status: Trap }
   }
   let actual_type_idx = rt.ctx.module_.funcs[local_func_idx].reinterpret_as_int()
-  let actual_type = match get_func_type_or_error(rt, actual_type_idx, "call_ref") {
+  let actual_type = match
+    get_func_type_or_error(rt, actual_type_idx, "call_ref") {
     Some(found) => found
     None => return { ..rt, status: Trap }
   }
 
   // Check type signature matches
-  let rt = check_type_signature_match(func_type, actual_type, "call_ref: type mismatch", rt)
+  let rt = check_type_signature_match(
+    func_type, actual_type, "call_ref: type mismatch", rt,
+  )
   if rt.status == Trap {
     return rt
   }
@@ -690,7 +789,12 @@ fn op_call_ref(rt : Runtime) -> Runtime {
   }
 
   // Update frame state
-  { ..rt, sp: new_sp, num_locals: num_params + code.locals.length(), pc: callee_pc }
+  {
+    ..rt,
+    sp: new_sp,
+    num_locals: num_params + code.locals.length(),
+    pc: callee_pc,
+  }
 }
 
 ///|
@@ -699,8 +803,11 @@ fn op_return_call_ref(rt : Runtime) -> Runtime {
 
   // Pop the function reference from the stack (stored as Int64, -1 = null)
   let stack_top = rt.stack_top - 1
-  let func_ref_raw = rt.stack.unsafe_get(stack_top).reinterpret_as_int64().to_int()
-  let rt = { ..rt, stack_top }
+  let func_ref_raw = rt.stack
+    .unsafe_get(stack_top)
+    .reinterpret_as_int64()
+    .to_int()
+  let rt = { ..rt, stack_top, }
   if func_ref_raw == -1 {
     rt.ctx.error_detail = "return_call_ref: null function reference"
     return { ..rt, status: Trap }
@@ -709,7 +816,8 @@ fn op_return_call_ref(rt : Runtime) -> Runtime {
   let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
 
   // Get the expected function type
-  let func_type = match get_func_type_or_error(rt, type_idx, "return_call_ref") {
+  let func_type = match
+    get_func_type_or_error(rt, type_idx, "return_call_ref") {
     Some(found) => found
     None => return { ..rt, status: Trap }
   }
@@ -717,23 +825,35 @@ fn op_return_call_ref(rt : Runtime) -> Runtime {
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
     // Get the imported function's type from the import descriptor
-    let actual_type_idx = get_func_type_idx(rt.ctx.module_, func_idx, num_imported_funcs)
+    let actual_type_idx = get_func_type_idx(
+      rt.ctx.module_,
+      func_idx,
+      num_imported_funcs,
+    )
     if actual_type_idx < 0 {
       rt.ctx.error_detail = "return_call_ref: invalid imported function index"
       return { ..rt, status: Trap }
     }
-    let actual_type = match get_func_type_or_error(rt, actual_type_idx, "return_call_ref") {
+    let actual_type = match
+      get_func_type_or_error(rt, actual_type_idx, "return_call_ref") {
       Some(found) => found
       None => return { ..rt, status: Trap }
     }
 
     // Check type signature matches
-    let rt = check_type_signature_match(func_type, actual_type, "return_call_ref: type mismatch", rt)
+    let rt = check_type_signature_match(
+      func_type, actual_type, "return_call_ref: type mismatch", rt,
+    )
     if rt.status == Trap {
       return rt
     }
     let (rt, args) = pop_arguments(rt, func_type)
-    let rt = call_imported_function(rt, func_idx, args, func_type.results.length())
+    let rt = call_imported_function(
+      rt,
+      func_idx,
+      args,
+      func_type.results.length(),
+    )
     return handle_tail_call_return(rt)
   }
 
@@ -744,13 +864,16 @@ fn op_return_call_ref(rt : Runtime) -> Runtime {
     return { ..rt, status: Trap }
   }
   let actual_type_idx = rt.ctx.module_.funcs[local_func_idx].reinterpret_as_int()
-  let actual_type = match get_func_type_or_error(rt, actual_type_idx, "return_call_ref") {
+  let actual_type = match
+    get_func_type_or_error(rt, actual_type_idx, "return_call_ref") {
     Some(found) => found
     None => return { ..rt, status: Trap }
   }
 
   // Check type signature matches
-  let rt = check_type_signature_match(func_type, actual_type, "return_call_ref: type mismatch", rt)
+  let rt = check_type_signature_match(
+    func_type, actual_type, "return_call_ref: type mismatch", rt,
+  )
   if rt.status == Trap {
     return rt
   }
@@ -864,7 +987,10 @@ fn op_table_fill(rt : Runtime) -> Runtime {
   }
   let stack_top = rt.stack_top - 3
   let n = rt.stack.unsafe_get(rt.stack_top - 1).to_uint().reinterpret_as_int()
-  let raw_ref = rt.stack.unsafe_get(rt.stack_top - 2).reinterpret_as_int64().to_int()
+  let raw_ref = rt.stack
+    .unsafe_get(rt.stack_top - 2)
+    .reinterpret_as_int64()
+    .to_int()
   let ref_value : Int? = if raw_ref == -1 { None } else { Some(raw_ref) }
   let dest = rt.stack.unsafe_get(stack_top).to_uint().reinterpret_as_int()
   let table = rt.ctx.tables[table_idx].data
@@ -933,7 +1059,10 @@ fn op_table_set(rt : Runtime) -> Runtime {
   }
   // Pop ref value - stored as Int64, -1 = null
   let stack_top = rt.stack_top - 2
-  let raw_ref = rt.stack.unsafe_get(rt.stack_top - 1).reinterpret_as_int64().to_int()
+  let raw_ref = rt.stack
+    .unsafe_get(rt.stack_top - 1)
+    .reinterpret_as_int64()
+    .to_int()
   let ref_value : Int? = if raw_ref == -1 { None } else { Some(raw_ref) }
   let elem_idx = rt.stack.unsafe_get(stack_top).to_uint().reinterpret_as_int()
   let table = rt.ctx.tables[table_idx].data
@@ -953,7 +1082,10 @@ fn op_table_grow(rt : Runtime) -> Runtime {
     return { ..rt, stack_top: rt.stack_top + 1, pc: rt.pc + 1 }
   }
   let stack_top = rt.stack_top - 2
-  let delta = rt.stack.unsafe_get(rt.stack_top - 1).to_uint().reinterpret_as_int()
+  let delta = rt.stack
+    .unsafe_get(rt.stack_top - 1)
+    .to_uint()
+    .reinterpret_as_int()
   // Pop ref value - stored as Int64, -1 = null
   let raw_ref = rt.stack.unsafe_get(stack_top).reinterpret_as_int64().to_int()
   let init_value : Int? = if raw_ref == -1 { None } else { Some(raw_ref) }
@@ -1024,7 +1156,10 @@ fn op_ref_eq(rt : Runtime) -> Runtime {
   // ref.eq compares two references for identity equality
   // Refs are stored as Int64, -1 = null
   let stack_top = rt.stack_top - 2
-  let rhs = rt.stack.unsafe_get(rt.stack_top - 1).reinterpret_as_int64().to_int()
+  let rhs = rt.stack
+    .unsafe_get(rt.stack_top - 1)
+    .reinterpret_as_int64()
+    .to_int()
   let lhs = rt.stack.unsafe_get(stack_top).reinterpret_as_int64().to_int()
   let eq : UInt64 = if lhs == rhs { 1UL } else { 0UL }
   rt.stack.unsafe_set(stack_top, eq)

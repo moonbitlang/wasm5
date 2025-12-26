@@ -225,7 +225,10 @@ fn get_tag_type_idx(
 ///|
 /// Pop function arguments from the stack (converts UInt64 to Value)
 /// Returns (new Runtime with updated stack_top, args array)
-fn pop_arguments(rt : Runtime, func_type : @core.FuncType) -> (Runtime, Array[Value]) {
+fn pop_arguments(
+  rt : Runtime,
+  func_type : @core.FuncType,
+) -> (Runtime, Array[Value]) {
   let num_params = func_type.params.length()
   let args : Array[Value] = Array::make(num_params, Value::I32(0U))
   let mut stack_top = rt.stack_top
@@ -234,7 +237,7 @@ fn pop_arguments(rt : Runtime, func_type : @core.FuncType) -> (Runtime, Array[Va
     let raw = rt.stack.unsafe_get(stack_top)
     args[i] = stack_to_value(raw, func_type.params[i])
   }
-  ({ ..rt, stack_top }, args)
+  ({ ..rt, stack_top, }, args)
 }
 
 ///|
@@ -271,7 +274,7 @@ fn init_declared_locals(rt : Runtime, code : @core.Code) -> Runtime {
       }
     }
   }
-  { ..rt, stack_top }
+  { ..rt, stack_top, }
 }
 
 ///|
@@ -294,9 +297,9 @@ fn initialize_entry_locals(
   }
 
   // Push default values for declared locals
-  let rt2 = init_declared_locals({ ..rt, stack_top }, code)
+  let rt2 = init_declared_locals({ ..rt, stack_top, }, code)
   if rt2.status == Trap {
-    return { ..rt2, sp }
+    return { ..rt2, sp, }
   }
 
   // Set num_locals
@@ -354,7 +357,7 @@ fn call_imported_function(
     rt.stack.unsafe_set(stack_top, value_to_stack(results[i]))
     stack_top += 1
   }
-  { ..rt, stack_top }
+  { ..rt, stack_top, }
 }
 
 ///|
@@ -363,7 +366,12 @@ fn call_imported_function(
 fn handle_tail_call_return(rt : Runtime) -> Runtime {
   if rt.ctx.call_stack.length() > 0 {
     let frame = rt.ctx.call_stack.unsafe_pop()
-    { ..rt, sp: frame.caller_sp, num_locals: frame.caller_num_locals, pc: frame.return_pc + 1 }
+    {
+      ..rt,
+      sp: frame.caller_sp,
+      num_locals: frame.caller_num_locals,
+      pc: frame.return_pc + 1,
+    }
   } else {
     { ..rt, status: Terminated }
   }
@@ -375,7 +383,7 @@ fn handle_tail_call_return(rt : Runtime) -> Runtime {
 fn read_imm_i32(rt : Runtime) -> (Runtime, UInt) {
   let pc = rt.pc + 1
   guard rt.ops.unsafe_get(pc) is ImmediateI32(value)
-  ({ ..rt, pc }, value)
+  ({ ..rt, pc, }, value)
 }
 
 ///|
@@ -384,7 +392,7 @@ fn read_imm_i32(rt : Runtime) -> (Runtime, UInt) {
 fn read_imm_idx(rt : Runtime) -> (Runtime, Int) {
   let pc = rt.pc + 1
   guard rt.ops.unsafe_get(pc) is ImmediateIdx(value)
-  ({ ..rt, pc }, value)
+  ({ ..rt, pc, }, value)
 }
 
 // ============================================================================

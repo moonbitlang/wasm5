@@ -9,7 +9,6 @@ pub suberror RuntimeError {
   UnimplementedInstruction(String) // Instruction not yet implemented
   Unreachable // Unreachable instruction executed
   FunctionNotCompiled(String) // Function not compiled
-  UnsupportedLocalType(String) // Unsupported local type
   UnsupportedInitExpression(String) // Unsupported init expression
   StackOverflow // Stack capacity exceeded
 } derive(Show)
@@ -18,15 +17,15 @@ pub suberror RuntimeError {
 /// Create a RuntimeError from error_detail string
 /// The detail string should start with an error type prefix
 fn RuntimeError::from_detail(detail : String) -> RuntimeError {
-  if detail.starts_with("division by zero") {
+  if detail.has_prefix("division by zero") {
     RuntimeError::DivisionByZero
-  } else if detail.starts_with("integer overflow") {
+  } else if detail.has_prefix("integer overflow") {
     RuntimeError::IntegerOverflow
-  } else if detail.starts_with("out of bounds") {
+  } else if detail.has_prefix("out of bounds") {
     RuntimeError::MemoryOutOfBounds
-  } else if detail.starts_with("unreachable") {
+  } else if detail.has_prefix("unreachable") {
     RuntimeError::Unreachable
-  } else if detail.starts_with("stack overflow") {
+  } else if detail.has_prefix("stack overflow") {
     RuntimeError::StackOverflow
   } else {
     RuntimeError::InvalidType(detail)
@@ -527,15 +526,8 @@ pub fn Runtime::load_with_resolver(
 
   // Create RuntimeContext with cold data
   let ctx = RuntimeContext::new(
-    m,
-    memory,
-    memory_max_pages,
-    globals,
-    tables,
-    imported_funcs,
-    data_segments,
+    m, memory, memory_max_pages, globals, tables, imported_funcs, data_segments,
   )
-
   Runtime::{
     ops: compiler.finish(),
     stack: FixedArray::make(initial_stack_capacity, 0UL),

@@ -356,7 +356,10 @@ fn op_f64_add(rt : Runtime) -> Runtime {
   let stack_top = rt.stack_top - 1
   let b = rt.stack.unsafe_get(stack_top).reinterpret_as_double()
   let a = rt.stack.unsafe_get(stack_top - 1).reinterpret_as_double()
-  rt.stack.unsafe_set(stack_top - 1, canonicalize_f64(a + b).reinterpret_as_uint64())
+  rt.stack.unsafe_set(
+    stack_top - 1,
+    canonicalize_f64(a + b).reinterpret_as_uint64(),
+  )
   { ..rt, stack_top, pc: rt.pc + 1 }
 }
 
@@ -365,7 +368,10 @@ fn op_f64_sub(rt : Runtime) -> Runtime {
   let stack_top = rt.stack_top - 1
   let b = rt.stack.unsafe_get(stack_top).reinterpret_as_double()
   let a = rt.stack.unsafe_get(stack_top - 1).reinterpret_as_double()
-  rt.stack.unsafe_set(stack_top - 1, canonicalize_f64(a - b).reinterpret_as_uint64())
+  rt.stack.unsafe_set(
+    stack_top - 1,
+    canonicalize_f64(a - b).reinterpret_as_uint64(),
+  )
   { ..rt, stack_top, pc: rt.pc + 1 }
 }
 
@@ -374,7 +380,10 @@ fn op_f64_mul(rt : Runtime) -> Runtime {
   let stack_top = rt.stack_top - 1
   let b = rt.stack.unsafe_get(stack_top).reinterpret_as_double()
   let a = rt.stack.unsafe_get(stack_top - 1).reinterpret_as_double()
-  rt.stack.unsafe_set(stack_top - 1, canonicalize_f64(a * b).reinterpret_as_uint64())
+  rt.stack.unsafe_set(
+    stack_top - 1,
+    canonicalize_f64(a * b).reinterpret_as_uint64(),
+  )
   { ..rt, stack_top, pc: rt.pc + 1 }
 }
 
@@ -383,7 +392,10 @@ fn op_f64_div(rt : Runtime) -> Runtime {
   let stack_top = rt.stack_top - 1
   let b = rt.stack.unsafe_get(stack_top).reinterpret_as_double()
   let a = rt.stack.unsafe_get(stack_top - 1).reinterpret_as_double()
-  rt.stack.unsafe_set(stack_top - 1, canonicalize_f64(a / b).reinterpret_as_uint64())
+  rt.stack.unsafe_set(
+    stack_top - 1,
+    canonicalize_f64(a / b).reinterpret_as_uint64(),
+  )
   { ..rt, stack_top, pc: rt.pc + 1 }
 }
 
