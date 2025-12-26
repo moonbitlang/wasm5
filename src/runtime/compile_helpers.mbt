@@ -223,12 +223,15 @@ fn get_tag_type_idx(
 }
 
 ///|
+/// Value struct for pop_arguments result (avoids tuple allocation)
+struct PopArgs {
+  rt : Runtime
+  args : Array[Value]
+}
+
+///|
 /// Pop function arguments from the stack (converts UInt64 to Value)
-/// Returns (new Runtime with updated stack_top, args array)
-fn pop_arguments(
-  rt : Runtime,
-  func_type : @core.FuncType,
-) -> (Runtime, Array[Value]) {
+fn pop_arguments(rt : Runtime, func_type : @core.FuncType) -> PopArgs {
   let num_params = func_type.params.length()
   let args : Array[Value] = Array::make(num_params, Value::I32(0U))
   let mut stack_top = rt.stack_top
@@ -237,7 +240,7 @@ fn pop_arguments(
     let raw = rt.stack.unsafe_get(stack_top)
     args[i] = stack_to_value(raw, func_type.params[i])
   }
-  ({ ..rt, stack_top, }, args)
+  { rt: { ..rt, stack_top, }, args }
 }
 
 ///|
@@ -378,21 +381,33 @@ fn handle_tail_call_return(rt : Runtime) -> Runtime {
 }
 
 ///|
+/// Value struct for read_imm_i32 result (avoids tuple allocation)
+struct ReadI32 {
+  rt : Runtime
+  value : UInt
+}
+
+///|
+/// Value struct for read_imm_idx result (avoids tuple allocation)
+struct ReadIdx {
+  rt : Runtime
+  value : Int
+}
+
+///|
 /// Read immediate i32 value and advance PC
-/// Returns (Runtime with new pc, value)
-fn read_imm_i32(rt : Runtime) -> (Runtime, UInt) {
+fn read_imm_i32(rt : Runtime) -> ReadI32 {
   let pc = rt.pc + 1
   guard rt.ops.unsafe_get(pc) is ImmediateI32(value)
-  ({ ..rt, pc, }, value)
+  { rt: { ..rt, pc, }, value }
 }
 
 ///|
 /// Read immediate index value and advance PC
-/// Returns (Runtime with new pc, value)
-fn read_imm_idx(rt : Runtime) -> (Runtime, Int) {
+fn read_imm_idx(rt : Runtime) -> ReadIdx {
   let pc = rt.pc + 1
   guard rt.ops.unsafe_get(pc) is ImmediateIdx(value)
-  ({ ..rt, pc, }, value)
+  { rt: { ..rt, pc, }, value }
 }
 
 // ============================================================================

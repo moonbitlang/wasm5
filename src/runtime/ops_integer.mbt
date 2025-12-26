@@ -4,7 +4,7 @@
 
 ///|
 fn op_i32_const(rt : Runtime) -> Runtime {
-  let (rt, value) = read_imm_i32(rt)
+  let { rt, value } = read_imm_i32(rt)
   rt.stack.unsafe_set(rt.stack_top, value.to_uint64())
   { ..rt, stack_top: rt.stack_top + 1, pc: rt.pc + 1 }
 }
@@ -362,8 +362,8 @@ fn op_i32_wrap_i64(rt : Runtime) -> Runtime {
 ///|
 fn op_i64_const(rt : Runtime) -> Runtime {
   // Read two i32 immediates to form i64
-  let (rt, low) = read_imm_i32(rt)
-  let (rt, high) = read_imm_i32(rt)
+  let { rt, value: low } = read_imm_i32(rt)
+  let { rt, value: high } = read_imm_i32(rt)
   let value = low.to_uint64() | (high.to_uint64() << 32)
   rt.stack.unsafe_set(rt.stack_top, value)
   { ..rt, stack_top: rt.stack_top + 1, pc: rt.pc + 1 }
@@ -371,15 +371,15 @@ fn op_i64_const(rt : Runtime) -> Runtime {
 
 ///|
 fn op_f32_const(rt : Runtime) -> Runtime {
-  let (rt, bits) = read_imm_i32(rt)
+  let { rt, value: bits } = read_imm_i32(rt)
   rt.stack.unsafe_set(rt.stack_top, bits.to_uint64())
   { ..rt, stack_top: rt.stack_top + 1, pc: rt.pc + 1 }
 }
 
 ///|
 fn op_f64_const(rt : Runtime) -> Runtime {
-  let (rt, low) = read_imm_i32(rt)
-  let (rt, high) = read_imm_i32(rt)
+  let { rt, value: low } = read_imm_i32(rt)
+  let { rt, value: high } = read_imm_i32(rt)
   let bits = low.to_uint64() | (high.to_uint64() << 32)
   rt.stack.unsafe_set(rt.stack_top, bits)
   { ..rt, stack_top: rt.stack_top + 1, pc: rt.pc + 1 }

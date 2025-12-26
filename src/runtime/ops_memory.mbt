@@ -7,7 +7,7 @@
 
 ///|
 fn op_i32_load(rt : Runtime) -> Runtime {
-  let (rt, offset) = read_imm_idx(rt)
+  let { rt, value: offset } = read_imm_idx(rt)
   let offset = offset.reinterpret_as_uint().to_uint64()
   let stack_top = rt.stack_top - 1
   let base = rt.stack.unsafe_get(stack_top)
@@ -31,7 +31,7 @@ fn op_i32_load(rt : Runtime) -> Runtime {
 
 ///|
 fn op_i32_store(rt : Runtime) -> Runtime {
-  let (rt, offset) = read_imm_idx(rt)
+  let { rt, value: offset } = read_imm_idx(rt)
   let offset = offset.reinterpret_as_uint().to_uint64()
   let stack_top = rt.stack_top - 2
   let value = rt.stack.unsafe_get(rt.stack_top - 1).to_uint()
@@ -54,7 +54,7 @@ fn op_i32_store(rt : Runtime) -> Runtime {
 
 ///|
 fn op_i32_load8_s(rt : Runtime) -> Runtime {
-  let (rt, offset) = read_imm_idx(rt)
+  let { rt, value: offset } = read_imm_idx(rt)
   let offset = offset.reinterpret_as_uint().to_uint64()
   let stack_top = rt.stack_top - 1
   let base = rt.stack.unsafe_get(stack_top)
@@ -74,7 +74,7 @@ fn op_i32_load8_s(rt : Runtime) -> Runtime {
 
 ///|
 fn op_i32_load8_u(rt : Runtime) -> Runtime {
-  let (rt, offset) = read_imm_idx(rt)
+  let { rt, value: offset } = read_imm_idx(rt)
   let offset = offset.reinterpret_as_uint().to_uint64()
   let stack_top = rt.stack_top - 1
   let base = rt.stack.unsafe_get(stack_top)
@@ -91,7 +91,7 @@ fn op_i32_load8_u(rt : Runtime) -> Runtime {
 
 ///|
 fn op_i32_load16_s(rt : Runtime) -> Runtime {
-  let (rt, offset) = read_imm_idx(rt)
+  let { rt, value: offset } = read_imm_idx(rt)
   let offset = offset.reinterpret_as_uint().to_uint64()
   let stack_top = rt.stack_top - 1
   let base = rt.stack.unsafe_get(stack_top)
@@ -113,7 +113,7 @@ fn op_i32_load16_s(rt : Runtime) -> Runtime {
 
 ///|
 fn op_i32_load16_u(rt : Runtime) -> Runtime {
-  let (rt, offset) = read_imm_idx(rt)
+  let { rt, value: offset } = read_imm_idx(rt)
   let offset = offset.reinterpret_as_uint().to_uint64()
   let stack_top = rt.stack_top - 1
   let base = rt.stack.unsafe_get(stack_top)
@@ -132,7 +132,7 @@ fn op_i32_load16_u(rt : Runtime) -> Runtime {
 
 ///|
 fn op_i64_load(rt : Runtime) -> Runtime {
-  let (rt, offset) = read_imm_idx(rt)
+  let { rt, value: offset } = read_imm_idx(rt)
   let offset = offset.reinterpret_as_uint().to_uint64()
   let stack_top = rt.stack_top - 1
   let base = rt.stack.unsafe_get(stack_top)
@@ -167,7 +167,7 @@ fn op_i64_load(rt : Runtime) -> Runtime {
 
 ///|
 fn op_i64_store(rt : Runtime) -> Runtime {
-  let (rt, offset) = read_imm_idx(rt)
+  let { rt, value: offset } = read_imm_idx(rt)
   let offset = offset.reinterpret_as_uint().to_uint64()
   let stack_top = rt.stack_top - 2
   let value = rt.stack.unsafe_get(rt.stack_top - 1)
@@ -192,7 +192,7 @@ fn op_i64_store(rt : Runtime) -> Runtime {
 
 ///|
 fn op_i64_load8_s(rt : Runtime) -> Runtime {
-  let (rt, offset) = read_imm_idx(rt)
+  let { rt, value: offset } = read_imm_idx(rt)
   let offset = offset.reinterpret_as_uint().to_uint64()
   let stack_top = rt.stack_top - 1
   let base = rt.stack.unsafe_get(stack_top)
@@ -212,7 +212,7 @@ fn op_i64_load8_s(rt : Runtime) -> Runtime {
 
 ///|
 fn op_i64_load8_u(rt : Runtime) -> Runtime {
-  let (rt, offset) = read_imm_idx(rt)
+  let { rt, value: offset } = read_imm_idx(rt)
   let offset = offset.reinterpret_as_uint().to_uint64()
   let stack_top = rt.stack_top - 1
   let base = rt.stack.unsafe_get(stack_top)
@@ -229,7 +229,7 @@ fn op_i64_load8_u(rt : Runtime) -> Runtime {
 
 ///|
 fn op_i64_load16_s(rt : Runtime) -> Runtime {
-  let (rt, offset) = read_imm_idx(rt)
+  let { rt, value: offset } = read_imm_idx(rt)
   let offset = offset.reinterpret_as_uint().to_uint64()
   let stack_top = rt.stack_top - 1
   let base = rt.stack.unsafe_get(stack_top)
@@ -251,7 +251,7 @@ fn op_i64_load16_s(rt : Runtime) -> Runtime {
 
 ///|
 fn op_i64_load16_u(rt : Runtime) -> Runtime {
-  let (rt, offset) = read_imm_idx(rt)
+  let { rt, value: offset } = read_imm_idx(rt)
   let offset = offset.reinterpret_as_uint().to_uint64()
   let stack_top = rt.stack_top - 1
   let base = rt.stack.unsafe_get(stack_top)
@@ -270,7 +270,7 @@ fn op_i64_load16_u(rt : Runtime) -> Runtime {
 
 ///|
 fn op_i64_load32_s(rt : Runtime) -> Runtime {
-  let (rt, offset) = read_imm_idx(rt)
+  let { rt, value: offset } = read_imm_idx(rt)
   let offset = offset.reinterpret_as_uint().to_uint64()
   let stack_top = rt.stack_top - 1
   let base = rt.stack.unsafe_get(stack_top)
@@ -298,7 +298,7 @@ fn op_i64_load32_s(rt : Runtime) -> Runtime {
 
 ///|
 fn op_i64_load32_u(rt : Runtime) -> Runtime {
-  let (rt, offset) = read_imm_idx(rt)
+  let { rt, value: offset } = read_imm_idx(rt)
   let offset = offset.reinterpret_as_uint().to_uint64()
   let stack_top = rt.stack_top - 1
   let base = rt.stack.unsafe_get(stack_top)
@@ -319,7 +319,7 @@ fn op_i64_load32_u(rt : Runtime) -> Runtime {
 
 ///|
 fn op_f32_load(rt : Runtime) -> Runtime {
-  let (rt, offset) = read_imm_idx(rt)
+  let { rt, value: offset } = read_imm_idx(rt)
   let offset = offset.reinterpret_as_uint().to_uint64()
   let stack_top = rt.stack_top - 1
   let base = rt.stack.unsafe_get(stack_top)
@@ -341,7 +341,7 @@ fn op_f32_load(rt : Runtime) -> Runtime {
 
 ///|
 fn op_f64_load(rt : Runtime) -> Runtime {
-  let (rt, offset) = read_imm_idx(rt)
+  let { rt, value: offset } = read_imm_idx(rt)
   let offset = offset.reinterpret_as_uint().to_uint64()
   let stack_top = rt.stack_top - 1
   let base = rt.stack.unsafe_get(stack_top)
@@ -374,7 +374,7 @@ fn op_f64_load(rt : Runtime) -> Runtime {
 
 ///|
 fn op_f32_store(rt : Runtime) -> Runtime {
-  let (rt, offset) = read_imm_idx(rt)
+  let { rt, value: offset } = read_imm_idx(rt)
   let offset = offset.reinterpret_as_uint().to_uint64()
   let stack_top = rt.stack_top - 2
   let value = rt.stack.unsafe_get(rt.stack_top - 1).to_uint()
@@ -395,7 +395,7 @@ fn op_f32_store(rt : Runtime) -> Runtime {
 
 ///|
 fn op_f64_store(rt : Runtime) -> Runtime {
-  let (rt, offset) = read_imm_idx(rt)
+  let { rt, value: offset } = read_imm_idx(rt)
   let offset = offset.reinterpret_as_uint().to_uint64()
   let stack_top = rt.stack_top - 2
   let value = rt.stack.unsafe_get(rt.stack_top - 1)
@@ -422,7 +422,7 @@ fn op_f64_store(rt : Runtime) -> Runtime {
 
 ///|
 fn op_i32_store8(rt : Runtime) -> Runtime {
-  let (rt, offset) = read_imm_idx(rt)
+  let { rt, value: offset } = read_imm_idx(rt)
   let offset = offset.reinterpret_as_uint().to_uint64()
   let stack_top = rt.stack_top - 2
   let value = rt.stack.unsafe_get(rt.stack_top - 1).to_uint()
@@ -440,7 +440,7 @@ fn op_i32_store8(rt : Runtime) -> Runtime {
 
 ///|
 fn op_i32_store16(rt : Runtime) -> Runtime {
-  let (rt, offset) = read_imm_idx(rt)
+  let { rt, value: offset } = read_imm_idx(rt)
   let offset = offset.reinterpret_as_uint().to_uint64()
   let stack_top = rt.stack_top - 2
   let value = rt.stack.unsafe_get(rt.stack_top - 1).to_uint()
@@ -459,7 +459,7 @@ fn op_i32_store16(rt : Runtime) -> Runtime {
 
 ///|
 fn op_i64_store8(rt : Runtime) -> Runtime {
-  let (rt, offset) = read_imm_idx(rt)
+  let { rt, value: offset } = read_imm_idx(rt)
   let offset = offset.reinterpret_as_uint().to_uint64()
   let stack_top = rt.stack_top - 2
   let value = rt.stack.unsafe_get(rt.stack_top - 1)
@@ -477,7 +477,7 @@ fn op_i64_store8(rt : Runtime) -> Runtime {
 
 ///|
 fn op_i64_store16(rt : Runtime) -> Runtime {
-  let (rt, offset) = read_imm_idx(rt)
+  let { rt, value: offset } = read_imm_idx(rt)
   let offset = offset.reinterpret_as_uint().to_uint64()
   let stack_top = rt.stack_top - 2
   let value = rt.stack.unsafe_get(rt.stack_top - 1)
@@ -496,7 +496,7 @@ fn op_i64_store16(rt : Runtime) -> Runtime {
 
 ///|
 fn op_i64_store32(rt : Runtime) -> Runtime {
-  let (rt, offset) = read_imm_idx(rt)
+  let { rt, value: offset } = read_imm_idx(rt)
   let offset = offset.reinterpret_as_uint().to_uint64()
   let stack_top = rt.stack_top - 2
   let value = rt.stack.unsafe_get(rt.stack_top - 1)
@@ -635,7 +635,7 @@ fn op_memory_fill(rt : Runtime) -> Runtime {
 
 ///|
 fn op_memory_init(rt : Runtime) -> Runtime {
-  let (rt, data_idx) = read_imm_idx(rt)
+  let { rt, value: data_idx } = read_imm_idx(rt)
   let stack_top = rt.stack_top - 3
   let n = rt.stack.unsafe_get(rt.stack_top - 1).to_uint().reinterpret_as_int()
   let src = rt.stack.unsafe_get(rt.stack_top - 2).to_uint().reinterpret_as_int()
@@ -667,7 +667,7 @@ fn op_memory_init(rt : Runtime) -> Runtime {
 
 ///|
 fn op_data_drop(rt : Runtime) -> Runtime {
-  let (rt, data_idx) = read_imm_idx(rt)
+  let { rt, value: data_idx } = read_imm_idx(rt)
 
   // Check data segment index
   if data_idx < 0 || data_idx >= rt.ctx.data_segments.length() {

@@ -948,7 +948,7 @@ test "compile helpers canonicalize and counts" {
 test "compile helpers pop arguments" {
   let rt = make_runtime([Value::I32(1U), Value::I32(2U), Value::I32(3U)], [], 0)
   let func_type : @core.FuncType = { params: [I32, I32], results: [] }
-  let (rt, args) = pop_arguments(rt, func_type)
+  let { rt, args } = pop_arguments(rt, func_type)
   assert_eq(args[0], Value::I32(2U))
   assert_eq(args[1], Value::I32(3U))
   assert_eq(rt.stack_top, 1)
