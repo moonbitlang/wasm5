@@ -1813,6 +1813,21 @@ async test "wat encoder matches wasm-tools for try label names" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for try delegate label names" {
+  let wat =
+    #|(module
+    #|  (tag $e (param i32))
+    #|  (func (export "f") (param i32) (result i32)
+    #|    (block $out (result i32)
+    #|      try $t (result i32)
+    #|        local.get 0
+    #|        throw $e
+    #|        i32.const 0
+    #|      delegate $out)))
+  assert_wat_matches_with_names("label_names_try_delegate", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for field names" {
   let wat =
     #|(module
