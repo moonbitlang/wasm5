@@ -20,8 +20,7 @@ pub fn Runtime::compile(self : Runtime) -> Runtime raise RuntimeError {
           raise RuntimeError::FunctionNotCompiled("Start function not compiled")
         }
 
-        // Clear stack and call_stack before setting up locals
-        self.ctx.call_stack.clear()
+        // Clear stack before setting up locals
         let rt : Runtime = { ..self, sp: 0, status: Terminated }
 
         // Initialize entry locals (start function has no parameters)
@@ -56,7 +55,28 @@ fn execute(rt : Runtime) -> Runtime raise RuntimeError {
   if rt.status is Trap {
     raise RuntimeError::from_detail(rt.ctx.error_detail)
   }
+  // Returned and Terminated both exit normally
   rt
+}
+
+///|
+/// Execute a local function call using native stack.
+/// Caller state is preserved on the MoonBit stack frame.
+/// Returns the runtime with results on the stack after callee returns.
+fn execute_call(
+  rt : Runtime,
+  callee_pc : Int,
+  caller_bp : Int,
+  caller_num_locals : Int,
+  return_pc : Int,
+) -> Runtime raise RuntimeError {
+  // Execute callee
+  let rt = execute({ ..rt, pc: callee_pc })
+
+  // Callee has returned - results are at stack[rt.bp .. rt.sp)
+  // Return values are already copied to bp by op_return
+  // Restore caller's state
+  { ..rt, bp: caller_bp, num_locals: caller_num_locals, pc: return_pc, status: Running }
 }
 
 ///|
@@ -101,8 +121,7 @@ pub fn Runtime::call_compiled(
     )
   }
 
-  // Clear stack and call_stack before setting up entry frame
-  self.ctx.call_stack.clear()
+  // Clear stack before setting up entry frame
   let rt : Runtime = { ..self, sp: 0, status: Terminated }
 
   // Initialize entry locals (pushes args and locals onto stack, sets sp/num_locals)

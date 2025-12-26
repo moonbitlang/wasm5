@@ -4,20 +4,13 @@ pub enum RuntimeStatus {
   Running
   Terminated
   Trap
+  Returned // Used by native stack approach: callee returned, continue in caller
 } derive(Eq, Show)
 
 // MInstr is now represented as FixedArray[UInt64]:
 // - Function pointers: stored via unsafe_function_to_uint64
 // - ImmediateI32: stored as value.to_uint64()
 // - ImmediateIdx: stored as value.to_int64().reinterpret_as_uint64()
-
-///|
-/// Call frame for function calls
-pub struct CallFrame {
-  return_pc : Int
-  caller_sp : Int
-  caller_num_locals : Int
-}
 
 ///|
 /// Block kind for compile-time control flow tracking

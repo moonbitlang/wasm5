@@ -240,83 +240,74 @@ fn op_br_on_non_null(rt : Runtime) -> Runtime {
 }
 
 ///|
-fn op_call(rt : Runtime) -> Runtime {
-  let func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
+/// Call a local (module-defined) function.
+/// Immediates (all computed at compile time):
+///   pc+1: callee_pc
+///   pc+2: num_params
+///   pc+3: num_locals
+///   pc+4: max_stack_height
+/// Uses native stack: recursively calls execute() for the callee.
+fn op_call_local(rt : Runtime) -> Runtime {
+  let callee_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let num_params = rt.ops.unsafe_get(rt.pc + 2).to_int()
+  let num_locals = rt.ops.unsafe_get(rt.pc + 3).to_int()
+  let max_stack_height = rt.ops.unsafe_get(rt.pc + 4).to_int()
 
-  // Check if calling an imported function
-  if func_idx < num_imported_funcs {
-    // Get the imported function's type from the import descriptor
-    let type_idx = get_func_type_idx(
-      rt.ctx.module_,
-      func_idx,
-      num_imported_funcs,
-    )
-    if type_idx < 0 {
-      rt.ctx.error_detail = "call: invalid imported function index"
-      return { ..rt, status: Trap }
-    }
-    let func_type = match get_func_type_or_error(rt, type_idx, "call") {
-      Some(found) => found
-      None => return { ..rt, status: Trap }
-    }
-    let { rt, args } = pop_arguments(rt, func_type)
-    let rt = call_imported_function(
-      rt,
-      func_idx,
-      args,
-      func_type.results.length(),
-    )
-    return { ..rt, pc: rt.pc + 2 }
+  // Unified stack: arguments are already on stack, they become callee's first locals
+  let new_bp = rt.sp - num_params
+
+  // Check stack capacity for the callee
+  if new_bp + max_stack_height > rt.stack.length() {
+    rt.ctx.error_detail = "Stack overflow: need \{max_stack_height} slots"
+    return { ..rt, status: Trap }
   }
 
-  // Adjust index for local functions
-  let local_func_idx = func_idx - num_imported_funcs
-  let type_idx = rt.ctx.module_.funcs[local_func_idx].reinterpret_as_int()
+  // Save caller state on native stack
+  let caller_bp = rt.bp
+  let caller_num_locals = rt.num_locals
+  let return_pc = rt.pc + 5 // Next instruction after call (op + 4 immediates)
+
+  // Set up callee frame (locals will be initialized by compiled code)
+  let rt = { ..rt, sp: new_bp + num_params, bp: new_bp, num_locals }
+
+  // Recursively execute callee using native stack
+  let rt = execute_call(rt, callee_pc, caller_bp, caller_num_locals, return_pc) catch {
+    err => {
+      rt.ctx.error_detail = err.to_string()
+      return { ..rt, status: Trap }
+    }
+  }
+  rt
+}
+
+///|
+/// Call an imported function. Immediate is the original func_idx.
+fn op_call_import(rt : Runtime) -> Runtime {
+  let func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
+  let type_idx = get_func_type_idx(rt.ctx.module_, func_idx, num_imported_funcs)
+  if type_idx < 0 {
+    rt.ctx.error_detail = "call: invalid imported function index"
+    return { ..rt, status: Trap }
+  }
   let func_type = match get_func_type_or_error(rt, type_idx, "call") {
     Some(found) => found
     None => return { ..rt, status: Trap }
   }
-  let code = rt.ctx.module_.codes[local_func_idx]
-  guard code.compiled is Some(callee_pc) else {
-    rt.ctx.error_detail = "Function not compiled: \{func_idx}"
-    return { ..rt, status: Trap }
-  }
-
-  // Unified stack: arguments are already on stack, they become callee's first locals
-  // new_sp points to where arguments start (they stay in place!)
-  let num_params = func_type.params.length()
-  let new_sp = rt.sp - num_params
-
-  // Check stack capacity for the callee
-  if new_sp + code.max_stack_height > rt.stack.length() {
-    rt.ctx.error_detail = "Stack overflow: need \{code.max_stack_height} slots"
-    return { ..rt, status: Trap }
-  }
-
-  // Save caller's frame (return_pc points to last immediate so return uses +1)
-  rt.ctx.call_stack.push(CallFrame::{
-    return_pc: rt.pc + 1,
-    caller_sp: rt.bp,
-    caller_num_locals: rt.num_locals,
-  })
-
-  // Push default values for declared locals (not params - they're already on stack)
-  let rt = init_declared_locals(rt, code)
-  if rt.status == Trap {
-    return rt
-  }
-
-  // Update frame state
-  {
-    ..rt,
-    bp: new_sp,
-    num_locals: num_params + code.locals.length(),
-    pc: callee_pc,
-  }
+  let { rt, args } = pop_arguments(rt, func_type)
+  let rt = call_imported_function(
+    rt,
+    func_idx,
+    args,
+    func_type.results.length(),
+  )
+  { ..rt, pc: rt.pc + 2 }
 }
 
 ///|
+/// Return from a function. Uses native stack approach.
+/// Copies return values to bp position and sets Returned status.
+/// The caller's execute_call will restore caller state.
 fn op_return(rt : Runtime) -> Runtime {
   // Read result count from immediate (emitted at compile time)
   let num_return_values = rt.ops
@@ -326,8 +317,7 @@ fn op_return(rt : Runtime) -> Runtime {
 
   // Unified stack return:
   // Return values are the top num_return_values values on the stack
-  // Copy them in-place to: stack[sp .. sp + num_return_values)
-  // Then trim stack to sp + num_return_values
+  // Copy them in-place to: stack[bp .. bp + num_return_values)
   let return_start = rt.sp - num_return_values
 
   // Copy return values to start of frame
@@ -337,23 +327,20 @@ fn op_return(rt : Runtime) -> Runtime {
 
   // Trim stack to keep only return values at frame position
   let stack_top = rt.bp + num_return_values
-  if rt.ctx.call_stack.length() == 0 {
-    // Entry function returning - results are now at stack[0..num_return_values)
-    return { ..rt, sp: stack_top, status: Terminated }
-  }
 
-  // Restore caller's state
-  let frame = rt.ctx.call_stack.unsafe_pop()
-  {
-    ..rt,
-    sp: stack_top,
-    bp: frame.caller_sp,
-    num_locals: frame.caller_num_locals,
-    pc: frame.return_pc + 1,
+  // Check if this is the entry function (bp == 0) or a nested call
+  if rt.bp == 0 {
+    // Entry function returning - results are now at stack[0..num_return_values)
+    { ..rt, sp: stack_top, status: Terminated }
+  } else {
+    // Nested call returning - let native stack unwind
+    // Caller's execute_call will restore bp, num_locals, pc
+    { ..rt, sp: stack_top, status: Returned }
   }
 }
 
 ///|
+/// Call a function indirectly via table. Uses native stack approach.
 fn op_call_indirect(rt : Runtime) -> Runtime {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let table_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
@@ -456,102 +443,85 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
 
   // Unified stack: arguments are already on stack, they become callee's first locals
   let num_params = actual_type.params.length()
-  let new_sp = rt.sp - num_params
+  let new_bp = rt.sp - num_params
 
   // Check stack capacity for the callee
-  if new_sp + code.max_stack_height > rt.stack.length() {
+  if new_bp + code.max_stack_height > rt.stack.length() {
     rt.ctx.error_detail = "Stack overflow: need \{code.max_stack_height} slots"
     return { ..rt, status: Trap }
   }
 
-  // Save caller's frame (return_pc points to last immediate so return uses +1)
-  rt.ctx.call_stack.push(CallFrame::{
-    return_pc: rt.pc + 2,
-    caller_sp: rt.bp,
-    caller_num_locals: rt.num_locals,
-  })
+  // Save caller state on native stack
+  let caller_bp = rt.bp
+  let caller_num_locals = rt.num_locals
+  let return_pc = rt.pc + 3 // Next instruction after call_indirect
 
-  // Push default values for declared locals
-  let rt = init_declared_locals(rt, code)
-  if rt.status == Trap {
-    return rt
-  }
-
-  // Update frame state
-  {
+  // Set up callee frame (locals will be initialized by compiled code)
+  let rt = {
     ..rt,
-    bp: new_sp,
+    sp: new_bp + num_params,
+    bp: new_bp,
     num_locals: num_params + code.locals.length(),
-    pc: callee_pc,
   }
+
+  // Recursively execute callee using native stack
+  let rt = execute_call(rt, callee_pc, caller_bp, caller_num_locals, return_pc) catch {
+    err => {
+      rt.ctx.error_detail = err.to_string()
+      return { ..rt, status: Trap }
+    }
+  }
+  rt
 }
 
 ///|
-fn op_return_call(rt : Runtime) -> Runtime {
-  let func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
+/// Tail call a local (module-defined) function.
+/// Immediates (all computed at compile time):
+///   pc+1: callee_pc
+///   pc+2: num_params
+///   pc+3: num_locals
+fn op_return_call_local(rt : Runtime) -> Runtime {
+  let callee_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let num_params = rt.ops.unsafe_get(rt.pc + 2).to_int()
+  let num_locals = rt.ops.unsafe_get(rt.pc + 3).to_int()
 
-  // Check if calling an imported function
-  if func_idx < num_imported_funcs {
-    // Get the imported function's type from the import descriptor
-    let type_idx = get_func_type_idx(
-      rt.ctx.module_,
-      func_idx,
-      num_imported_funcs,
-    )
-    if type_idx < 0 {
-      rt.ctx.error_detail = "return_call: invalid imported function index"
-      return { ..rt, status: Trap }
-    }
-    let func_type = match get_func_type_or_error(rt, type_idx, "return_call") {
-      Some(found) => found
-      None => return { ..rt, status: Trap }
-    }
-    let { rt, args } = pop_arguments(rt, func_type)
-    let rt = call_imported_function(
-      rt,
-      func_idx,
-      args,
-      func_type.results.length(),
-    )
-    return handle_tail_call_return(rt)
-  }
-
-  // Adjust index for local functions
-  let local_func_idx = func_idx - num_imported_funcs
-  let type_idx = rt.ctx.module_.funcs[local_func_idx].reinterpret_as_int()
-  let func_type = match get_func_type_or_error(rt, type_idx, "return_call") {
-    Some(found) => found
-    None => return { ..rt, status: Trap }
-  }
-  let code = rt.ctx.module_.codes[local_func_idx]
-  guard code.compiled is Some(callee_pc) else {
-    rt.ctx.error_detail = "Function not compiled: \{func_idx}"
-    return { ..rt, status: Trap }
-  }
   // Tail call: reuse current frame
-  // Move arguments in-place from stack top to sp position
-  let num_params = func_type.params.length()
+  // Move arguments in-place from stack top to bp position
   let args_start = rt.sp - num_params
 
-  // Copy arguments to sp position (they become new locals)
+  // Copy arguments to bp position (they become new locals)
   if num_params > 0 && args_start > rt.bp {
     for i = 0; i < num_params; i = i + 1 {
       rt.stack.unsafe_set(rt.bp + i, rt.stack.unsafe_get(args_start + i))
     }
   }
 
-  // Trim stack to sp + num_params
-  let rt = { ..rt, sp: rt.bp + num_params }
+  // Trim stack to bp + num_params (locals will be initialized by compiled code)
+  { ..rt, sp: rt.bp + num_params, num_locals, pc: callee_pc }
+}
 
-  // Push default values for declared locals
-  let rt = init_declared_locals(rt, code)
-  if rt.status == Trap {
-    return rt
+///|
+/// Tail call an imported function. Immediate is the original func_idx.
+fn op_return_call_import(rt : Runtime) -> Runtime {
+  let func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
+  let type_idx = get_func_type_idx(rt.ctx.module_, func_idx, num_imported_funcs)
+  if type_idx < 0 {
+    rt.ctx.error_detail = "return_call: invalid imported function index"
+    return { ..rt, status: Trap }
   }
-
-  // Update num_locals (sp stays same)
-  { ..rt, num_locals: num_params + code.locals.length(), pc: callee_pc }
+  let func_type = match get_func_type_or_error(rt, type_idx, "return_call") {
+    Some(found) => found
+    None => return { ..rt, status: Trap }
+  }
+  let { rt, args } = pop_arguments(rt, func_type)
+  let rt = call_imported_function(
+    rt,
+    func_idx,
+    args,
+    func_type.results.length(),
+  )
+  handle_tail_call_return(rt)
 }
 
 ///|
@@ -667,20 +637,12 @@ fn op_return_call_indirect(rt : Runtime) -> Runtime {
     }
   }
 
-  // Trim stack to sp + num_params
-  let rt = { ..rt, sp: rt.bp + num_params }
-
-  // Push default values for declared locals
-  let rt = init_declared_locals(rt, code)
-  if rt.status == Trap {
-    return rt
-  }
-
-  // Update num_locals (sp stays same)
-  { ..rt, num_locals: num_params + code.locals.length(), pc: callee_pc }
+  // Trim stack to bp + num_params (locals will be initialized by compiled code)
+  { ..rt, sp: rt.bp + num_params, num_locals: num_params + code.locals.length(), pc: callee_pc }
 }
 
 ///|
+/// Call a function via reference. Uses native stack approach.
 fn op_call_ref(rt : Runtime) -> Runtime {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
 
@@ -767,34 +729,35 @@ fn op_call_ref(rt : Runtime) -> Runtime {
 
   // Unified stack: arguments are already on stack, they become callee's first locals
   let num_params = func_type.params.length()
-  let new_sp = rt.sp - num_params
+  let new_bp = rt.sp - num_params
 
   // Check stack capacity for the callee
-  if new_sp + code.max_stack_height > rt.stack.length() {
+  if new_bp + code.max_stack_height > rt.stack.length() {
     rt.ctx.error_detail = "Stack overflow: need \{code.max_stack_height} slots"
     return { ..rt, status: Trap }
   }
 
-  // Save caller's frame (return_pc points to last immediate so return uses +1)
-  rt.ctx.call_stack.push(CallFrame::{
-    return_pc: rt.pc + 1,
-    caller_sp: rt.bp,
-    caller_num_locals: rt.num_locals,
-  })
+  // Save caller state on native stack
+  let caller_bp = rt.bp
+  let caller_num_locals = rt.num_locals
+  let return_pc = rt.pc + 2 // Next instruction after call_ref
 
-  // Push default values for declared locals
-  let rt = init_declared_locals(rt, code)
-  if rt.status == Trap {
-    return rt
-  }
-
-  // Update frame state
-  {
+  // Set up callee frame (locals will be initialized by compiled code)
+  let rt = {
     ..rt,
-    bp: new_sp,
+    sp: new_bp + num_params,
+    bp: new_bp,
     num_locals: num_params + code.locals.length(),
-    pc: callee_pc,
   }
+
+  // Recursively execute callee using native stack
+  let rt = execute_call(rt, callee_pc, caller_bp, caller_num_locals, return_pc) catch {
+    err => {
+      rt.ctx.error_detail = err.to_string()
+      return { ..rt, status: Trap }
+    }
+  }
+  rt
 }
 
 ///|
@@ -895,22 +858,47 @@ fn op_return_call_ref(rt : Runtime) -> Runtime {
     }
   }
 
-  // Trim stack to sp + num_params
-  let rt = { ..rt, sp: rt.bp + num_params }
-
-  // Push default values for declared locals
-  let rt = init_declared_locals(rt, code)
-  if rt.status == Trap {
-    return rt
-  }
-
-  // Update num_locals (sp stays same)
-  { ..rt, num_locals: num_params + code.locals.length(), pc: callee_pc }
+  // Trim stack to bp + num_params (locals will be initialized by compiled code)
+  { ..rt, sp: rt.bp + num_params, num_locals: num_params + code.locals.length(), pc: callee_pc }
 }
 
 ///|
 fn op_nop(rt : Runtime) -> Runtime {
   { ..rt, pc: rt.pc + 1 }
+}
+
+///|
+/// Batch initialize locals with zeros (for i32/i64/f32/f64).
+/// Immediate: count of zeros to push.
+fn op_init_zeros(rt : Runtime) -> Runtime {
+  let count = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let mut sp = rt.sp
+  for i = 0; i < count; i = i + 1 {
+    rt.stack.unsafe_set(sp, 0UL)
+    sp += 1
+  }
+  { ..rt, sp, pc: rt.pc + 2 }
+}
+
+///|
+/// Batch initialize locals with null refs (for reference types).
+/// Immediate: count of null refs to push.
+fn op_init_null_refs(rt : Runtime) -> Runtime {
+  let count = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let null_ref = (-1L).reinterpret_as_uint64()
+  let mut sp = rt.sp
+  for i = 0; i < count; i = i + 1 {
+    rt.stack.unsafe_set(sp, null_ref)
+    sp += 1
+  }
+  { ..rt, sp, pc: rt.pc + 2 }
+}
+
+///|
+/// Trap for unsupported local type (V128, etc.)
+fn op_local_init_unsupported(rt : Runtime) -> Runtime {
+  rt.ctx.error_detail = "Unsupported local type"
+  { ..rt, status: Trap }
 }
 
 ///|

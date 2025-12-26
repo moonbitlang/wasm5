@@ -244,53 +244,17 @@ fn pop_arguments(rt : Runtime, func_type : @core.FuncType) -> PopArgs {
 }
 
 ///|
-/// Push default values for declared locals onto the unified stack.
-/// Params are already on the stack - this only handles declared locals.
-/// Returns Runtime with updated sp and status (Trap on error).
-fn init_declared_locals(rt : Runtime, code : @core.Code) -> Runtime {
-  let mut stack_top = rt.sp
-  for local_type in code.locals {
-    match local_type {
-      I32 | I64 | F32 | F64 => {
-        rt.stack.unsafe_set(stack_top, 0UL)
-        stack_top += 1
-      }
-      FuncRef
-      | ExternRef
-      | AnyRef
-      | ExnRef
-      | NullRef
-      | NullFuncRef
-      | NullExnRef
-      | NullExternRef
-      | EqRef
-      | I31Ref
-      | StructRef
-      | ArrayRef
-      | Ref(_, _) => {
-        rt.stack.unsafe_set(stack_top, (-1L).reinterpret_as_uint64()) // null ref
-        stack_top += 1
-      }
-      _ => {
-        rt.ctx.error_detail = "Unsupported local type: \{local_type}"
-        return { ..rt, sp: stack_top, status: Trap }
-      }
-    }
-  }
-  { ..rt, sp: stack_top }
-}
-
-///|
 /// Initialize locals for entry point (call_compiled, start function).
-/// Pushes args onto stack, then declared locals, and sets sp/num_locals.
-/// Returns Runtime with updated sp, bp, num_locals, and status.
+/// Pushes args onto stack and sets bp/num_locals.
+/// Declared locals will be initialized by compiled code's first instructions.
+/// Returns Runtime with updated sp, bp, num_locals.
 fn initialize_entry_locals(
   rt : Runtime,
   args : Array[Value],
   code : @core.Code,
 ) -> Runtime {
-  // sp points to start of locals (current stack position)
-  let sp = rt.sp
+  // bp points to start of frame
+  let bp = rt.sp
   let mut stack_top = rt.sp
 
   // Push arguments as first locals
@@ -299,15 +263,9 @@ fn initialize_entry_locals(
     stack_top += 1
   }
 
-  // Push default values for declared locals
-  let rt2 = init_declared_locals({ ..rt, sp: stack_top }, code)
-  if rt2.status == Trap {
-    return { ..rt2, bp: sp }
-  }
-
-  // Set num_locals
+  // Set num_locals (declared locals will be initialized by compiled code)
   let num_locals = args.length() + code.locals.length()
-  { ..rt2, bp: sp, num_locals }
+  { ..rt, sp: stack_top, bp, num_locals }
 }
 
 ///|
@@ -365,18 +323,17 @@ fn call_imported_function(
 
 ///|
 /// Handle return from a tail call to imported function.
-/// Results are already on stack, just restore caller state.
+/// Results are already on stack at sp, copy to bp and set Returned status.
+/// Uses native stack approach - caller's execute_call will restore caller state.
 fn handle_tail_call_return(rt : Runtime) -> Runtime {
-  if rt.ctx.call_stack.length() > 0 {
-    let frame = rt.ctx.call_stack.unsafe_pop()
-    {
-      ..rt,
-      bp: frame.caller_sp,
-      num_locals: frame.caller_num_locals,
-      pc: frame.return_pc + 1,
-    }
-  } else {
+  // Results are at stack[rt.bp..rt.sp) - they're already in place for tail calls
+  // Just signal return to let native stack unwind
+  if rt.bp == 0 {
+    // Entry function - terminate
     { ..rt, status: Terminated }
+  } else {
+    // Nested call - let native stack restore caller state
+    { ..rt, status: Returned }
   }
 }
 
