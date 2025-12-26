@@ -515,23 +515,26 @@ test "parse reftype variants" {
     }
   }
   assert_eq(saw_error, true)
-  let ref_type = Parser::new(Bytes::from_array([b'\x63', b'\x70'])).read_reftype()
+  let (ref_type, nullable) = Parser::new(Bytes::from_array([b'\x63', b'\x70'])).read_reftype_with_nullability()
   assert_eq(ref_type, Func)
-  let ref_type = Parser::new(Bytes::from_array([b'\x63', b'\x01'])).read_reftype()
+  assert_eq(nullable, true)
+  let (ref_type, nullable) = Parser::new(Bytes::from_array([b'\x63', b'\x01'])).read_reftype_with_nullability()
   assert_eq(ref_type, TypeIndex(1))
-  let ref_type = Parser::new(Bytes::from_array([b'\x64', b'\x70'])).read_reftype()
+  assert_eq(nullable, true)
+  let (ref_type, nullable) = Parser::new(Bytes::from_array([b'\x64', b'\x70'])).read_reftype_with_nullability()
   assert_eq(ref_type, Func)
-  let ref_type = Parser::new(Bytes::from_array([b'\x64', b'\x01'])).read_reftype()
+  assert_eq(nullable, false)
+  let (ref_type, nullable) = Parser::new(Bytes::from_array([b'\x64', b'\x01'])).read_reftype_with_nullability()
   assert_eq(ref_type, TypeIndex(1))
-  let ref_type = Parser::new(Bytes::from_array([b'\x01'])).read_reftype()
+  assert_eq(nullable, false)
+  let (ref_type, nullable) = Parser::new(Bytes::from_array([b'\x01'])).read_reftype_with_nullability()
   assert_eq(ref_type, TypeIndex(1))
-  let ref_type = Parser::new(Bytes::from_array([b'\x40'])).read_reftype()
-  assert_eq(ref_type, Func)
+  assert_eq(nullable, true)
   saw_error = false
-  let _ = Parser::new(Bytes::from_array([b'\x62'])).read_reftype() catch {
+  let _ = Parser::new(Bytes::from_array([b'\x62'])).read_reftype_with_nullability() catch {
     _ => {
       saw_error = true
-      Func
+      (Func, true)
     }
   }
   assert_eq(saw_error, true)

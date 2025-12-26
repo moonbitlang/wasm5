@@ -423,7 +423,11 @@ test "validate alignment and memory exists" {
   assert_eq(saw_error, true)
   saw_error = false
   let module_empty = test_empty_module()
-  let _ = validate_memory_exists(module_empty, get_import_counts(module_empty)) catch {
+  let _ = validate_memory_index(
+    module_empty,
+    get_import_counts(module_empty),
+    0U,
+  ) catch {
     _ => {
       saw_error = true
       ()

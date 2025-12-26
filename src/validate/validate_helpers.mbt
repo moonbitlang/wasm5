@@ -48,7 +48,6 @@ fn get_import_counts(module_ : @core.Module) -> ImportCounts {
       Mem(_) => mems += 1
       Global(_) => globals += 1
       Tag(_) => tags += 1
-      _ => ()
     }
   }
   { funcs, tables, mems, globals, tags }
@@ -204,15 +203,6 @@ fn validate_alignment(
       "alignment must not be larger than natural (align=\{align_int}, max=\{max_align})",
     )
   }
-}
-
-///|
-/// Validate that a memory exists in the module (memory 0)
-fn validate_memory_exists(
-  module_ : @core.Module,
-  import_counts : ImportCounts,
-) -> Unit raise ValidationError {
-  validate_memory_index(module_, import_counts, 0U)
 }
 
 ///|
