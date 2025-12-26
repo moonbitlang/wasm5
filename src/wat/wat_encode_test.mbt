@@ -205,14 +205,23 @@ async test "wat encoder matches wasm-tools for add" {
 ///|
 async test "wat encoder matches wasm-tools for imports" {
   let wat =
-    #|(module (import "env" "inc" (func $inc (param i32) (result i32))) (global (export "g") i32 (i32.const 7)) (func (export "call") (param i32) (result i32) local.get 0 call $inc))
+    #|(module
+    #|  (import "env" "inc" (func $inc (param i32) (result i32)))
+    #|  (global (export "g") i32 (i32.const 7))
+    #|  (func (export "call") (param i32) (result i32)
+    #|    local.get 0
+    #|    call $inc))
   assert_wat_matches("imports", wat)
 }
 
 ///|
 async test "wat encoder matches wasm-tools for memory/table imports" {
   let wat =
-    #|(module (import "env" "tab" (table 1 3 funcref)) (import "env" "mem" (memory 1 2)) (func (export "msize") (result i32) memory.size) (func (export "tsize") (result i32) table.size))
+    #|(module
+    #|  (import "env" "tab" (table 1 3 funcref))
+    #|  (import "env" "mem" (memory 1 2))
+    #|  (func (export "msize") (result i32) memory.size)
+    #|  (func (export "tsize") (result i32) table.size))
   assert_wat_matches("import_mem_table", wat)
 }
 
@@ -452,7 +461,10 @@ async test "wat encoder matches wasm-tools for global init get" {
 ///|
 async test "wat encoder matches wasm-tools for ref globals" {
   let wat =
-    #|(module (func $f (result i32) i32.const 0) (global (export "gnull") funcref (ref.null func)) (global (export "gfunc") funcref (ref.func $f)))
+    #|(module
+    #|  (func $f (result i32) i32.const 0)
+    #|  (global (export "gnull") funcref (ref.null func))
+    #|  (global (export "gfunc") funcref (ref.func $f)))
   assert_wat_matches("global_ref_init", wat)
 }
 
@@ -515,14 +527,560 @@ async test "wat encoder matches wasm-tools for numeric literals" {
 ///|
 async test "wat encoder matches wasm-tools for numeric ops" {
   let wat =
-    #|(module (func (export "i32_ops") (param i32 i32) (result i32) nop local.get 0 i32.eqz drop local.get 0 local.get 1 i32.eq drop local.get 0 local.get 1 i32.ne drop local.get 0 local.get 1 i32.lt_s drop local.get 0 local.get 1 i32.lt_u drop local.get 0 local.get 1 i32.gt_s drop local.get 0 local.get 1 i32.gt_u drop local.get 0 local.get 1 i32.le_s drop local.get 0 local.get 1 i32.le_u drop local.get 0 local.get 1 i32.ge_s drop local.get 0 local.get 1 i32.ge_u drop local.get 0 i32.clz drop local.get 0 i32.ctz drop local.get 0 i32.popcnt drop local.get 0 local.get 1 i32.add drop local.get 0 local.get 1 i32.sub drop local.get 0 local.get 1 i32.mul drop local.get 0 local.get 1 i32.div_s drop local.get 0 local.get 1 i32.div_u drop local.get 0 local.get 1 i32.rem_s drop local.get 0 local.get 1 i32.rem_u drop local.get 0 local.get 1 i32.and drop local.get 0 local.get 1 i32.or drop local.get 0 local.get 1 i32.xor drop local.get 0 local.get 1 i32.shl drop local.get 0 local.get 1 i32.shr_s drop local.get 0 local.get 1 i32.shr_u drop local.get 0 local.get 1 i32.rotl drop local.get 0 local.get 1 i32.rotr drop local.get 0 local.get 1 local.get 0 select drop i32.const 0) (func (export "i64_ops") (param i64 i64) (result i32) local.get 0 i64.eqz drop local.get 0 local.get 1 i64.eq drop local.get 0 local.get 1 i64.ne drop local.get 0 local.get 1 i64.lt_s drop local.get 0 local.get 1 i64.lt_u drop local.get 0 local.get 1 i64.gt_s drop local.get 0 local.get 1 i64.gt_u drop local.get 0 local.get 1 i64.le_s drop local.get 0 local.get 1 i64.le_u drop local.get 0 local.get 1 i64.ge_s drop local.get 0 local.get 1 i64.ge_u drop local.get 0 i64.clz drop local.get 0 i64.ctz drop local.get 0 i64.popcnt drop local.get 0 local.get 1 i64.add drop local.get 0 local.get 1 i64.sub drop local.get 0 local.get 1 i64.mul drop local.get 0 local.get 1 i64.div_s drop local.get 0 local.get 1 i64.div_u drop local.get 0 local.get 1 i64.rem_s drop local.get 0 local.get 1 i64.rem_u drop local.get 0 local.get 1 i64.and drop local.get 0 local.get 1 i64.or drop local.get 0 local.get 1 i64.xor drop local.get 0 local.get 1 i64.shl drop local.get 0 local.get 1 i64.shr_s drop local.get 0 local.get 1 i64.shr_u drop local.get 0 local.get 1 i64.rotl drop local.get 0 local.get 1 i64.rotr drop i32.const 0) (func (export "f32_ops") (param f32 f32) (result i32) local.get 0 local.get 1 f32.eq drop local.get 0 local.get 1 f32.ne drop local.get 0 local.get 1 f32.lt drop local.get 0 local.get 1 f32.gt drop local.get 0 local.get 1 f32.le drop local.get 0 local.get 1 f32.ge drop local.get 0 f32.abs drop local.get 0 f32.neg drop local.get 0 f32.ceil drop local.get 0 f32.floor drop local.get 0 f32.trunc drop local.get 0 f32.nearest drop local.get 0 f32.sqrt drop local.get 0 local.get 1 f32.add drop local.get 0 local.get 1 f32.sub drop local.get 0 local.get 1 f32.mul drop local.get 0 local.get 1 f32.div drop local.get 0 local.get 1 f32.min drop local.get 0 local.get 1 f32.max drop local.get 0 local.get 1 f32.copysign drop i32.const 0) (func (export "f64_ops") (param f64 f64) (result i32) local.get 0 local.get 1 f64.eq drop local.get 0 local.get 1 f64.ne drop local.get 0 local.get 1 f64.lt drop local.get 0 local.get 1 f64.gt drop local.get 0 local.get 1 f64.le drop local.get 0 local.get 1 f64.ge drop local.get 0 f64.abs drop local.get 0 f64.neg drop local.get 0 f64.ceil drop local.get 0 f64.floor drop local.get 0 f64.trunc drop local.get 0 f64.nearest drop local.get 0 f64.sqrt drop local.get 0 local.get 1 f64.add drop local.get 0 local.get 1 f64.sub drop local.get 0 local.get 1 f64.mul drop local.get 0 local.get 1 f64.div drop local.get 0 local.get 1 f64.min drop local.get 0 local.get 1 f64.max drop local.get 0 local.get 1 f64.copysign drop i32.const 0) (func (export "conv_ops") (param i32 i64 f32 f64) (result i32) local.get 1 i32.wrap_i64 drop local.get 2 i32.trunc_f32_s drop local.get 2 i32.trunc_f32_u drop local.get 3 i32.trunc_f64_s drop local.get 3 i32.trunc_f64_u drop local.get 0 i64.extend_i32_s drop local.get 0 i64.extend_i32_u drop local.get 2 i64.trunc_f32_s drop local.get 2 i64.trunc_f32_u drop local.get 3 i64.trunc_f64_s drop local.get 3 i64.trunc_f64_u drop local.get 0 f32.convert_i32_s drop local.get 0 f32.convert_i32_u drop local.get 1 f32.convert_i64_s drop local.get 1 f32.convert_i64_u drop local.get 3 f32.demote_f64 drop local.get 0 f64.convert_i32_s drop local.get 0 f64.convert_i32_u drop local.get 1 f64.convert_i64_s drop local.get 1 f64.convert_i64_u drop local.get 2 f64.promote_f32 drop local.get 2 i32.reinterpret_f32 drop local.get 3 i64.reinterpret_f64 drop local.get 0 f32.reinterpret_i32 drop local.get 1 f64.reinterpret_i64 drop local.get 0 i32.extend8_s drop local.get 0 i32.extend16_s drop local.get 1 i64.extend8_s drop local.get 1 i64.extend16_s drop local.get 1 i64.extend32_s drop local.get 2 i32.trunc_sat_f32_s drop local.get 2 i32.trunc_sat_f32_u drop local.get 3 i32.trunc_sat_f64_s drop local.get 3 i32.trunc_sat_f64_u drop local.get 2 i64.trunc_sat_f32_s drop local.get 2 i64.trunc_sat_f32_u drop local.get 3 i64.trunc_sat_f64_s drop local.get 3 i64.trunc_sat_f64_u drop i32.const 0))
+    #|(module
+    #|  (func (export "i32_ops") (param i32 i32) (result i32)
+    #|    nop
+    #|    local.get 0
+    #|    i32.eqz
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.eq
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.ne
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.lt_s
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.lt_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.gt_s
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.gt_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.le_s
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.le_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.ge_s
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.ge_u
+    #|    drop
+    #|    local.get 0
+    #|    i32.clz
+    #|    drop
+    #|    local.get 0
+    #|    i32.ctz
+    #|    drop
+    #|    local.get 0
+    #|    i32.popcnt
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.add
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.sub
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.mul
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.div_s
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.div_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.rem_s
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.rem_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.and
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.or
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.xor
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.shl
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.shr_s
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.shr_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.rotl
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.rotr
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 0
+    #|    select
+    #|    drop
+    #|    i32.const 0)
+    #|  (func (export "i64_ops") (param i64 i64) (result i32)
+    #|    local.get 0
+    #|    i64.eqz
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i64.eq
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i64.ne
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i64.lt_s
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i64.lt_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i64.gt_s
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i64.gt_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i64.le_s
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i64.le_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i64.ge_s
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i64.ge_u
+    #|    drop
+    #|    local.get 0
+    #|    i64.clz
+    #|    drop
+    #|    local.get 0
+    #|    i64.ctz
+    #|    drop
+    #|    local.get 0
+    #|    i64.popcnt
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i64.add
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i64.sub
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i64.mul
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i64.div_s
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i64.div_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i64.rem_s
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i64.rem_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i64.and
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i64.or
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i64.xor
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i64.shl
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i64.shr_s
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i64.shr_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i64.rotl
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i64.rotr
+    #|    drop
+    #|    i32.const 0)
+    #|  (func (export "f32_ops") (param f32 f32) (result i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    f32.eq
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    f32.ne
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    f32.lt
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    f32.gt
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    f32.le
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    f32.ge
+    #|    drop
+    #|    local.get 0
+    #|    f32.abs
+    #|    drop
+    #|    local.get 0
+    #|    f32.neg
+    #|    drop
+    #|    local.get 0
+    #|    f32.ceil
+    #|    drop
+    #|    local.get 0
+    #|    f32.floor
+    #|    drop
+    #|    local.get 0
+    #|    f32.trunc
+    #|    drop
+    #|    local.get 0
+    #|    f32.nearest
+    #|    drop
+    #|    local.get 0
+    #|    f32.sqrt
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    f32.add
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    f32.sub
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    f32.mul
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    f32.div
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    f32.min
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    f32.max
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    f32.copysign
+    #|    drop
+    #|    i32.const 0)
+    #|  (func (export "f64_ops") (param f64 f64) (result i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    f64.eq
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    f64.ne
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    f64.lt
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    f64.gt
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    f64.le
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    f64.ge
+    #|    drop
+    #|    local.get 0
+    #|    f64.abs
+    #|    drop
+    #|    local.get 0
+    #|    f64.neg
+    #|    drop
+    #|    local.get 0
+    #|    f64.ceil
+    #|    drop
+    #|    local.get 0
+    #|    f64.floor
+    #|    drop
+    #|    local.get 0
+    #|    f64.trunc
+    #|    drop
+    #|    local.get 0
+    #|    f64.nearest
+    #|    drop
+    #|    local.get 0
+    #|    f64.sqrt
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    f64.add
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    f64.sub
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    f64.mul
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    f64.div
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    f64.min
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    f64.max
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    f64.copysign
+    #|    drop
+    #|    i32.const 0)
+    #|  (func (export "conv_ops") (param i32 i64 f32 f64) (result i32)
+    #|    local.get 1
+    #|    i32.wrap_i64
+    #|    drop
+    #|    local.get 2
+    #|    i32.trunc_f32_s
+    #|    drop
+    #|    local.get 2
+    #|    i32.trunc_f32_u
+    #|    drop
+    #|    local.get 3
+    #|    i32.trunc_f64_s
+    #|    drop
+    #|    local.get 3
+    #|    i32.trunc_f64_u
+    #|    drop
+    #|    local.get 0
+    #|    i64.extend_i32_s
+    #|    drop
+    #|    local.get 0
+    #|    i64.extend_i32_u
+    #|    drop
+    #|    local.get 2
+    #|    i64.trunc_f32_s
+    #|    drop
+    #|    local.get 2
+    #|    i64.trunc_f32_u
+    #|    drop
+    #|    local.get 3
+    #|    i64.trunc_f64_s
+    #|    drop
+    #|    local.get 3
+    #|    i64.trunc_f64_u
+    #|    drop
+    #|    local.get 0
+    #|    f32.convert_i32_s
+    #|    drop
+    #|    local.get 0
+    #|    f32.convert_i32_u
+    #|    drop
+    #|    local.get 1
+    #|    f32.convert_i64_s
+    #|    drop
+    #|    local.get 1
+    #|    f32.convert_i64_u
+    #|    drop
+    #|    local.get 3
+    #|    f32.demote_f64
+    #|    drop
+    #|    local.get 0
+    #|    f64.convert_i32_s
+    #|    drop
+    #|    local.get 0
+    #|    f64.convert_i32_u
+    #|    drop
+    #|    local.get 1
+    #|    f64.convert_i64_s
+    #|    drop
+    #|    local.get 1
+    #|    f64.convert_i64_u
+    #|    drop
+    #|    local.get 2
+    #|    f64.promote_f32
+    #|    drop
+    #|    local.get 2
+    #|    i32.reinterpret_f32
+    #|    drop
+    #|    local.get 3
+    #|    i64.reinterpret_f64
+    #|    drop
+    #|    local.get 0
+    #|    f32.reinterpret_i32
+    #|    drop
+    #|    local.get 1
+    #|    f64.reinterpret_i64
+    #|    drop
+    #|    local.get 0
+    #|    i32.extend8_s
+    #|    drop
+    #|    local.get 0
+    #|    i32.extend16_s
+    #|    drop
+    #|    local.get 1
+    #|    i64.extend8_s
+    #|    drop
+    #|    local.get 1
+    #|    i64.extend16_s
+    #|    drop
+    #|    local.get 1
+    #|    i64.extend32_s
+    #|    drop
+    #|    local.get 2
+    #|    i32.trunc_sat_f32_s
+    #|    drop
+    #|    local.get 2
+    #|    i32.trunc_sat_f32_u
+    #|    drop
+    #|    local.get 3
+    #|    i32.trunc_sat_f64_s
+    #|    drop
+    #|    local.get 3
+    #|    i32.trunc_sat_f64_u
+    #|    drop
+    #|    local.get 2
+    #|    i64.trunc_sat_f32_s
+    #|    drop
+    #|    local.get 2
+    #|    i64.trunc_sat_f32_u
+    #|    drop
+    #|    local.get 3
+    #|    i64.trunc_sat_f64_s
+    #|    drop
+    #|    local.get 3
+    #|    i64.trunc_sat_f64_u
+    #|    drop
+    #|    i32.const 0))
   assert_wat_matches("numeric_ops", wat)
 }
 
 ///|
 async test "wat encoder matches wasm-tools for memory ops" {
   let wat =
-    #|(module (memory (export "mem") 1) (func (export "mem_ops") (result i32) i32.const 0 i32.const 42 i32.store offset=4 align=4 i32.const 0 i32.load offset=4 align=4 drop i32.const 8 i32.const 7 i32.store16 align=2 i32.const 8 i32.load16_u align=2 drop i32.const 12 i32.const 1 i32.store8 i32.const 12 i32.load8_s drop i32.const 16 i64.const 5 i64.store align=8 i32.const 16 i64.load align=8 drop i32.const 24 i64.const 9 i64.store32 i32.const 24 i64.load32_u drop memory.size drop i32.const 1 memory.grow drop i32.const 0 i32.const 8 i32.const 4 memory.copy i32.const 0 i32.const 0 i32.const 4 memory.fill i32.const 0))
+    #|(module
+    #|  (memory (export "mem") 1)
+    #|  (func (export "mem_ops") (result i32)
+    #|    i32.const 0
+    #|    i32.const 42
+    #|    i32.store offset=4 align=4
+    #|    i32.const 0
+    #|    i32.load offset=4 align=4
+    #|    drop
+    #|    i32.const 8
+    #|    i32.const 7
+    #|    i32.store16 align=2
+    #|    i32.const 8
+    #|    i32.load16_u align=2
+    #|    drop
+    #|    i32.const 12
+    #|    i32.const 1
+    #|    i32.store8
+    #|    i32.const 12
+    #|    i32.load8_s
+    #|    drop
+    #|    i32.const 16
+    #|    i64.const 5
+    #|    i64.store align=8
+    #|    i32.const 16
+    #|    i64.load align=8
+    #|    drop
+    #|    i32.const 24
+    #|    i64.const 9
+    #|    i64.store32
+    #|    i32.const 24
+    #|    i64.load32_u
+    #|    drop
+    #|    memory.size
+    #|    drop
+    #|    i32.const 1
+    #|    memory.grow
+    #|    drop
+    #|    i32.const 0
+    #|    i32.const 8
+    #|    i32.const 4
+    #|    memory.copy
+    #|    i32.const 0
+    #|    i32.const 0
+    #|    i32.const 4
+    #|    memory.fill
+    #|    i32.const 0))
   assert_wat_matches("memory_ops", wat)
 }
 
@@ -545,7 +1103,30 @@ async test "wat encoder matches wasm-tools for shared memory i32" {
 ///|
 async test "wat encoder matches wasm-tools for multi-memory bulk ops" {
   let wat =
-    #|(module (memory 1) (memory 1) (data "hi") (func (export "multi") memory.size 1 drop i32.const 0 memory.grow 1 drop i32.const 0 i32.const 0 i32.const 0 memory.copy 1 0 i32.const 0 i32.const 0 i32.const 0 memory.fill 1 i32.const 0 i32.const 0 i32.const 0 memory.init 1 0 data.drop 0 i32.const 0))
+    #|(module
+    #|  (memory 1)
+    #|  (memory 1)
+    #|  (data "hi")
+    #|  (func (export "multi")
+    #|    memory.size 1
+    #|    drop
+    #|    i32.const 0
+    #|    memory.grow 1
+    #|    drop
+    #|    i32.const 0
+    #|    i32.const 0
+    #|    i32.const 0
+    #|    memory.copy 1 0
+    #|    i32.const 0
+    #|    i32.const 0
+    #|    i32.const 0
+    #|    memory.fill 1
+    #|    i32.const 0
+    #|    i32.const 0
+    #|    i32.const 0
+    #|    memory.init 1 0
+    #|    data.drop 0
+    #|    i32.const 0))
   assert_wat_matches("multi_memory_bulk", wat)
 }
 
@@ -665,14 +1246,42 @@ async test "wat encoder matches wasm-tools for folded bulk/table ops" {
 ///|
 async test "wat encoder matches wasm-tools for control flow" {
   let wat =
-    #|(module (func (export "block_if") (param i32) (result i32) (block $out (result i32) i32.const 7 local.get 0 br_if $out i32.const 42)) (func (export "loop_br") (result i32) (block (result i32) (loop $top i32.const 9 br 1))) (func (export "if_else") (param i32) (result i32) local.get 0 (if (result i32) (then i32.const 1) (else i32.const 2))) (func (export "br_table") (param i32) (block local.get 0 br_table 0 0)))
+    #|(module
+    #|  (func (export "block_if") (param i32) (result i32)
+    #|    (block $out (result i32)
+    #|      i32.const 7
+    #|      local.get 0
+    #|      br_if $out
+    #|      i32.const 42))
+    #|  (func (export "loop_br") (result i32)
+    #|    (block (result i32)
+    #|      (loop $top
+    #|        i32.const 9
+    #|        br 1)))
+    #|  (func (export "if_else") (param i32) (result i32)
+    #|    local.get 0
+    #|    (if (result i32)
+    #|      (then i32.const 1)
+    #|      (else i32.const 2)))
+    #|  (func (export "br_table") (param i32)
+    #|    (block
+    #|      local.get 0
+    #|      br_table 0 0)))
   assert_wat_matches("control_flow", wat)
 }
 
 ///|
 async test "wat encoder matches wasm-tools for br_on_null" {
   let wat =
-    #|(module (func (export "brs") (param funcref) (block $l local.get 0 br_on_null $l drop local.get 0 br_on_non_null $l drop)))
+    #|(module
+    #|  (func (export "brs") (param funcref)
+    #|    (block $l
+    #|      local.get 0
+    #|      br_on_null $l
+    #|      drop
+    #|      local.get 0
+    #|      br_on_non_null $l
+    #|      drop)))
   assert_wat_matches("br_on_null", wat)
 }
 
@@ -703,21 +1312,39 @@ async test "wat encoder matches wasm-tools for try_table simple" {
 ///|
 async test "wat encoder matches wasm-tools for call_indirect" {
   let wat =
-    #|(module (table 1 funcref) (func (export "call") (param i32 i32) (result i32) local.get 0 local.get 1 call_indirect (param i32) (result i32)))
+    #|(module
+    #|  (table 1 funcref)
+    #|  (func (export "call") (param i32 i32) (result i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    call_indirect (param i32) (result i32)))
   assert_wat_matches("call_indirect", wat)
 }
 
 ///|
 async test "wat encoder matches wasm-tools for call_indirect table list" {
   let wat =
-    #|(module (type $t (func (param i32) (result i32))) (table $tab 1 funcref) (func $f (type $t) (param i32) (result i32) local.get 0) (elem (i32.const 0) $f) (func (export "call") (param i32 i32) (result i32) local.get 0 local.get 1 (call_indirect $tab (type $t))))
+    #|(module
+    #|  (type $t (func (param i32) (result i32)))
+    #|  (table $tab 1 funcref)
+    #|  (func $f (type $t) (param i32) (result i32) local.get 0)
+    #|  (elem (i32.const 0) $f)
+    #|  (func (export "call") (param i32 i32) (result i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    (call_indirect $tab (type $t))))
   assert_wat_matches("call_indirect_table_list", wat)
 }
 
 ///|
 async test "wat encoder matches wasm-tools for call_indirect table inline" {
   let wat =
-    #|(module (table $tab 1 funcref) (func (export "call") (param i32 i32) (result i32) local.get 0 local.get 1 call_indirect $tab (param i32) (result i32)))
+    #|(module
+    #|  (table $tab 1 funcref)
+    #|  (func (export "call") (param i32 i32) (result i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    call_indirect $tab (param i32) (result i32)))
   assert_wat_matches("call_indirect_table_inline", wat)
 }
 
@@ -759,7 +1386,15 @@ async test "wat encoder matches wasm-tools for return_call" {
 ///|
 async test "wat encoder matches wasm-tools for return_call_indirect" {
   let wat =
-    #|(module (type $t (func (param i32) (result i32))) (table $tab 1 funcref) (func $f (type $t) (param i32) (result i32) local.get 0) (elem (i32.const 0) $f) (func (export "call") (param i32) (result i32) local.get 0 i32.const 0 return_call_indirect $tab (type $t)))
+    #|(module
+    #|  (type $t (func (param i32) (result i32)))
+    #|  (table $tab 1 funcref)
+    #|  (func $f (type $t) (param i32) (result i32) local.get 0)
+    #|  (elem (i32.const 0) $f)
+    #|  (func (export "call") (param i32) (result i32)
+    #|    local.get 0
+    #|    i32.const 0
+    #|    return_call_indirect $tab (type $t)))
   assert_wat_matches("return_call_indirect", wat)
 }
 
@@ -781,21 +1416,62 @@ async test "wat encoder matches wasm-tools for return_call_indirect implicit typ
 ///|
 async test "wat encoder matches wasm-tools for return_call_indirect list" {
   let wat =
-    #|(module (table $tab 1 funcref) (func (export "call") (param i32 i32) (result i32) local.get 0 local.get 1 (return_call_indirect $tab (param i32) (result i32))))
+    #|(module
+    #|  (table $tab 1 funcref)
+    #|  (func (export "call") (param i32 i32) (result i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    (return_call_indirect $tab (param i32) (result i32))))
   assert_wat_matches("return_call_indirect_list", wat)
 }
 
 ///|
 async test "wat encoder matches wasm-tools for typeuse names" {
   let wat =
-    #|(module (type $t (func (param i32) (result i32))) (table 1 funcref) (func (type $t) (param $x i32) (result i32) local.get $x) (func (export "call") (param i32 i32) (result i32) local.get 0 local.get 1 call_indirect (type $t)))
+    #|(module
+    #|  (type $t (func (param i32) (result i32)))
+    #|  (table 1 funcref)
+    #|  (func (type $t) (param $x i32) (result i32) local.get $x)
+    #|  (func (export "call") (param i32 i32) (result i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    call_indirect (type $t)))
   assert_wat_matches("typeuse_names", wat)
 }
 
 ///|
 async test "wat encoder matches wasm-tools for table and ref ops" {
   let wat =
-    #|(module (table 1 funcref) (elem (i32.const 0) 0) (func (export "table_ops") (param i32 funcref i32 i32 i32) (result i32) local.get 0 table.get drop local.get 0 local.get 1 table.set table.size drop local.get 2 local.get 1 table.grow drop local.get 3 local.get 4 local.get 0 table.init 0 local.get 3 local.get 4 local.get 0 table.copy elem.drop 0 ref.null func drop ref.func 0 drop i32.const 0))
+    #|(module
+    #|  (table 1 funcref)
+    #|  (elem (i32.const 0) 0)
+    #|  (func (export "table_ops") (param i32 funcref i32 i32 i32) (result i32)
+    #|    local.get 0
+    #|    table.get
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    table.set
+    #|    table.size
+    #|    drop
+    #|    local.get 2
+    #|    local.get 1
+    #|    table.grow
+    #|    drop
+    #|    local.get 3
+    #|    local.get 4
+    #|    local.get 0
+    #|    table.init 0
+    #|    local.get 3
+    #|    local.get 4
+    #|    local.get 0
+    #|    table.copy
+    #|    elem.drop 0
+    #|    ref.null func
+    #|    drop
+    #|    ref.func 0
+    #|    drop
+    #|    i32.const 0))
   assert_wat_matches("table_ref_ops", wat)
 }
 
@@ -886,7 +1562,16 @@ async test "wat encoder matches wasm-tools for elem item exprs" {
 ///|
 async test "wat encoder matches wasm-tools for data segments and memory.init" {
   let wat =
-    #|(module (memory 1) (data $p "hi") (data (i32.const 0) "ok") (func (export "init") (param i32 i32 i32) local.get 0 local.get 1 local.get 2 memory.init $p data.drop $p))
+    #|(module
+    #|  (memory 1)
+    #|  (data $p "hi")
+    #|  (data (i32.const 0) "ok")
+    #|  (func (export "init") (param i32 i32 i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    memory.init $p
+    #|    data.drop $p))
   assert_wat_matches("data_memory_init", wat)
 }
 
@@ -907,7 +1592,15 @@ async test "wat encoder matches wasm-tools for custom section after type" {
 ///|
 async test "wat encoder matches wasm-tools for custom section before code" {
   let wat =
-    #|(module (memory 1) (data "hi") (@custom "foo" (before code) "data") (func (param i32 i32 i32) local.get 0 local.get 1 local.get 2 memory.init 0))
+    #|(module
+    #|  (memory 1)
+    #|  (data "hi")
+    #|  (@custom "foo" (before code) "data")
+    #|  (func (param i32 i32 i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    memory.init 0))
   assert_wat_matches_custom("custom_before_code", wat)
 }
 
@@ -983,28 +1676,165 @@ async test "wat encoder matches wasm-tools for sub types without supertypes" {
 ///|
 async test "wat encoder matches wasm-tools for gc struct/array ops" {
   let wat =
-    #|(module (type $s (struct (field i32) (field (mut i32)))) (type $sp (struct (field i8) (field (mut i16)))) (type $a16 (array (mut i16))) (type $a32 (array (mut i32))) (func (export "gc_ops") (param i32 i32 i32) (result i32) struct.new_default $s drop local.get 0 local.get 1 struct.new $s struct.get $s 0 drop local.get 0 local.get 1 struct.new $s local.get 2 struct.set $s 1 struct.new_default $sp struct.get_s $sp 0 drop struct.new_default $sp struct.get_u $sp 1 drop local.get 0 array.new_default $a16 array.len drop local.get 1 local.get 2 array.new_fixed $a16 2 drop local.get 1 local.get 0 array.new $a16 local.get 0 array.get_u $a16 drop local.get 1 local.get 0 array.new $a16 local.get 0 array.get_s $a16 drop local.get 1 local.get 0 array.new $a32 local.get 0 array.get $a32 drop local.get 1 local.get 0 array.new $a16 local.get 0 local.get 2 array.set $a16 local.get 1 local.get 0 array.new $a16 local.get 0 local.get 2 local.get 1 array.fill $a16 local.get 1 local.get 0 array.new $a16 local.get 0 local.get 1 local.get 0 array.new $a16 local.get 0 local.get 2 array.copy $a16 $a16 i32.const 0))
+    #|(module
+    #|  (type $s (struct (field i32) (field (mut i32))))
+    #|  (type $sp (struct (field i8) (field (mut i16))))
+    #|  (type $a16 (array (mut i16)))
+    #|  (type $a32 (array (mut i32)))
+    #|  (func (export "gc_ops") (param i32 i32 i32) (result i32)
+    #|    struct.new_default $s
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    struct.new $s
+    #|    struct.get $s 0
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    struct.new $s
+    #|    local.get 2
+    #|    struct.set $s 1
+    #|    struct.new_default $sp
+    #|    struct.get_s $sp 0
+    #|    drop
+    #|    struct.new_default $sp
+    #|    struct.get_u $sp 1
+    #|    drop
+    #|    local.get 0
+    #|    array.new_default $a16
+    #|    array.len
+    #|    drop
+    #|    local.get 1
+    #|    local.get 2
+    #|    array.new_fixed $a16 2
+    #|    drop
+    #|    local.get 1
+    #|    local.get 0
+    #|    array.new $a16
+    #|    local.get 0
+    #|    array.get_u $a16
+    #|    drop
+    #|    local.get 1
+    #|    local.get 0
+    #|    array.new $a16
+    #|    local.get 0
+    #|    array.get_s $a16
+    #|    drop
+    #|    local.get 1
+    #|    local.get 0
+    #|    array.new $a32
+    #|    local.get 0
+    #|    array.get $a32
+    #|    drop
+    #|    local.get 1
+    #|    local.get 0
+    #|    array.new $a16
+    #|    local.get 0
+    #|    local.get 2
+    #|    array.set $a16
+    #|    local.get 1
+    #|    local.get 0
+    #|    array.new $a16
+    #|    local.get 0
+    #|    local.get 2
+    #|    local.get 1
+    #|    array.fill $a16
+    #|    local.get 1
+    #|    local.get 0
+    #|    array.new $a16
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 0
+    #|    array.new $a16
+    #|    local.get 0
+    #|    local.get 2
+    #|    array.copy $a16 $a16
+    #|    i32.const 0))
   assert_wat_matches("gc_struct_array_ops", wat)
 }
 
 ///|
 async test "wat encoder matches wasm-tools for gc data/elem ops" {
   let wat =
-    #|(module (type $a (array (mut i8))) (func $f (result i32) i32.const 0) (table $t 1 funcref) (elem $e (i32.const 0) $f) (data $d "hi") (func (export "gc_data") (param i32) (result i32) i32.const 0 local.get 0 array.new_data $a $d drop i32.const 0 local.get 0 array.new_elem $a $e drop local.get 0 array.new_default $a i32.const 0 i32.const 0 local.get 0 array.init_data $a $d local.get 0 array.new_default $a i32.const 0 i32.const 0 local.get 0 array.init_elem $a $e i32.const 0))
+    #|(module
+    #|  (type $a (array (mut i8)))
+    #|  (func $f (result i32) i32.const 0)
+    #|  (table $t 1 funcref)
+    #|  (elem $e (i32.const 0) $f)
+    #|  (data $d "hi")
+    #|  (func (export "gc_data") (param i32) (result i32)
+    #|    i32.const 0
+    #|    local.get 0
+    #|    array.new_data $a $d
+    #|    drop
+    #|    i32.const 0
+    #|    local.get 0
+    #|    array.new_elem $a $e
+    #|    drop
+    #|    local.get 0
+    #|    array.new_default $a
+    #|    i32.const 0
+    #|    i32.const 0
+    #|    local.get 0
+    #|    array.init_data $a $d
+    #|    local.get 0
+    #|    array.new_default $a
+    #|    i32.const 0
+    #|    i32.const 0
+    #|    local.get 0
+    #|    array.init_elem $a $e
+    #|    i32.const 0))
   assert_wat_matches("gc_data_elem_ops", wat)
 }
 
 ///|
 async test "wat encoder matches wasm-tools for gc cast and i31 ops" {
   let wat =
-    #|(module (type $s (struct (field i32))) (func (export "gc_casts") (param (ref null $s)) (result i32) (block (result (ref null $s)) local.get 0 br_on_cast 0 (ref $s) (ref null $s)) drop (block (result (ref null $s)) local.get 0 br_on_cast_fail 0 (ref $s) (ref null $s)) drop i32.const 7 ref.i31 i31.get_s drop i32.const 7 ref.i31 i31.get_u drop ref.null extern any.convert_extern drop ref.null any extern.convert_any drop i32.const 0))
+    #|(module
+    #|  (type $s (struct (field i32)))
+    #|  (func (export "gc_casts") (param (ref null $s)) (result i32)
+    #|    (block (result (ref null $s))
+    #|      local.get 0
+    #|      br_on_cast 0 (ref $s) (ref null $s))
+    #|    drop
+    #|    (block (result (ref null $s))
+    #|      local.get 0
+    #|      br_on_cast_fail 0 (ref $s) (ref null $s))
+    #|    drop
+    #|    i32.const 7
+    #|    ref.i31
+    #|    i31.get_s
+    #|    drop
+    #|    i32.const 7
+    #|    ref.i31
+    #|    i31.get_u
+    #|    drop
+    #|    ref.null extern
+    #|    any.convert_extern
+    #|    drop
+    #|    ref.null any
+    #|    extern.convert_any
+    #|    drop
+    #|    i32.const 0))
   assert_wat_matches("gc_cast_i31_ops", wat)
 }
 
 ///|
 async test "wat encoder matches wasm-tools for call_ref and return_call_ref" {
   let wat =
-    #|(module (type $t (func (param i32) (result i32))) (table 1 funcref) (func $f (type $t) (param i32) (result i32) local.get 0) (elem (i32.const 0) $f) (func (export "call") (param i32) (result i32) local.get 0 ref.func $f call_ref $t) (func (export "tail") (param i32) (result i32) local.get 0 ref.func $f return_call_ref $t))
+    #|(module
+    #|  (type $t (func (param i32) (result i32)))
+    #|  (table 1 funcref)
+    #|  (func $f (type $t) (param i32) (result i32) local.get 0)
+    #|  (elem (i32.const 0) $f)
+    #|  (func (export "call") (param i32) (result i32)
+    #|    local.get 0
+    #|    ref.func $f
+    #|    call_ref $t)
+    #|  (func (export "tail") (param i32) (result i32)
+    #|    local.get 0
+    #|    ref.func $f
+    #|    return_call_ref $t))
   assert_wat_matches("call_ref", wat)
 }
 
@@ -1049,28 +1879,61 @@ async test "wat encoder matches wasm-tools for return_call_ref type order" {
 ///|
 async test "wat encoder matches wasm-tools for ref types" {
   let wat =
-    #|(module (type $t (func)) (func $f (type $t)) (table 1 (ref null $t)) (func (export "short") (param funcref externref anyref eqref i31ref structref arrayref exnref nullref nullfuncref nullexternref nullexnref)) (func (export "typed") (param (ref func) (ref extern) (ref any)) (result (ref $t) (ref null $t) (ref null func)) ref.func $f ref.null $t ref.null func))
+    #|(module
+    #|  (type $t (func))
+    #|  (func $f (type $t))
+    #|  (table 1 (ref null $t))
+    #|  (func (export "short")
+    #|    (param funcref externref anyref eqref i31ref structref arrayref exnref
+    #|      nullref nullfuncref nullexternref nullexnref))
+    #|  (func (export "typed")
+    #|    (param (ref func) (ref extern) (ref any))
+    #|    (result (ref $t) (ref null $t) (ref null func))
+    #|    ref.func $f
+    #|    ref.null $t
+    #|    ref.null func))
   assert_wat_matches("ref_types", wat)
 }
 
 ///|
 async test "wat encoder matches wasm-tools for ref eq ops" {
   let wat =
-    #|(module (func (export "eq") (param funcref funcref) (result i32) local.get 0 local.get 1 ref.eq) (func (export "asnn") (param funcref) (result funcref) local.get 0 ref.as_non_null))
+    #|(module
+    #|  (func (export "eq") (param funcref funcref) (result i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    ref.eq)
+    #|  (func (export "asnn") (param funcref) (result funcref)
+    #|    local.get 0
+    #|    ref.as_non_null))
   assert_wat_matches("ref_eq_ops", wat)
 }
 
 ///|
 async test "wat encoder matches wasm-tools for ref.test and ref.cast" {
   let wat =
-    #|(module (func (export "ref_test") (param anyref) (result i32) local.get 0 ref.test anyref) (func (export "ref_cast") (param anyref) (result anyref) local.get 0 ref.cast anyref))
+    #|(module
+    #|  (func (export "ref_test") (param anyref) (result i32)
+    #|    local.get 0
+    #|    ref.test anyref)
+    #|  (func (export "ref_cast") (param anyref) (result anyref)
+    #|    local.get 0
+    #|    ref.cast anyref))
   assert_wat_matches("ref_test_cast", wat)
 }
 
 ///|
 async test "wat encoder matches wasm-tools for block typeuse params" {
   let wat =
-    #|(module (type $t (func (param i32 i64) (result i32))) (func (export "block_params") (param i32 i64) (result i32) local.get 0 local.get 1 (block (type $t) (param i32 i64) (result i32) drop drop i32.const 7)))
+    #|(module
+    #|  (type $t (func (param i32 i64) (result i32)))
+    #|  (func (export "block_params") (param i32 i64) (result i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    (block (type $t) (param i32 i64) (result i32)
+    #|      drop
+    #|      drop
+    #|      i32.const 7)))
   assert_wat_matches("block_typeuse_params", wat)
 }
 
@@ -1099,14 +1962,38 @@ async test "wat encoder matches wasm-tools for block type order" {
 ///|
 async test "wat encoder matches wasm-tools for typed select and ref.is_null" {
   let wat =
-    #|(module (func (export "select_typed") (param i32 i32 i32) (result i32) local.get 0 local.get 1 local.get 2 select (result i32)) (func (export "ref_is_null") (param funcref) (result i32) local.get 0 ref.is_null))
+    #|(module
+    #|  (func (export "select_typed") (param i32 i32 i32) (result i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    select (result i32))
+    #|  (func (export "ref_is_null") (param funcref) (result i32)
+    #|    local.get 0
+    #|    ref.is_null))
   assert_wat_matches("select_ref_ops", wat)
 }
 
 ///|
 async test "wat encoder matches wasm-tools for multi-name params and locals" {
   let wat =
-    #|(module (func (export "sum") (param $x i32) (param $y i32) (result i32) local.get $x local.get $y i32.add) (func (export "locals") (param $x i32) (param $y i32) (result i32) (local $a i64) (local $b i64) local.get $x local.get $y i32.add drop local.get $a drop local.get $b drop i32.const 0))
+    #|(module
+    #|  (func (export "sum") (param $x i32) (param $y i32) (result i32)
+    #|    local.get $x
+    #|    local.get $y
+    #|    i32.add)
+    #|  (func (export "locals") (param $x i32) (param $y i32) (result i32)
+    #|    (local $a i64)
+    #|    (local $b i64)
+    #|    local.get $x
+    #|    local.get $y
+    #|    i32.add
+    #|    drop
+    #|    local.get $a
+    #|    drop
+    #|    local.get $b
+    #|    drop
+    #|    i32.const 0))
   assert_wat_matches("multi_name_params", wat)
 }
 
@@ -1120,7 +2007,14 @@ async test "wat encoder matches wasm-tools for data offset list" {
 ///|
 async test "wat encoder matches wasm-tools for data passive" {
   let wat =
-    #|(module (memory 1) (data "hi") (func (export "init") (param i32 i32 i32) local.get 0 local.get 1 local.get 2 memory.init 0))
+    #|(module
+    #|  (memory 1)
+    #|  (data "hi")
+    #|  (func (export "init") (param i32 i32 i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    memory.init 0))
   assert_wat_matches("data_passive", wat)
 }
 
@@ -1141,14 +2035,45 @@ async test "wat encoder matches wasm-tools for elem passive" {
 ///|
 async test "wat encoder matches wasm-tools for table indexed ops" {
   let wat =
-    #|(module (table $tab 2 funcref) (func $f) (elem (i32.const 0) $f) (func (export "ops") (param i32 funcref i32) (result i32) local.get 0 table.get $tab drop local.get 0 local.get 1 table.set $tab table.size $tab drop local.get 2 local.get 1 table.grow $tab drop i32.const 0))
+    #|(module
+    #|  (table $tab 2 funcref)
+    #|  (func $f)
+    #|  (elem (i32.const 0) $f)
+    #|  (func (export "ops") (param i32 funcref i32) (result i32)
+    #|    local.get 0
+    #|    table.get $tab
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    table.set $tab
+    #|    table.size $tab
+    #|    drop
+    #|    local.get 2
+    #|    local.get 1
+    #|    table.grow $tab
+    #|    drop
+    #|    i32.const 0))
   assert_wat_matches("table_indexed_ops", wat)
 }
 
 ///|
 async test "wat encoder matches wasm-tools for table init/copy indexed" {
   let wat =
-    #|(module (table $dst 2 funcref) (table $src 2 funcref) (func $f) (elem $e func $f) (func (export "init") (param i32 i32 i32) local.get 0 local.get 1 local.get 2 table.init $dst $e) (func (export "copy") (param i32 i32 i32) local.get 0 local.get 1 local.get 2 table.copy $dst $src))
+    #|(module
+    #|  (table $dst 2 funcref)
+    #|  (table $src 2 funcref)
+    #|  (func $f)
+    #|  (elem $e func $f)
+    #|  (func (export "init") (param i32 i32 i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    table.init $dst $e)
+    #|  (func (export "copy") (param i32 i32 i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    table.copy $dst $src))
   assert_wat_matches("table_init_copy_indexed", wat)
 }
 
@@ -1162,14 +2087,56 @@ async test "wat encoder matches wasm-tools for table.fill" {
 ///|
 async test "wat encoder matches wasm-tools for memory indexed ops" {
   let wat =
-    #|(module (memory 1) (data $d "hi") (data "ok") (func (export "bulk") (param i32 i32 i32) local.get 0 local.get 1 local.get 2 memory.init $d local.get 0 local.get 1 local.get 2 memory.copy 0 0 local.get 0 local.get 1 local.get 2 memory.fill 0) (func (export "size") (result i32) memory.size 0) (func (export "grow") (param i32) (result i32) local.get 0 memory.grow 0))
+    #|(module
+    #|  (memory 1)
+    #|  (data $d "hi")
+    #|  (data "ok")
+    #|  (func (export "bulk") (param i32 i32 i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    memory.init $d
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    memory.copy 0 0
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    memory.fill 0)
+    #|  (func (export "size") (result i32)
+    #|    memory.size 0)
+    #|  (func (export "grow") (param i32) (result i32)
+    #|    local.get 0
+    #|    memory.grow 0))
   assert_wat_matches("memory_indexed_ops", wat)
 }
 
 ///|
 async test "wat encoder matches wasm-tools for list form table/memory ops" {
   let wat =
-    #|(module (memory 1) (table $tab 1 funcref) (func (export "list_ops") (param i32 funcref i32) (result i32) local.get 0 (table.get $tab) drop local.get 0 local.get 1 (table.set $tab) (table.size $tab) drop local.get 1 local.get 2 (table.grow $tab) drop (memory.size 0) drop local.get 2 (memory.grow 0) drop i32.const 0))
+    #|(module
+    #|  (memory 1)
+    #|  (table $tab 1 funcref)
+    #|  (func (export "list_ops") (param i32 funcref i32) (result i32)
+    #|    local.get 0
+    #|    (table.get $tab)
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    (table.set $tab)
+    #|    (table.size $tab)
+    #|    drop
+    #|    local.get 1
+    #|    local.get 2
+    #|    (table.grow $tab)
+    #|    drop
+    #|    (memory.size 0)
+    #|    drop
+    #|    local.get 2
+    #|    (memory.grow 0)
+    #|    drop
+    #|    i32.const 0))
   assert_wat_matches("list_ops", wat)
 }
 
@@ -1183,35 +2150,135 @@ async test "wat encoder matches wasm-tools for elem table index 1" {
 ///|
 async test "wat encoder matches wasm-tools for br_table labels" {
   let wat =
-    #|(module (func (export "brs") (param i32) (result i32) (block $out (block $in local.get 0 br_table $in $out)) i32.const 7))
+    #|(module
+    #|  (func (export "brs") (param i32) (result i32)
+    #|    (block $out
+    #|      (block $in
+    #|        local.get 0
+    #|        br_table $in $out))
+    #|    i32.const 7))
   assert_wat_matches("br_table_labels", wat)
 }
 
 ///|
 async test "wat encoder matches wasm-tools for tag import and throw" {
   let wat =
-    #|(module (type $t (func (param i32))) (import "env" "e" (tag $e (type $t))) (func (export "throw") (param i32) local.get 0 throw $e))
+    #|(module
+    #|  (type $t (func (param i32)))
+    #|  (import "env" "e" (tag $e (type $t)))
+    #|  (func (export "throw") (param i32)
+    #|    local.get 0
+    #|    throw $e))
   assert_wat_matches("tag_import_throw", wat)
 }
 
 ///|
 async test "wat encoder matches wasm-tools for try_table" {
   let wat =
-    #|(module (type $t (func (param i32))) (tag $e (export "e") (type $t)) (func (export "try") (param i32) (result i32) (block $out (result i32) (try_table (result i32) (catch $e $out) local.get 0 throw $e i32.const 7))))
+    #|(module
+    #|  (type $t (func (param i32)))
+    #|  (tag $e (export "e") (type $t))
+    #|  (func (export "try") (param i32) (result i32)
+    #|    (block $out (result i32)
+    #|      (try_table (result i32)
+    #|        (catch $e $out)
+    #|        local.get 0
+    #|        throw $e
+    #|        i32.const 7))))
   assert_wat_matches("try_table", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for try_table type order" {
+  let wat =
+    #|(module
+    #|  (func (export "f") (result i32)
+    #|    (block $out (result i32)
+    #|      (try_table (result i64 i32)
+    #|        (catch_all $out)
+    #|        (i64.const 1)
+    #|        (i32.const 2))
+    #|      drop
+    #|      drop
+    #|      i32.const 0))
+    #|  (func $g (type 2) (param i64) (result i32)
+    #|    local.get 0
+    #|    i32.wrap_i64)
+    #|  (func (export "call") (param i64) (result i32)
+    #|    local.get 0
+    #|    ref.func $g
+    #|    call_ref 2))
+  assert_wat_matches("try_table_type_order", wat)
 }
 
 ///|
 async test "wat encoder matches wasm-tools for simd ops" {
   let wat =
-    #|(module (memory 1) (func (export "simd") (param i32) (result i32) (local v128) v128.const i8x16 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 local.set 1 local.get 0 v128.load local.get 1 i8x16.shuffle 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 local.set 1 local.get 1 local.get 1 i16x8.add drop local.get 1 i32x4.extract_lane 2 drop i32.const 0))
+    #|(module
+    #|  (memory 1)
+    #|  (func (export "simd") (param i32) (result i32)
+    #|    (local v128)
+    #|    v128.const i8x16 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
+    #|    local.set 1
+    #|    local.get 0
+    #|    v128.load
+    #|    local.get 1
+    #|    i8x16.shuffle 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
+    #|    local.set 1
+    #|    local.get 1
+    #|    local.get 1
+    #|    i16x8.add
+    #|    drop
+    #|    local.get 1
+    #|    i32x4.extract_lane 2
+    #|    drop
+    #|    i32.const 0))
   assert_wat_matches("simd_ops", wat)
 }
 
 ///|
 async test "wat encoder matches wasm-tools for atomic ops" {
   let wat =
-    #|(module (memory 1) (func (export "atomic") (param i32 i32 i64) (result i32) atomic.fence local.get 0 i32.atomic.load drop local.get 0 local.get 1 i32.atomic.store local.get 0 local.get 1 i32.atomic.rmw.add drop local.get 0 local.get 1 local.get 1 i32.atomic.rmw.cmpxchg drop local.get 0 local.get 1 memory.atomic.notify drop local.get 0 local.get 1 local.get 2 memory.atomic.wait32 drop local.get 0 i64.atomic.load drop local.get 0 local.get 2 i64.atomic.store local.get 0 i64.const 0 local.get 2 memory.atomic.wait64 drop i32.const 0))
+    #|(module
+    #|  (memory 1)
+    #|  (func (export "atomic") (param i32 i32 i64) (result i32)
+    #|    atomic.fence
+    #|    local.get 0
+    #|    i32.atomic.load
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.atomic.store
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.atomic.rmw.add
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 1
+    #|    i32.atomic.rmw.cmpxchg
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    memory.atomic.notify
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    memory.atomic.wait32
+    #|    drop
+    #|    local.get 0
+    #|    i64.atomic.load
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    i64.atomic.store
+    #|    local.get 0
+    #|    i64.const 0
+    #|    local.get 2
+    #|    memory.atomic.wait64
+    #|    drop
+    #|    i32.const 0))
   assert_wat_matches("atomic_ops", wat)
 }
 
