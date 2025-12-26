@@ -13,22 +13,11 @@ test "compile helpers initialize entry locals" {
   let rt = make_runtime([], [], 0)
   let code = make_code([I32, Ref(Func, true)])
   let rt = initialize_entry_locals(rt, [Value::I32(9U)], code)
-  assert_ok(rt)
-  // Check unified stack: [arg0=9, local0=0, local1=null_ref]
-  assert_eq(rt.sp, 3)
+  // Check: args pushed, but declared locals NOT pushed (done by compiled code)
+  assert_eq(rt.sp, 1) // Only args pushed
   assert_eq(rt.stack.unsafe_get(0), 9UL) // arg
-  assert_eq(rt.stack.unsafe_get(1), 0UL) // i32 local
-  assert_eq(rt.stack.unsafe_get(2), (-1L).reinterpret_as_uint64()) // null ref
   assert_eq(rt.bp, 0)
-  assert_eq(rt.num_locals, 3)
-}
-
-///|
-test "compile helpers init declared locals unsupported" {
-  let rt = make_runtime([], [], 0)
-  let code = make_code([V128])
-  let rt = init_declared_locals(rt, code)
-  assert_trap(rt)
+  assert_eq(rt.num_locals, 3) // Still 3 locals expected (1 arg + 2 declared)
 }
 
 ///|

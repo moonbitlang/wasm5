@@ -270,15 +270,10 @@ fn op_call_local(rt : Runtime) -> Runtime {
   let caller_num_locals = rt.num_locals
   let return_pc = rt.pc + 2 // Next instruction after call
 
-  // Push default values for declared locals (not params - they're already on stack)
-  let rt = init_declared_locals(rt, code)
-  if rt.status == Trap {
-    return rt
-  }
-
-  // Set up callee frame
+  // Set up callee frame (locals will be initialized by compiled code)
   let rt = {
     ..rt,
+    sp: new_bp + num_params, // sp points past params, callee's init ops will push locals
     bp: new_bp,
     num_locals: num_params + code.locals.length(),
   }
@@ -469,15 +464,10 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
   let caller_num_locals = rt.num_locals
   let return_pc = rt.pc + 3 // Next instruction after call_indirect
 
-  // Push default values for declared locals
-  let rt = init_declared_locals(rt, code)
-  if rt.status == Trap {
-    return rt
-  }
-
-  // Set up callee frame
+  // Set up callee frame (locals will be initialized by compiled code)
   let rt = {
     ..rt,
+    sp: new_bp + num_params,
     bp: new_bp,
     num_locals: num_params + code.locals.length(),
   }
@@ -519,17 +509,8 @@ fn op_return_call_local(rt : Runtime) -> Runtime {
     }
   }
 
-  // Trim stack to bp + num_params
-  let rt = { ..rt, sp: rt.bp + num_params }
-
-  // Push default values for declared locals
-  let rt = init_declared_locals(rt, code)
-  if rt.status == Trap {
-    return rt
-  }
-
-  // Update num_locals
-  { ..rt, num_locals: num_params + code.locals.length(), pc: callee_pc }
+  // Trim stack to bp + num_params (locals will be initialized by compiled code)
+  { ..rt, sp: rt.bp + num_params, num_locals: num_params + code.locals.length(), pc: callee_pc }
 }
 
 ///|
@@ -669,17 +650,8 @@ fn op_return_call_indirect(rt : Runtime) -> Runtime {
     }
   }
 
-  // Trim stack to sp + num_params
-  let rt = { ..rt, sp: rt.bp + num_params }
-
-  // Push default values for declared locals
-  let rt = init_declared_locals(rt, code)
-  if rt.status == Trap {
-    return rt
-  }
-
-  // Update num_locals (sp stays same)
-  { ..rt, num_locals: num_params + code.locals.length(), pc: callee_pc }
+  // Trim stack to bp + num_params (locals will be initialized by compiled code)
+  { ..rt, sp: rt.bp + num_params, num_locals: num_params + code.locals.length(), pc: callee_pc }
 }
 
 ///|
@@ -783,15 +755,10 @@ fn op_call_ref(rt : Runtime) -> Runtime {
   let caller_num_locals = rt.num_locals
   let return_pc = rt.pc + 2 // Next instruction after call_ref
 
-  // Push default values for declared locals
-  let rt = init_declared_locals(rt, code)
-  if rt.status == Trap {
-    return rt
-  }
-
-  // Set up callee frame
+  // Set up callee frame (locals will be initialized by compiled code)
   let rt = {
     ..rt,
+    sp: new_bp + num_params,
     bp: new_bp,
     num_locals: num_params + code.locals.length(),
   }
@@ -904,22 +871,47 @@ fn op_return_call_ref(rt : Runtime) -> Runtime {
     }
   }
 
-  // Trim stack to sp + num_params
-  let rt = { ..rt, sp: rt.bp + num_params }
-
-  // Push default values for declared locals
-  let rt = init_declared_locals(rt, code)
-  if rt.status == Trap {
-    return rt
-  }
-
-  // Update num_locals (sp stays same)
-  { ..rt, num_locals: num_params + code.locals.length(), pc: callee_pc }
+  // Trim stack to bp + num_params (locals will be initialized by compiled code)
+  { ..rt, sp: rt.bp + num_params, num_locals: num_params + code.locals.length(), pc: callee_pc }
 }
 
 ///|
 fn op_nop(rt : Runtime) -> Runtime {
   { ..rt, pc: rt.pc + 1 }
+}
+
+///|
+/// Batch initialize locals with zeros (for i32/i64/f32/f64).
+/// Immediate: count of zeros to push.
+fn op_init_zeros(rt : Runtime) -> Runtime {
+  let count = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let mut sp = rt.sp
+  for i = 0; i < count; i = i + 1 {
+    rt.stack.unsafe_set(sp, 0UL)
+    sp += 1
+  }
+  { ..rt, sp, pc: rt.pc + 2 }
+}
+
+///|
+/// Batch initialize locals with null refs (for reference types).
+/// Immediate: count of null refs to push.
+fn op_init_null_refs(rt : Runtime) -> Runtime {
+  let count = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let null_ref = (-1L).reinterpret_as_uint64()
+  let mut sp = rt.sp
+  for i = 0; i < count; i = i + 1 {
+    rt.stack.unsafe_set(sp, null_ref)
+    sp += 1
+  }
+  { ..rt, sp, pc: rt.pc + 2 }
+}
+
+///|
+/// Trap for unsupported local type (V128, etc.)
+fn op_local_init_unsupported(rt : Runtime) -> Runtime {
+  rt.ctx.error_detail = "Unsupported local type"
+  { ..rt, status: Trap }
 }
 
 ///|

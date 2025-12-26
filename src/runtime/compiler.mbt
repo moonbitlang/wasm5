@@ -41,6 +41,51 @@ pub fn Compiler::finish(self : Compiler) -> FixedArray[UInt64] {
 }
 
 ///|
+/// Get the initialization category for a local type.
+/// Returns: 0 = zero (i32/i64/f32/f64), 1 = null ref, -1 = unsupported
+fn local_init_category(t : @core.ValType) -> Int {
+  match t {
+    I32 | I64 | F32 | F64 => 0 // zero
+    FuncRef | ExternRef | AnyRef | ExnRef | NullRef | NullFuncRef | NullExnRef
+    | NullExternRef | EqRef | I31Ref | StructRef | ArrayRef | Ref(_, _) => 1 // null ref
+    _ => -1 // unsupported (V128, etc.)
+  }
+}
+
+///|
+/// Emit batch initialization ops for declared locals.
+/// Groups consecutive locals by type (zero vs null ref) for efficiency.
+/// Unsupported types (V128) cause a trap instruction to be emitted.
+fn Compiler::emit_locals_init(self : Compiler, locals : Array[@core.ValType]) -> Unit {
+  if locals.length() == 0 {
+    return
+  }
+
+  let mut i = 0
+  while i < locals.length() {
+    let category = local_init_category(locals[i])
+    if category < 0 {
+      // Unsupported local type - emit trap
+      self.emit_fn(op_local_init_unsupported)
+      return
+    }
+    let mut count = 1
+    // Count consecutive locals of same category
+    while i + count < locals.length() && local_init_category(locals[i + count]) == category {
+      count += 1
+    }
+    // Emit batch init op
+    if category == 1 {
+      self.emit_fn(op_init_null_refs)
+    } else {
+      self.emit_fn(op_init_zeros)
+    }
+    self.emit_idx(count)
+    i += count
+  }
+}
+
+///|
 fn Compiler::compile_func(
   self : Compiler,
   func_idx : Int, // Index into module_.funcs (excludes imports)
@@ -66,6 +111,10 @@ fn Compiler::compile_func(
   // target_pc is 0 placeholder - will be patched at end
   ctx.push_control(BlockKind, [], func_type.results, 0)
   let start_pc = self.ops.length()
+
+  // Emit batch initialization for declared locals (params are already on stack)
+  self.emit_locals_init(code.locals)
+
   // Compile function body
   for instr in code.body.instrs {
     self.compile_wasm_instr(ctx, instr)
