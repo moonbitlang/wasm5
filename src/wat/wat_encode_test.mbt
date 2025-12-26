@@ -410,6 +410,103 @@ test "wat parser rejects data without offset for explicit memory" {
 }
 
 ///|
+test "wat parser rejects try without end" {
+  let wat =
+    #|(module
+    #|  (func
+    #|    try
+    #|      nop))
+  let mut saw_error = false
+  let _ = wat_to_module(wat) catch {
+    _ => {
+      saw_error = true
+      empty_module()
+    }
+  }
+  assert_eq(saw_error, true)
+}
+
+///|
+test "wat parser rejects try delegate after catch" {
+  let wat =
+    #|(module
+    #|  (tag $e)
+    #|  (func (result i32)
+    #|    try (result i32)
+    #|      i32.const 0
+    #|    catch $e
+    #|      i32.const 1
+    #|    delegate 0
+    #|    end))
+  let mut saw_error = false
+  let _ = wat_to_module(wat) catch {
+    _ => {
+      saw_error = true
+      empty_module()
+    }
+  }
+  assert_eq(saw_error, true)
+}
+
+///|
+test "wat parser rejects try delegate without label" {
+  let wat =
+    #|(module
+    #|  (func (result i32)
+    #|    try (result i32)
+    #|      i32.const 0
+    #|    delegate
+    #|    end))
+  let mut saw_error = false
+  let _ = wat_to_module(wat) catch {
+    _ => {
+      saw_error = true
+      empty_module()
+    }
+  }
+  assert_eq(saw_error, true)
+}
+
+///|
+test "wat parser rejects try_table catch without label" {
+  let wat =
+    #|(module
+    #|  (tag $e)
+    #|  (func (result i32)
+    #|    (block (result i32)
+    #|      (try_table (result i32)
+    #|        (catch $e)
+    #|        i32.const 0))))
+  let mut saw_error = false
+  let _ = wat_to_module(wat) catch {
+    _ => {
+      saw_error = true
+      empty_module()
+    }
+  }
+  assert_eq(saw_error, true)
+}
+
+///|
+test "wat parser rejects try_table catch_all without label" {
+  let wat =
+    #|(module
+    #|  (func (result i32)
+    #|    (block (result i32)
+    #|      (try_table (result i32)
+    #|        (catch_all)
+    #|        i32.const 0))))
+  let mut saw_error = false
+  let _ = wat_to_module(wat) catch {
+    _ => {
+      saw_error = true
+      empty_module()
+    }
+  }
+  assert_eq(saw_error, true)
+}
+
+///|
 async test "wat encoder matches wasm-tools for data" {
   let wat =
     #|(module (memory (export "mem") 1) (data (i32.const 0) "hi"))
@@ -2267,6 +2364,23 @@ async test "wat encoder matches wasm-tools for try_table catch_ref" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for try_table catch_ref label depth" {
+  let wat =
+    #|(module
+    #|  (tag $e (param i32))
+    #|  (func (export "f") (param i32) (result i32)
+    #|    (block $outer (result i32)
+    #|      (block $inner (result i32)
+    #|        (try_table (result i32)
+    #|          (catch_ref $e 1)
+    #|          (catch_all_ref 1)
+    #|          local.get 0
+    #|          throw $e
+    #|          i32.const 9)))))
+  assert_wat_matches("try_table_catch_ref_depth", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for try_table typeuse" {
   let wat =
     #|(module
@@ -2295,6 +2409,22 @@ async test "wat encoder matches wasm-tools for try_table label depth" {
     #|        throw $e
     #|        i32.const 0))))
   assert_wat_matches("try_table_label_depth", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for try_table outer label depth" {
+  let wat =
+    #|(module
+    #|  (tag $e)
+    #|  (func (export "f") (result i32)
+    #|    (block $outer (result i32)
+    #|      (block $inner (result i32)
+    #|        (try_table (result i32)
+    #|          (catch $e 1)
+    #|          (catch_all 1)
+    #|          throw $e
+    #|          i32.const 42)))))
+  assert_wat_matches("try_table_label_depth_outer", wat)
 }
 
 ///|
