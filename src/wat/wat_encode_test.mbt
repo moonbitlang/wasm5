@@ -3411,6 +3411,19 @@ async test "wat encoder matches wasm-tools for list form memory.init default" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for list form memory size/grow defaults" {
+  let wat =
+    #|(module
+    #|  (memory 1)
+    #|  (func (export "sizes") (param i32) (result i32)
+    #|    (memory.size)
+    #|    drop
+    #|    local.get 0
+    #|    (memory.grow)))
+  assert_wat_matches("list_memory_size_grow_default", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for memory64 bulk ops" {
   let wat =
     #|(module
