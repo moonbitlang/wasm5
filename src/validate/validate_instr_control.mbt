@@ -507,19 +507,89 @@ fn validate_instruction_control(
         }
         stack.push(non_null_type)
       }
-    BrOnNonNull(_label) =>
-      // br_on_non_null: pop nullable ref, branch if non-null (with the value), else continue
-      // Pop the nullable reference
+    BrOnNonNull(label) => {
+      // br_on_non_null l : [t* (ref null ht)] -> [t*]
+      //
+      // This instruction:
+      // 1. Pops a nullable reference (ref null ht) from the stack
+      // 2. If non-null: branches to label l, passing t* plus the non-null ref (ref ht)
+      // 3. If null: continues execution (ref is consumed)
+      //
+      // The label must expect a reference type as its last type.
+      // Through subtyping, the non-null ref (ref ht) must be a subtype of the label's last type.
+      // This means the label can expect either (ref ht) or (ref null ht).
+
+      // First validate the label exists
+      let label_types = ctx.get_label_types(label)
+
+      // Label must expect at least one type (the ref being passed)
+      if label_types.length() == 0 {
+        raise ValidationError::TypeMismatch(
+          "br_on_non_null: label expects no values, but needs ref type",
+        )
+      }
+
+      // The last type expected by the label must be a reference type
+      let last_label_type = label_types[label_types.length() - 1]
+      guard last_label_type.is_ref_type() else {
+        raise ValidationError::TypeMismatch(
+          "br_on_non_null: label's last type must be a ref type, got \{last_label_type}",
+        )
+      }
+
+      // Pop the nullable reference from the stack
       if not(ctx.is_unreachable) && stack.length() < 1 {
         raise ValidationError::TypeMismatch(
           "br_on_non_null expects reference on stack",
         )
-      } else if stack.length() >= 1 {
-        let _ = stack.unsafe_pop()
-
       }
-    // If we branch, we pass the non-null value to the target
-    // Fallthrough case: the value was null, so nothing is pushed
+
+      if stack.length() >= 1 {
+        let popped_ref = stack.unsafe_pop()
+
+        // The value we pop must be a nullable reference
+        guard popped_ref.is_ref_type() else {
+          raise ValidationError::TypeMismatch(
+            "br_on_non_null: expected reference on stack, got \{popped_ref}",
+          )
+        }
+
+        // The non-null version of our popped ref must be a subtype of the label's last type
+        let non_null_ref = popped_ref.to_non_nullable()
+        if not(is_subtype(module_, non_null_ref, last_label_type)) {
+          raise ValidationError::TypeMismatch(
+            "br_on_non_null: non-null ref type \{non_null_ref} incompatible with label's expected \{last_label_type}",
+          )
+        }
+
+        // Check that remaining stack matches the prefix of label's expected types
+        // According to the spec, the t* types must match exactly between the stack
+        // and the label's expected types (before the ref type at the end)
+        let prefix_len = label_types.length() - 1
+        if not(ctx.is_unreachable) && stack.length() < prefix_len {
+          raise ValidationError::TypeMismatch(
+            "br_on_non_null: stack has \{stack.length()} values, label expects \{prefix_len} plus ref",
+          )
+        }
+
+        // Validate prefix types match exactly (not via subtyping!)
+        // The spec rule requires t* to be the same in both the stack and label
+        for i in 0..<prefix_len {
+          if i < stack.length() {
+            let stack_idx = stack.length() - prefix_len + i
+            let stack_type = stack[stack_idx]
+            let expected_type = label_types[i]
+            // Use exact type equality, not subtyping
+            if stack_type != expected_type {
+              raise ValidationError::TypeMismatch(
+                "br_on_non_null: stack type \{stack_type} doesn't match label's expected \{expected_type} at position \{i}",
+              )
+            }
+          }
+        }
+      }
+      // Fallthrough case: the ref was null, so it's consumed (already popped)
+    }
     Nop => ()
     Unreachable =>
       // unreachable instruction marks all subsequent code as unreachable
