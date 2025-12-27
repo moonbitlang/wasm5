@@ -658,6 +658,17 @@ async test "wat encoder matches wasm-tools for unicode string escapes" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for string escapes" {
+  let wat =
+    #|(module
+    #|  (memory 1)
+    #|  (data (i32.const 0) "line1\n\tend\r")
+    #|  (data (i32.const 16) "quote:\" backslash:\\")
+    #|  (data (i32.const 40) "\00\01\7f\ff"))
+  assert_wat_matches("data_string_escapes", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for inline memory data" {
   let wat =
     #|(module (memory (data "hi")))
