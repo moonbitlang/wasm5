@@ -3383,6 +3383,19 @@ async test "wat encoder matches wasm-tools for list form memory bulk ops" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for list form memory.copy defaults" {
+  let wat =
+    #|(module
+    #|  (memory 1)
+    #|  (func (export "copy") (param i32 i32 i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    (memory.copy)))
+  assert_wat_matches("list_memory_copy_default", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for memory64 bulk ops" {
   let wat =
     #|(module
