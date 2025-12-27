@@ -2259,6 +2259,16 @@ async test "wat encoder matches wasm-tools for custom section before func" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for custom section before global" {
+  let wat =
+    #|(module
+    #|  (@custom "foo" (before global) "data")
+    #|  (global (export "g") i32 (i32.const 1))
+    #|  (func (export "get") (result i32) global.get 0))
+  assert_wat_matches_custom("custom_before_global", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for custom section after elem" {
   let wat =
     #|(module
