@@ -2281,6 +2281,17 @@ async test "wat encoder matches wasm-tools for custom section before tag" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for custom section before elem" {
+  let wat =
+    #|(module
+    #|  (table 1 funcref)
+    #|  (func $f)
+    #|  (@custom "foo" (before elem) "data")
+    #|  (elem (i32.const 0) $f))
+  assert_wat_matches_custom("custom_before_elem", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for custom section after elem" {
   let wat =
     #|(module
