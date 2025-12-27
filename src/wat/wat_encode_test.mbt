@@ -2940,6 +2940,28 @@ async test "wat encoder matches wasm-tools for table64 bulk ops" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for table64 ops" {
+  let wat =
+    #|(module
+    #|  (table $t i64 2 funcref)
+    #|  (func $f)
+    #|  (elem (i64.const 0) func $f)
+    #|  (func (export "ops") (param i64 funcref i64) (result i64)
+    #|    local.get 0
+    #|    table.get $t
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    table.set $t
+    #|    table.size $t
+    #|    drop
+    #|    local.get 2
+    #|    local.get 1
+    #|    table.grow $t))
+  assert_wat_matches("table64_ops", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for mixed multi-memory/table64 ops" {
   let wat =
     #|(module
