@@ -2658,6 +2658,16 @@ async test "wat encoder matches wasm-tools for ref types" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for ref.null type index" {
+  let wat =
+    #|(module
+    #|  (type $t (struct))
+    #|  (func (export "null") (result (ref null $t))
+    #|    ref.null 0))
+  assert_wat_matches("ref_null_type_index", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for ref.null heaptypes" {
   let wat =
     #|(module
