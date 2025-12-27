@@ -758,6 +758,18 @@ async test "wat encoder matches wasm-tools for local.tee" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for local.set" {
+  let wat =
+    #|(module
+    #|  (func (export "set") (param i32) (result i32)
+    #|    (local i32)
+    #|    local.get 0
+    #|    local.set 1
+    #|    local.get 1))
+  assert_wat_matches("local_set", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for numeric index refs" {
   let wat =
     #|(module
