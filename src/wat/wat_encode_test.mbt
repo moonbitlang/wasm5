@@ -231,6 +231,16 @@ async test "wat encoder matches wasm-tools for imports" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for export name escapes" {
+  let wat =
+    #|(module
+    #|  (func $f (result i32) i32.const 0)
+    #|  (export "line\n\tend" (func $f))
+    #|  (memory (export "quote:\\\"") 1))
+  assert_wat_matches("export_name_escapes", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for memory/table imports" {
   let wat =
     #|(module
