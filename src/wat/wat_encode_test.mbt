@@ -814,6 +814,24 @@ async test "wat encoder matches wasm-tools for global init ref.i31" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for global init ref.test" {
+  let wat =
+    #|(module
+    #|  (global (export "g") i32
+    #|    (ref.test funcref (ref.null func))))
+  assert_wat_matches("global_init_ref_test", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for global init ref.cast" {
+  let wat =
+    #|(module
+    #|  (global (export "g") funcref
+    #|    (ref.cast funcref (ref.null func))))
+  assert_wat_matches("global_init_ref_cast", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for mutable globals" {
   let wat =
     #|(module (global $g (mut i64) (i64.const 1)) (func (export "set") (param i64) local.get 0 global.set $g))
