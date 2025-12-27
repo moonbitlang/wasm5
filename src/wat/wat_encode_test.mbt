@@ -2602,6 +2602,16 @@ async test "wat encoder matches wasm-tools for data offset list" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for memory64 data offset list" {
+  let wat =
+    #|(module
+    #|  (memory i64 1)
+    #|  (data (offset (i64.const 0)) "hi")
+    #|  (data (memory 0) (offset (i64.const 4)) "ok"))
+  assert_wat_matches("mem64_data_offset_list", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for data passive" {
   let wat =
     #|(module
