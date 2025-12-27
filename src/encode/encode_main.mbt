@@ -740,11 +740,7 @@ fn encode_data_count_section(module_ : @core.Module) -> Array[Byte] {
 
 ///|
 fn needs_data_count(module_ : @core.Module) -> Bool {
-  for data in module_.datas {
-    if not(data.is_active) {
-      return true
-    }
-  }
+  // Only emit data count when bulk-memory-style instructions reference data.
   for code in module_.codes {
     if instrs_use_bulk_memory(code.body.instrs) {
       return true
