@@ -4381,6 +4381,161 @@ async test "wat encoder matches wasm-tools for atomic memarg literals" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for atomic rmw width variants" {
+  let wat =
+    #|(module
+    #|  (memory 1)
+    #|  (func (export "rmw") (param i32 i32 i64) (result i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.atomic.rmw8.add_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.atomic.rmw16.add_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.atomic.rmw8.sub_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.atomic.rmw16.sub_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.atomic.rmw8.and_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.atomic.rmw16.and_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.atomic.rmw8.or_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.atomic.rmw16.or_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.atomic.rmw8.xor_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.atomic.rmw16.xor_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.atomic.rmw8.xchg_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.atomic.rmw16.xchg_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 1
+    #|    i32.atomic.rmw8.cmpxchg_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 1
+    #|    i32.atomic.rmw16.cmpxchg_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    i64.atomic.rmw8.add_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    i64.atomic.rmw16.add_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    i64.atomic.rmw32.add_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    i64.atomic.rmw8.sub_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    i64.atomic.rmw16.sub_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    i64.atomic.rmw32.sub_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    i64.atomic.rmw8.and_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    i64.atomic.rmw16.and_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    i64.atomic.rmw32.and_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    i64.atomic.rmw8.or_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    i64.atomic.rmw16.or_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    i64.atomic.rmw32.or_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    i64.atomic.rmw8.xor_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    i64.atomic.rmw16.xor_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    i64.atomic.rmw32.xor_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    i64.atomic.rmw8.xchg_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    i64.atomic.rmw16.xchg_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    i64.atomic.rmw32.xchg_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    local.get 2
+    #|    i64.atomic.rmw8.cmpxchg_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    local.get 2
+    #|    i64.atomic.rmw16.cmpxchg_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    local.get 2
+    #|    i64.atomic.rmw32.cmpxchg_u
+    #|    drop
+    #|    i32.const 0))
+  assert_wat_matches("atomic_rmw_widths", wat)
+}
+
+///|
 test "wast parser exposes script commands" {
   let wast =
     #|(script
