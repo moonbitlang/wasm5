@@ -2981,6 +2981,15 @@ async test "wat encoder matches wasm-tools for data offset list" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for named memory data" {
+  let wat =
+    #|(module
+    #|  (memory $mem 1)
+    #|  (data (memory $mem) (offset (i32.const 0)) "hi"))
+  assert_wat_matches("data_memory_named", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for memory64 data offset list" {
   let wat =
     #|(module
