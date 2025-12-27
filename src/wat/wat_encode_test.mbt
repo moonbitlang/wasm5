@@ -2509,6 +2509,31 @@ async test "wat encoder matches wasm-tools for ref.null heaptypes" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for ref.test heaptypes" {
+  let wat =
+    #|(module
+    #|  (func (export "tests") (result i32 i32 i32 i32)
+    #|    (local (ref null noextern) (ref null nofunc) (ref null noexn) (ref null none))
+    #|    ref.null noextern
+    #|    local.set 0
+    #|    local.get 0
+    #|    ref.test (ref null noextern)
+    #|    ref.null nofunc
+    #|    local.set 1
+    #|    local.get 1
+    #|    ref.test (ref null nofunc)
+    #|    ref.null noexn
+    #|    local.set 2
+    #|    local.get 2
+    #|    ref.test (ref null noexn)
+    #|    ref.null none
+    #|    local.set 3
+    #|    local.get 3
+    #|    ref.test (ref null none)))
+  assert_wat_matches("ref_test_heaptypes", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for ref eq ops" {
   let wat =
     #|(module
