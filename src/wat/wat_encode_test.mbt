@@ -1886,6 +1886,17 @@ async test "wat encoder matches wasm-tools for if type index" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for loop type index" {
+  let wat =
+    #|(module
+    #|  (type (func (result i32)))
+    #|  (func (export "loop_type") (result i32)
+    #|    (loop (type 0)
+    #|      i32.const 1)))
+  assert_wat_matches("loop_type_index", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for br_on_null" {
   let wat =
     #|(module
