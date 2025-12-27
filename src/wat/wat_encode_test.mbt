@@ -811,6 +811,17 @@ async test "wat encoder matches wasm-tools for ref globals" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for externref globals" {
+  let wat =
+    #|(module
+    #|  (global (export "g") externref (ref.null extern))
+    #|  (func (export "is_null") (result i32)
+    #|    global.get 0
+    #|    ref.is_null))
+  assert_wat_matches("global_externref", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for gc struct const expr" {
   let wat =
     #|(module
