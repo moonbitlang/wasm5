@@ -972,6 +972,8 @@ test "validate control instruction branches" {
   assert_eq(ok, true)
   assert_eq(ctx_br_on_null.stack[0], Ref(Func, false))
   let ctx_br_on_non_null = ValidationCtx::new()
+  // br_on_non_null requires a label that expects a ref type as its last type
+  ctx_br_on_non_null.push_control([], [FuncRef])
   ctx_br_on_non_null.stack.push(FuncRef)
   let ok = validate_instruction_control(
     test_empty_module(),
