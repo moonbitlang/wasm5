@@ -2309,6 +2309,16 @@ async test "wat encoder matches wasm-tools for custom section before code" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for custom section after code" {
+  let wat =
+    #|(module
+    #|  (func (export "f") nop)
+    #|  (@custom "foo" (after code) "data")
+    #|  (memory 1))
+  assert_wat_matches_custom("custom_after_code", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for custom section escapes" {
   let wat =
     #|(module
