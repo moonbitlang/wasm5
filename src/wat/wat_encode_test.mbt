@@ -1781,6 +1781,18 @@ async test "wat encoder matches wasm-tools for control flow typeuse params" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for block params no type" {
+  let wat =
+    #|(module
+    #|  (func (export "block_params") (param i32) (result i32)
+    #|    local.get 0
+    #|    (block (param i32) (result i32)
+    #|      i32.const 1
+    #|      i32.add)))
+  assert_wat_matches("block_params_no_type", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for br_on_null" {
   let wat =
     #|(module
