@@ -1873,6 +1873,19 @@ async test "wat encoder matches wasm-tools for block type index" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for if type index" {
+  let wat =
+    #|(module
+    #|  (type (func (result i32)))
+    #|  (func (export "if_type") (param i32) (result i32)
+    #|    local.get 0
+    #|    (if (type 0)
+    #|      (then i32.const 1)
+    #|      (else i32.const 2))))
+  assert_wat_matches("if_type_index", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for br_on_null" {
   let wat =
     #|(module
