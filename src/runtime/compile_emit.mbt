@@ -618,6 +618,10 @@ fn Compiler::compile_wasm_instr(
       self.emit_fn(op_throw)
       self.emit_idx(tag_idx_int)
     }
+    ThrowRef => {
+      ctx.pop_type()
+      self.emit_fn(op_throw_ref)
+    }
     Rethrow(label_idx) => {
       self.emit_fn(op_rethrow)
       self.emit_idx(label_idx.reinterpret_as_int())
@@ -891,6 +895,34 @@ fn Compiler::compile_wasm_instr(
       ctx.truncate_stack(block.stack_height_at_entry)
       ctx.push_types(block.results)
     }
+    Try(block_type, instrs, _catches) => {
+      let (params, results) = get_compile_block_type(self.module_, block_type)
+      ctx.push_control(BlockKind, params, results, 0)
+      for instr in instrs {
+        self.compile_wasm_instr(ctx, instr)
+      }
+      let end_pc = self.ops.length()
+      let block = ctx.pop_control()
+      for slot in block.pending_br_patches {
+        self.ops[slot] = end_pc.to_int64().reinterpret_as_uint64()
+      }
+      ctx.truncate_stack(block.stack_height_at_entry)
+      ctx.push_types(block.results)
+    }
+    TryDelegate(block_type, instrs, _label_idx) => {
+      let (params, results) = get_compile_block_type(self.module_, block_type)
+      ctx.push_control(BlockKind, params, results, 0)
+      for instr in instrs {
+        self.compile_wasm_instr(ctx, instr)
+      }
+      let end_pc = self.ops.length()
+      let block = ctx.pop_control()
+      for slot in block.pending_br_patches {
+        self.ops[slot] = end_pc.to_int64().reinterpret_as_uint64()
+      }
+      ctx.truncate_stack(block.stack_height_at_entry)
+      ctx.push_types(block.results)
+    }
     TryTable(block_type, _catches, instrs) => {
       let (params, results) = get_compile_block_type(self.module_, block_type)
       ctx.push_control(BlockKind, params, results, 0)
@@ -937,7 +969,6 @@ fn Compiler::compile_wasm_instr(
         let func_type = require_func_type(self.module_, type_idx, "call")
         let num_params = func_type.params.length()
         let num_locals = num_params + code.locals.length()
-
         self.emit_fn(op_call_local)
         let callee_pc_slot = self.ops.length()
         match code.compiled {
@@ -945,7 +976,10 @@ fn Compiler::compile_wasm_instr(
           None => {
             // Forward reference - emit placeholder and record for patching
             self.emit_idx(0)
-            self.pending_call_patches.push({ local_func_idx, slot: callee_pc_slot })
+            self.pending_call_patches.push({
+              local_func_idx,
+              slot: callee_pc_slot,
+            })
           }
         }
         self.emit_idx(num_params)
@@ -1491,7 +1525,6 @@ fn Compiler::compile_wasm_instr(
         let func_type = require_func_type(self.module_, type_idx, "return_call")
         let num_params = func_type.params.length()
         let num_locals = num_params + code.locals.length()
-
         self.emit_fn(op_return_call_local)
         let callee_pc_slot = self.ops.length()
         match code.compiled {
@@ -1499,7 +1532,10 @@ fn Compiler::compile_wasm_instr(
           None => {
             // Forward reference - emit placeholder and record for patching
             self.emit_idx(0)
-            self.pending_call_patches.push({ local_func_idx, slot: callee_pc_slot })
+            self.pending_call_patches.push({
+              local_func_idx,
+              slot: callee_pc_slot,
+            })
           }
         }
         self.emit_idx(num_params)

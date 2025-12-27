@@ -76,7 +76,13 @@ fn execute_call(
   // Callee has returned - results are at stack[rt.bp .. rt.sp)
   // Return values are already copied to bp by op_return
   // Restore caller's state
-  { ..rt, bp: caller_bp, num_locals: caller_num_locals, pc: return_pc, status: Running }
+  {
+    ..rt,
+    bp: caller_bp,
+    num_locals: caller_num_locals,
+    pc: return_pc,
+    status: Running,
+  }
 }
 
 ///|

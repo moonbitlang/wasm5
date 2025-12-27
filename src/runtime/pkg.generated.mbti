@@ -23,21 +23,14 @@ pub suberror RuntimeError {
   MemoryOutOfBounds
   InvalidType(String)
   FunctionNotFound(String)
-  UnimplementedInstruction(String)
   Unreachable
   FunctionNotCompiled(String)
-  UnsupportedLocalType(String)
   UnsupportedInitExpression(String)
+  StackOverflow
 }
 pub impl Show for RuntimeError
 
 // Types and methods
-pub struct CallFrame {
-  return_pc : Int
-  caller_sp : Int
-  caller_num_locals : Int
-}
-
 pub struct CompileBlock {
   kind : CompileBlockKind
   params : Array[@core.ValType]
@@ -58,7 +51,17 @@ pub struct CompileCtx {
   type_stack : Array[@core.ValType]
   control_stack : Array[CompileBlock]
   func_result_count : Int
+  mut max_stack_depth : Int
 }
+
+pub struct Compiler {
+  module_ : @core.Module
+  ops : Array[UInt64]
+  pending_call_patches : Array[PendingCallPatch]
+}
+pub fn Compiler::compile(Self) -> Unit raise RuntimeError
+pub fn Compiler::finish(Self) -> FixedArray[UInt64]
+pub fn Compiler::new(@core.Module) -> Self
 
 pub struct ImportResolver {
   modules : Map[Bytes, ImportResolverEntry]
@@ -86,33 +89,27 @@ pub struct ImportedMemory {
   max : UInt64?
 }
 
-pub enum MInstr {
-  WasmInstr((Runtime) -> RetCode)
-  ImmediateI32(UInt)
-  ImmediateIdx(Int)
-}
-
-pub enum RetCode {
-  OK
-  DivisionByZero
-  IntegerOverflow
-  MemoryOutOfBounds
-  Unreachable
-  InvalidType
-  FunctionNotCompiled
-  UnsupportedLocalType
-}
-pub impl Eq for RetCode
+type PendingCallPatch
 
 pub struct Runtime {
+  ops : FixedArray[UInt64]
+  stack : FixedArray[UInt64]
+  sp : Int
+  bp : Int
+  num_locals : Int
+  pc : Int
+  status : RuntimeStatus
+  ctx : RuntimeContext
+}
+pub fn Runtime::call_compiled(Self, Bytes, Array[Value]) -> (Self, Array[Value]) raise RuntimeError
+pub fn Runtime::compile(Self) -> Self raise RuntimeError
+pub fn Runtime::get_globals(Self) -> Array[Value]
+pub fn Runtime::get_module(Self) -> @core.Module
+pub fn Runtime::load(@core.Module) -> Self raise RuntimeError
+pub fn Runtime::load_with_resolver(@core.Module, ImportResolver) -> Self raise RuntimeError
+
+pub struct RuntimeContext {
   module_ : @core.Module
-  ops : Array[MInstr]
-  stack : Array[UInt64]
-  mut sp : Int
-  mut num_locals : Int
-  mut pc : Int
-  mut running : Bool
-  call_stack : Array[CallFrame]
   memory : Array[Byte]
   memory_max : UInt64?
   globals : Array[Value]
@@ -121,12 +118,15 @@ pub struct Runtime {
   data_segments : Array[Array[Byte]]
   mut error_detail : String
 }
-pub fn Runtime::call_compiled(Self, Bytes, Array[Value]) -> Array[Value] raise RuntimeError
-pub fn Runtime::compile(Self) -> Unit raise RuntimeError
-pub fn Runtime::get_globals(Self) -> Array[Value]
-pub fn Runtime::get_module(Self) -> @core.Module
-pub fn Runtime::load(@core.Module) -> Self raise RuntimeError
-pub fn Runtime::load_with_resolver(@core.Module, ImportResolver) -> Self raise RuntimeError
+
+pub enum RuntimeStatus {
+  Running
+  Terminated
+  Trap
+  Returned
+}
+pub impl Eq for RuntimeStatus
+pub impl Show for RuntimeStatus
 
 type RuntimeTable
 
