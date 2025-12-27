@@ -4354,6 +4354,33 @@ async test "wat encoder matches wasm-tools for extended atomic ops" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for atomic memarg literals" {
+  let wat =
+    #|(module
+    #|  (memory 1)
+    #|  (func (export "atomic_memarg") (param i32 i32 i64) (result i32)
+    #|    local.get 0
+    #|    i32.atomic.load offset=0x10 align=4
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.atomic.store offset=16 align=4
+    #|    local.get 0
+    #|    local.get 2
+    #|    i64.atomic.store offset=0x20 align=8
+    #|    local.get 0
+    #|    i32.atomic.rmw.add offset=4 align=4
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 1
+    #|    i32.atomic.rmw.cmpxchg offset=0x08 align=4
+    #|    drop
+    #|    i32.const 0))
+  assert_wat_matches("atomic_memarg_literals", wat)
+}
+
+///|
 test "wast parser exposes script commands" {
   let wast =
     #|(script
