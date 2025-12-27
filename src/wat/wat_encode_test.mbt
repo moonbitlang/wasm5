@@ -2758,6 +2758,30 @@ async test "wat encoder matches wasm-tools for memory indexed ops" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for memory64 bulk ops" {
+  let wat =
+    #|(module
+    #|  (memory i64 1)
+    #|  (data "hi")
+    #|  (func (export "init")
+    #|    i64.const 0
+    #|    i64.const 0
+    #|    i64.const 2
+    #|    memory.init 0)
+    #|  (func (export "copy")
+    #|    i64.const 0
+    #|    i64.const 0
+    #|    i64.const 2
+    #|    memory.copy 0 0)
+    #|  (func (export "fill")
+    #|    i64.const 0
+    #|    i32.const 7
+    #|    i64.const 2
+    #|    memory.fill 0))
+  assert_wat_matches("memory64_bulk_ops", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for list form table/memory ops" {
   let wat =
     #|(module
