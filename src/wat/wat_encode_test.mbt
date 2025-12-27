@@ -2458,6 +2458,19 @@ async test "wat encoder matches wasm-tools for ref types" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for ref.null heaptypes" {
+  let wat =
+    #|(module
+    #|  (func (export "nulls")
+    #|    (result (ref null none) (ref null nofunc) (ref null noextern) (ref null noexn))
+    #|    ref.null none
+    #|    ref.null nofunc
+    #|    ref.null noextern
+    #|    ref.null noexn))
+  assert_wat_matches("ref_null_heaptypes", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for ref eq ops" {
   let wat =
     #|(module
