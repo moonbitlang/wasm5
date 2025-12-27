@@ -4163,6 +4163,51 @@ async test "wat encoder matches wasm-tools for simd memarg literals" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for simd bitwise ops" {
+  let wat =
+    #|(module
+    #|  (func (export "bitwise") (result i32)
+    #|    (local v128)
+    #|    (local v128)
+    #|    (local v128)
+    #|    v128.const i32x4 1 2 3 4
+    #|    local.set 0
+    #|    v128.const i32x4 5 6 7 8
+    #|    local.set 1
+    #|    v128.const i32x4 9 10 11 12
+    #|    local.set 2
+    #|    local.get 0
+    #|    v128.not
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    v128.and
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    v128.or
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    v128.xor
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    v128.andnot
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    v128.bitselect
+    #|    drop
+    #|    local.get 0
+    #|    v128.any_true
+    #|    drop
+    #|    i32.const 0))
+  assert_wat_matches("simd_bitwise_ops", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for relaxed simd ops" {
   let wat =
     #|(module
