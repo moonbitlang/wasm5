@@ -231,6 +231,13 @@ async test "wat encoder matches wasm-tools for imports" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for multi export" {
+  let wat =
+    #|(module (func (export "a") (export "b") (result i32) i32.const 0))
+  assert_wat_matches("multi_export", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for export name escapes" {
   let wat =
     #|(module
