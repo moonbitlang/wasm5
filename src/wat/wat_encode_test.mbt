@@ -2944,6 +2944,19 @@ async test "wat encoder matches wasm-tools for table.fill" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for table.fill externref" {
+  let wat =
+    #|(module
+    #|  (table $t 2 externref)
+    #|  (func (export "fill") (param i32 i32)
+    #|    local.get 0
+    #|    ref.null extern
+    #|    local.get 1
+    #|    table.fill $t))
+  assert_wat_matches("table_fill_externref", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for table64 bulk ops" {
   let wat =
     #|(module
