@@ -203,6 +203,22 @@ async test "wat encoder matches wasm-tools for add" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for comments" {
+  let wat =
+    #|(module
+    #|  ;; line comment
+    #|  (func (; inline ;) (export "f") (param i32) (result i32)
+    #|    local.get 0
+    #|    (; nested (; block ;) comment ;)
+    #|    i32.const 1
+    #|    i32.add)
+    #|  (; outer (; inner ;) end ;)
+    #|  (memory 1)
+    #|  (data (i32.const 0) "hi"))
+  assert_wat_matches("comments", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for imports" {
   let wat =
     #|(module
