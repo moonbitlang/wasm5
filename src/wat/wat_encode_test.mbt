@@ -4123,6 +4123,46 @@ async test "wat encoder matches wasm-tools for simd lane ops" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for simd memarg literals" {
+  let wat =
+    #|(module
+    #|  (memory 1)
+    #|  (func (export "memarg") (param i32) (result i32)
+    #|    (local v128)
+    #|    v128.const i32x4 1 2 3 4
+    #|    local.set 1
+    #|    local.get 0
+    #|    v128.load offset=0x10 align=16
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    v128.store offset=0x20 align=16
+    #|    local.get 0
+    #|    v128.load8x8_s offset=0x08 align=8
+    #|    drop
+    #|    local.get 0
+    #|    v128.load16x4_u offset=0x10 align=8
+    #|    drop
+    #|    local.get 0
+    #|    v128.load32x2_s offset=0x18 align=8
+    #|    drop
+    #|    local.get 0
+    #|    v128.load8_splat offset=1 align=1
+    #|    drop
+    #|    local.get 0
+    #|    v128.load16_splat offset=2 align=2
+    #|    drop
+    #|    local.get 0
+    #|    v128.load32_splat offset=4 align=4
+    #|    drop
+    #|    local.get 0
+    #|    v128.load64_splat offset=8 align=8
+    #|    drop
+    #|    i32.const 0))
+  assert_wat_matches("simd_memarg_literals", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for relaxed simd ops" {
   let wat =
     #|(module
