@@ -727,6 +727,13 @@ async test "wat encoder matches wasm-tools for data concat" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for empty data" {
+  let wat =
+    #|(module (memory 1) (data (i32.const 0) ""))
+  assert_wat_matches("data_empty", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for local names" {
   let wat =
     #|(module (func (export "inc") (param $x i32) (result i32) local.get $x i32.const 1 i32.add))
