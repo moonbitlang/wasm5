@@ -3186,6 +3186,18 @@ async test "wat encoder matches wasm-tools for table externref ops" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for table externref grow" {
+  let wat =
+    #|(module
+    #|  (table $t 1 externref)
+    #|  (func (export "grow") (param i32) (result i32)
+    #|    local.get 0
+    #|    ref.null extern
+    #|    table.grow $t))
+  assert_wat_matches("table_externref_grow", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for table64 bulk ops" {
   let wat =
     #|(module
