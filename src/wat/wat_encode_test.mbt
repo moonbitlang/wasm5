@@ -3524,6 +3524,20 @@ async test "wat encoder matches wasm-tools for list form table.init default" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for list form table size/grow defaults" {
+  let wat =
+    #|(module
+    #|  (table 1 funcref)
+    #|  (func (export "sizes") (param funcref i32) (result i32)
+    #|    (table.size)
+    #|    drop
+    #|    local.get 0
+    #|    local.get 1
+    #|    (table.grow)))
+  assert_wat_matches("list_table_size_grow_default", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for elem table index 1" {
   let wat =
     #|(module (table 1 funcref) (table $tab1 1 funcref) (func $f) (elem (table $tab1) (offset (i32.const 0)) func $f))
