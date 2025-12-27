@@ -734,6 +734,16 @@ async test "wat encoder matches wasm-tools for local names" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for local.tee" {
+  let wat =
+    #|(module
+    #|  (func (export "tee") (param i32) (result i32)
+    #|    local.get 0
+    #|    local.tee 0))
+  assert_wat_matches("local_tee", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for numeric index refs" {
   let wat =
     #|(module
