@@ -1729,6 +1729,22 @@ async test "wat encoder matches wasm-tools for control flow" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for if multi-value" {
+  let wat =
+    #|(module
+    #|  (func (export "if_multi") (param i32) (result i64 i32)
+    #|    local.get 0
+    #|    (if (result i64 i32)
+    #|      (then
+    #|        i64.const 1
+    #|        i32.const 2)
+    #|      (else
+    #|        i64.const 3
+    #|        i32.const 4))))
+  assert_wat_matches("if_multi_value", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for control flow typeuse params" {
   let wat =
     #|(module
