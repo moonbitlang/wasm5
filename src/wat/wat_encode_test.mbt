@@ -2730,6 +2730,31 @@ async test "wat encoder matches wasm-tools for table.fill" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for table64 bulk ops" {
+  let wat =
+    #|(module
+    #|  (table $t i64 2 funcref)
+    #|  (func $f)
+    #|  (elem $e func $f)
+    #|  (func (export "init") (param i64 i64 i64)
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    table.init $t $e)
+    #|  (func (export "copy") (param i64 i64 i64)
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    table.copy $t $t)
+    #|  (func (export "fill") (param i64 funcref i64)
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    table.fill $t))
+  assert_wat_matches("table64_bulk_ops", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for memory indexed ops" {
   let wat =
     #|(module
