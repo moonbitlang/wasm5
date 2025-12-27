@@ -959,6 +959,22 @@ async test "wat encoder matches wasm-tools for memory64 data offset shift" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for memory64 load/store" {
+  let wat =
+    #|(module
+    #|  (memory i64 1)
+    #|  (func (export "mem64") (param i64) (result i32)
+    #|    local.get 0
+    #|    i32.load offset=4 align=4
+    #|    drop
+    #|    local.get 0
+    #|    i32.const 1
+    #|    i32.store offset=8 align=4
+    #|    i32.const 0))
+  assert_wat_matches("mem64_load_store", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for start section" {
   let wat =
     #|(module (func $start nop) (start $start))
