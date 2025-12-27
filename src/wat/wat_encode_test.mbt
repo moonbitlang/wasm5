@@ -4122,6 +4122,32 @@ async test "wat encoder matches wasm-tools for atomic ops" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for list form atomic ops" {
+  let wat =
+    #|(module
+    #|  (memory 1)
+    #|  (func (export "atomic") (param i32 i32 i64) (result i32)
+    #|    (i32.atomic.load (local.get 0))
+    #|    drop
+    #|    (i32.atomic.store (local.get 0) (local.get 1))
+    #|    (i32.atomic.rmw.add (local.get 0) (local.get 1))
+    #|    drop
+    #|    (i32.atomic.rmw.cmpxchg (local.get 0) (local.get 1) (local.get 1))
+    #|    drop
+    #|    (memory.atomic.notify (local.get 0) (local.get 1))
+    #|    drop
+    #|    (memory.atomic.wait32 (local.get 0) (local.get 1) (local.get 2))
+    #|    drop
+    #|    (i64.atomic.load (local.get 0))
+    #|    drop
+    #|    (i64.atomic.store (local.get 0) (local.get 2))
+    #|    (memory.atomic.wait64 (local.get 0) (i64.const 0) (local.get 2))
+    #|    drop
+    #|    i32.const 0))
+  assert_wat_matches("list_atomic_ops", wat)
+}
+
+///|
 test "wast parser exposes script commands" {
   let wast =
     #|(script
