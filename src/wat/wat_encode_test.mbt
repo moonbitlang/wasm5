@@ -3219,6 +3219,29 @@ async test "wat encoder matches wasm-tools for named memory bulk ops" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for list form memory bulk ops" {
+  let wat =
+    #|(module
+    #|  (memory $m0 1)
+    #|  (memory $m1 1)
+    #|  (data $d "hi")
+    #|  (func (export "bulk") (param i32 i32 i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    (memory.init $m1 $d)
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    (memory.copy $m1 $m0)
+    #|    local.get 0
+    #|    i32.const 7
+    #|    local.get 2
+    #|    (memory.fill $m0)))
+  assert_wat_matches("memory_bulk_list", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for memory64 bulk ops" {
   let wat =
     #|(module
