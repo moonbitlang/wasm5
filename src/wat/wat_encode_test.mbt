@@ -2709,6 +2709,18 @@ async test "wat encoder matches wasm-tools for typed select and ref.is_null" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for typed select ref" {
+  let wat =
+    #|(module
+    #|  (func (export "select_ref") (param funcref funcref i32) (result funcref)
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    select (result funcref)))
+  assert_wat_matches("select_ref_typed", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for multi-name params and locals" {
   let wat =
     #|(module
