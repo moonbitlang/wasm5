@@ -697,6 +697,28 @@ async test "wat encoder matches wasm-tools for local names" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for numeric index refs" {
+  let wat =
+    #|(module
+    #|  (tag (param i32))
+    #|  (func (result i32) i32.const 0)
+    #|  (global i32 (i32.const 1))
+    #|  (table 1 funcref)
+    #|  (elem (i32.const 0) 0)
+    #|  (func (export "mixed") (param i32)
+    #|    call 0
+    #|    drop
+    #|    global.get 0
+    #|    drop
+    #|    local.get 0
+    #|    table.get 0
+    #|    drop
+    #|    local.get 0
+    #|    throw 0))
+  assert_wat_matches("numeric_index_refs", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for global init get" {
   let wat =
     #|(module (import "env" "g" (global $g i32)) (global (export "h") i32 (global.get $g)))
