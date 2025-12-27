@@ -2051,6 +2051,69 @@ async test "wat encoder matches wasm-tools for custom section before code" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for custom section before import" {
+  let wat =
+    #|(module
+    #|  (@custom "foo" (before import) "data")
+    #|  (import "env" "f" (func $f)))
+  assert_wat_matches_custom("custom_before_import", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for custom section after import" {
+  let wat =
+    #|(module
+    #|  (import "env" "f" (func $f (param i32)))
+    #|  (@custom "foo" (after import) "data")
+    #|  (func (export "call") (param i32)
+    #|    local.get 0
+    #|    call $f))
+  assert_wat_matches_custom("custom_after_import", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for custom section before export" {
+  let wat =
+    #|(module
+    #|  (func $f (result i32) i32.const 0)
+    #|  (@custom "foo" (before export) "data")
+    #|  (export "f" (func $f)))
+  assert_wat_matches_custom("custom_before_export", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for custom section after export" {
+  let wat =
+    #|(module
+    #|  (func $f (result i32) i32.const 0)
+    #|  (export "f" (func $f))
+    #|  (@custom "foo" (after export) "data")
+    #|  (memory 1))
+  assert_wat_matches_custom("custom_after_export", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for custom section before start" {
+  let wat =
+    #|(module
+    #|  (func $start nop)
+    #|  (@custom "foo" (before start) "data")
+    #|  (start $start))
+  assert_wat_matches_custom("custom_before_start", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for custom section after start" {
+  let wat =
+    #|(module
+    #|  (func $start nop)
+    #|  (start $start)
+    #|  (@custom "foo" (after start) "data")
+    #|  (memory 1))
+  assert_wat_matches_custom("custom_after_start", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for name section" {
   let wat =
     #|(module $m
