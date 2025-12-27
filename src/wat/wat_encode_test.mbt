@@ -4208,6 +4208,48 @@ async test "wat encoder matches wasm-tools for simd bitwise ops" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for simd conversion ops" {
+  let wat =
+    #|(module
+    #|  (func (export "conv") (result i32)
+    #|    (local v128)
+    #|    v128.const i32x4 1 2 3 4
+    #|    local.set 0
+    #|    local.get 0
+    #|    f32x4.convert_i32x4_s
+    #|    drop
+    #|    local.get 0
+    #|    f32x4.convert_i32x4_u
+    #|    drop
+    #|    local.get 0
+    #|    f64x2.convert_low_i32x4_s
+    #|    drop
+    #|    local.get 0
+    #|    f64x2.convert_low_i32x4_u
+    #|    drop
+    #|    local.get 0
+    #|    i32x4.trunc_sat_f32x4_s
+    #|    drop
+    #|    local.get 0
+    #|    i32x4.trunc_sat_f32x4_u
+    #|    drop
+    #|    local.get 0
+    #|    i32x4.trunc_sat_f64x2_s_zero
+    #|    drop
+    #|    local.get 0
+    #|    i32x4.trunc_sat_f64x2_u_zero
+    #|    drop
+    #|    local.get 0
+    #|    f32x4.demote_f64x2_zero
+    #|    drop
+    #|    local.get 0
+    #|    f64x2.promote_low_f32x4
+    #|    drop
+    #|    i32.const 0))
+  assert_wat_matches("simd_convert_ops", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for relaxed simd ops" {
   let wat =
     #|(module
