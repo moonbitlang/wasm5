@@ -6753,6 +6753,8 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
       global_map,
       wat.global_imports,
       func_map,
+      elem_map,
+      data_map,
     )
     globals.push({
       type_: global_.type_,
@@ -6801,6 +6803,8 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
             global_map,
             wat.global_imports,
             func_map,
+            elem_map,
+            data_map,
           ),
         })
       None => None
@@ -6840,6 +6844,8 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
         global_map,
         wat.global_imports,
         func_map,
+        elem_map,
+        data_map,
       )
       init_exprs.push(@core.Expr::{ instrs: init_instrs })
     }
@@ -7059,6 +7065,8 @@ fn resolve_const_instrs(
   global_map : Map[Bytes, UInt],
   imported_globals : Array[WatImportGlobal],
   func_map : Map[Bytes, UInt],
+  elem_map : Map[Bytes, UInt],
+  data_map : Map[Bytes, UInt],
 ) -> Array[@core.Instr] raise WatError {
   let out : Array[@core.Instr] = []
   for instr in instrs {
@@ -7076,6 +7084,13 @@ fn resolve_const_instrs(
           | RefTest(_, _)
           | RefCast(_, _)
           | RefI31
+          | StructNew(_)
+          | StructNewDefault(_)
+          | ArrayNew(_)
+          | ArrayNewDefault(_)
+          | ArrayNewFixed(_, _)
+          | ArrayNewData(_, _)
+          | ArrayNewElem(_, _)
           | I32Eqz
           | I32Eq
           | I32Ne
@@ -7221,6 +7236,14 @@ fn resolve_const_instrs(
         }
       WatInstr::CoreMemRef(_, _) =>
         raise WatError::Unsupported("non-const init expression")
+      WatInstr::ArrayNewData(type_idx, data_ref) => {
+        let data_idx = resolve_index_ref(data_ref, data_map, "data")
+        out.push(@core.Instr::ArrayNewData(type_idx, data_idx))
+      }
+      WatInstr::ArrayNewElem(type_idx, elem_ref) => {
+        let elem_idx = resolve_index_ref(elem_ref, elem_map, "elem")
+        out.push(@core.Instr::ArrayNewElem(type_idx, elem_idx))
+      }
       WatInstr::RefFunc(func_ref) =>
         out.push(@core.Instr::RefFunc(resolve_func_ref(func_ref, func_map)))
       WatInstr::GlobalGet(global_ref) => {

@@ -85,6 +85,7 @@ pub(all) struct Code {
   locals : Array[ValType]
   body : Expr
   mut compiled : Int?
+  mut max_stack_height : Int
 }
 
 pub(all) enum CustomPlacement {

@@ -740,11 +740,6 @@ fn encode_data_count_section(module_ : @core.Module) -> Array[Byte] {
 
 ///|
 fn needs_data_count(module_ : @core.Module) -> Bool {
-  for data in module_.datas {
-    if not(data.is_active) {
-      return true
-    }
-  }
   for code in module_.codes {
     if instrs_use_bulk_memory(code.body.instrs) {
       return true
@@ -766,7 +761,8 @@ fn instrs_use_bulk_memory(instrs : Array[@core.Instr]) -> Bool {
 ///|
 fn instr_uses_bulk_memory(instr : @core.Instr) -> Bool {
   match instr {
-    MemoryInit(_, _) | DataDrop(_) => true
+    MemoryInit(_, _) | DataDrop(_) | ArrayNewData(_, _) | ArrayInitData(_, _) =>
+      true
     Block(_, body) => instrs_use_bulk_memory(body)
     Loop(_, body) => instrs_use_bulk_memory(body)
     If(_, then_body, else_body) =>

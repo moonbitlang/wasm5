@@ -341,6 +341,8 @@ fn table_index_type(table_type : @core.TableType) -> @core.ValType {
 /// WebAssembly constant expressions can only contain:
 /// - Constant instructions: i32.const, i64.const, f32.const, f64.const
 /// - Reference instructions: ref.null, ref.func, ref.is_null, ref.eq, ref.as_non_null, ref.test, ref.cast, ref.i31
+/// - GC constructors: struct.new, struct.new_default, array.new, array.new_default, array.new_fixed,
+///   array.new_data, array.new_elem
 /// - @core.Global access: global.get
 /// - Numeric instructions (integer/float ops, conversions, sign-extend, trunc-sat)
 fn validate_const_expr_instructions(
@@ -361,6 +363,13 @@ fn validate_const_expr_instructions(
       | RefTest(_, _)
       | RefCast(_, _)
       | RefI31
+      | StructNew(_)
+      | StructNewDefault(_)
+      | ArrayNew(_)
+      | ArrayNewDefault(_)
+      | ArrayNewFixed(_, _)
+      | ArrayNewData(_, _)
+      | ArrayNewElem(_, _)
       | I32Eqz
       | I32Eq
       | I32Ne

@@ -741,6 +741,42 @@ async test "wat encoder matches wasm-tools for ref globals" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for gc struct const expr" {
+  let wat =
+    #|(module
+    #|  (type $s (struct (field i32) (field (mut i32))))
+    #|  (global (export "g_default") (ref null $s)
+    #|    (struct.new_default $s))
+    #|  (global (export "g_init") (ref null $s)
+    #|    (struct.new $s (i32.const 1) (i32.const 2))))
+  assert_wat_matches("global_init_gc_struct", wat)
+}
+
+///|
+async test "wat encoder matches wasm-tools for gc array const expr" {
+  let wat =
+    #|(module
+    #|  (type $a (array i32))
+    #|  (type $ab (array i8))
+    #|  (type $af (array funcref))
+    #|  (func $f)
+    #|  (table $t 1 funcref)
+    #|  (elem $e (i32.const 0) $f)
+    #|  (data $d "hi")
+    #|  (global (export "g_default") (ref null $a)
+    #|    (array.new_default $a (i32.const 3)))
+    #|  (global (export "g_fixed") (ref null $a)
+    #|    (array.new_fixed $a 2 (i32.const 1) (i32.const 2)))
+    #|  (global (export "g_new") (ref null $a)
+    #|    (array.new $a (i32.const 7) (i32.const 3)))
+    #|  (global (export "g_data") (ref null $ab)
+    #|    (array.new_data $ab $d (i32.const 0) (i32.const 2)))
+    #|  (global (export "g_elem") (ref null $af)
+    #|    (array.new_elem $af $e (i32.const 0) (i32.const 1))))
+  assert_wat_matches("global_init_gc_array", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for global init ref.is_null" {
   let wat =
     #|(module

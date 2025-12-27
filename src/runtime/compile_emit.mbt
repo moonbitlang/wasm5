@@ -620,7 +620,7 @@ fn Compiler::compile_wasm_instr(
     }
     ThrowRef => {
       ctx.pop_type()
-      self.emit(WasmInstr(op_throw_ref))
+      self.emit_fn(op_throw_ref)
     }
     Rethrow(label_idx) => {
       self.emit_fn(op_rethrow)
@@ -904,7 +904,7 @@ fn Compiler::compile_wasm_instr(
       let end_pc = self.ops.length()
       let block = ctx.pop_control()
       for slot in block.pending_br_patches {
-        self.ops[slot] = ImmediateIdx(end_pc)
+        self.ops[slot] = end_pc.to_int64().reinterpret_as_uint64()
       }
       ctx.truncate_stack(block.stack_height_at_entry)
       ctx.push_types(block.results)
@@ -918,7 +918,7 @@ fn Compiler::compile_wasm_instr(
       let end_pc = self.ops.length()
       let block = ctx.pop_control()
       for slot in block.pending_br_patches {
-        self.ops[slot] = ImmediateIdx(end_pc)
+        self.ops[slot] = end_pc.to_int64().reinterpret_as_uint64()
       }
       ctx.truncate_stack(block.stack_height_at_entry)
       ctx.push_types(block.results)
@@ -969,7 +969,6 @@ fn Compiler::compile_wasm_instr(
         let func_type = require_func_type(self.module_, type_idx, "call")
         let num_params = func_type.params.length()
         let num_locals = num_params + code.locals.length()
-
         self.emit_fn(op_call_local)
         let callee_pc_slot = self.ops.length()
         match code.compiled {
@@ -977,7 +976,10 @@ fn Compiler::compile_wasm_instr(
           None => {
             // Forward reference - emit placeholder and record for patching
             self.emit_idx(0)
-            self.pending_call_patches.push({ local_func_idx, slot: callee_pc_slot })
+            self.pending_call_patches.push({
+              local_func_idx,
+              slot: callee_pc_slot,
+            })
           }
         }
         self.emit_idx(num_params)
@@ -1523,7 +1525,6 @@ fn Compiler::compile_wasm_instr(
         let func_type = require_func_type(self.module_, type_idx, "return_call")
         let num_params = func_type.params.length()
         let num_locals = num_params + code.locals.length()
-
         self.emit_fn(op_return_call_local)
         let callee_pc_slot = self.ops.length()
         match code.compiled {
@@ -1531,7 +1532,10 @@ fn Compiler::compile_wasm_instr(
           None => {
             // Forward reference - emit placeholder and record for patching
             self.emit_idx(0)
-            self.pending_call_patches.push({ local_func_idx, slot: callee_pc_slot })
+            self.pending_call_patches.push({
+              local_func_idx,
+              slot: callee_pc_slot,
+            })
           }
         }
         self.emit_idx(num_params)
