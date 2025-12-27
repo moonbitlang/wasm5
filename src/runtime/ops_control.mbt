@@ -638,7 +638,12 @@ fn op_return_call_indirect(rt : Runtime) -> Runtime {
   }
 
   // Trim stack to bp + num_params (locals will be initialized by compiled code)
-  { ..rt, sp: rt.bp + num_params, num_locals: num_params + code.locals.length(), pc: callee_pc }
+  {
+    ..rt,
+    sp: rt.bp + num_params,
+    num_locals: num_params + code.locals.length(),
+    pc: callee_pc,
+  }
 }
 
 ///|
@@ -859,7 +864,12 @@ fn op_return_call_ref(rt : Runtime) -> Runtime {
   }
 
   // Trim stack to bp + num_params (locals will be initialized by compiled code)
-  { ..rt, sp: rt.bp + num_params, num_locals: num_params + code.locals.length(), pc: callee_pc }
+  {
+    ..rt,
+    sp: rt.bp + num_params,
+    num_locals: num_params + code.locals.length(),
+    pc: callee_pc,
+  }
 }
 
 ///|
@@ -918,6 +928,12 @@ fn op_throw(rt : Runtime) -> Runtime {
 fn op_rethrow(rt : Runtime) -> Runtime {
   let label_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   rt.ctx.error_detail = "rethrow not implemented for label \{label_idx}"
+  { ..rt, status: Trap }
+}
+
+///|
+fn op_throw_ref(rt : Runtime) -> Runtime {
+  rt.ctx.error_detail = "throw_ref not implemented"
   { ..rt, status: Trap }
 }
 
