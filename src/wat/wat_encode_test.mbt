@@ -1670,6 +1670,31 @@ async test "wat encoder matches wasm-tools for control flow" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for control flow typeuse params" {
+  let wat =
+    #|(module
+    #|  (type $t (func (param i32 i32) (result i32)))
+    #|  (func (export "block_params") (param i32 i32) (result i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    (block (type $t)
+    #|      i32.add))
+    #|  (func (export "loop_params") (param i32) (result i32)
+    #|    local.get 0
+    #|    (loop (param i32) (result i32)
+    #|      i32.const 1
+    #|      i32.add))
+    #|  (func (export "if_params") (param i32 i32) (result i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    i32.const 0
+    #|    (if (param i32 i32) (result i32)
+    #|      (then i32.add)
+    #|      (else i32.sub))))
+  assert_wat_matches("control_flow_typeuse_params", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for br_on_null" {
   let wat =
     #|(module
