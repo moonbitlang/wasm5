@@ -2100,6 +2100,16 @@ async test "wat encoder matches wasm-tools for custom section before code" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for custom section escapes" {
+  let wat =
+    #|(module
+    #|  (memory 1)
+    #|  (data (i32.const 0) "hi")
+    #|  (@custom "foo" (after data) "line\n" "tab\t" "\00\ff" "\u{2603}"))
+  assert_wat_matches_custom("custom_escapes", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for custom section before import" {
   let wat =
     #|(module
