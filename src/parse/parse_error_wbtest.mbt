@@ -144,8 +144,13 @@ test "parse prefix fc errors" {
 test "parse instr control variants" {
   let instr = parse_instr_control(make_parser([b'\x40', b'\x0b']), b'\x06')
   assert_eq(instr is Some(_), true)
-  let instr = parse_instr_control(make_parser([b'\x00']), b'\x07')
+  let instr = parse_instr_control(
+    make_parser([b'\x40', b'\x18', b'\x00']),
+    b'\x06',
+  )
   assert_eq(instr is Some(_), true)
+  let instr = parse_instr_control(make_parser([b'\x00']), b'\x07')
+  assert_eq(instr is None, true)
   let instr = parse_instr_control(make_parser([b'\x00']), b'\x08')
   assert_eq(instr is Some(_), true)
   let instr = parse_instr_control(make_parser([b'\x00']), b'\x09')

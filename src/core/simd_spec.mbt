@@ -256,6 +256,27 @@ pub let simd_specs : Array[SimdSpec] = [
   { name: b"i32x4.trunc_sat_f64x2_u_zero", opcode: 0xFDU, imm: None },
   { name: b"f64x2.convert_low_i32x4_s", opcode: 0xFEU, imm: None },
   { name: b"f64x2.convert_low_i32x4_u", opcode: 0xFFU, imm: None },
+  // Relaxed SIMD opcodes (0x100+)
+  { name: b"i8x16.relaxed_swizzle", opcode: 0x100U, imm: None },
+  { name: b"i32x4.relaxed_trunc_f32x4_s", opcode: 0x101U, imm: None },
+  { name: b"i32x4.relaxed_trunc_f32x4_u", opcode: 0x102U, imm: None },
+  { name: b"i32x4.relaxed_trunc_f64x2_s_zero", opcode: 0x103U, imm: None },
+  { name: b"i32x4.relaxed_trunc_f64x2_u_zero", opcode: 0x104U, imm: None },
+  { name: b"f32x4.relaxed_madd", opcode: 0x105U, imm: None },
+  { name: b"f32x4.relaxed_nmadd", opcode: 0x106U, imm: None },
+  { name: b"f64x2.relaxed_madd", opcode: 0x107U, imm: None },
+  { name: b"f64x2.relaxed_nmadd", opcode: 0x108U, imm: None },
+  { name: b"i8x16.relaxed_laneselect", opcode: 0x109U, imm: None },
+  { name: b"i16x8.relaxed_laneselect", opcode: 0x10AU, imm: None },
+  { name: b"i32x4.relaxed_laneselect", opcode: 0x10BU, imm: None },
+  { name: b"i64x2.relaxed_laneselect", opcode: 0x10CU, imm: None },
+  { name: b"f32x4.relaxed_min", opcode: 0x10DU, imm: None },
+  { name: b"f32x4.relaxed_max", opcode: 0x10EU, imm: None },
+  { name: b"f64x2.relaxed_min", opcode: 0x10FU, imm: None },
+  { name: b"f64x2.relaxed_max", opcode: 0x110U, imm: None },
+  { name: b"i16x8.relaxed_q15mulr_s", opcode: 0x111U, imm: None },
+  { name: b"i16x8.relaxed_dot_i8x16_i7x16_s", opcode: 0x112U, imm: None },
+  { name: b"i32x4.relaxed_dot_i8x16_i7x16_add_s", opcode: 0x113U, imm: None },
 ]
 
 ///|
@@ -298,7 +319,11 @@ pub fn simd_stack_effect(name : Bytes) -> SimdStackEffect {
   if name == b"i8x16.shuffle" {
     return SimdStackEffect::Binary
   }
-  if name == b"v128.bitselect" {
+  if name == b"v128.bitselect" ||
+    bytes_contains(name, b"relaxed_madd") ||
+    bytes_contains(name, b"relaxed_nmadd") ||
+    bytes_contains(name, b"relaxed_laneselect") ||
+    bytes_contains(name, b"relaxed_dot_i8x16_i7x16_add") {
     return SimdStackEffect::Ternary
   }
   if name == b"v128.any_true" ||

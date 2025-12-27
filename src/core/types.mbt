@@ -354,6 +354,8 @@ pub(all) enum Instr {
   Block(BlockType, Array[Instr])
   Loop(BlockType, Array[Instr])
   If(BlockType, Array[Instr], Array[Instr])
+  Try(BlockType, Array[Instr], Array[TryCatch]) // Exception handling
+  TryDelegate(BlockType, Array[Instr], UInt) // Exception handling
   TryTable(BlockType, Array[CatchClause], Array[Instr]) // Exception handling
   Br(UInt)
   BrIf(UInt)
@@ -368,6 +370,7 @@ pub(all) enum Instr {
   CallRef(UInt) // typed function references
   ReturnCallRef(UInt) // typed function references
   Throw(UInt) // exception handling
+  ThrowRef // exception handling
   Rethrow(UInt) // exception handling
   Simd(SimdInstr) // SIMD instructions
   Atomic(AtomicInstr) // Atomic instructions (threads)
@@ -627,6 +630,12 @@ pub(all) enum CatchClause {
   CatchRef(UInt, UInt) // tag index, label index
   CatchAll(UInt) // label index
   CatchAllRef(UInt) // label index
+} derive(Show)
+
+///|
+pub(all) enum TryCatch {
+  Catch(UInt, Array[Instr]) // tag index, catch body
+  CatchAll(Array[Instr]) // catch-all body
 } derive(Show)
 
 // Expression (sequence of instructions)

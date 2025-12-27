@@ -36,6 +36,26 @@ fn parse_instrs(parser : Parser) -> Array[@core.Instr] raise {
   read_loop([])
 }
 
+///|
+fn parse_instrs_until_try_marker(parser : Parser) -> Array[@core.Instr] raise {
+  fn read_loop(instrs : Array[@core.Instr]) -> Array[@core.Instr] raise {
+    let opcode = parser.read_byte()
+    if opcode == 0x0B ||
+      opcode == 0x05 ||
+      opcode == 0x07 ||
+      opcode == 0x18 ||
+      opcode == 0x19 {
+      parser.pos = parser.pos - 1
+      instrs
+    } else {
+      instrs.push(parse_instr(parser, opcode))
+      read_loop(instrs)
+    }
+  }
+
+  read_loop([])
+}
+
 // Parse a single instruction
 
 ///|
