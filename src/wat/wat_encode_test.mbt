@@ -2633,6 +2633,16 @@ async test "wat encoder matches wasm-tools for elem offset list" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for table64 elem offset list" {
+  let wat =
+    #|(module
+    #|  (table i64 1 funcref)
+    #|  (func $f)
+    #|  (elem (offset (i64.const 0)) func $f))
+  assert_wat_matches("elem_offset_list64", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for elem passive" {
   let wat =
     #|(module (func $f) (elem func $f))
