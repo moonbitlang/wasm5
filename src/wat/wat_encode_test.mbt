@@ -3495,6 +3495,22 @@ async test "wat encoder matches wasm-tools for list form table.copy defaults" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for list form table.init default" {
+  let wat =
+    #|(module
+    #|  (table 1 funcref)
+    #|  (func $f)
+    #|  (elem $e func $f)
+    #|  (func (export "init") (param i32 i32 i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    (table.init $e)
+    #|    elem.drop $e))
+  assert_wat_matches("list_table_init_default", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for elem table index 1" {
   let wat =
     #|(module (table 1 funcref) (table $tab1 1 funcref) (func $f) (elem (table $tab1) (offset (i32.const 0)) func $f))
