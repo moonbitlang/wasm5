@@ -4086,6 +4086,43 @@ async test "wat encoder matches wasm-tools for simd ops" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for simd lane ops" {
+  let wat =
+    #|(module
+    #|  (memory 1)
+    #|  (func (export "lane") (param i32) (result i32)
+    #|    (local v128)
+    #|    v128.const i32x4 1 2 3 4
+    #|    local.set 1
+    #|    local.get 0
+    #|    local.get 1
+    #|    v128.load8_lane offset=0 3
+    #|    local.set 1
+    #|    local.get 0
+    #|    local.get 1
+    #|    v128.store16_lane offset=0 4
+    #|    local.get 0
+    #|    v128.load32_zero
+    #|    drop
+    #|    local.get 0
+    #|    v128.load64_zero
+    #|    drop
+    #|    local.get 1
+    #|    local.get 1
+    #|    i8x16.swizzle
+    #|    drop
+    #|    i32.const 7
+    #|    i8x16.splat
+    #|    drop
+    #|    local.get 1
+    #|    i32.const 1
+    #|    i16x8.shr_s
+    #|    drop
+    #|    i32.const 0))
+  assert_wat_matches("simd_lane_ops", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for relaxed simd ops" {
   let wat =
     #|(module
