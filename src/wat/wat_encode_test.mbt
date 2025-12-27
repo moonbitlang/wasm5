@@ -2796,6 +2796,54 @@ async test "wat encoder matches wasm-tools for table64 bulk ops" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for mixed multi-memory/table64 ops" {
+  let wat =
+    #|(module
+    #|  (memory $m0 i64 1)
+    #|  (memory $m1 i64 1)
+    #|  (data $d0 "hi")
+    #|  (data $d1 "ok")
+    #|  (table $t0 i64 2 funcref)
+    #|  (table $t1 i64 2 funcref)
+    #|  (func $f)
+    #|  (elem $e0 func $f)
+    #|  (func (export "mem_ops") (param i64 i64 i64) (result i64)
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    memory.copy 1 $m0
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    memory.init $m0 1
+    #|    local.get 0
+    #|    i32.const 7
+    #|    local.get 2
+    #|    memory.fill 1
+    #|    local.get 0
+    #|    memory.grow $m1
+    #|    drop
+    #|    memory.size 0)
+    #|  (func (export "table_ops") (param i64 i64 i64) (result i64)
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    table.copy $t1 0
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    table.init 0 $e0
+    #|    local.get 0
+    #|    ref.null func
+    #|    local.get 2
+    #|    table.fill 1
+    #|    ref.null func
+    #|    local.get 0
+    #|    table.grow $t0))
+  assert_wat_matches("mixed_multi_mem_table64", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for memory indexed ops" {
   let wat =
     #|(module
