@@ -393,16 +393,22 @@ pub fn Runtime::load_with_resolver(
       _ => ()
     }
   }
+  let ref_counter : Array[Int] = [-2]
   // Then add local globals
   for i in 0..<m.globals.length() {
     let global = m.globals[i]
-    let value = eval_const_expr(global.init, globals)
+    let value = eval_const_expr(global.init, globals, m.types, ref_counter)
     globals.push(value)
   }
   // Initialize data segments (copy data into memory)
   for data in m.datas {
     // Evaluate offset expression to get the starting address
-    let offset_value = eval_const_expr(data.offset, globals)
+    let offset_value = eval_const_expr(
+      data.offset,
+      globals,
+      m.types,
+      ref_counter,
+    )
     let offset = match offset_value {
       I32(v) => v.reinterpret_as_int()
       _ =>
@@ -444,7 +450,12 @@ pub fn Runtime::load_with_resolver(
     // Initialize table with default value (null unless table has init expr)
     let init_ref = match table.init {
       Some(init_expr) => {
-        let init_value = eval_const_expr(init_expr, globals)
+        let init_value = eval_const_expr(
+          init_expr,
+          globals,
+          m.types,
+          ref_counter,
+        )
         match init_value {
           Ref(ref_idx) => ref_idx
           _ =>
@@ -465,7 +476,12 @@ pub fn Runtime::load_with_resolver(
       let table_idx = elem.table_idx.reinterpret_as_int()
       if table_idx >= 0 && table_idx < tables.length() {
         // Evaluate offset expression
-        let offset_value = eval_const_expr(elem.offset, globals)
+        let offset_value = eval_const_expr(
+          elem.offset,
+          globals,
+          m.types,
+          ref_counter,
+        )
         let offset = match offset_value {
           I32(v) => v.reinterpret_as_int()
           _ =>
@@ -478,7 +494,12 @@ pub fn Runtime::load_with_resolver(
         for i in 0..<elem.init.length() {
           let addr = offset + i
           if addr >= 0 && addr < table.data.length() {
-            let value = eval_const_expr(elem.init[i], globals)
+            let value = eval_const_expr(
+              elem.init[i],
+              globals,
+              m.types,
+              ref_counter,
+            )
             match value {
               Ref(ref_idx) => table.data[addr] = ref_idx
               _ =>
@@ -610,6 +631,75 @@ fn pop_ref_value(
 }
 
 ///|
+fn pop_value(
+  stack : Array[Value],
+  context : String,
+) -> Value raise RuntimeError {
+  guard stack.length() > 0 else {
+    raise RuntimeError::UnsupportedInitExpression(
+      "stack underflow in \{context}",
+    )
+  }
+  stack.unsafe_pop()
+}
+
+///|
+fn pop_values(
+  stack : Array[Value],
+  count : Int,
+  context : String,
+) -> Unit raise RuntimeError {
+  guard count >= 0 && stack.length() >= count else {
+    raise RuntimeError::UnsupportedInitExpression(
+      "stack underflow in \{context}",
+    )
+  }
+  for _ in 0..<count {
+    let _ = stack.unsafe_pop()
+
+  }
+}
+
+///|
+fn alloc_const_gc_ref(ref_counter : Array[Int]) -> Int {
+  let id = ref_counter[0]
+  ref_counter[0] = id - 1
+  id
+}
+
+///|
+fn require_const_struct_type(
+  types : Array[@core.TypeDef],
+  type_idx : UInt,
+  context : String,
+) -> @core.StructType raise RuntimeError {
+  let idx = type_idx.reinterpret_as_int()
+  if idx < 0 || idx >= types.length() {
+    raise RuntimeError::InvalidType("\{context}: invalid type index \{idx}")
+  }
+  match types[idx] {
+    Struct(struct_type) => struct_type
+    _ => raise RuntimeError::InvalidType("\{context}: expected struct type")
+  }
+}
+
+///|
+fn require_const_array_type(
+  types : Array[@core.TypeDef],
+  type_idx : UInt,
+  context : String,
+) -> @core.ArrayType raise RuntimeError {
+  let idx = type_idx.reinterpret_as_int()
+  if idx < 0 || idx >= types.length() {
+    raise RuntimeError::InvalidType("\{context}: invalid type index \{idx}")
+  }
+  match types[idx] {
+    Array(array_type) => array_type
+    _ => raise RuntimeError::InvalidType("\{context}: expected array type")
+  }
+}
+
+///|
 fn push_i32_bool(stack : Array[Value], value : Bool) -> Unit {
   stack.push(I32(if value { 1U } else { 0U }))
 }
@@ -618,6 +708,8 @@ fn push_i32_bool(stack : Array[Value], value : Bool) -> Unit {
 fn eval_const_expr(
   expr : @core.Expr,
   globals : Array[Value],
+  types : Array[@core.TypeDef],
+  ref_counter : Array[Int],
 ) -> Value raise RuntimeError {
   // Constant expression evaluator for init expressions
   // Supports multi-instruction expressions (e.g., arithmetic in global inits)
@@ -697,6 +789,45 @@ fn eval_const_expr(
             }
           Some(idx) => stack.push(Ref(Some(idx)))
         }
+      }
+      StructNew(type_idx) => {
+        let struct_type = require_const_struct_type(
+          types, type_idx, "struct.new",
+        )
+        pop_values(stack, struct_type.fields.length(), "struct.new")
+        stack.push(Ref(Some(alloc_const_gc_ref(ref_counter))))
+      }
+      StructNewDefault(type_idx) => {
+        let _ = require_const_struct_type(types, type_idx, "struct.new_default")
+        stack.push(Ref(Some(alloc_const_gc_ref(ref_counter))))
+      }
+      ArrayNew(type_idx) => {
+        let _ = require_const_array_type(types, type_idx, "array.new")
+        let _ = pop_i32_value(stack, "array.new")
+        let _ = pop_value(stack, "array.new")
+        stack.push(Ref(Some(alloc_const_gc_ref(ref_counter))))
+      }
+      ArrayNewDefault(type_idx) => {
+        let _ = require_const_array_type(types, type_idx, "array.new_default")
+        let _ = pop_i32_value(stack, "array.new_default")
+        stack.push(Ref(Some(alloc_const_gc_ref(ref_counter))))
+      }
+      ArrayNewFixed(type_idx, len) => {
+        let _ = require_const_array_type(types, type_idx, "array.new_fixed")
+        pop_values(stack, len.reinterpret_as_int(), "array.new_fixed")
+        stack.push(Ref(Some(alloc_const_gc_ref(ref_counter))))
+      }
+      ArrayNewData(type_idx, _data_idx) => {
+        let _ = require_const_array_type(types, type_idx, "array.new_data")
+        let _ = pop_i32_value(stack, "array.new_data")
+        let _ = pop_i32_value(stack, "array.new_data")
+        stack.push(Ref(Some(alloc_const_gc_ref(ref_counter))))
+      }
+      ArrayNewElem(type_idx, _elem_idx) => {
+        let _ = require_const_array_type(types, type_idx, "array.new_elem")
+        let _ = pop_i32_value(stack, "array.new_elem")
+        let _ = pop_i32_value(stack, "array.new_elem")
+        stack.push(Ref(Some(alloc_const_gc_ref(ref_counter))))
       }
       RefI31 => {
         let value = pop_i32_value(stack, "ref.i31")

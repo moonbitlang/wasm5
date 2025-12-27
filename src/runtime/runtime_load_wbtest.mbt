@@ -191,37 +191,109 @@ test "runtime load missing imported function" {
 
 ///|
 test "eval const expr values" {
+  let types : Array[@core.TypeDef] = []
+  let ref_counter : Array[Int] = [-2]
   let globals = [Value::I32(4U)]
   let add_expr = make_expr([I32Const(3U), GlobalGet(0U), I32Add])
-  assert_eq(eval_const_expr(add_expr, globals), Value::I32(7U))
+  assert_eq(
+    eval_const_expr(add_expr, globals, types, ref_counter),
+    Value::I32(7U),
+  )
   let sub_expr = make_expr([I32Const(5U), I32Const(2U), I32Sub])
-  assert_eq(eval_const_expr(sub_expr, []), Value::I32(3U))
+  assert_eq(eval_const_expr(sub_expr, [], types, ref_counter), Value::I32(3U))
   let mul_expr = make_expr([I32Const(2U), I32Const(4U), I32Mul])
-  assert_eq(eval_const_expr(mul_expr, []), Value::I32(8U))
+  assert_eq(eval_const_expr(mul_expr, [], types, ref_counter), Value::I32(8U))
   let i64_expr = make_expr([I64Const(10UL)])
-  assert_eq(eval_const_expr(i64_expr, []), Value::I64(10UL))
+  assert_eq(eval_const_expr(i64_expr, [], types, ref_counter), Value::I64(10UL))
   let i64_add = make_expr([I64Const(1UL), I64Const(2UL), I64Add])
-  assert_eq(eval_const_expr(i64_add, []), Value::I64(3UL))
+  assert_eq(eval_const_expr(i64_add, [], types, ref_counter), Value::I64(3UL))
   let i64_sub = make_expr([I64Const(5UL), I64Const(3UL), I64Sub])
-  assert_eq(eval_const_expr(i64_sub, []), Value::I64(2UL))
+  assert_eq(eval_const_expr(i64_sub, [], types, ref_counter), Value::I64(2UL))
   let i64_mul = make_expr([I64Const(2UL), I64Const(6UL), I64Mul])
-  assert_eq(eval_const_expr(i64_mul, []), Value::I64(12UL))
+  assert_eq(eval_const_expr(i64_mul, [], types, ref_counter), Value::I64(12UL))
   let ref_expr = make_expr([RefFunc(2U)])
-  assert_eq(eval_const_expr(ref_expr, []), Value::Ref(Some(2)))
+  assert_eq(
+    eval_const_expr(ref_expr, [], types, ref_counter),
+    Value::Ref(Some(2)),
+  )
   let ref_is_null = make_expr([RefNull(Func), RefIsNull])
-  assert_eq(eval_const_expr(ref_is_null, []), Value::I32(1U))
+  assert_eq(
+    eval_const_expr(ref_is_null, [], types, ref_counter),
+    Value::I32(1U),
+  )
   let ref_eq = make_expr([RefNull(Func), RefNull(Func), RefEq])
-  assert_eq(eval_const_expr(ref_eq, []), Value::I32(1U))
+  assert_eq(eval_const_expr(ref_eq, [], types, ref_counter), Value::I32(1U))
   let ref_as_non_null = make_expr([RefFunc(1U), RefAsNonNull])
-  assert_eq(eval_const_expr(ref_as_non_null, []), Value::Ref(Some(1)))
+  assert_eq(
+    eval_const_expr(ref_as_non_null, [], types, ref_counter),
+    Value::Ref(Some(1)),
+  )
   let ref_i31 = make_expr([I32Const(42U), RefI31])
-  assert_eq(eval_const_expr(ref_i31, []), Value::Ref(Some(42)))
+  assert_eq(
+    eval_const_expr(ref_i31, [], types, ref_counter),
+    Value::Ref(Some(42)),
+  )
+}
+
+///|
+test "eval const expr gc constructors" {
+  let types : Array[@core.TypeDef] = [
+    Struct({
+      fields: [
+        { storage: Val(I32), mutable: false },
+        { storage: Val(I32), mutable: true },
+      ],
+    }),
+    Array({ element: { storage: Val(I32), mutable: false } }),
+  ]
+  let ref_counter : Array[Int] = [-2]
+  let struct_expr = make_expr([I32Const(1U), I32Const(2U), StructNew(0U)])
+  assert_eq(
+    eval_const_expr(struct_expr, [], types, ref_counter),
+    Value::Ref(Some(-2)),
+  )
+  let struct_default = make_expr([StructNewDefault(0U)])
+  assert_eq(
+    eval_const_expr(struct_default, [], types, ref_counter),
+    Value::Ref(Some(-3)),
+  )
+  let array_new = make_expr([I32Const(7U), I32Const(3U), ArrayNew(1U)])
+  assert_eq(
+    eval_const_expr(array_new, [], types, ref_counter),
+    Value::Ref(Some(-4)),
+  )
+  let array_default = make_expr([I32Const(2U), ArrayNewDefault(1U)])
+  assert_eq(
+    eval_const_expr(array_default, [], types, ref_counter),
+    Value::Ref(Some(-5)),
+  )
+  let array_fixed = make_expr([
+    I32Const(1U),
+    I32Const(2U),
+    ArrayNewFixed(1U, 2U),
+  ])
+  assert_eq(
+    eval_const_expr(array_fixed, [], types, ref_counter),
+    Value::Ref(Some(-6)),
+  )
+  let array_data = make_expr([I32Const(0U), I32Const(2U), ArrayNewData(1U, 0U)])
+  assert_eq(
+    eval_const_expr(array_data, [], types, ref_counter),
+    Value::Ref(Some(-7)),
+  )
+  let array_elem = make_expr([I32Const(0U), I32Const(1U), ArrayNewElem(1U, 0U)])
+  assert_eq(
+    eval_const_expr(array_elem, [], types, ref_counter),
+    Value::Ref(Some(-8)),
+  )
 }
 
 ///|
 test "eval const expr errors" {
+  let types : Array[@core.TypeDef] = []
+  let ref_counter : Array[Int] = [-2]
   let mut saw_error = false
-  let _ = eval_const_expr(make_expr([]), []) catch {
+  let _ = eval_const_expr(make_expr([]), [], types, ref_counter) catch {
     _ => {
       saw_error = true
       Value::I32(0U)
@@ -229,7 +301,7 @@ test "eval const expr errors" {
   }
   assert_eq(saw_error, true)
   saw_error = false
-  let _ = eval_const_expr(make_expr([GlobalGet(0U)]), []) catch {
+  let _ = eval_const_expr(make_expr([GlobalGet(0U)]), [], types, ref_counter) catch {
     _ => {
       saw_error = true
       Value::I32(0U)
@@ -237,7 +309,12 @@ test "eval const expr errors" {
   }
   assert_eq(saw_error, true)
   saw_error = false
-  let _ = eval_const_expr(make_expr([I32Const(1U), F32Const(1.0), I32Add]), []) catch {
+  let _ = eval_const_expr(
+    make_expr([I32Const(1U), F32Const(1.0), I32Add]),
+    [],
+    types,
+    ref_counter,
+  ) catch {
     _ => {
       saw_error = true
       Value::I32(0U)
@@ -245,7 +322,7 @@ test "eval const expr errors" {
   }
   assert_eq(saw_error, true)
   saw_error = false
-  let _ = eval_const_expr(make_expr([Nop]), []) catch {
+  let _ = eval_const_expr(make_expr([Nop]), [], types, ref_counter) catch {
     _ => {
       saw_error = true
       Value::I32(0U)
@@ -253,7 +330,12 @@ test "eval const expr errors" {
   }
   assert_eq(saw_error, true)
   saw_error = false
-  let _ = eval_const_expr(make_expr([I32Const(1U), I32Const(2U)]), []) catch {
+  let _ = eval_const_expr(
+    make_expr([I32Const(1U), I32Const(2U)]),
+    [],
+    types,
+    ref_counter,
+  ) catch {
     _ => {
       saw_error = true
       Value::I32(0U)
