@@ -1794,6 +1794,19 @@ async test "wat encoder matches wasm-tools for control flow" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for control ops" {
+  let wat =
+    #|(module
+    #|  (func (export "ret") (result i32)
+    #|    i32.const 1
+    #|    return
+    #|    i32.const 2)
+    #|  (func (export "trap")
+    #|    unreachable))
+  assert_wat_matches("control_ops", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for if multi-value" {
   let wat =
     #|(module
