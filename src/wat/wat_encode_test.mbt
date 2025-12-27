@@ -1060,6 +1060,13 @@ async test "wat encoder matches wasm-tools for float nan/inf literals" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for float negative zero" {
+  let wat =
+    #|(module (func (export "f") (result f32 f64) f32.const -0.0 f64.const -0.0))
+  assert_wat_matches("float_neg_zero", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for hex float literals" {
   let wat =
     #|(module (func (export "f") (result f32 f64) f32.const 0x1.8p+1 f64.const -0x1.0p-1))
