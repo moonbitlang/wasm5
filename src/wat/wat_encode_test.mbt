@@ -4252,6 +4252,71 @@ async test "wat encoder matches wasm-tools for list form atomic ops" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for extended atomic ops" {
+  let wat =
+    #|(module
+    #|  (memory 1)
+    #|  (func (export "atomic_ext") (param i32 i64 i32 i64) (result i32)
+    #|    local.get 0
+    #|    i32.atomic.load8_u
+    #|    drop
+    #|    local.get 0
+    #|    i32.atomic.load16_u
+    #|    drop
+    #|    local.get 0
+    #|    i64.atomic.load8_u
+    #|    drop
+    #|    local.get 0
+    #|    i64.atomic.load16_u
+    #|    drop
+    #|    local.get 0
+    #|    i64.atomic.load32_u
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    i32.atomic.store8
+    #|    local.get 0
+    #|    local.get 2
+    #|    i32.atomic.store16
+    #|    local.get 0
+    #|    local.get 3
+    #|    i64.atomic.store8
+    #|    local.get 0
+    #|    local.get 3
+    #|    i64.atomic.store16
+    #|    local.get 0
+    #|    local.get 3
+    #|    i64.atomic.store32
+    #|    local.get 0
+    #|    local.get 2
+    #|    i32.atomic.rmw.sub
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    i32.atomic.rmw.and
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    i32.atomic.rmw.or
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    i32.atomic.rmw.xor
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    i32.atomic.rmw.xchg
+    #|    drop
+    #|    local.get 0
+    #|    local.get 2
+    #|    local.get 2
+    #|    i32.atomic.rmw.cmpxchg
+    #|    drop
+    #|    i32.const 0))
+  assert_wat_matches("atomic_ops_extended", wat)
+}
+
+///|
 test "wast parser exposes script commands" {
   let wast =
     #|(script
