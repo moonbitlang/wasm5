@@ -1020,6 +1020,13 @@ async test "wat encoder matches wasm-tools for start section" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for start index" {
+  let wat =
+    #|(module (func nop) (start 0))
+  assert_wat_matches("start_index", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for float consts" {
   let wat =
     #|(module (func (export "f32") (result f32) f32.const 1.5) (func (export "f64") (result f64) f64.const -2.25))
