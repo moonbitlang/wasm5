@@ -3169,6 +3169,25 @@ async test "wat encoder matches wasm-tools for list form table/memory ops" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for list form table.init/copy" {
+  let wat =
+    #|(module
+    #|  (table $t 1 funcref)
+    #|  (func $f)
+    #|  (elem $e func $f)
+    #|  (func (export "bulk") (param i32 i32 i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    (table.init $t $e)
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    (table.copy $t $t)))
+  assert_wat_matches("list_table_bulk", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for elem table index 1" {
   let wat =
     #|(module (table 1 funcref) (table $tab1 1 funcref) (func $f) (elem (table $tab1) (offset (i32.const 0)) func $f))
