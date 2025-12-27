@@ -2520,6 +2520,23 @@ async test "wat encoder matches wasm-tools for ref.test and ref.cast" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for typed ref.test/ref.cast" {
+  let wat =
+    #|(module
+    #|  (type $t (struct))
+    #|  (func (export "test_named") (param (ref null $t)) (result i32)
+    #|    local.get 0
+    #|    ref.test (ref $t))
+    #|  (func (export "test_nullable") (param (ref null $t)) (result i32)
+    #|    local.get 0
+    #|    ref.test (ref null $t))
+    #|  (func (export "cast_index") (param (ref null $t)) (result (ref null $t))
+    #|    local.get 0
+    #|    ref.cast (ref null 0)))
+  assert_wat_matches("ref_test_cast_typed", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for block typeuse params" {
   let wat =
     #|(module
