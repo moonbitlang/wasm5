@@ -2068,6 +2068,16 @@ async test "wat encoder matches wasm-tools for return_call" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for return_call list form" {
+  let wat =
+    #|(module
+    #|  (func $add (param i32 i32) (result i32) local.get 0 local.get 1 i32.add)
+    #|  (func (export "call") (result i32)
+    #|    (return_call $add (i32.const 2) (i32.const 3))))
+  assert_wat_matches("return_call_list", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for return_call_indirect" {
   let wat =
     #|(module
