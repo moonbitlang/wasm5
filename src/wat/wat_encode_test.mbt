@@ -2608,6 +2608,17 @@ async test "wat encoder matches wasm-tools for elem passive" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for elem.drop named" {
+  let wat =
+    #|(module
+    #|  (func $f)
+    #|  (elem $e func $f)
+    #|  (func (export "drop")
+    #|    elem.drop $e))
+  assert_wat_matches("elem_drop_named", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for table indexed ops" {
   let wat =
     #|(module
