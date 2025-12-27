@@ -3396,6 +3396,21 @@ async test "wat encoder matches wasm-tools for list form memory.copy defaults" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for list form memory.init default" {
+  let wat =
+    #|(module
+    #|  (memory 1)
+    #|  (data $d "hi")
+    #|  (func (export "init") (param i32 i32 i32)
+    #|    local.get 0
+    #|    local.get 1
+    #|    local.get 2
+    #|    (memory.init $d)
+    #|    data.drop $d))
+  assert_wat_matches("list_memory_init_default", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for memory64 bulk ops" {
   let wat =
     #|(module
