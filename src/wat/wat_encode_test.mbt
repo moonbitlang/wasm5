@@ -3185,6 +3185,18 @@ async test "wat encoder matches wasm-tools for tag import and throw" {
 }
 
 ///|
+async test "wat encoder matches wasm-tools for tag import inline params" {
+  let wat =
+    #|(module
+    #|  (import "env" "e" (tag $e (param i32 i64)))
+    #|  (func (export "throw") (param i32 i64)
+    #|    local.get 0
+    #|    local.get 1
+    #|    throw $e))
+  assert_wat_matches("tag_import_inline", wat)
+}
+
+///|
 async test "wat encoder matches wasm-tools for try_table" {
   let wat =
     #|(module
