@@ -3,6 +3,7 @@ fn validate_instruction_reference(
   module_ : @core.Module,
   ctx : ValidationCtx,
   import_counts : ImportCounts,
+  declared_funcs : Set[Int],
   instr : @core.Instr,
 ) -> Bool raise ValidationError {
   let stack = ctx.stack
@@ -20,6 +21,10 @@ fn validate_instruction_reference(
       let total_funcs = import_counts.funcs + module_.funcs.length()
       if idx < 0 || idx >= total_funcs {
         raise ValidationError::InvalidFunctionIndex(idx)
+      }
+      // Check that function is declared (in elem segment, export, or global init)
+      if not(declared_funcs.contains(idx)) {
+        raise ValidationError::UndeclaredFunctionReference(idx)
       }
       let type_idx = get_func_type_index(module_, idx, import_counts)
       // Push typed function reference (non-nullable)

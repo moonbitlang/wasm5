@@ -619,3 +619,58 @@ fn is_subtype(
     _ => false
   }
 }
+
+///|
+/// Collect declared function indices from a module.
+/// A function is "declared" if it appears in:
+/// - An element segment (active or declarative)
+/// - An export
+/// - A global initializer containing ref.func
+fn collect_declared_funcs(m : @core.Module) -> Set[Int] {
+  let declared : Set[Int] = Set::new()
+
+  // Collect from element segments
+  for elem in m.elems {
+    for init_expr in elem.init {
+      for instr in init_expr.instrs {
+        match instr {
+          RefFunc(idx) => declared.add(idx.reinterpret_as_int())
+          _ => ()
+        }
+      }
+    }
+  }
+
+  // Collect from exports
+  for exp in m.exports {
+    match exp.desc {
+      Func(idx) => declared.add(idx.reinterpret_as_int())
+      _ => ()
+    }
+  }
+
+  // Collect from global initializers
+  for global in m.globals {
+    for instr in global.init.instrs {
+      match instr {
+        RefFunc(idx) => declared.add(idx.reinterpret_as_int())
+        _ => ()
+      }
+    }
+  }
+
+  // Collect from table initializers
+  for table in m.tables {
+    match table.init {
+      Some(init_expr) =>
+        for instr in init_expr.instrs {
+          match instr {
+            RefFunc(idx) => declared.add(idx.reinterpret_as_int())
+            _ => ()
+          }
+        }
+      None => ()
+    }
+  }
+  declared
+}

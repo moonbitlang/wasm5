@@ -698,6 +698,14 @@ fn handle_assert_trap(
             "[\{fn_name}] expected '\{expected_error}' but got null function reference",
           )
         }
+      } else if msg.contains("null reference") {
+        if not(expected_error.contains("null reference")) {
+          ctx.fail(
+            line,
+            "assert_trap",
+            "[\{fn_name}] expected '\{expected_error}' but got null reference",
+          )
+        }
       } else {
         ctx.fail(
           line,
@@ -1033,66 +1041,12 @@ pub async fn process_wast_file(
 
 ///|
 /// Whitelist of individual tests to skip (file, line)
-/// These are known failing tests that won't be fixed soon
+/// These are known failing tests due to missing features
 let whitelisted_tests : Array[(String, Set[Int])] = [
-  ("local_tee.wast", Set::from_array([613])), // complicated null ref handling
-  // All call_ref.wast tests now pass!
   // Test harness limitations (not WASM implementation issues):
-  // - Line 26: invoke $ModuleName syntax not supported (need registry lookup in action handler)
-  // - Lines 93,94,97: "get" action type not supported (need handler to read exported globals)
+  // - Line 26: invoke $ModuleName syntax not supported
+  // - Lines 93,94,97: "get" action type not supported
   ("exports.wast", Set::from_array([26, 93, 94, 97])),
-  // br_on_non_null.wast line 92 - now handled correctly by br_on_non_null validation
-  ("ref_as_non_null.wast", Set::from_array([27])),
-  ("br_on_null.wast", Set::from_array([82])),
-  ("unreached-invalid.wast", Set::from_array([676, 687])),
-  // All imports.wast tests now pass!
-  // All conversions.wast tests now pass!
-  // All float_exprs.wast tests now pass!
-  // All br_if.wast tests now pass!
-  //
-  // ref_func.wast failures: Lines 109, 113 - Undeclared function reference validation
-  //
-  // These tests expect validation errors when ref.func is used on functions that aren't
-  // "declared" (i.e., don't appear in element segments, globals, or exports).
-  //
-  // DIFFICULTY: HIGH - Requires extensive refactoring with cascading effects
-  //
-  // What needs to be implemented:
-  // 1. Add declared_funcs: Set[Int] field to ValidationCtx (tracking C.refs from spec)
-  // 2. Create collect_declared_funcs() to scan:
-  //    - Element segments (including inline table initializers like (table (elem $f)))
-  //    - Global initializers that use ref.func
-  //    - Exported functions
-  // 3. Thread declared_funcs through all validation contexts:
-  //    - Function bodies: validate_function() → ValidationCtx::new_with_locals()
-  //    - Global initializers: Multiple places where init_ctx is created
-  //    - Table initializers: Two separate code paths for nullable/non-nullable tables
-  // 4. Add validation check in RefFunc instruction to ensure function is declared
-  // 5. Update test harness to accept "undeclared function reference" errors
-  //
-  // COMPLICATIONS discovered during implementation attempt:
-  // - Parser complexity: Inline elem syntax (table (elem $f)) may be parsed into separate
-  //   elem segments or table.init fields depending on syntax - requires deep parser knowledge
-  // - Validation order: declared_funcs must be collected BEFORE validating any expressions
-  //   that might contain ref.func, but globals/tables themselves declare functions
-  // - Cascading failures: Implementation broke 162 tests across br_table.wast and table.wast
-  //   due to modules using ref.func in ways that should be valid but weren't properly handled
-  // - Edge cases: Functions can be declared through multiple mechanisms (elem segments,
-  //   declarative segments, global init, table init, exports) - all must be tracked
-  //
-  // RECOMMENDATION: This requires a comprehensive audit of all places where constant
-  // expressions are validated and ensuring declared_funcs is available everywhere.
-  // The cascading test failures suggest missing edge cases in how declarations are collected
-  // or validated. A more thorough understanding of the parser's handling of inline elem
-  // segments is needed before attempting this fix.
-  ("ref_func.wast", Set::from_array([109, 113])),
-  // Line 276: return_call_ref return type mismatch validation issue
-  // Function $f23 returns (ref null $t) but calls return_call_ref $t3 which returns (ref func).
-  // Validation correctly detects Ref(Func, false) is not a subtype of Ref(TypeIndex($t), true),
-  // but the module is still being accepted. The subtyping check returns false as expected,
-  // but somehow the ValidationError is not properly propagating or the test has an edge case
-  // with how multi-function modules are validated. Requires deeper investigation.
-  ("return_call_ref.wast", Set::from_array([276])),
-  ("table_grow.wast", Set::from_array([124, 130])), // cross-module imports not implemented
-  ("func_ptrs.wast", Set::from_array([49])),
+  // Cross-module imports not implemented
+  ("table_grow.wast", Set::from_array([124, 130])),
 ]

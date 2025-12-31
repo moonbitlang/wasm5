@@ -7,6 +7,7 @@ fn validate_instruction(
   ctx : ValidationCtx,
   instr : @core.Instr,
   import_counts : ImportCounts,
+  declared_funcs : Set[Int],
 ) -> Unit raise ValidationError {
   if validate_instruction_numeric(module_, ctx, instr) {
     return
@@ -34,11 +35,13 @@ fn validate_instruction(
   if validate_instruction_gc(module_, ctx, instr) {
     return
   }
-  if validate_instruction_reference(module_, ctx, import_counts, instr) {
+  if validate_instruction_reference(
+      module_, ctx, import_counts, declared_funcs, instr,
+    ) {
     return
   }
   if validate_instruction_control(
-      module_, func_type, code, ctx, instr, import_counts,
+      module_, func_type, code, ctx, instr, import_counts, declared_funcs,
     ) {
     return
   }

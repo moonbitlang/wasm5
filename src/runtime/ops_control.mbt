@@ -638,7 +638,12 @@ fn op_return_call_indirect(rt : Runtime) -> Runtime {
   }
 
   // Trim stack to bp + num_params (locals will be initialized by compiled code)
-  { ..rt, sp: rt.bp + num_params, num_locals: num_params + code.locals.length(), pc: callee_pc }
+  {
+    ..rt,
+    sp: rt.bp + num_params,
+    num_locals: num_params + code.locals.length(),
+    pc: callee_pc,
+  }
 }
 
 ///|
@@ -859,7 +864,12 @@ fn op_return_call_ref(rt : Runtime) -> Runtime {
   }
 
   // Trim stack to bp + num_params (locals will be initialized by compiled code)
-  { ..rt, sp: rt.bp + num_params, num_locals: num_params + code.locals.length(), pc: callee_pc }
+  {
+    ..rt,
+    sp: rt.bp + num_params,
+    num_locals: num_params + code.locals.length(),
+    pc: callee_pc,
+  }
 }
 
 ///|
