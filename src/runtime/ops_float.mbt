@@ -6,7 +6,9 @@ fn op_f32_eq(rt : Runtime) -> Runtime {
     rt.stack.unsafe_get(stack_top - 1).to_uint(),
   )
   rt.stack.unsafe_set(stack_top - 1, if a == b { 1UL } else { 0UL })
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -17,7 +19,9 @@ fn op_f32_ne(rt : Runtime) -> Runtime {
     rt.stack.unsafe_get(stack_top - 1).to_uint(),
   )
   rt.stack.unsafe_set(stack_top - 1, if a != b { 1UL } else { 0UL })
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -28,7 +32,9 @@ fn op_f32_lt(rt : Runtime) -> Runtime {
     rt.stack.unsafe_get(stack_top - 1).to_uint(),
   )
   rt.stack.unsafe_set(stack_top - 1, if a < b { 1UL } else { 0UL })
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -39,7 +45,9 @@ fn op_f32_gt(rt : Runtime) -> Runtime {
     rt.stack.unsafe_get(stack_top - 1).to_uint(),
   )
   rt.stack.unsafe_set(stack_top - 1, if a > b { 1UL } else { 0UL })
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -50,7 +58,9 @@ fn op_f32_le(rt : Runtime) -> Runtime {
     rt.stack.unsafe_get(stack_top - 1).to_uint(),
   )
   rt.stack.unsafe_set(stack_top - 1, if a <= b { 1UL } else { 0UL })
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -61,7 +71,9 @@ fn op_f32_ge(rt : Runtime) -> Runtime {
     rt.stack.unsafe_get(stack_top - 1).to_uint(),
   )
   rt.stack.unsafe_set(stack_top - 1, if a >= b { 1UL } else { 0UL })
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -70,7 +82,9 @@ fn op_f64_eq(rt : Runtime) -> Runtime {
   let b = rt.stack.unsafe_get(stack_top).reinterpret_as_double()
   let a = rt.stack.unsafe_get(stack_top - 1).reinterpret_as_double()
   rt.stack.unsafe_set(stack_top - 1, if a == b { 1UL } else { 0UL })
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -79,7 +93,9 @@ fn op_f64_ne(rt : Runtime) -> Runtime {
   let b = rt.stack.unsafe_get(stack_top).reinterpret_as_double()
   let a = rt.stack.unsafe_get(stack_top - 1).reinterpret_as_double()
   rt.stack.unsafe_set(stack_top - 1, if a != b { 1UL } else { 0UL })
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -88,7 +104,9 @@ fn op_f64_lt(rt : Runtime) -> Runtime {
   let b = rt.stack.unsafe_get(stack_top).reinterpret_as_double()
   let a = rt.stack.unsafe_get(stack_top - 1).reinterpret_as_double()
   rt.stack.unsafe_set(stack_top - 1, if a < b { 1UL } else { 0UL })
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -97,7 +115,9 @@ fn op_f64_gt(rt : Runtime) -> Runtime {
   let b = rt.stack.unsafe_get(stack_top).reinterpret_as_double()
   let a = rt.stack.unsafe_get(stack_top - 1).reinterpret_as_double()
   rt.stack.unsafe_set(stack_top - 1, if a > b { 1UL } else { 0UL })
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -106,7 +126,9 @@ fn op_f64_le(rt : Runtime) -> Runtime {
   let b = rt.stack.unsafe_get(stack_top).reinterpret_as_double()
   let a = rt.stack.unsafe_get(stack_top - 1).reinterpret_as_double()
   rt.stack.unsafe_set(stack_top - 1, if a <= b { 1UL } else { 0UL })
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -115,7 +137,9 @@ fn op_f64_ge(rt : Runtime) -> Runtime {
   let b = rt.stack.unsafe_get(stack_top).reinterpret_as_double()
   let a = rt.stack.unsafe_get(stack_top - 1).reinterpret_as_double()
   rt.stack.unsafe_set(stack_top - 1, if a >= b { 1UL } else { 0UL })
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 // Float unary operations
@@ -124,14 +148,16 @@ fn op_f64_ge(rt : Runtime) -> Runtime {
 fn op_f32_neg(rt : Runtime) -> Runtime {
   let a = Float::reinterpret_from_uint(rt.stack.unsafe_get(rt.sp - 1).to_uint())
   rt.stack.unsafe_set(rt.sp - 1, (-a).reinterpret_as_uint().to_uint64())
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
 fn op_f32_abs(rt : Runtime) -> Runtime {
   let a = Float::reinterpret_from_uint(rt.stack.unsafe_get(rt.sp - 1).to_uint())
   rt.stack.unsafe_set(rt.sp - 1, a.abs().reinterpret_as_uint().to_uint64())
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -141,7 +167,8 @@ fn op_f32_sqrt(rt : Runtime) -> Runtime {
     rt.sp - 1,
     canonicalize_f32(a.sqrt()).reinterpret_as_uint().to_uint64(),
   )
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -151,7 +178,8 @@ fn op_f32_ceil(rt : Runtime) -> Runtime {
     rt.sp - 1,
     canonicalize_f32(a.ceil()).reinterpret_as_uint().to_uint64(),
   )
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -161,7 +189,8 @@ fn op_f32_floor(rt : Runtime) -> Runtime {
     rt.sp - 1,
     canonicalize_f32(a.floor()).reinterpret_as_uint().to_uint64(),
   )
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -171,7 +200,8 @@ fn op_f32_trunc(rt : Runtime) -> Runtime {
     rt.sp - 1,
     canonicalize_f32(a.trunc()).reinterpret_as_uint().to_uint64(),
   )
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -181,14 +211,16 @@ fn op_f32_nearest(rt : Runtime) -> Runtime {
     rt.sp - 1,
     canonicalize_f32(rintf(a)).reinterpret_as_uint().to_uint64(),
   )
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
 fn op_f64_neg(rt : Runtime) -> Runtime {
   let a = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_double()
   rt.stack.unsafe_set(rt.sp - 1, (-a).reinterpret_as_uint64())
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 // Float binary operations
@@ -204,7 +236,9 @@ fn op_f32_add(rt : Runtime) -> Runtime {
     stack_top - 1,
     canonicalize_f32(a + b).reinterpret_as_uint().to_uint64(),
   )
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -218,7 +252,9 @@ fn op_f32_sub(rt : Runtime) -> Runtime {
     stack_top - 1,
     canonicalize_f32(a - b).reinterpret_as_uint().to_uint64(),
   )
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -232,7 +268,9 @@ fn op_f32_mul(rt : Runtime) -> Runtime {
     stack_top - 1,
     canonicalize_f32(a * b).reinterpret_as_uint().to_uint64(),
   )
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -246,7 +284,9 @@ fn op_f32_div(rt : Runtime) -> Runtime {
     stack_top - 1,
     canonicalize_f32(a / b).reinterpret_as_uint().to_uint64(),
   )
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -281,7 +321,9 @@ fn op_f32_min(rt : Runtime) -> Runtime {
     }
   }
   rt.stack.unsafe_set(stack_top - 1, result.reinterpret_as_uint().to_uint64())
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -316,7 +358,9 @@ fn op_f32_max(rt : Runtime) -> Runtime {
     }
   }
   rt.stack.unsafe_set(stack_top - 1, result.reinterpret_as_uint().to_uint64())
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -331,7 +375,9 @@ fn op_f32_copysign(rt : Runtime) -> Runtime {
   let sign_mask = 0x8000_0000U
   let result_bits = (a_bits & sign_mask.lnot()) | (b_bits & sign_mask)
   rt.stack.unsafe_set(stack_top - 1, result_bits.to_uint64())
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -343,7 +389,9 @@ fn op_f64_add(rt : Runtime) -> Runtime {
     stack_top - 1,
     canonicalize_f64(a + b).reinterpret_as_uint64(),
   )
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -355,7 +403,9 @@ fn op_f64_sub(rt : Runtime) -> Runtime {
     stack_top - 1,
     canonicalize_f64(a - b).reinterpret_as_uint64(),
   )
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -367,7 +417,9 @@ fn op_f64_mul(rt : Runtime) -> Runtime {
     stack_top - 1,
     canonicalize_f64(a * b).reinterpret_as_uint64(),
   )
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -379,7 +431,9 @@ fn op_f64_div(rt : Runtime) -> Runtime {
     stack_top - 1,
     canonicalize_f64(a / b).reinterpret_as_uint64(),
   )
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -412,7 +466,9 @@ fn op_f64_min(rt : Runtime) -> Runtime {
     }
   }
   rt.stack.unsafe_set(stack_top - 1, result.reinterpret_as_uint64())
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -445,7 +501,9 @@ fn op_f64_max(rt : Runtime) -> Runtime {
     }
   }
   rt.stack.unsafe_set(stack_top - 1, result.reinterpret_as_uint64())
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -458,7 +516,9 @@ fn op_f64_copysign(rt : Runtime) -> Runtime {
   let sign_mask = 0x8000_0000_0000_0000UL
   let result_bits = (a_bits & sign_mask.lnot()) | (b_bits & sign_mask)
   rt.stack.unsafe_set(stack_top - 1, result_bits)
-  { ..rt, sp: stack_top, pc: rt.pc + 1 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 1
+  rt
 }
 
 // Float unary operations
@@ -467,7 +527,8 @@ fn op_f64_copysign(rt : Runtime) -> Runtime {
 fn op_f64_abs(rt : Runtime) -> Runtime {
   let a = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_double()
   rt.stack.unsafe_set(rt.sp - 1, a.abs().reinterpret_as_uint64())
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -477,7 +538,8 @@ fn op_f64_sqrt(rt : Runtime) -> Runtime {
     rt.sp - 1,
     canonicalize_f64(a.sqrt()).reinterpret_as_uint64(),
   )
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -487,7 +549,8 @@ fn op_f64_ceil(rt : Runtime) -> Runtime {
     rt.sp - 1,
     canonicalize_f64(a.ceil()).reinterpret_as_uint64(),
   )
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -497,7 +560,8 @@ fn op_f64_floor(rt : Runtime) -> Runtime {
     rt.sp - 1,
     canonicalize_f64(a.floor()).reinterpret_as_uint64(),
   )
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -507,7 +571,8 @@ fn op_f64_trunc(rt : Runtime) -> Runtime {
     rt.sp - 1,
     canonicalize_f64(a.trunc()).reinterpret_as_uint64(),
   )
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -517,7 +582,8 @@ fn op_f64_nearest(rt : Runtime) -> Runtime {
     rt.sp - 1,
     canonicalize_f64(rint(a)).reinterpret_as_uint64(),
   )
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 // Float conversion operations
@@ -526,28 +592,32 @@ fn op_f64_nearest(rt : Runtime) -> Runtime {
 fn op_f64_convert_i64_u(rt : Runtime) -> Runtime {
   let a = rt.stack.unsafe_get(rt.sp - 1)
   rt.stack.unsafe_set(rt.sp - 1, a.to_double().reinterpret_as_uint64())
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
 fn op_f64_convert_i64_s(rt : Runtime) -> Runtime {
   let a = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_int64()
   rt.stack.unsafe_set(rt.sp - 1, a.to_double().reinterpret_as_uint64())
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
 fn op_f64_convert_i32_u(rt : Runtime) -> Runtime {
   let a = rt.stack.unsafe_get(rt.sp - 1).to_uint()
   rt.stack.unsafe_set(rt.sp - 1, a.to_double().reinterpret_as_uint64())
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
 fn op_f64_convert_i32_s(rt : Runtime) -> Runtime {
   let a = rt.stack.unsafe_get(rt.sp - 1).to_uint().reinterpret_as_int()
   rt.stack.unsafe_set(rt.sp - 1, a.to_double().reinterpret_as_uint64())
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -559,7 +629,8 @@ fn op_f64_promote_f32(rt : Runtime) -> Runtime {
     rt.sp - 1,
     canonicalize_f64(result).reinterpret_as_uint64(),
   )
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -571,7 +642,8 @@ fn op_f32_demote_f64(rt : Runtime) -> Runtime {
     rt.sp - 1,
     canonicalize_f32(result).reinterpret_as_uint().to_uint64(),
   )
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -581,7 +653,8 @@ fn op_f32_convert_i32_s(rt : Runtime) -> Runtime {
     rt.sp - 1,
     Float::from_int(a).reinterpret_as_uint().to_uint64(),
   )
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -591,7 +664,8 @@ fn op_f32_convert_i32_u(rt : Runtime) -> Runtime {
     rt.sp - 1,
     Float::from_double(a.to_double()).reinterpret_as_uint().to_uint64(),
   )
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -613,7 +687,8 @@ fn op_f32_convert_i64_s(rt : Runtime) -> Runtime {
     rt.sp - 1,
     f32_from_i64(a).reinterpret_as_uint().to_uint64(),
   )
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -623,7 +698,8 @@ fn op_f32_convert_i64_u(rt : Runtime) -> Runtime {
     rt.sp - 1,
     f32_from_u64(a).reinterpret_as_uint().to_uint64(),
   )
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 // Truncation operations (with trapping on overflow/NaN)
@@ -641,7 +717,8 @@ fn op_i64_trunc_f64_s(rt : Runtime) -> Runtime {
     return { ..rt, status: Trap }
   }
   rt.stack.unsafe_set(rt.sp - 1, a.to_int64().reinterpret_as_uint64())
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -658,7 +735,8 @@ fn op_i64_trunc_f64_u(rt : Runtime) -> Runtime {
   }
   // Use C function for proper conversion at precision boundaries
   rt.stack.unsafe_set(rt.sp - 1, u64_from_f64(a))
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -674,7 +752,8 @@ fn op_i32_trunc_f32_s(rt : Runtime) -> Runtime {
     return { ..rt, status: Trap }
   }
   rt.stack.unsafe_set(rt.sp - 1, a.to_int().reinterpret_as_uint().to_uint64())
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -690,7 +769,8 @@ fn op_i32_trunc_f32_u(rt : Runtime) -> Runtime {
     return { ..rt, status: Trap }
   }
   rt.stack.unsafe_set(rt.sp - 1, a.to_double().to_uint64() & 0xFFFFFFFFUL)
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -706,7 +786,8 @@ fn op_i32_trunc_f64_s(rt : Runtime) -> Runtime {
     return { ..rt, status: Trap }
   }
   rt.stack.unsafe_set(rt.sp - 1, a.to_int().reinterpret_as_uint().to_uint64())
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -722,7 +803,8 @@ fn op_i32_trunc_f64_u(rt : Runtime) -> Runtime {
     return { ..rt, status: Trap }
   }
   rt.stack.unsafe_set(rt.sp - 1, a.to_uint64() & 0xFFFFFFFFUL)
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -738,7 +820,8 @@ fn op_i64_trunc_f32_s(rt : Runtime) -> Runtime {
     return { ..rt, status: Trap }
   }
   rt.stack.unsafe_set(rt.sp - 1, a.to_int64().reinterpret_as_uint64())
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -756,7 +839,8 @@ fn op_i64_trunc_f32_u(rt : Runtime) -> Runtime {
   }
   // Use C function for proper conversion at precision boundaries
   rt.stack.unsafe_set(rt.sp - 1, u64_from_f32(a))
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 // =============================================================================
@@ -780,7 +864,8 @@ fn op_i32_trunc_sat_f32_s(rt : Runtime) -> Runtime {
     a.to_int().reinterpret_as_uint().to_uint64()
   }
   rt.stack.unsafe_set(rt.sp - 1, result)
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -798,7 +883,8 @@ fn op_i32_trunc_sat_f32_u(rt : Runtime) -> Runtime {
     a.to_double().to_uint64() & 0xFFFFFFFFUL
   }
   rt.stack.unsafe_set(rt.sp - 1, result)
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -816,7 +902,8 @@ fn op_i32_trunc_sat_f64_s(rt : Runtime) -> Runtime {
     a.to_int().reinterpret_as_uint().to_uint64()
   }
   rt.stack.unsafe_set(rt.sp - 1, result)
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -834,7 +921,8 @@ fn op_i32_trunc_sat_f64_u(rt : Runtime) -> Runtime {
     a.to_uint64() & 0xFFFFFFFFUL
   }
   rt.stack.unsafe_set(rt.sp - 1, result)
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -852,7 +940,8 @@ fn op_i64_trunc_sat_f32_s(rt : Runtime) -> Runtime {
     a.to_int64().reinterpret_as_uint64()
   }
   rt.stack.unsafe_set(rt.sp - 1, result)
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -872,7 +961,8 @@ fn op_i64_trunc_sat_f32_u(rt : Runtime) -> Runtime {
     u64_from_f32(a)
   }
   rt.stack.unsafe_set(rt.sp - 1, result)
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -890,7 +980,8 @@ fn op_i64_trunc_sat_f64_s(rt : Runtime) -> Runtime {
     a.to_int64().reinterpret_as_uint64()
   }
   rt.stack.unsafe_set(rt.sp - 1, result)
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -909,7 +1000,8 @@ fn op_i64_trunc_sat_f64_u(rt : Runtime) -> Runtime {
     u64_from_f64(a)
   }
   rt.stack.unsafe_set(rt.sp - 1, result)
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 // Reinterpret operations
@@ -919,25 +1011,29 @@ fn op_i32_reinterpret_f32(rt : Runtime) -> Runtime {
   // Already stored as bits, just mask to i32 range
   let v = rt.stack.unsafe_get(rt.sp - 1)
   rt.stack.unsafe_set(rt.sp - 1, v & 0xFFFFFFFFUL)
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
 fn op_i64_reinterpret_f64(rt : Runtime) -> Runtime {
   // Already stored as bits, no change needed
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
 fn op_f32_reinterpret_i32(rt : Runtime) -> Runtime {
   // Already stored as bits, no change needed
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
 fn op_f64_reinterpret_i64(rt : Runtime) -> Runtime {
   // Already stored as bits, no change needed
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 // Global operations
