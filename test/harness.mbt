@@ -698,6 +698,14 @@ fn handle_assert_trap(
             "[\{fn_name}] expected '\{expected_error}' but got null function reference",
           )
         }
+      } else if msg.contains("null reference") {
+        if not(expected_error.contains("null reference")) {
+          ctx.fail(
+            line,
+            "assert_trap",
+            "[\{fn_name}] expected '\{expected_error}' but got null reference",
+          )
+        }
       } else {
         ctx.fail(
           line,
@@ -1042,7 +1050,7 @@ let whitelisted_tests : Array[(String, Set[Int])] = [
   // - Lines 93,94,97: "get" action type not supported (need handler to read exported globals)
   ("exports.wast", Set::from_array([26, 93, 94, 97])),
   // br_on_non_null.wast line 92 - now handled correctly by br_on_non_null validation
-  ("ref_as_non_null.wast", Set::from_array([27])),
+  // All ref_as_non_null.wast tests now pass!
   // All br_on_null.wast tests now pass!
   ("unreached-invalid.wast", Set::from_array([676, 687])),
   // All imports.wast tests now pass!
