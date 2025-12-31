@@ -67,6 +67,7 @@ fn validate_instruction_control(
   ctx : ValidationCtx,
   instr : @core.Instr,
   import_counts : ImportCounts,
+  declared_funcs : Set[Int],
 ) -> Bool raise ValidationError {
   let stack = ctx.stack
   match instr {
@@ -96,7 +97,7 @@ fn validate_instruction_control(
       // Validate block body
       for block_instr in instrs {
         validate_instruction(
-          module_, func_type, code, block_ctx, block_instr, import_counts,
+          module_, func_type, code, block_ctx, block_instr, import_counts, declared_funcs,
         )
       }
       let _ = block_ctx.pop_control()
@@ -154,7 +155,7 @@ fn validate_instruction_control(
       // Validate loop body
       for loop_instr in instrs {
         validate_instruction(
-          module_, func_type, code, loop_ctx, loop_instr, import_counts,
+          module_, func_type, code, loop_ctx, loop_instr, import_counts, declared_funcs,
         )
       }
       let _ = loop_ctx.pop_control()
@@ -209,7 +210,7 @@ fn validate_instruction_control(
       }
       for then_instr in then_instrs {
         validate_instruction(
-          module_, func_type, code, then_ctx, then_instr, import_counts,
+          module_, func_type, code, then_ctx, then_instr, import_counts, declared_funcs,
         )
       }
       let _ = then_ctx.pop_control()
@@ -246,7 +247,7 @@ fn validate_instruction_control(
       }
       for else_instr in else_instrs {
         validate_instruction(
-          module_, func_type, code, else_ctx, else_instr, import_counts,
+          module_, func_type, code, else_ctx, else_instr, import_counts, declared_funcs,
         )
       }
       let _ = else_ctx.pop_control()
@@ -309,7 +310,7 @@ fn validate_instruction_control(
       }
       for block_instr in instrs {
         validate_instruction(
-          module_, func_type, code, try_ctx, block_instr, import_counts,
+          module_, func_type, code, try_ctx, block_instr, import_counts, declared_funcs,
         )
       }
       let _ = try_ctx.pop_control()
@@ -572,7 +573,6 @@ fn validate_instruction_control(
           "br_on_non_null expects reference on stack",
         )
       }
-
       if stack.length() >= 1 {
         let popped_ref = stack.unsafe_pop()
 

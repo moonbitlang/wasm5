@@ -27,4 +27,5 @@ pub(all) suberror ValidationError {
   ConstantExpressionRequired(String)
   UninitializedLocal(Int) // Local with non-defaultable type used before initialization
   UnknownType(Int) // Type index in ref type doesn't exist
+  UndeclaredFunctionReference(Int) // ref.func used for undeclared function
 } derive(Show)

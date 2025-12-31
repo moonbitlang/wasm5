@@ -633,13 +633,15 @@ test "validate memory instruction errors" {
 test "validate reference instruction errors" {
   let module_empty = test_empty_module()
   let counts = get_import_counts(module_empty)
+  let declared_funcs : Set[Int] = Set::new()
   let mut saw_error = false
   let ctx_ref_func = ValidationCtx::new()
   let _ = validate_instruction_reference(
     module_empty,
     ctx_ref_func,
     counts,
-    RefFunc(0U),
+    declared_funcs,
+    @core.RefFunc(0U),
   ) catch {
     _ => {
       saw_error = true
@@ -653,7 +655,8 @@ test "validate reference instruction errors" {
     module_empty,
     ctx_ref_is_null,
     counts,
-    RefIsNull,
+    declared_funcs,
+    @core.RefIsNull,
   ) catch {
     _ => {
       saw_error = true
@@ -666,7 +669,8 @@ test "validate reference instruction errors" {
     module_empty,
     ctx_ref_null,
     counts,
-    RefNull(Extern),
+    declared_funcs,
+    @core.RefNull(Extern),
   )
   assert_eq(ok, true)
   assert_eq(ctx_ref_null.stack.length(), 1)
@@ -677,7 +681,8 @@ test "validate reference instruction errors" {
     module_empty,
     ctx_unreachable,
     counts,
-    RefIsNull,
+    declared_funcs,
+    @core.RefIsNull,
   )
   assert_eq(ok, true)
   assert_eq(ctx_unreachable.stack.length(), 1)
@@ -826,6 +831,7 @@ test "validate table instruction errors" {
 
 ///|
 test "validate control instruction branches" {
+  let declared_funcs : Set[Int] = Set::new()
   let func_type : @core.FuncType = { params: [I32], results: [I32] }
   let module_funcs : @core.Module = {
     types: [Func(func_type)],
@@ -895,6 +901,7 @@ test "validate control instruction branches" {
     ctx_block,
     Block(Empty, []),
     get_import_counts(test_empty_module()),
+    declared_funcs,
   )
   assert_eq(ok, true)
   let ctx_loop = ValidationCtx::new()
@@ -905,6 +912,7 @@ test "validate control instruction branches" {
     ctx_loop,
     Loop(Empty, []),
     get_import_counts(test_empty_module()),
+    declared_funcs,
   )
   assert_eq(ok, true)
   let ctx_if = ValidationCtx::new()
@@ -916,6 +924,7 @@ test "validate control instruction branches" {
     ctx_if,
     If(Empty, [], []),
     get_import_counts(test_empty_module()),
+    declared_funcs,
   )
   assert_eq(ok, true)
   let ctx_br = ValidationCtx::new()
@@ -928,6 +937,7 @@ test "validate control instruction branches" {
     ctx_br,
     Br(0U),
     get_import_counts(test_empty_module()),
+    declared_funcs,
   )
   assert_eq(ok, true)
   assert_eq(ctx_br.is_unreachable, true)
@@ -942,6 +952,7 @@ test "validate control instruction branches" {
     ctx_br_if,
     BrIf(0U),
     get_import_counts(test_empty_module()),
+    declared_funcs,
   )
   assert_eq(ok, true)
   assert_eq(ctx_br_if.stack.length(), 1)
@@ -956,6 +967,7 @@ test "validate control instruction branches" {
     ctx_br_table,
     BrTable([], 0U),
     get_import_counts(test_empty_module()),
+    declared_funcs,
   )
   assert_eq(ok, true)
   assert_eq(ctx_br_table.is_unreachable, true)
@@ -968,6 +980,7 @@ test "validate control instruction branches" {
     ctx_br_on_null,
     BrOnNull(0U),
     get_import_counts(test_empty_module()),
+    declared_funcs,
   )
   assert_eq(ok, true)
   assert_eq(ctx_br_on_null.stack[0], Ref(Func, false))
@@ -982,6 +995,7 @@ test "validate control instruction branches" {
     ctx_br_on_non_null,
     BrOnNonNull(0U),
     get_import_counts(test_empty_module()),
+    declared_funcs,
   )
   assert_eq(ok, true)
   assert_eq(ctx_br_on_non_null.stack.length(), 0)
@@ -994,6 +1008,7 @@ test "validate control instruction branches" {
     ctx_return,
     Return,
     counts,
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1010,6 +1025,7 @@ test "validate control instruction branches" {
     ctx_call,
     Call(0U),
     counts,
+    declared_funcs,
   )
   assert_eq(ok, true)
   assert_eq(ctx_call.stack.length(), 1)
@@ -1023,6 +1039,7 @@ test "validate control instruction branches" {
     ctx_call_indirect,
     CallIndirect(0U, 0U),
     counts,
+    declared_funcs,
   )
   assert_eq(ok, true)
   assert_eq(ctx_call_indirect.stack.length(), 1)
@@ -1035,6 +1052,7 @@ test "validate control instruction branches" {
     ctx_return_call,
     ReturnCall(0U),
     counts,
+    declared_funcs,
   )
   assert_eq(ok, true)
   assert_eq(ctx_return_call.is_unreachable, true)
@@ -1048,6 +1066,7 @@ test "validate control instruction branches" {
     ctx_return_call_indirect,
     ReturnCallIndirect(0U, 0U),
     counts,
+    declared_funcs,
   )
   assert_eq(ok, true)
   assert_eq(ctx_return_call_indirect.is_unreachable, true)
@@ -1061,6 +1080,7 @@ test "validate control instruction branches" {
     ctx_call_ref,
     CallRef(0U),
     counts,
+    declared_funcs,
   )
   assert_eq(ok, true)
   assert_eq(ctx_call_ref.stack.length(), 1)
@@ -1074,6 +1094,7 @@ test "validate control instruction branches" {
     ctx_return_call_ref,
     ReturnCallRef(0U),
     counts,
+    declared_funcs,
   )
   assert_eq(ok, true)
   assert_eq(ctx_return_call_ref.is_unreachable, true)
@@ -1081,6 +1102,7 @@ test "validate control instruction branches" {
 
 ///|
 test "validate control block loop if branches" {
+  let declared_funcs : Set[Int] = Set::new()
   let block_type : @core.FuncType = { params: [I32], results: [I64] }
   let module_block : @core.Module = {
     types: [Func(block_type)],
@@ -1110,6 +1132,7 @@ test "validate control block loop if branches" {
     ctx_block,
     Block(TypeIndex(0), [Unreachable]),
     counts,
+    declared_funcs,
   )
   assert_eq(ok, true)
   assert_eq(ctx_block.stack[0], I64)
@@ -1122,6 +1145,7 @@ test "validate control block loop if branches" {
     ctx_block_mismatch,
     Block(Value(I32), []),
     counts,
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1138,6 +1162,7 @@ test "validate control block loop if branches" {
     ctx_block_type,
     Block(Value(I32), [I64Const(0UL)]),
     counts,
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1154,6 +1179,7 @@ test "validate control block loop if branches" {
     ctx_loop,
     Loop(TypeIndex(0), [Unreachable]),
     counts,
+    declared_funcs,
   )
   assert_eq(ok, true)
   assert_eq(ctx_loop.stack[0], I64)
@@ -1166,6 +1192,7 @@ test "validate control block loop if branches" {
     ctx_loop_mismatch,
     Loop(Value(I32), []),
     counts,
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1182,6 +1209,7 @@ test "validate control block loop if branches" {
     ctx_loop_type,
     Loop(Value(I32), [I64Const(0UL)]),
     counts,
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1199,6 +1227,7 @@ test "validate control block loop if branches" {
     ctx_if,
     If(TypeIndex(0), [Drop, I64Const(0UL)], [Unreachable]),
     counts,
+    declared_funcs,
   )
   assert_eq(ok, true)
   assert_eq(ctx_if.stack[0], I64)
@@ -1213,6 +1242,7 @@ test "validate control block loop if branches" {
     ctx_if_then,
     If(Value(I32), [], []),
     counts,
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1231,6 +1261,7 @@ test "validate control block loop if branches" {
     ctx_if_else,
     If(Value(I32), [I32Const(0U)], [I64Const(0UL)]),
     counts,
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1242,6 +1273,7 @@ test "validate control block loop if branches" {
 
 ///|
 test "validate control branch errors" {
+  let declared_funcs : Set[Int] = Set::new()
   let module_empty = test_empty_module()
   let counts = get_import_counts(module_empty)
   let code = test_make_code([], [])
@@ -1256,6 +1288,7 @@ test "validate control branch errors" {
     ctx_return_bad,
     Return,
     counts,
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1273,6 +1306,7 @@ test "validate control branch errors" {
     ctx_br_short,
     Br(0U),
     counts,
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1291,6 +1325,7 @@ test "validate control branch errors" {
     ctx_br_mismatch,
     Br(0U),
     counts,
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1309,6 +1344,7 @@ test "validate control branch errors" {
     ctx_br_unreachable,
     Br(0U),
     counts,
+    declared_funcs,
   )
   assert_eq(ok, true)
   saw_error = false
@@ -1323,6 +1359,7 @@ test "validate control branch errors" {
     ctx_br_table_arity,
     BrTable([1U], 0U),
     counts,
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1341,6 +1378,7 @@ test "validate control branch errors" {
     ctx_br_table_short,
     BrTable([], 0U),
     counts,
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1360,6 +1398,7 @@ test "validate control branch errors" {
     ctx_br_table_unreachable,
     BrTable([], 0U),
     counts,
+    declared_funcs,
   )
   assert_eq(ok, true)
   saw_error = false
@@ -1374,6 +1413,7 @@ test "validate control branch errors" {
     ctx_br_table_mismatch,
     BrTable([], 0U),
     counts,
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1390,6 +1430,7 @@ test "validate control branch errors" {
     ctx_br_on_null_err,
     BrOnNull(0U),
     counts,
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1406,6 +1447,7 @@ test "validate control branch errors" {
     ctx_br_on_non_null_err,
     BrOnNonNull(0U),
     counts,
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1417,6 +1459,7 @@ test "validate control branch errors" {
 
 ///|
 test "validate control loop results" {
+  let declared_funcs : Set[Int] = Set::new()
   let module_empty = test_empty_module()
   let counts = get_import_counts(module_empty)
   let code = test_make_code([], [])
@@ -1428,6 +1471,7 @@ test "validate control loop results" {
     ctx_loop_result,
     Loop(Value(I32), [I32Const(0U)]),
     counts,
+    declared_funcs,
   )
   assert_eq(ok, true)
   assert_eq(ctx_loop_result.stack.length(), 1)
@@ -1436,6 +1480,7 @@ test "validate control loop results" {
 
 ///|
 test "validate control if branch coverage" {
+  let declared_funcs : Set[Int] = Set::new()
   let block_type : @core.FuncType = { params: [I32], results: [I32] }
   let module_if : @core.Module = {
     types: [Func(block_type)],
@@ -1466,6 +1511,7 @@ test "validate control if branch coverage" {
     ctx_then_unreachable,
     If(TypeIndex(0), [Unreachable], [Drop, I32Const(0U)]),
     counts,
+    declared_funcs,
   )
   assert_eq(ok, true)
   assert_eq(ctx_then_unreachable.stack.length(), 1)
@@ -1479,6 +1525,7 @@ test "validate control if branch coverage" {
     ctx_else_unreachable,
     If(TypeIndex(0), [Drop, I32Const(1U)], [Unreachable]),
     counts,
+    declared_funcs,
   )
   assert_eq(ok, true)
   assert_eq(ctx_else_unreachable.stack.length(), 1)
@@ -1492,6 +1539,7 @@ test "validate control if branch coverage" {
     ctx_else_mismatch,
     If(Value(I32), [I32Const(0U)], []),
     counts,
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1510,6 +1558,7 @@ test "validate control if branch coverage" {
     ctx_then_mismatch,
     If(TypeIndex(0), [Drop, I64Const(0UL)], [Drop, I32Const(0U)]),
     counts,
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1521,6 +1570,7 @@ test "validate control if branch coverage" {
 
 ///|
 test "validate control returns false on non-control" {
+  let declared_funcs : Set[Int] = Set::new()
   let module_empty = test_empty_module()
   let counts = get_import_counts(module_empty)
   let code = test_make_code([], [])
@@ -1532,12 +1582,14 @@ test "validate control returns false on non-control" {
     ctx,
     I32Const(0U),
     counts,
+    declared_funcs,
   )
   assert_eq(ok, false)
 }
 
 ///|
 test "validate control br_on_null conversions" {
+  let declared_funcs : Set[Int] = Set::new()
   let module_empty = test_empty_module()
   let counts = get_import_counts(module_empty)
   let code = test_make_code([], [])
@@ -1551,6 +1603,7 @@ test "validate control br_on_null conversions" {
     ctx_ref_nullable,
     BrOnNull(0U),
     counts,
+    declared_funcs,
   )
   assert_eq(ok, true)
   assert_eq(ctx_ref_nullable.stack[0], Ref(Func, false))
@@ -1563,6 +1616,7 @@ test "validate control br_on_null conversions" {
     ctx_ref_nonnull,
     BrOnNull(0U),
     counts,
+    declared_funcs,
   )
   assert_eq(ok, true)
   assert_eq(ctx_ref_nonnull.stack[0], Ref(Func, false))
@@ -1575,6 +1629,7 @@ test "validate control br_on_null conversions" {
     ctx_extern,
     BrOnNull(0U),
     counts,
+    declared_funcs,
   )
   assert_eq(ok, true)
   assert_eq(ctx_extern.stack[0], Ref(Extern, false))
@@ -1587,6 +1642,7 @@ test "validate control br_on_null conversions" {
     ctx_any,
     BrOnNull(0U),
     counts,
+    declared_funcs,
   )
   assert_eq(ok, true)
   assert_eq(ctx_any.stack[0], Ref(Any, false))
@@ -1599,6 +1655,7 @@ test "validate control br_on_null conversions" {
     ctx_null_func,
     BrOnNull(0U),
     counts,
+    declared_funcs,
   )
   assert_eq(ok, true)
   assert_eq(ctx_null_func.stack[0], Ref(Func, false))
@@ -1611,6 +1668,7 @@ test "validate control br_on_null conversions" {
     ctx_null_extern,
     BrOnNull(0U),
     counts,
+    declared_funcs,
   )
   assert_eq(ok, true)
   assert_eq(ctx_null_extern.stack[0], Ref(Extern, false))
@@ -1623,6 +1681,7 @@ test "validate control br_on_null conversions" {
     ctx_null_any,
     BrOnNull(0U),
     counts,
+    declared_funcs,
   )
   assert_eq(ok, true)
   assert_eq(ctx_null_any.stack[0], Ref(Any, false))
@@ -1635,6 +1694,7 @@ test "validate control br_on_null conversions" {
     ctx_other,
     BrOnNull(0U),
     counts,
+    declared_funcs,
   )
   assert_eq(ok, true)
   assert_eq(ctx_other.stack[0], I32)
@@ -1642,6 +1702,7 @@ test "validate control br_on_null conversions" {
 
 ///|
 test "validate control call errors" {
+  let declared_funcs : Set[Int] = Set::new()
   let module_empty = test_empty_module()
   let counts_empty = get_import_counts(module_empty)
   let code = test_make_code([], [])
@@ -1655,6 +1716,7 @@ test "validate control call errors" {
     ctx_call_bad,
     Call(0U),
     counts_empty,
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1671,6 +1733,7 @@ test "validate control call errors" {
     ctx_call_indirect_bad,
     CallIndirect(0U, 0U),
     counts_empty,
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1716,6 +1779,7 @@ test "validate control call errors" {
     ctx_call_indirect,
     CallIndirect(0U, 0U),
     counts_import,
+    declared_funcs,
   )
   assert_eq(ok, true)
   let module_import_scan : @core.Module = {
@@ -1761,6 +1825,7 @@ test "validate control call errors" {
     ctx_call_indirect_scan,
     CallIndirect(0U, 0U),
     counts_scan,
+    declared_funcs,
   )
   assert_eq(ok, true)
   let ctx_return_call_indirect_scan = ValidationCtx::new()
@@ -1772,6 +1837,7 @@ test "validate control call errors" {
     ctx_return_call_indirect_scan,
     ReturnCallIndirect(0U, 0U),
     counts_scan,
+    declared_funcs,
   )
   assert_eq(ok, true)
   saw_error = false
@@ -1807,6 +1873,7 @@ test "validate control call errors" {
     ctx_call_indirect_bad_table,
     CallIndirect(0U, 0U),
     get_import_counts(module_table_bad),
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1847,6 +1914,7 @@ test "validate control call errors" {
     ctx_call_indirect_bad_type,
     CallIndirect(0U, 0U),
     get_import_counts(module_table_no_types),
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1879,6 +1947,7 @@ test "validate control call errors" {
     ctx_return_call_bad,
     ReturnCall(0U),
     get_import_counts(module_return_call),
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1895,6 +1964,7 @@ test "validate control call errors" {
     ctx_return_call_indirect_bad,
     ReturnCallIndirect(0U, 0U),
     counts_empty,
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1911,6 +1981,7 @@ test "validate control call errors" {
     ctx_return_call_indirect,
     ReturnCallIndirect(0U, 0U),
     counts_import,
+    declared_funcs,
   )
   assert_eq(ok, true)
   saw_error = false
@@ -1922,6 +1993,7 @@ test "validate control call errors" {
     ctx_return_call_indirect_bad_table,
     ReturnCallIndirect(0U, 0U),
     get_import_counts(module_table_bad),
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1938,6 +2010,7 @@ test "validate control call errors" {
     ctx_return_call_indirect_bad_type,
     ReturnCallIndirect(0U, 0U),
     get_import_counts(module_table_no_types),
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1954,6 +2027,7 @@ test "validate control call errors" {
     ctx_call_ref_bad,
     CallRef(0U),
     counts_empty,
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1970,6 +2044,7 @@ test "validate control call errors" {
     ctx_return_call_ref_bad,
     ReturnCallRef(0U),
     counts_empty,
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -1981,6 +2056,7 @@ test "validate control call errors" {
 
 ///|
 test "validate function stack mismatch" {
+  let declared_funcs : Set[Int] = Set::new()
   let module_empty = test_empty_module()
   let func_type : @core.FuncType = { params: [], results: [] }
   let code = test_make_code([], [I32Const(0U)])
@@ -1990,6 +2066,7 @@ test "validate function stack mismatch" {
     func_type,
     code,
     get_import_counts(module_empty),
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -2023,6 +2100,7 @@ test "validate function stack mismatch" {
     func_type_param,
     code_empty,
     get_import_counts(module_types),
+    declared_funcs,
   )
   saw_error = false
   let func_type_result : @core.FuncType = { params: [], results: [I32] }
@@ -2032,6 +2110,7 @@ test "validate function stack mismatch" {
     func_type_result,
     code_result,
     get_import_counts(module_empty),
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -2046,6 +2125,7 @@ test "validate function stack mismatch" {
     func_type_result,
     code_missing,
     get_import_counts(module_empty),
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true
@@ -2060,6 +2140,7 @@ test "validate function stack mismatch" {
     func_type_result,
     code_extra,
     get_import_counts(module_empty),
+    declared_funcs,
   ) catch {
     _ => {
       saw_error = true

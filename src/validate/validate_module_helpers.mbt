@@ -163,10 +163,30 @@ fn validate_module_start_function(
 }
 
 ///|
+/// Get a set of all function indices in the module (for constant expression validation)
+/// In constant expressions, ref.func can reference any function since that's where
+/// functions get "declared" for later use in function bodies.
+fn all_function_indices(
+  m : @core.Module,
+  import_counts : ImportCounts,
+) -> Set[Int] {
+  let all_funcs : Set[Int] = Set::new()
+  let total_funcs = import_counts.funcs + m.funcs.length()
+  for i in 0..<total_funcs {
+    all_funcs.add(i)
+  }
+  all_funcs
+}
+
+///|
 fn validate_module_global_initializers(
   m : @core.Module,
   import_counts : ImportCounts,
 ) -> Unit raise ValidationError {
+  // For constant expressions, all functions are considered "declared"
+  // since ref.func in constant expressions is what creates declarations
+  let all_funcs = all_function_indices(m, import_counts)
+
   // Validate global initializers
   for global in m.globals {
     // Validate that only constant expression instructions are used
@@ -189,7 +209,7 @@ fn validate_module_global_initializers(
     }
     for instr in global.init.instrs {
       validate_instruction(
-        m, dummy_func_type, dummy_code, init_ctx, instr, import_counts,
+        m, dummy_func_type, dummy_code, init_ctx, instr, import_counts, all_funcs,
       )
     }
     // Check that init expression produces exactly one value of the correct type
@@ -284,6 +304,9 @@ fn validate_module_tables(
   m : @core.Module,
   import_counts : ImportCounts,
 ) -> Unit raise ValidationError {
+  // For constant expressions, all functions are considered "declared"
+  let all_funcs = all_function_indices(m, import_counts)
+
   // Validate table limits and initializers
   for table in m.tables {
     match table.limits.max {
@@ -343,7 +366,7 @@ fn validate_module_tables(
           }
           for instr in init_expr.instrs {
             validate_instruction(
-              m, dummy_func_type, dummy_code, init_ctx, instr, import_counts,
+              m, dummy_func_type, dummy_code, init_ctx, instr, import_counts, all_funcs,
             )
           }
           if init_ctx.stack.length() != 1 {
@@ -387,7 +410,7 @@ fn validate_module_tables(
           }
           for instr in init_expr.instrs {
             validate_instruction(
-              m, dummy_func_type, dummy_code, init_ctx, instr, import_counts,
+              m, dummy_func_type, dummy_code, init_ctx, instr, import_counts, all_funcs,
             )
           }
           if init_ctx.stack.length() != 1 {
@@ -603,6 +626,10 @@ fn validate_module_function_bodies(
   m : @core.Module,
   import_counts : ImportCounts,
 ) -> Unit raise ValidationError {
+  // Collect declared functions (from elem segments, exports, global inits)
+  // These are the only functions that can be used with ref.func
+  let declared_funcs = collect_declared_funcs(m)
+
   // Validate function bodies against their types
   for i in 0..<m.codes.length() {
     let type_idx = m.funcs[i].reinterpret_as_int()
@@ -616,7 +643,7 @@ fn validate_module_function_bodies(
     let code = m.codes[i]
 
     // Validate the function body
-    validate_function(m, func_type, code, import_counts)
+    validate_function(m, func_type, code, import_counts, declared_funcs)
   }
 }
 
