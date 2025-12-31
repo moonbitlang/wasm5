@@ -972,6 +972,8 @@ test "validate control instruction branches" {
   assert_eq(ok, true)
   assert_eq(ctx_br_table.is_unreachable, true)
   let ctx_br_on_null = ValidationCtx::new()
+  // br_on_null needs a control frame to branch to
+  ctx_br_on_null.push_control([], [])
   ctx_br_on_null.stack.push(FuncRef)
   let ok = validate_instruction_control(
     test_empty_module(),
@@ -1594,7 +1596,9 @@ test "validate control br_on_null conversions" {
   let counts = get_import_counts(module_empty)
   let code = test_make_code([], [])
   let empty_func : @core.FuncType = { params: [], results: [] }
+  // All BrOnNull tests need a control frame to branch to
   let ctx_ref_nullable = ValidationCtx::new()
+  ctx_ref_nullable.push_control([], [])
   ctx_ref_nullable.stack.push(Ref(Func, true))
   let ok = validate_instruction_control(
     module_empty,
@@ -1608,6 +1612,7 @@ test "validate control br_on_null conversions" {
   assert_eq(ok, true)
   assert_eq(ctx_ref_nullable.stack[0], Ref(Func, false))
   let ctx_ref_nonnull = ValidationCtx::new()
+  ctx_ref_nonnull.push_control([], [])
   ctx_ref_nonnull.stack.push(Ref(Func, false))
   let ok = validate_instruction_control(
     module_empty,
@@ -1621,6 +1626,7 @@ test "validate control br_on_null conversions" {
   assert_eq(ok, true)
   assert_eq(ctx_ref_nonnull.stack[0], Ref(Func, false))
   let ctx_extern = ValidationCtx::new()
+  ctx_extern.push_control([], [])
   ctx_extern.stack.push(ExternRef)
   let ok = validate_instruction_control(
     module_empty,
@@ -1634,6 +1640,7 @@ test "validate control br_on_null conversions" {
   assert_eq(ok, true)
   assert_eq(ctx_extern.stack[0], Ref(Extern, false))
   let ctx_any = ValidationCtx::new()
+  ctx_any.push_control([], [])
   ctx_any.stack.push(AnyRef)
   let ok = validate_instruction_control(
     module_empty,
@@ -1647,6 +1654,7 @@ test "validate control br_on_null conversions" {
   assert_eq(ok, true)
   assert_eq(ctx_any.stack[0], Ref(Any, false))
   let ctx_null_func = ValidationCtx::new()
+  ctx_null_func.push_control([], [])
   ctx_null_func.stack.push(NullFuncRef)
   let ok = validate_instruction_control(
     module_empty,
@@ -1660,6 +1668,7 @@ test "validate control br_on_null conversions" {
   assert_eq(ok, true)
   assert_eq(ctx_null_func.stack[0], Ref(Func, false))
   let ctx_null_extern = ValidationCtx::new()
+  ctx_null_extern.push_control([], [])
   ctx_null_extern.stack.push(NullExternRef)
   let ok = validate_instruction_control(
     module_empty,
@@ -1673,6 +1682,7 @@ test "validate control br_on_null conversions" {
   assert_eq(ok, true)
   assert_eq(ctx_null_extern.stack[0], Ref(Extern, false))
   let ctx_null_any = ValidationCtx::new()
+  ctx_null_any.push_control([], [])
   ctx_null_any.stack.push(NullRef)
   let ok = validate_instruction_control(
     module_empty,
@@ -1686,6 +1696,7 @@ test "validate control br_on_null conversions" {
   assert_eq(ok, true)
   assert_eq(ctx_null_any.stack[0], Ref(Any, false))
   let ctx_other = ValidationCtx::new()
+  ctx_other.push_control([], [])
   ctx_other.stack.push(I32)
   let ok = validate_instruction_control(
     module_empty,
