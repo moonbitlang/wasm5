@@ -479,34 +479,63 @@ fn validate_instruction_control(
       // @core.Code after is unreachable, record stack height
       ctx.mark_unreachable()
     }
-    BrOnNull(_label) =>
-      // br_on_null: pop nullable ref, branch if null, else push non-null ref
-      // The fallthrough path pushes the reference with nullable=false
-      if not(ctx.is_unreachable) && stack.length() < 1 {
+    BrOnNull(label) => {
+      // br_on_null l : [t* (ref null ht)] -> [t* (ref ht)]
+      //
+      // Per https://github.com/WebAssembly/gc/issues/516, validation must:
+      //   pop_operands(label_types)
+      //   push_operands(label_types)
+      // This normalizes the stack to label types, not keeping original types.
+
+      let label_types = ctx.get_label_types(label)
+
+      // First check we have at least 1 + label_types.length() values
+      let required = label_types.length() + 1
+      if not(ctx.is_unreachable) && stack.length() < required {
         raise ValidationError::TypeMismatch(
-          "br_on_null expects reference on stack",
+          "br_on_null: stack has \{stack.length()} values, need \{required}",
         )
-      } else if stack.length() >= 1 {
+      }
+
+      // Pop the nullable reference from the stack
+      if stack.length() >= 1 {
         let popped = stack.unsafe_pop()
+
         // Make the reference non-nullable for the fallthrough case
         let non_null_type : @core.ValType = match popped {
-          // Nullable typed ref becomes non-nullable
           Ref(ht, true) => Ref(ht, false)
-          // Already non-nullable - keep as is (shouldn't happen, but handle it)
           Ref(ht, false) => Ref(ht, false)
-          // Generic nullable refs become non-nullable refs
           FuncRef => Ref(Func, false)
           ExternRef => Ref(Extern, false)
           AnyRef => Ref(Any, false)
-          // Null types become their non-null counterparts
           NullFuncRef => Ref(Func, false)
           NullExternRef => Ref(Extern, false)
           NullRef => Ref(Any, false)
-          // Other types shouldn't be here, but keep them
           _ => popped
         }
+
+        // Pop and validate t* against label types (in reverse order)
+        for i = label_types.length() - 1; i >= 0; i = i - 1 {
+          if stack.length() > 0 {
+            let stack_type = stack.unsafe_pop()
+            let expected_type = label_types[i]
+            if not(is_subtype(module_, stack_type, expected_type)) {
+              raise ValidationError::TypeMismatch(
+                "br_on_null: stack type \{stack_type} not subtype of label's \{expected_type}",
+              )
+            }
+          }
+        }
+
+        // Push back the label types (normalized to expected types)
+        for t in label_types {
+          stack.push(t)
+        }
+
+        // Push the non-null reference for fallthrough
         stack.push(non_null_type)
       }
+    }
     BrOnNonNull(label) => {
       // br_on_non_null l : [t* (ref null ht)] -> [t*]
       //
