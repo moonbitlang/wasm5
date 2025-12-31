@@ -186,7 +186,16 @@ fn register_module(
           ctx.resolver.add_global(name_bytes, exp.name, global_value)
         }
       }
-      _ => () // Skip other export types for now
+      @wasm5_core.ExportDesc::Table(table_idx) => {
+        // Export a table - this enables cross-module table sharing
+        let table_idx_int = table_idx.reinterpret_as_int()
+        let tables = runtime.get_tables()
+        if table_idx_int >= 0 && table_idx_int < tables.length() {
+          let table = tables[table_idx_int]
+          ctx.resolver.add_table(name_bytes, exp.name, table)
+        }
+      }
+      _ => () // Skip other export types (memory, etc.)
     }
   }
 }
@@ -1162,8 +1171,4 @@ pub async fn process_wast_file(
 ///|
 /// Whitelist of individual tests to skip (file, line)
 /// These are known failing tests due to missing features
-let whitelisted_tests : Array[(String, Set[Int])] = [
-  // Cross-module table sharing not implemented: imported tables should share
-  // the same table instance, but currently each module creates its own table.
-  ("table_grow.wast", Set::from_array([124, 130])),
-]
+let whitelisted_tests : Array[(String, Set[Int])] = []

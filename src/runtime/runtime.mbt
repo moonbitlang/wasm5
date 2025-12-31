@@ -268,6 +268,12 @@ pub fn Runtime::get_globals(self : Runtime) -> Array[Value] {
 }
 
 ///|
+/// Get the tables array from the runtime
+pub fn Runtime::get_tables(self : Runtime) -> Array[RuntimeTable] {
+  self.ctx.tables
+}
+
+///|
 /// Create a default import resolver with spectest module
 pub fn default_import_resolver() -> ImportResolver {
   let resolver = ImportResolver::new()
