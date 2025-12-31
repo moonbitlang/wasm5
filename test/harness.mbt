@@ -1043,7 +1043,7 @@ pub async fn process_wast_file(
 /// Whitelist of individual tests to skip (file, line)
 /// These are known failing tests that won't be fixed soon
 let whitelisted_tests : Array[(String, Set[Int])] = [
-  ("local_tee.wast", Set::from_array([613])), // complicated null ref handling
+  // All local_tee.wast tests now pass!
   // All call_ref.wast tests now pass!
   // Test harness limitations (not WASM implementation issues):
   // - Line 26: invoke $ModuleName syntax not supported (need registry lookup in action handler)
@@ -1094,13 +1094,7 @@ let whitelisted_tests : Array[(String, Set[Int])] = [
   // or validated. A more thorough understanding of the parser's handling of inline elem
   // segments is needed before attempting this fix.
   ("ref_func.wast", Set::from_array([109, 113])),
-  // Line 276: return_call_ref return type mismatch validation issue
-  // Function $f23 returns (ref null $t) but calls return_call_ref $t3 which returns (ref func).
-  // Validation correctly detects Ref(Func, false) is not a subtype of Ref(TypeIndex($t), true),
-  // but the module is still being accepted. The subtyping check returns false as expected,
-  // but somehow the ValidationError is not properly propagating or the test has an edge case
-  // with how multi-function modules are validated. Requires deeper investigation.
-  ("return_call_ref.wast", Set::from_array([276])),
+  // All return_call_ref.wast tests now pass!
+  // All func_ptrs.wast tests now pass!
   ("table_grow.wast", Set::from_array([124, 130])), // cross-module imports not implemented
-  ("func_ptrs.wast", Set::from_array([49])),
 ]
