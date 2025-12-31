@@ -1052,7 +1052,7 @@ let whitelisted_tests : Array[(String, Set[Int])] = [
   // br_on_non_null.wast line 92 - now handled correctly by br_on_non_null validation
   // All ref_as_non_null.wast tests now pass!
   // All br_on_null.wast tests now pass!
-  ("unreached-invalid.wast", Set::from_array([676, 687])),
+  // All unreached-invalid.wast tests now pass!
   // All imports.wast tests now pass!
   // All conversions.wast tests now pass!
   // All float_exprs.wast tests now pass!
