@@ -1041,24 +1041,12 @@ pub async fn process_wast_file(
 
 ///|
 /// Whitelist of individual tests to skip (file, line)
-/// These are known failing tests that won't be fixed soon
+/// These are known failing tests due to missing features
 let whitelisted_tests : Array[(String, Set[Int])] = [
-  // All local_tee.wast tests now pass!
-  // All call_ref.wast tests now pass!
   // Test harness limitations (not WASM implementation issues):
-  // - Line 26: invoke $ModuleName syntax not supported (need registry lookup in action handler)
-  // - Lines 93,94,97: "get" action type not supported (need handler to read exported globals)
+  // - Line 26: invoke $ModuleName syntax not supported
+  // - Lines 93,94,97: "get" action type not supported
   ("exports.wast", Set::from_array([26, 93, 94, 97])),
-  // br_on_non_null.wast line 92 - now handled correctly by br_on_non_null validation
-  // All ref_as_non_null.wast tests now pass!
-  // All br_on_null.wast tests now pass!
-  // All unreached-invalid.wast tests now pass!
-  // All imports.wast tests now pass!
-  // All conversions.wast tests now pass!
-  // All float_exprs.wast tests now pass!
-  // All br_if.wast tests now pass!
-  // All ref_func.wast tests now pass! (undeclared function reference validation implemented)
-  // All return_call_ref.wast tests now pass!
-  // All func_ptrs.wast tests now pass!
-  ("table_grow.wast", Set::from_array([124, 130])), // cross-module imports not implemented
+  // Cross-module imports not implemented
+  ("table_grow.wast", Set::from_array([124, 130])),
 ]
