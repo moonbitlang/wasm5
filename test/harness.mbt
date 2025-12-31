@@ -521,10 +521,16 @@ async fn handle_module(
   ctx : TestContext,
   filename : String,
   line : Int,
+  name~ : String? = None,
 ) -> Unit {
   try {
     let runtime = parse_and_compile(ctx.dir, filename, ctx.resolver)
     ctx.runtime = Some(runtime)
+    // If a name is provided, automatically register the module
+    match name {
+      Some(n) => register_module(ctx, n, runtime, runtime.get_module())
+      None => ()
+    }
   } catch {
     e => ctx.fail(line, "module", "Error loading module: \{e}")
   }
@@ -542,6 +548,23 @@ fn handle_register(ctx : TestContext, name : String, line : Int) -> Unit {
 }
 
 ///|
+/// Get runtime for a specific module name, or the current runtime if no module specified
+fn get_runtime_for_module(
+  ctx : TestContext,
+  module_name : String?,
+) -> @wasm5_runtime.Runtime? {
+  match module_name {
+    Some(name) =>
+      // Look up the registered module
+      match ctx.registry.0.get(name) {
+        Some(registered) => Some(registered.runtime)
+        None => None
+      }
+    None => ctx.runtime
+  }
+}
+
+///|
 /// Handle "assert_return" command - call function and check results
 fn handle_assert_return(
   ctx : TestContext,
@@ -549,15 +572,16 @@ fn handle_assert_return(
   args : Array[Json],
   expected : Array[Json],
   line : Int,
+  module_name~ : String? = None,
 ) -> Unit {
   try {
     let runtime_args = parse_args(args)
-    guard ctx.runtime is Some(rt) else {
-      ctx.fail(
-        line,
-        "assert_return",
-        "[\{fn_name}] no module loaded (previous module failed to load)",
-      )
+    guard get_runtime_for_module(ctx, module_name) is Some(rt) else {
+      let msg = match module_name {
+        Some(name) => "[\{fn_name}] module '\{name}' not registered"
+        None => "[\{fn_name}] no module loaded (previous module failed to load)"
+      }
+      ctx.fail(line, "assert_return", msg)
       return
     }
     let (_, results) = rt.call_compiled(
@@ -597,6 +621,7 @@ fn handle_assert_trap(
   args : Array[Json],
   expected_error : String,
   line : Int,
+  module_name~ : String? = None,
 ) -> Unit {
   let runtime_args = parse_args(args) catch {
     e => {
@@ -604,12 +629,12 @@ fn handle_assert_trap(
       return
     }
   }
-  guard ctx.runtime is Some(rt) else {
-    ctx.fail(
-      line,
-      "assert_trap",
-      "[\{fn_name}] no module loaded (previous module failed to load)",
-    )
+  guard get_runtime_for_module(ctx, module_name) is Some(rt) else {
+    let msg = match module_name {
+      Some(name) => "[\{fn_name}] module '\{name}' not registered"
+      None => "[\{fn_name}] no module loaded (previous module failed to load)"
+    }
+    ctx.fail(line, "assert_trap", msg)
     return
   }
   try {
@@ -881,15 +906,91 @@ fn handle_action(
 }
 
 ///|
+/// Handle "assert_return" with "get" action - read a global value
+fn handle_assert_return_get(
+  ctx : TestContext,
+  field : String,
+  expected : Array[Json],
+  line : Int,
+  module_name~ : String? = None,
+) -> Unit {
+  try {
+    guard get_runtime_for_module(ctx, module_name) is Some(rt) else {
+      let msg = match module_name {
+        Some(name) => "[get \{field}] module '\{name}' not registered"
+        None => "[get \{field}] no module loaded (previous module failed to load)"
+      }
+      ctx.fail(line, "assert_return", msg)
+      return
+    }
+    // Find the exported global by name
+    let module_ = rt.get_module()
+    let field_bytes = @encoding/utf8.encode(field)
+    let mut global_idx : Int? = None
+    for exp in module_.exports {
+      if exp.name == field_bytes {
+        match exp.desc {
+          @wasm5_core.ExportDesc::Global(idx) => {
+            global_idx = Some(idx.reinterpret_as_int())
+            break
+          }
+          _ => ()
+        }
+      }
+    }
+    guard global_idx is Some(idx) else {
+      ctx.fail(
+        line, "assert_return", "[get \{field}] global '\{field}' not exported",
+      )
+      return
+    }
+    let globals = rt.get_globals()
+    if idx < 0 || idx >= globals.length() {
+      ctx.fail(
+        line, "assert_return", "[get \{field}] global index \{idx} out of bounds",
+      )
+      return
+    }
+    let actual_value = globals[idx]
+    // Check expected
+    if expected.length() != 1 {
+      ctx.fail(
+        line,
+        "assert_return",
+        "[get \{field}] expected 1 result, got \{expected.length()}",
+      )
+      return
+    }
+    let expected_value = parse_expected_value(expected[0])
+    if not(values_match(actual_value, expected_value)) {
+      ctx.fail(
+        line,
+        "assert_return",
+        "[get \{field}] expected \{format_expected_with_bits(expected_value)}, got \{format_value_with_bits(actual_value)}",
+      )
+    }
+  } catch {
+    e => ctx.fail(line, "assert_return", "[get \{field}] error: \{e}")
+  }
+}
+
+///|
 /// Process a single command from the test metadata
 async fn process_command(ctx : TestContext, cmd : Json) -> Unit {
   match cmd {
-    // Load module
-    { "type": "module", "filename": String(filename), "line"? : line, .. } => {
+    // Load module (with optional name for auto-registration)
+    {
+      "type": "module",
+      "filename": String(filename),
+      "line"? : line,
+      "name"? : name,
+      ..
+    } => {
       let line = if line is Some(Number(n, ..)) { n.to_int() } else { -1 }
-      handle_module(ctx, filename, line)
+      let name = if name is Some(String(n)) { Some(n) } else { None }
+      handle_module(ctx, filename, line, name~)
     }
-    // Assert function returns expected value
+    // Assert function returns expected value (invoke action)
     {
       "type": "assert_return",
       "line": Number(line, ..),
@@ -897,11 +998,26 @@ async fn process_command(ctx : TestContext, cmd : Json) -> Unit {
         "type": "invoke",
         "field": String(fn_name),
         "args": Array(args),
+        "module"? : module_name,
         ..
       },
       "expected": Array(expected),
       ..
-    } => handle_assert_return(ctx, fn_name, args, expected, line.to_int())
+    } => {
+      let module_name = if module_name is Some(String(n)) { Some(n) } else { None }
+      handle_assert_return(ctx, fn_name, args, expected, line.to_int(), module_name~)
+    }
+    // Assert function returns expected value (get action - read global)
+    {
+      "type": "assert_return",
+      "line": Number(line, ..),
+      "action": { "type": "get", "field": String(field), "module"? : module_name, .. },
+      "expected": Array(expected),
+      ..
+    } => {
+      let module_name = if module_name is Some(String(n)) { Some(n) } else { None }
+      handle_assert_return_get(ctx, field, expected, line.to_int(), module_name~)
+    }
     // Assert function returns (unsupported action type)
     { "type": "assert_return", "line": Number(line, ..), "action": action, .. } =>
       ctx.fail(
@@ -917,11 +1033,15 @@ async fn process_command(ctx : TestContext, cmd : Json) -> Unit {
         "type": "invoke",
         "field": String(fn_name),
         "args": Array(args),
+        "module"? : module_name,
         ..
       },
       "text": String(expected_error),
       ..
-    } => handle_assert_trap(ctx, fn_name, args, expected_error, line.to_int())
+    } => {
+      let module_name = if module_name is Some(String(n)) { Some(n) } else { None }
+      handle_assert_trap(ctx, fn_name, args, expected_error, line.to_int(), module_name~)
+    }
     {
       "type": "assert_invalid",
       "line": Number(line, ..),
@@ -1043,10 +1163,7 @@ pub async fn process_wast_file(
 /// Whitelist of individual tests to skip (file, line)
 /// These are known failing tests due to missing features
 let whitelisted_tests : Array[(String, Set[Int])] = [
-  // Test harness limitations (not WASM implementation issues):
-  // - Line 26: invoke $ModuleName syntax not supported
-  // - Lines 93,94,97: "get" action type not supported
-  ("exports.wast", Set::from_array([26, 93, 94, 97])),
-  // Cross-module imports not implemented
+  // Cross-module table sharing not implemented: imported tables should share
+  // the same table instance, but currently each module creates its own table.
   ("table_grow.wast", Set::from_array([124, 130])),
 ]
