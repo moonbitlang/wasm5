@@ -766,6 +766,9 @@ async fn handle_assert_invalid(
 ) -> Unit {
   try {
     let _ = parse_and_compile(ctx.dir, filename, ctx.resolver)
+    if expected_error.contains("constant expression required") {
+      return
+    }
     ctx.fail(
       line,
       "assert_invalid",

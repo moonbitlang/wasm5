@@ -740,11 +740,6 @@ fn encode_data_count_section(module_ : @core.Module) -> Array[Byte] {
 
 ///|
 fn needs_data_count(module_ : @core.Module) -> Bool {
-  for data in module_.datas {
-    if not(data.is_active) {
-      return true
-    }
-  }
   for code in module_.codes {
     if instrs_use_bulk_memory(code.body.instrs) {
       return true
@@ -766,11 +761,29 @@ fn instrs_use_bulk_memory(instrs : Array[@core.Instr]) -> Bool {
 ///|
 fn instr_uses_bulk_memory(instr : @core.Instr) -> Bool {
   match instr {
-    MemoryInit(_, _) | DataDrop(_) => true
+    MemoryInit(_, _) | DataDrop(_) | ArrayNewData(_, _) | ArrayInitData(_, _) =>
+      true
     Block(_, body) => instrs_use_bulk_memory(body)
     Loop(_, body) => instrs_use_bulk_memory(body)
     If(_, then_body, else_body) =>
       instrs_use_bulk_memory(then_body) || instrs_use_bulk_memory(else_body)
+    Try(_, body, catches) => {
+      if instrs_use_bulk_memory(body) {
+        return true
+      }
+      for clause in catches {
+        match clause {
+          @core.TryCatch::Catch(_, catch_body)
+          | @core.TryCatch::CatchAll(catch_body) =>
+            if instrs_use_bulk_memory(catch_body) {
+              return true
+            }
+        }
+      }
+      false
+    }
+    TryDelegate(_, body, _) => instrs_use_bulk_memory(body)
+    TryTable(_, _, body) => instrs_use_bulk_memory(body)
     _ => false
   }
 }
@@ -1028,6 +1041,40 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
       }
       payload.push(0x0BU.to_byte())
     }
+    Try(block_type, instrs, catches) => {
+      payload.push(0x06U.to_byte())
+      append_bytes(payload, encode_block_type(block_type))
+      for item in instrs {
+        append_bytes(payload, encode_instr(item))
+      }
+      for clause in catches {
+        match clause {
+          @core.TryCatch::Catch(tag_idx, body) => {
+            payload.push(0x07U.to_byte())
+            append_bytes(payload, encode_u32_leb128(tag_idx))
+            for item in body {
+              append_bytes(payload, encode_instr(item))
+            }
+          }
+          @core.TryCatch::CatchAll(body) => {
+            payload.push(0x19U.to_byte())
+            for item in body {
+              append_bytes(payload, encode_instr(item))
+            }
+          }
+        }
+      }
+      payload.push(0x0BU.to_byte())
+    }
+    TryDelegate(block_type, instrs, label_idx) => {
+      payload.push(0x06U.to_byte())
+      append_bytes(payload, encode_block_type(block_type))
+      for item in instrs {
+        append_bytes(payload, encode_instr(item))
+      }
+      payload.push(0x18U.to_byte())
+      append_bytes(payload, encode_u32_leb128(label_idx))
+    }
     TryTable(block_type, catches, instrs) => {
       payload.push(0x1FU.to_byte())
       append_bytes(payload, encode_block_type(block_type))
@@ -1037,21 +1084,21 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
       )
       for clause in catches {
         match clause {
-          Catch(tag_idx, label_idx) => {
+          @core.CatchClause::Catch(tag_idx, label_idx) => {
             payload.push(0x00U.to_byte())
             append_bytes(payload, encode_u32_leb128(tag_idx))
             append_bytes(payload, encode_u32_leb128(label_idx))
           }
-          CatchRef(tag_idx, label_idx) => {
+          @core.CatchClause::CatchRef(tag_idx, label_idx) => {
             payload.push(0x01U.to_byte())
             append_bytes(payload, encode_u32_leb128(tag_idx))
             append_bytes(payload, encode_u32_leb128(label_idx))
           }
-          CatchAll(label_idx) => {
+          @core.CatchClause::CatchAll(label_idx) => {
             payload.push(0x02U.to_byte())
             append_bytes(payload, encode_u32_leb128(label_idx))
           }
-          CatchAllRef(label_idx) => {
+          @core.CatchClause::CatchAllRef(label_idx) => {
             payload.push(0x03U.to_byte())
             append_bytes(payload, encode_u32_leb128(label_idx))
           }
@@ -1106,6 +1153,7 @@ fn encode_instr(instr : @core.Instr) -> Array[Byte] raise EncodeError {
       payload.push(0x08U.to_byte())
       append_bytes(payload, encode_u32_leb128(idx))
     }
+    ThrowRef => payload.push(0x0AU.to_byte())
     Rethrow(idx) => {
       payload.push(0x09U.to_byte())
       append_bytes(payload, encode_u32_leb128(idx))
