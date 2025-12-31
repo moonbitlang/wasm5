@@ -54,8 +54,19 @@ pub fn Compiler::finish(self : Compiler) -> FixedArray[UInt64] {
 fn local_init_category(t : @core.ValType) -> Int {
   match t {
     I32 | I64 | F32 | F64 => 0 // zero
-    FuncRef | ExternRef | AnyRef | ExnRef | NullRef | NullFuncRef | NullExnRef
-    | NullExternRef | EqRef | I31Ref | StructRef | ArrayRef | Ref(_, _) => 1 // null ref
+    FuncRef
+    | ExternRef
+    | AnyRef
+    | ExnRef
+    | NullRef
+    | NullFuncRef
+    | NullExnRef
+    | NullExternRef
+    | EqRef
+    | I31Ref
+    | StructRef
+    | ArrayRef
+    | Ref(_, _) => 1 // null ref
     _ => -1 // unsupported (V128, etc.)
   }
 }
@@ -64,11 +75,13 @@ fn local_init_category(t : @core.ValType) -> Int {
 /// Emit batch initialization ops for declared locals.
 /// Groups consecutive locals by type (zero vs null ref) for efficiency.
 /// Unsupported types (V128) cause a trap instruction to be emitted.
-fn Compiler::emit_locals_init(self : Compiler, locals : Array[@core.ValType]) -> Unit {
+fn Compiler::emit_locals_init(
+  self : Compiler,
+  locals : Array[@core.ValType],
+) -> Unit {
   if locals.length() == 0 {
     return
   }
-
   let mut i = 0
   while i < locals.length() {
     let category = local_init_category(locals[i])
@@ -79,7 +92,8 @@ fn Compiler::emit_locals_init(self : Compiler, locals : Array[@core.ValType]) ->
     }
     let mut count = 1
     // Count consecutive locals of same category
-    while i + count < locals.length() && local_init_category(locals[i + count]) == category {
+    while i + count < locals.length() &&
+          local_init_category(locals[i + count]) == category {
       count += 1
     }
     // Emit batch init op
