@@ -153,6 +153,18 @@ fn storage_value_type(storage : @core.StorageType) -> @core.ValType {
 }
 
 ///|
+/// Get the byte size of a storage type
+fn storage_byte_size(storage : @core.StorageType) -> Int {
+  match storage {
+    I8 => 1
+    I16 => 2
+    Val(I32) | Val(F32) => 4
+    Val(I64) | Val(F64) => 8
+    _ => 8 // Default for reference types
+  }
+}
+
+///|
 /// Get the type index for a function (imported or local)
 /// Returns -1 if the function index is invalid
 fn get_func_type_idx(

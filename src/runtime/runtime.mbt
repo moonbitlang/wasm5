@@ -399,10 +399,13 @@ pub fn Runtime::load_with_resolver(
       _ => ()
     }
   }
+  // Create GC heap for const expr evaluation (for globals that use GC instructions)
+  let gc_heap : Array[GcObject] = []
+
   // Then add local globals
   for i in 0..<m.globals.length() {
     let global = m.globals[i]
-    let value = eval_const_expr(global.init, globals)
+    let value = eval_const_expr_with_gc(global.init, globals, gc_heap, m)
     globals.push(value)
   }
   // Initialize data segments (copy data into memory)
@@ -529,9 +532,9 @@ pub fn Runtime::load_with_resolver(
   let compiler = Compiler::new(m)
   compiler.compile()
 
-  // Create RuntimeContext with cold data
-  let ctx = RuntimeContext::new(
-    m, memory, memory_max_pages, globals, tables, imported_funcs, data_segments,
+  // Create RuntimeContext with cold data (including gc_heap from const expr evaluation)
+  let ctx = RuntimeContext::new_with_gc_heap(
+    m, memory, memory_max_pages, globals, tables, imported_funcs, data_segments, gc_heap,
   )
   Runtime::{
     ops: compiler.finish(),
@@ -546,9 +549,38 @@ pub fn Runtime::load_with_resolver(
 }
 
 ///|
+/// Constant expression evaluator context - holds gc_heap for GC const exprs
+priv struct ConstExprContext {
+  gc_heap : Array[GcObject]
+  module_ : @core.Module?
+}
+
+///|
 fn eval_const_expr(
   expr : @core.Expr,
   globals : Array[Value],
+) -> Value raise RuntimeError {
+  // Create empty GC heap for simple cases that don't need it
+  let ctx = ConstExprContext::{ gc_heap: [], module_: None }
+  eval_const_expr_with_context(expr, globals, ctx)
+}
+
+///|
+fn eval_const_expr_with_gc(
+  expr : @core.Expr,
+  globals : Array[Value],
+  gc_heap : Array[GcObject],
+  module_ : @core.Module,
+) -> Value raise RuntimeError {
+  let ctx = ConstExprContext::{ gc_heap, module_: Some(module_) }
+  eval_const_expr_with_context(expr, globals, ctx)
+}
+
+///|
+fn eval_const_expr_with_context(
+  expr : @core.Expr,
+  globals : Array[Value],
+  ctx : ConstExprContext,
 ) -> Value raise RuntimeError {
   // Constant expression evaluator for init expressions
   // Supports multi-instruction expressions (e.g., arithmetic in global inits)
@@ -640,6 +672,119 @@ fn eval_const_expr(
               "type mismatch in i64.mul",
             )
         }
+      }
+      // GC instructions for constant expressions
+      StructNew(type_idx) => {
+        let type_idx_int = type_idx.reinterpret_as_int()
+        let num_fields = match ctx.module_ {
+          Some(m) =>
+            match m.types.get(type_idx_int) {
+              Some(Struct(s)) => s.fields.length()
+              _ => 0
+            }
+          None => 0
+        }
+        let fields : Array[UInt64] = Array::make(num_fields, 0UL)
+        for i = num_fields - 1; i >= 0; i = i - 1 {
+          match stack.unsafe_pop() {
+            I32(v) => fields[i] = v.to_uint64()
+            I64(v) => fields[i] = v
+            F32(v) => fields[i] = v.reinterpret_as_uint().to_uint64()
+            F64(v) => fields[i] = v.reinterpret_as_uint64()
+            Ref(r) =>
+              fields[i] = match r {
+                Some(idx) => idx.to_uint64()
+                None => 0UL
+              }
+          }
+        }
+        let obj = GcObject::Struct({ type_idx: type_idx_int, fields })
+        ctx.gc_heap.push(obj)
+        let ref_value = ctx.gc_heap.length() // 1-based index
+        stack.push(Ref(Some(ref_value)))
+      }
+      StructNewDefault(type_idx) => {
+        let type_idx_int = type_idx.reinterpret_as_int()
+        let num_fields = match ctx.module_ {
+          Some(m) =>
+            match m.types.get(type_idx_int) {
+              Some(Struct(s)) => s.fields.length()
+              _ => 0
+            }
+          None => 0
+        }
+        let fields : Array[UInt64] = Array::make(num_fields, 0UL)
+        let obj = GcObject::Struct({ type_idx: type_idx_int, fields })
+        ctx.gc_heap.push(obj)
+        let ref_value = ctx.gc_heap.length()
+        stack.push(Ref(Some(ref_value)))
+      }
+      ArrayNew(type_idx) => {
+        let type_idx_int = type_idx.reinterpret_as_int()
+        let length = match stack.unsafe_pop() {
+          I32(v) => v.reinterpret_as_int()
+          _ => 0
+        }
+        let init_value = match stack.unsafe_pop() {
+          I32(v) => v.to_uint64()
+          I64(v) => v
+          F32(v) => v.reinterpret_as_uint().to_uint64()
+          F64(v) => v.reinterpret_as_uint64()
+          Ref(r) =>
+            match r {
+              Some(idx) => idx.to_uint64()
+              None => 0UL
+            }
+        }
+        let elements = Array::make(length, init_value)
+        let obj = GcObject::Array({ type_idx: type_idx_int, elements })
+        ctx.gc_heap.push(obj)
+        let ref_value = ctx.gc_heap.length()
+        stack.push(Ref(Some(ref_value)))
+      }
+      ArrayNewDefault(type_idx) => {
+        let type_idx_int = type_idx.reinterpret_as_int()
+        let length = match stack.unsafe_pop() {
+          I32(v) => v.reinterpret_as_int()
+          _ => 0
+        }
+        let elements : Array[UInt64] = Array::make(length, 0UL)
+        let obj = GcObject::Array({ type_idx: type_idx_int, elements })
+        ctx.gc_heap.push(obj)
+        let ref_value = ctx.gc_heap.length()
+        stack.push(Ref(Some(ref_value)))
+      }
+      ArrayNewFixed(type_idx, len) => {
+        let type_idx_int = type_idx.reinterpret_as_int()
+        let length = len.reinterpret_as_int()
+        let elements : Array[UInt64] = Array::make(length, 0UL)
+        for i = length - 1; i >= 0; i = i - 1 {
+          match stack.unsafe_pop() {
+            I32(v) => elements[i] = v.to_uint64()
+            I64(v) => elements[i] = v
+            F32(v) => elements[i] = v.reinterpret_as_uint().to_uint64()
+            F64(v) => elements[i] = v.reinterpret_as_uint64()
+            Ref(r) =>
+              elements[i] = match r {
+                Some(idx) => idx.to_uint64()
+                None => 0UL
+              }
+          }
+        }
+        let obj = GcObject::Array({ type_idx: type_idx_int, elements })
+        ctx.gc_heap.push(obj)
+        let ref_value = ctx.gc_heap.length()
+        stack.push(Ref(Some(ref_value)))
+      }
+      RefI31 => {
+        let value = match stack.unsafe_pop() {
+          I32(v) => v.reinterpret_as_int()
+          _ => 0
+        }
+        // Encode i31ref: (value << 1) | 1
+        let i31_value = value.land(0x7FFFFFFF)
+        let encoded = (i31_value << 1).lor(1)
+        stack.push(Ref(Some(encoded)))
       }
       _ =>
         raise RuntimeError::UnsupportedInitExpression(

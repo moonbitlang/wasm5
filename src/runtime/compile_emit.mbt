@@ -1214,10 +1214,28 @@ fn Compiler::compile_wasm_instr(
       }
       self.emit_fn(op_ref_as_non_null)
     }
-    RefTest(_ref_type, _nullable) => {
+    RefTest(ref_type, nullable) => {
       ctx.pop_type()
       ctx.push_type(I32)
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_ref_test)
+      // Emit target type code (negative for abstract types, positive for TypeIndex)
+      let target_type = match ref_type {
+        Func => -7
+        Extern => -8
+        Any => -2
+        Eq => -3
+        I31 => -4
+        Struct => -5
+        Array => -6
+        Exn => -9
+        None => -10
+        NoFunc => -11
+        NoExtern => -12
+        NoExn => -13
+        TypeIndex(idx) => idx
+      }
+      self.emit_idx(target_type)
+      self.emit_idx(if nullable { 1 } else { 0 })
     }
     RefCast(ref_type, nullable) => {
       let target = reftype_to_valtype(ref_type)
@@ -1228,7 +1246,25 @@ fn Compiler::compile_wasm_instr(
       }
       ctx.pop_type()
       ctx.push_type(result_type)
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_ref_cast)
+      // Emit target type code
+      let target_type = match ref_type {
+        Func => -7
+        Extern => -8
+        Any => -2
+        Eq => -3
+        I31 => -4
+        Struct => -5
+        Array => -6
+        Exn => -9
+        None => -10
+        NoFunc => -11
+        NoExtern => -12
+        NoExn => -13
+        TypeIndex(idx) => idx
+      }
+      self.emit_idx(target_type)
+      self.emit_idx(if nullable { 1 } else { 0 })
     }
     StructNew(type_idx) => {
       let type_idx_int = type_idx.reinterpret_as_int()
@@ -1237,19 +1273,25 @@ fn Compiler::compile_wasm_instr(
         type_idx_int,
         "struct.new",
       )
-      ctx.pop_types(struct_type.fields.length())
+      let num_fields = struct_type.fields.length()
+      ctx.pop_types(num_fields)
       ctx.push_type(Ref(TypeIndex(type_idx_int), false))
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_struct_new)
+      self.emit_idx(type_idx_int)
+      self.emit_idx(num_fields)
     }
     StructNewDefault(type_idx) => {
       let type_idx_int = type_idx.reinterpret_as_int()
-      let _ = require_struct_type(
+      let struct_type = require_struct_type(
         self.module_,
         type_idx_int,
         "struct.new_default",
       )
+      let num_fields = struct_type.fields.length()
       ctx.push_type(Ref(TypeIndex(type_idx_int), false))
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_struct_new_default)
+      self.emit_idx(type_idx_int)
+      self.emit_idx(num_fields)
     }
     StructGet(type_idx, field_idx) => {
       let type_idx_int = type_idx.reinterpret_as_int()
@@ -1265,7 +1307,8 @@ fn Compiler::compile_wasm_instr(
       let field = struct_type.fields[field_idx_int]
       ctx.pop_type()
       ctx.push_type(storage_value_type(field.storage))
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_struct_get)
+      self.emit_idx(field_idx_int)
     }
     StructGetS(type_idx, field_idx) => {
       let type_idx_int = type_idx.reinterpret_as_int()
@@ -1278,9 +1321,17 @@ fn Compiler::compile_wasm_instr(
       if field_idx_int < 0 || field_idx_int >= struct_type.fields.length() {
         raise RuntimeError::InvalidType("struct.get_s: invalid field index")
       }
+      let field = struct_type.fields[field_idx_int]
+      let storage_type_code = match field.storage {
+        I8 => 0
+        I16 => 1
+        _ => 0
+      }
       ctx.pop_type()
       ctx.push_type(I32)
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_struct_get_s)
+      self.emit_idx(field_idx_int)
+      self.emit_idx(storage_type_code)
     }
     StructGetU(type_idx, field_idx) => {
       let type_idx_int = type_idx.reinterpret_as_int()
@@ -1293,9 +1344,17 @@ fn Compiler::compile_wasm_instr(
       if field_idx_int < 0 || field_idx_int >= struct_type.fields.length() {
         raise RuntimeError::InvalidType("struct.get_u: invalid field index")
       }
+      let field = struct_type.fields[field_idx_int]
+      let storage_type_code = match field.storage {
+        I8 => 0
+        I16 => 1
+        _ => 0
+      }
       ctx.pop_type()
       ctx.push_type(I32)
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_struct_get_u)
+      self.emit_idx(field_idx_int)
+      self.emit_idx(storage_type_code)
     }
     StructSet(type_idx, field_idx) => {
       let type_idx_int = type_idx.reinterpret_as_int()
@@ -1309,14 +1368,16 @@ fn Compiler::compile_wasm_instr(
         raise RuntimeError::InvalidType("struct.set: invalid field index")
       }
       ctx.pop_types(2)
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_struct_set)
+      self.emit_idx(field_idx_int)
     }
     ArrayNew(type_idx) => {
       let type_idx_int = type_idx.reinterpret_as_int()
       let _ = require_array_type(self.module_, type_idx_int, "array.new")
       ctx.pop_types(2)
       ctx.push_type(Ref(TypeIndex(type_idx_int), false))
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_array_new)
+      self.emit_idx(type_idx_int)
     }
     ArrayNewDefault(type_idx) => {
       let type_idx_int = type_idx.reinterpret_as_int()
@@ -1327,28 +1388,44 @@ fn Compiler::compile_wasm_instr(
       )
       ctx.pop_type()
       ctx.push_type(Ref(TypeIndex(type_idx_int), false))
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_array_new_default)
+      self.emit_idx(type_idx_int)
     }
     ArrayNewFixed(type_idx, len) => {
       let type_idx_int = type_idx.reinterpret_as_int()
+      let len_int = len.reinterpret_as_int()
       let _ = require_array_type(self.module_, type_idx_int, "array.new_fixed")
-      ctx.pop_types(len.reinterpret_as_int())
+      ctx.pop_types(len_int)
       ctx.push_type(Ref(TypeIndex(type_idx_int), false))
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_array_new_fixed)
+      self.emit_idx(type_idx_int)
+      self.emit_idx(len_int)
     }
-    ArrayNewData(type_idx, _data_idx) => {
+    ArrayNewData(type_idx, data_idx) => {
       let type_idx_int = type_idx.reinterpret_as_int()
-      let _ = require_array_type(self.module_, type_idx_int, "array.new_data")
+      let data_idx_int = data_idx.reinterpret_as_int()
+      let array_type = require_array_type(
+        self.module_,
+        type_idx_int,
+        "array.new_data",
+      )
+      let elem_size = storage_byte_size(array_type.element.storage)
       ctx.pop_types(2)
       ctx.push_type(Ref(TypeIndex(type_idx_int), false))
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_array_new_data)
+      self.emit_idx(type_idx_int)
+      self.emit_idx(data_idx_int)
+      self.emit_idx(elem_size)
     }
-    ArrayNewElem(type_idx, _elem_idx) => {
+    ArrayNewElem(type_idx, elem_idx) => {
       let type_idx_int = type_idx.reinterpret_as_int()
+      let elem_idx_int = elem_idx.reinterpret_as_int()
       let _ = require_array_type(self.module_, type_idx_int, "array.new_elem")
       ctx.pop_types(2)
       ctx.push_type(Ref(TypeIndex(type_idx_int), false))
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_array_new_elem)
+      self.emit_idx(type_idx_int)
+      self.emit_idx(elem_idx_int)
     }
     ArrayGet(type_idx) => {
       let type_idx_int = type_idx.reinterpret_as_int()
@@ -1359,38 +1436,60 @@ fn Compiler::compile_wasm_instr(
       )
       ctx.pop_types(2)
       ctx.push_type(storage_value_type(array_type.element.storage))
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_array_get)
     }
     ArrayGetS(type_idx) => {
       let type_idx_int = type_idx.reinterpret_as_int()
-      let _ = require_array_type(self.module_, type_idx_int, "array.get_s")
+      let array_type = require_array_type(
+        self.module_,
+        type_idx_int,
+        "array.get_s",
+      )
+      let storage_type_code = match array_type.element.storage {
+        I8 => 0
+        I16 => 1
+        _ => 0
+      }
       ctx.pop_types(2)
       ctx.push_type(I32)
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_array_get_s)
+      self.emit_idx(storage_type_code)
     }
     ArrayGetU(type_idx) => {
       let type_idx_int = type_idx.reinterpret_as_int()
-      let _ = require_array_type(self.module_, type_idx_int, "array.get_u")
+      let array_type = require_array_type(
+        self.module_,
+        type_idx_int,
+        "array.get_u",
+      )
+      let storage_type_code = match array_type.element.storage {
+        I8 => 0
+        I16 => 1
+        _ => 0
+      }
       ctx.pop_types(2)
       ctx.push_type(I32)
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_array_get_u)
+      self.emit_idx(storage_type_code)
     }
     ArraySet(type_idx) => {
       let type_idx_int = type_idx.reinterpret_as_int()
       let _ = require_array_type(self.module_, type_idx_int, "array.set")
       ctx.pop_types(3)
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_array_set)
+      ignore(type_idx_int)
     }
     ArrayLen => {
       ctx.pop_type()
       ctx.push_type(I32)
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_array_len)
     }
     ArrayFill(type_idx) => {
       let type_idx_int = type_idx.reinterpret_as_int()
       let _ = require_array_type(self.module_, type_idx_int, "array.fill")
       ctx.pop_types(4)
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_array_fill)
+      ignore(type_idx_int)
     }
     ArrayCopy(dst_type, src_type) => {
       let dst_int = dst_type.reinterpret_as_int()
@@ -1398,54 +1497,126 @@ fn Compiler::compile_wasm_instr(
       let _ = require_array_type(self.module_, dst_int, "array.copy")
       let _ = require_array_type(self.module_, src_int, "array.copy")
       ctx.pop_types(5)
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_array_copy)
     }
-    ArrayInitData(type_idx, _data_idx) => {
+    ArrayInitData(type_idx, data_idx) => {
       let type_idx_int = type_idx.reinterpret_as_int()
-      let _ = require_array_type(self.module_, type_idx_int, "array.init_data")
+      let data_idx_int = data_idx.reinterpret_as_int()
+      let array_type = require_array_type(
+        self.module_,
+        type_idx_int,
+        "array.init_data",
+      )
+      let elem_size = storage_byte_size(array_type.element.storage)
       ctx.pop_types(4)
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_array_init_data)
+      self.emit_idx(type_idx_int)
+      self.emit_idx(data_idx_int)
+      self.emit_idx(elem_size)
     }
-    ArrayInitElem(type_idx, _elem_idx) => {
+    ArrayInitElem(type_idx, elem_idx) => {
       let type_idx_int = type_idx.reinterpret_as_int()
+      let elem_idx_int = elem_idx.reinterpret_as_int()
       let _ = require_array_type(self.module_, type_idx_int, "array.init_elem")
       ctx.pop_types(4)
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_array_init_elem)
+      self.emit_idx(type_idx_int)
+      self.emit_idx(elem_idx_int)
     }
-    BrOnCast(_label, _tref, _tnull, _sref, _snull) => {
+    BrOnCast(label, target_ref, target_nullable, _sref, _snull) => {
+      let label_int = label.reinterpret_as_int()
+      let arity = ctx.get_branch_arity(label_int)
+      let drop_count = ctx.calc_drop_count(label_int, arity)
       ctx.pop_type()
       ctx.push_type(Ref(Any, true))
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_br_on_cast)
+      let target_pc_slot = self.ops.length()
+      if ctx.is_loop_target(label_int) {
+        self.emit_idx(ctx.get_target_pc(label_int))
+      } else {
+        self.emit_idx(0) // Placeholder
+        ctx.add_br_patch(label_int, target_pc_slot)
+      }
+      self.emit_idx(arity)
+      self.emit_idx(drop_count)
+      // Emit target type code
+      let target_type = match target_ref {
+        Func => -7
+        Extern => -8
+        Any => -2
+        Eq => -3
+        I31 => -4
+        Struct => -5
+        Array => -6
+        Exn => -9
+        None => -10
+        NoFunc => -11
+        NoExtern => -12
+        NoExn => -13
+        TypeIndex(idx) => idx
+      }
+      self.emit_idx(target_type)
+      self.emit_idx(if target_nullable { 1 } else { 0 })
     }
-    BrOnCastFail(_label, _tref, _tnull, _sref, _snull) => {
+    BrOnCastFail(label, target_ref, target_nullable, _sref, _snull) => {
+      let label_int = label.reinterpret_as_int()
+      let arity = ctx.get_branch_arity(label_int)
+      let drop_count = ctx.calc_drop_count(label_int, arity)
       ctx.pop_type()
       ctx.push_type(Ref(Any, true))
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_br_on_cast_fail)
+      let target_pc_slot = self.ops.length()
+      if ctx.is_loop_target(label_int) {
+        self.emit_idx(ctx.get_target_pc(label_int))
+      } else {
+        self.emit_idx(0) // Placeholder
+        ctx.add_br_patch(label_int, target_pc_slot)
+      }
+      self.emit_idx(arity)
+      self.emit_idx(drop_count)
+      // Emit target type code
+      let target_type = match target_ref {
+        Func => -7
+        Extern => -8
+        Any => -2
+        Eq => -3
+        I31 => -4
+        Struct => -5
+        Array => -6
+        Exn => -9
+        None => -10
+        NoFunc => -11
+        NoExtern => -12
+        NoExn => -13
+        TypeIndex(idx) => idx
+      }
+      self.emit_idx(target_type)
+      self.emit_idx(if target_nullable { 1 } else { 0 })
     }
     AnyConvertExtern => {
       ctx.pop_type()
       ctx.push_type(AnyRef)
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_any_convert_extern)
     }
     ExternConvertAny => {
       ctx.pop_type()
       ctx.push_type(ExternRef)
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_extern_convert_any)
     }
     RefI31 => {
       ctx.pop_type()
       ctx.push_type(Ref(I31, false))
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_ref_i31)
     }
     I31GetS => {
       ctx.pop_type()
       ctx.push_type(I32)
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_i31_get_s)
     }
     I31GetU => {
       ctx.pop_type()
       ctx.push_type(I32)
-      self.emit_fn(op_gc_unimplemented)
+      self.emit_fn(op_i31_get_u)
     }
     // Indirect call
     CallIndirect(type_idx, table_idx) => {
