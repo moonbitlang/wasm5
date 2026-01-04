@@ -377,13 +377,21 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
 
   // Check if this is an external funcref (negative index)
   // Mapping: -1 → external_funcrefs[0], -2 → [1], etc.
+  // Check table's external_funcrefs first (for shared table funcrefs),
+  // then fall back to runtime's external_funcrefs (for imported funcref globals).
   if func_idx < 0 {
     let ext_idx = -(func_idx + 1)
-    if ext_idx < 0 || ext_idx >= rt.ctx.external_funcrefs.length() {
+    // First check the table's external_funcrefs (for cross-module table sharing)
+    let table = rt.ctx.tables[table_idx]
+    let ext_func = if ext_idx >= 0 && ext_idx < table.external_funcrefs.length() {
+      table.external_funcrefs[ext_idx]
+    } else if ext_idx >= 0 && ext_idx < rt.ctx.external_funcrefs.length() {
+      // Fall back to runtime's external_funcrefs (for imported funcref globals)
+      rt.ctx.external_funcrefs[ext_idx]
+    } else {
       rt.ctx.error_detail = "call_indirect: invalid external funcref index"
       return { ..rt, status: Trap }
     }
-    let ext_func = rt.ctx.external_funcrefs[ext_idx]
     // Pop arguments and call external function
     let { rt, args } = pop_arguments(rt, expected_type)
     let results = (ext_func.func)(args)

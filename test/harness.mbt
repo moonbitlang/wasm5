@@ -273,6 +273,146 @@ fn register_module(
       _ => () // Skip other export types (memory, etc.)
     }
   }
+
+  // Fix up element segments that initialized imported tables.
+  // When a module stores its own funcrefs into a shared table, we need to
+  // replace those local indices with wrappers stored in table.external_funcrefs.
+  fix_shared_table_elements(entry, module_, runtime)
+}
+
+///|
+/// Fix up element segments that initialized imported tables.
+/// When a module stores its own funcrefs into a shared table, the local
+/// function indices don't work for cross-module calls. This function
+/// replaces those indices with wrappers stored in table.external_funcrefs.
+fn fix_shared_table_elements(
+  registered : RegisteredModule,
+  module_ : @wasm5_core.Module,
+  runtime : @wasm5_runtime.Runtime,
+) -> Unit {
+  // Count imported tables
+  let mut num_imported_tables = 0
+  for imp in module_.imports {
+    match imp.desc {
+      @wasm5_core.ImportDesc::Table(_) => num_imported_tables += 1
+      _ => ()
+    }
+  }
+
+  // If no imported tables, nothing to fix
+  if num_imported_tables == 0 {
+    return
+  }
+
+  // Count imported functions to calculate local function indices
+  let mut num_imported_funcs = 0
+  for imp in module_.imports {
+    match imp.desc {
+      @wasm5_core.ImportDesc::Func(_) => num_imported_funcs += 1
+      _ => ()
+    }
+  }
+
+  let tables = runtime.get_tables()
+
+  // Process each active element segment
+  for elem in module_.elems {
+    if elem.is_active {
+      let table_idx = elem.table_idx.reinterpret_as_int()
+
+      // Only fix imported tables (indices 0..num_imported_tables-1)
+      if table_idx >= 0 && table_idx < num_imported_tables && table_idx < tables.length() {
+        let table = tables[table_idx]
+
+        // Evaluate offset - we need to match the runtime's evaluation
+        let offset = eval_elem_offset(elem, runtime)
+        guard offset is Some(off) else { continue }
+
+        // For each funcref in this element segment
+        for i in 0..<elem.init.length() {
+          let addr = off + i
+          if addr >= 0 && addr < table.data_length() {
+            // Get the current value - this is a local func index
+            match table.get_data(addr) {
+              Some(func_idx) if func_idx >= 0 => {
+                // This is a local function index - create a wrapper
+                let type_idx = if func_idx < num_imported_funcs {
+                  // Imported function - get type from import
+                  get_import_func_type_idx(module_, func_idx)
+                } else {
+                  // Local function
+                  let local_idx = func_idx - num_imported_funcs
+                  if local_idx >= 0 && local_idx < module_.funcs.length() {
+                    module_.funcs[local_idx].reinterpret_as_int()
+                  } else {
+                    0
+                  }
+                }
+
+                let arity : UInt = match module_.types.get(type_idx) {
+                  Some(@wasm5_core.TypeDef::Func(ft)) =>
+                    ft.params.length().reinterpret_as_uint()
+                  _ => 0U
+                }
+
+                // Create wrapper and add to table's external_funcrefs
+                let wrapper = make_funcref_wrapper(registered, func_idx, arity)
+                let ext_idx = table.add_external_funcref(wrapper)
+
+                // Store negative index pointing to the wrapper
+                table.set_data(addr, Some(-(ext_idx + 1)))
+              }
+              _ => () // null or already negative - skip
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+///|
+/// Evaluate element segment offset expression
+fn eval_elem_offset(
+  elem : @wasm5_core.Elem,
+  runtime : @wasm5_runtime.Runtime,
+) -> Int? {
+  // Simple evaluation for common cases
+  for instr in elem.offset.instrs {
+    match instr {
+      @wasm5_core.Instr::I32Const(v) => return Some(v.reinterpret_as_int())
+      @wasm5_core.Instr::GlobalGet(idx) => {
+        let globals = runtime.get_globals()
+        let idx_int = idx.reinterpret_as_int()
+        if idx_int >= 0 && idx_int < globals.length() {
+          match globals[idx_int] {
+            I32(v) => return Some(v.reinterpret_as_int())
+            _ => ()
+          }
+        }
+      }
+      _ => ()
+    }
+  }
+  None
+}
+
+///|
+/// Get the type index for an imported function
+fn get_import_func_type_idx(module_ : @wasm5_core.Module, func_idx : Int) -> Int {
+  let mut import_idx = 0
+  for imp in module_.imports {
+    match imp.desc {
+      @wasm5_core.ImportDesc::Func(tidx) => {
+        if import_idx == func_idx {
+          return tidx.reinterpret_as_int()
+        }
+        import_idx += 1
+      }
+      _ => ()
+    }
+  }
+  0
 }
 
 ///|
@@ -1246,18 +1386,17 @@ pub async fn process_wast_file(
 ///|
 /// Whitelist of individual tests to skip (file, line)
 /// These are known failing tests due to missing features
-// Whitelisted tests that are skipped due to unrelated issues
-// elem.wast: Validation and element segment initialization issues (not funcref-related)
+// Whitelisted tests that are skipped due to missing validation/features
+// elem.wast: Validation issues and declarative segment handling
 let whitelisted_tests : Array[(String, Set[Int])] = [
   (
     "elem.wast",
     Set::from_iter(
       [
-        517, 525, // assert_invalid: type mismatch (validation)
-        816, 842, // assert_invalid: constant expression required (validation)
+        517, 525, // assert_invalid: type mismatch (non-nullable table type)
+        816, 842, // assert_invalid: constant expression required (mutable global)
         979, 984, 989, 998, // assert_invalid: type mismatch (validation)
-        706, 716, // assert_trap: out of bounds table access (bounds checking)
-        959, 960, 972, 973, 974, // assert_return: element offset issues
+        706, 716, // assert_trap: out of bounds table access (declarative segments)
       ].iter(),
     ),
   ),

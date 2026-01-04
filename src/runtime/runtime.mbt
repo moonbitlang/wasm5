@@ -46,6 +46,46 @@ pub(all) enum Value {
 struct RuntimeTable {
   data : Array[Int?] // Table data (function indices, None = null ref)
   max : UInt64? // Maximum size limit (None = no limit)
+  // External funcrefs for cross-module table sharing.
+  // When a module stores its own funcrefs into an imported table,
+  // wrappers are added here and negative indices stored in data.
+  // Mapping: -1 → external_funcrefs[0], -2 → [1], etc.
+  external_funcrefs : Array[ImportedFunc]
+}
+
+///|
+/// Get table data length
+pub fn RuntimeTable::data_length(self : RuntimeTable) -> Int {
+  self.data.length()
+}
+
+///|
+/// Get table element at index
+pub fn RuntimeTable::get_data(self : RuntimeTable, idx : Int) -> Int? {
+  self.data[idx]
+}
+
+///|
+/// Set table element at index
+pub fn RuntimeTable::set_data(self : RuntimeTable, idx : Int, value : Int?) -> Unit {
+  self.data[idx] = value
+}
+
+///|
+/// Get external funcrefs length
+pub fn RuntimeTable::external_funcrefs_length(self : RuntimeTable) -> Int {
+  self.external_funcrefs.length()
+}
+
+///|
+/// Add external funcref and return its index
+pub fn RuntimeTable::add_external_funcref(
+  self : RuntimeTable,
+  func : ImportedFunc,
+) -> Int {
+  let idx = self.external_funcrefs.length()
+  self.external_funcrefs.push(func)
+  idx
 }
 
 ///|
@@ -356,6 +396,7 @@ pub fn default_import_resolver() -> ImportResolver {
   resolver.add_table(b"spectest", b"table", {
     data: table_data,
     max: Some(20UL),
+    external_funcrefs: [],
   })
   // Add spectest memory (1 page initial, 2 pages max)
   let memory_size = 1 * 65536 // 1 page = 65536 bytes
@@ -506,7 +547,7 @@ pub fn Runtime::load_with_resolver(
             // This shouldn't happen with proper test setup, but provides graceful fallback
             let table_size = 10 // Default size for fallback
             let table_data : Array[Int?] = Array::make(table_size, None)
-            tables.push({ data: table_data, max: Some(20UL) })
+            tables.push({ data: table_data, max: Some(20UL), external_funcrefs: [] })
           }
         }
       _ => ()
@@ -530,7 +571,7 @@ pub fn Runtime::load_with_resolver(
       None => None
     }
     let table_data : Array[Int?] = Array::make(table_size, init_ref)
-    tables.push({ data: table_data, max: table.limits.max })
+    tables.push({ data: table_data, max: table.limits.max, external_funcrefs: [] })
   }
   // Initialize element segments (copy function references into tables)
   // Only process active segments - skip passive and declarative segments
