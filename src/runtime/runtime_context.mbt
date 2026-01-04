@@ -10,6 +10,10 @@ pub struct RuntimeContext {
   imported_funcs : Array[ImportedFunc]
   data_segments : Array[Array[Byte]]
   gc_heap : Array[GcObject] // GC heap for struct/array instances
+  // External function references from other modules.
+  // Used for cross-module funcref globals and table entries.
+  // Accessed via negative indices: index -1 = external_funcrefs[0], -2 = [1], etc.
+  external_funcrefs : Array[ImportedFunc]
   mut error_detail : String
 }
 
@@ -23,6 +27,7 @@ fn RuntimeContext::new(
   tables : Array[RuntimeTable],
   imported_funcs : Array[ImportedFunc],
   data_segments : Array[Array[Byte]],
+  external_funcrefs~ : Array[ImportedFunc] = [],
 ) -> RuntimeContext {
   {
     module_,
@@ -33,6 +38,7 @@ fn RuntimeContext::new(
     imported_funcs,
     data_segments,
     gc_heap: [],
+    external_funcrefs,
     error_detail: "",
   }
 }
@@ -48,6 +54,7 @@ fn RuntimeContext::new_with_gc_heap(
   imported_funcs : Array[ImportedFunc],
   data_segments : Array[Array[Byte]],
   gc_heap : Array[GcObject],
+  external_funcrefs~ : Array[ImportedFunc] = [],
 ) -> RuntimeContext {
   {
     module_,
@@ -58,6 +65,7 @@ fn RuntimeContext::new_with_gc_heap(
     imported_funcs,
     data_segments,
     gc_heap,
+    external_funcrefs,
     error_detail: "",
   }
 }

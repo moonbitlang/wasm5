@@ -334,6 +334,18 @@ fn call_imported_function(
 }
 
 ///|
+/// Push results from an external function call onto the stack.
+/// Returns Runtime with updated sp.
+fn push_results(rt : Runtime, results : Array[Value]) -> Runtime {
+  let mut stack_top = rt.sp
+  for i in 0..<results.length() {
+    rt.stack.unsafe_set(stack_top, value_to_stack(results[i]))
+    stack_top += 1
+  }
+  { ..rt, sp: stack_top }
+}
+
+///|
 /// Handle return from a tail call to imported function.
 /// Results are already on stack at sp, copy to bp and set Returned status.
 /// Uses native stack approach - caller's execute_call will restore caller state.

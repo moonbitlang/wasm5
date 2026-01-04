@@ -149,3 +149,63 @@ pub fn Runtime::call_compiled(
   }
   (rt, results)
 }
+
+///|
+/// Call a function by its index (used for funcref handling).
+/// This allows calling functions that may not be exported by name.
+pub fn Runtime::call_by_index(
+  self : Runtime,
+  func_idx : Int,
+  args : Array[Value],
+) -> (Runtime, Array[Value]) raise RuntimeError {
+  let num_imported_funcs = count_imported_funcs(self.ctx.module_)
+
+  // Check if it's an imported function - call it directly via import resolver
+  if func_idx < num_imported_funcs {
+    if func_idx < 0 || func_idx >= self.ctx.imported_funcs.length() {
+      raise RuntimeError::FunctionNotFound(
+        "Invalid imported function index: \{func_idx}",
+      )
+    }
+    let imported_func = self.ctx.imported_funcs[func_idx]
+    return (self, (imported_func.func)(args))
+  }
+
+  // Adjust to local function index
+  let local_idx = func_idx - num_imported_funcs
+  if local_idx < 0 || local_idx >= self.ctx.module_.codes.length() {
+    raise RuntimeError::FunctionNotFound(
+      "Invalid local function index: \{func_idx}",
+    )
+  }
+
+  let type_idx = self.ctx.module_.funcs[local_idx].reinterpret_as_int()
+  let func_type = require_func_type(self.ctx.module_, type_idx, "call_by_index")
+  let code = self.ctx.module_.codes[local_idx]
+  guard code.compiled is Some(start_pc) else {
+    raise RuntimeError::FunctionNotCompiled(
+      "Function not compiled: index \{func_idx}",
+    )
+  }
+
+  // Clear stack before setting up entry frame
+  let rt : Runtime = { ..self, sp: 0, status: Terminated }
+
+  // Initialize entry locals (pushes args and locals onto stack, sets sp/num_locals)
+  let rt = initialize_entry_locals(rt, args, code)
+  if rt.status == Trap {
+    raise RuntimeError::from_detail(rt.ctx.error_detail)
+  }
+  let rt = { ..rt, pc: start_pc }
+  let rt = execute(rt)
+
+  // Extract results from unified stack
+  let results : Array[Value] = []
+  let result_types = func_type.results
+  for i in 0..<result_types.length() {
+    if i < rt.sp {
+      results.push(stack_to_value(rt.stack.unsafe_get(i), result_types[i]))
+    }
+  }
+  (rt, results)
+}

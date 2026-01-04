@@ -367,7 +367,6 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
     rt.ctx.error_detail = "uninitialized element"
     return { ..rt, status: Trap }
   }
-  let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
 
   // Get the expected type
   let expected_type = match
@@ -375,6 +374,25 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
     Some(found) => found
     None => return { ..rt, status: Trap }
   }
+
+  // Check if this is an external funcref (negative index)
+  // Mapping: -1 → external_funcrefs[0], -2 → [1], etc.
+  if func_idx < 0 {
+    let ext_idx = -(func_idx + 1)
+    if ext_idx < 0 || ext_idx >= rt.ctx.external_funcrefs.length() {
+      rt.ctx.error_detail = "call_indirect: invalid external funcref index"
+      return { ..rt, status: Trap }
+    }
+    let ext_func = rt.ctx.external_funcrefs[ext_idx]
+    // Pop arguments and call external function
+    let { rt, args } = pop_arguments(rt, expected_type)
+    let results = (ext_func.func)(args)
+    // Push results back onto the stack
+    let rt = push_results(rt, results)
+    return { ..rt, pc: rt.pc + 3 }
+  }
+
+  let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
 
   // Check if calling an imported function
   if func_idx < num_imported_funcs {

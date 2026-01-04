@@ -79,6 +79,8 @@ struct ImportResolverEntry {
   globals : Map[Bytes, Value]
   tables : Map[Bytes, RuntimeTable]
   memories : Map[Bytes, ImportedMemory]
+  // Wrappers for funcref globals - used for cross-module funcref handling
+  funcref_wrappers : Map[Bytes, ImportedFunc]
 }
 
 ///|
@@ -108,6 +110,7 @@ pub fn ImportResolver::add_func(
         globals: Map::new(),
         tables: Map::new(),
         memories: Map::new(),
+        funcref_wrappers: Map::new(),
       }
       entry.funcs[name] = func
       self.modules[module_] = entry
@@ -131,6 +134,7 @@ pub fn ImportResolver::add_global(
         globals: Map::new(),
         tables: Map::new(),
         memories: Map::new(),
+        funcref_wrappers: Map::new(),
       }
       entry.globals[name] = value
       self.modules[module_] = entry
@@ -180,6 +184,7 @@ pub fn ImportResolver::add_table(
         globals: Map::new(),
         tables: Map::new(),
         memories: Map::new(),
+        funcref_wrappers: Map::new(),
       }
       entry.tables[name] = table
       self.modules[module_] = entry
@@ -216,6 +221,7 @@ pub fn ImportResolver::add_memory(
         globals: Map::new(),
         tables: Map::new(),
         memories: Map::new(),
+        funcref_wrappers: Map::new(),
       }
       entry.memories[name] = memory
       self.modules[module_] = entry
@@ -232,6 +238,45 @@ pub fn ImportResolver::get_memory(
 ) -> ImportedMemory? {
   match self.modules.get(module_) {
     Some(entry) => entry.memories.get(name)
+    None => None
+  }
+}
+
+///|
+/// Add a funcref wrapper to the resolver.
+/// This is used for cross-module funcref handling - when a module exports
+/// a funcref global, we also register a wrapper that can call the function.
+pub fn ImportResolver::add_funcref_wrapper(
+  self : ImportResolver,
+  module_ : Bytes,
+  name : Bytes,
+  wrapper : ImportedFunc,
+) -> Unit {
+  match self.modules.get(module_) {
+    Some(entry) => entry.funcref_wrappers[name] = wrapper
+    None => {
+      let entry : ImportResolverEntry = {
+        funcs: Map::new(),
+        globals: Map::new(),
+        tables: Map::new(),
+        memories: Map::new(),
+        funcref_wrappers: Map::new(),
+      }
+      entry.funcref_wrappers[name] = wrapper
+      self.modules[module_] = entry
+    }
+  }
+}
+
+///|
+/// Look up a funcref wrapper
+pub fn ImportResolver::get_funcref_wrapper(
+  self : ImportResolver,
+  module_ : Bytes,
+  name : Bytes,
+) -> ImportedFunc? {
+  match self.modules.get(module_) {
+    Some(entry) => entry.funcref_wrappers.get(name)
     None => None
   }
 }
@@ -376,12 +421,32 @@ pub fn Runtime::load_with_resolver(
   // Initialize globals
   // First, add imported globals - try to get from resolver, otherwise use default values
   let globals : Array[Value] = []
+  // Track external funcrefs for cross-module funcref handling
+  let external_funcrefs : Array[ImportedFunc] = []
   for imp in m.imports {
     match imp.desc {
       Global(gt) => {
         // Try to get the global value from the resolver
         let value = match resolver.get_global(imp.module_, imp.name) {
-          Some(v) => v
+          Some(v) => {
+            // For funcref globals, check if there's a funcref wrapper
+            // and if so, use a negative index to point to external_funcrefs
+            match v {
+              Ref(Some(_)) =>
+                // Check for a funcref wrapper for cross-module calls
+                match resolver.get_funcref_wrapper(imp.module_, imp.name) {
+                  Some(wrapper) => {
+                    // Add wrapper to external_funcrefs and use negative index
+                    // Mapping: -1 → [0], -2 → [1], etc.
+                    let ext_idx = external_funcrefs.length()
+                    external_funcrefs.push(wrapper)
+                    Value::Ref(Some(-(ext_idx + 1)))
+                  }
+                  None => v
+                }
+              _ => v
+            }
+          }
           None =>
             // Fall back to default values (for spectest)
             match gt.val_type {
@@ -534,7 +599,15 @@ pub fn Runtime::load_with_resolver(
 
   // Create RuntimeContext with cold data (including gc_heap from const expr evaluation)
   let ctx = RuntimeContext::new_with_gc_heap(
-    m, memory, memory_max_pages, globals, tables, imported_funcs, data_segments, gc_heap,
+    m,
+    memory,
+    memory_max_pages,
+    globals,
+    tables,
+    imported_funcs,
+    data_segments,
+    gc_heap,
+    external_funcrefs~,
   )
   Runtime::{
     ops: compiler.finish(),
