@@ -897,6 +897,14 @@ fn handle_assert_trap(
           "[\{fn_name}] expected '\{expected_error}' but got MemoryOutOfBounds",
         )
       }
+    @wasm5_runtime.RuntimeError::TableOutOfBounds =>
+      if not(expected_error.contains("out of bounds table access")) {
+        ctx.fail(
+          line,
+          "assert_trap",
+          "[\{fn_name}] expected '\{expected_error}' but got TableOutOfBounds",
+        )
+      }
     @wasm5_runtime.RuntimeError::Unreachable =>
       if not(expected_error.contains("unreachable")) {
         ctx.fail(
@@ -1389,15 +1397,5 @@ pub async fn process_wast_file(
 // Whitelisted tests that are skipped due to missing validation/features
 // elem.wast: Validation issues and declarative segment handling
 let whitelisted_tests : Array[(String, Set[Int])] = [
-  (
-    "elem.wast",
-    Set::from_iter(
-      [
-        517, 525, // assert_invalid: type mismatch (non-nullable table type)
-        816, 842, // assert_invalid: constant expression required (mutable global)
-        979, 984, 989, 998, // assert_invalid: type mismatch (validation)
-        706, 716, // assert_trap: out of bounds table access (declarative segments)
-      ].iter(),
-    ),
-  ),
+  // All elem.wast tests should now pass
 ]

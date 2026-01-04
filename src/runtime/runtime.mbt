@@ -4,6 +4,7 @@ pub suberror RuntimeError {
   DivisionByZero
   IntegerOverflow
   MemoryOutOfBounds
+  TableOutOfBounds // Out of bounds table access
   InvalidType(String)
   FunctionNotFound(String)
   Unreachable // Unreachable instruction executed
@@ -20,6 +21,8 @@ fn RuntimeError::from_detail(detail : String) -> RuntimeError {
     RuntimeError::DivisionByZero
   } else if detail.has_prefix("integer overflow") {
     RuntimeError::IntegerOverflow
+  } else if detail.has_prefix("out of bounds table access") {
+    RuntimeError::TableOutOfBounds
   } else if detail.has_prefix("out of bounds") {
     RuntimeError::MemoryOutOfBounds
   } else if detail.has_prefix("unreachable") {
@@ -574,8 +577,14 @@ pub fn Runtime::load_with_resolver(
     tables.push({ data: table_data, max: table.limits.max, external_funcrefs: [] })
   }
   // Initialize element segments (copy function references into tables)
-  // Only process active segments - skip passive and declarative segments
-  for elem in m.elems {
+  // Track which segments are dropped - active and declarative segments are dropped after instantiation
+  let dropped_elems : Array[Bool] = []
+  for i = 0; i < m.elems.length(); i = i + 1 {
+    let elem = m.elems[i]
+    // Active and declarative segments are dropped after instantiation
+    dropped_elems.push(elem.is_active || elem.is_declarative)
+
+    // Only process active segments - skip passive and declarative segments
     if elem.is_active {
       let table_idx = elem.table_idx.reinterpret_as_int()
       if table_idx >= 0 && table_idx < tables.length() {
@@ -590,10 +599,10 @@ pub fn Runtime::load_with_resolver(
         }
         // Copy element expressions into table
         let table = tables[table_idx]
-        for i in 0..<elem.init.length() {
-          let addr = offset + i
+        for j in 0..<elem.init.length() {
+          let addr = offset + j
           if addr >= 0 && addr < table.data.length() {
-            let value = eval_const_expr(elem.init[i], globals)
+            let value = eval_const_expr(elem.init[j], globals)
             match value {
               Ref(ref_idx) => table.data[addr] = ref_idx
               _ =>
@@ -649,6 +658,7 @@ pub fn Runtime::load_with_resolver(
     data_segments,
     gc_heap,
     external_funcrefs~,
+    dropped_elems~,
   )
   Runtime::{
     ops: compiler.finish(),

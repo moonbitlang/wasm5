@@ -271,13 +271,14 @@ test "ops control reference ops" {
 ///|
 test "ops control table bulk stubs" {
   let module_local = base_module([], [], [], [])
+  // table.init with non-existent element segment should trap
   let rt_table_init = base_runtime(module_local, [idx(0), idx(0), idx(0)], [
     Value::I32(0U),
     Value::I32(0U),
     Value::I32(0U),
   ])
   let rt_table_init = op_table_init(rt_table_init)
-  assert_ok(rt_table_init)
+  assert_trap(rt_table_init) // Traps: element segment 0 doesn't exist
   let rt_table_copy = base_runtime(module_local, [idx(0), idx(0), idx(0)], [
     Value::I32(0U),
     Value::I32(0U),

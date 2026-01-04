@@ -8,12 +8,29 @@ fn validate_instruction_table(
   let stack = ctx.stack
   match instr {
     // Table bulk operations (index type depends on table64)
-    TableInit(table_idx, _) => {
+    TableInit(table_idx, elem_idx) => {
       let table_type = get_table_type(module_, import_counts, table_idx)
       let idx_type = table_index_type(table_type)
       ctx.poly_pop_expect(module_, idx_type, "table.init n")
       ctx.poly_pop_expect(module_, idx_type, "table.init src")
       ctx.poly_pop_expect(module_, idx_type, "table.init dest")
+
+      // Check element segment exists and its type is compatible with table
+      let elem_idx_int = elem_idx.reinterpret_as_int()
+      if elem_idx_int < 0 || elem_idx_int >= module_.elems.length() {
+        raise ValidationError::InvalidElemIndex(elem_idx_int)
+      }
+      let elem = module_.elems[elem_idx_int]
+      let elem_type = @core.ValType::Ref(elem.elem_type, elem.elem_nullable)
+      let table_elem_type = @core.ValType::Ref(
+        table_type.elem_type,
+        table_type.nullable,
+      )
+      guard is_subtype(module_, elem_type, table_elem_type) else {
+        raise ValidationError::TypeMismatch(
+          "table.init: element segment type \{elem_type} is not compatible with table element type \{table_elem_type}",
+        )
+      }
     }
     TableCopy(dst_idx, src_idx) => {
       let dst_type = get_table_type(module_, import_counts, dst_idx)
