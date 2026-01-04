@@ -1110,6 +1110,22 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got UninitializedLocal",
         )
       }
+    @wasm5_validate.ValidationError::UnknownDataSegment(_) =>
+      if not(expected_error.contains("unknown data segment")) {
+        ctx.fail(
+          line,
+          "assert_invalid",
+          "expected '\{expected_error}' but got UnknownDataSegment",
+        )
+      }
+    @wasm5_validate.ValidationError::InvalidElemIndex(_) =>
+      if not(expected_error.contains("unknown elem segment")) {
+        ctx.fail(
+          line,
+          "assert_invalid",
+          "expected '\{expected_error}' but got InvalidElemIndex",
+        )
+      }
     _ => () // Other validation errors are acceptable
   }
 }

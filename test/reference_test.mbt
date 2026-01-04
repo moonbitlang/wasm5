@@ -721,37 +721,37 @@ async test "bulk-memory/bulk.wast" {
   run_bulk_memory_harness("bulk.wast")
 }
 
-// ///|
-// async test "bulk-memory/memory_copy.wast" {
-//   run_bulk_memory_harness("memory_copy.wast")
-// }
+///|
+async test "bulk-memory/memory_copy.wast" {
+  run_bulk_memory_harness("memory_copy.wast")
+}
 
-// ///|
-// async test "bulk-memory/memory_fill.wast" {
-//   run_bulk_memory_harness("memory_fill.wast")
-// }
+///|
+async test "bulk-memory/memory_fill.wast" {
+  run_bulk_memory_harness("memory_fill.wast")
+}
 
-// ///|
-// async test "bulk-memory/memory_init.wast" {
-//   run_bulk_memory_harness("memory_init.wast")
-// }
+///|
+async test "bulk-memory/memory_init.wast" {
+  run_bulk_memory_harness("memory_init.wast")
+}
 
-// ///|
-// async test "bulk-memory/table-sub.wast" {
-//   run_bulk_memory_harness("table-sub.wast")
-// }
+///|
+async test "bulk-memory/table-sub.wast" {
+  run_bulk_memory_harness("table-sub.wast")
+}
 
-// ///|
-// async test "bulk-memory/table_copy.wast" {
-//   run_bulk_memory_harness("table_copy.wast")
-// }
+///|
+async test "bulk-memory/table_copy.wast" {
+  run_bulk_memory_harness("table_copy.wast")
+}
 
-// ///|
-// async test "bulk-memory/table_fill.wast" {
-//   run_bulk_memory_harness("table_fill.wast")
-// }
+///|
+async test "bulk-memory/table_fill.wast" {
+  run_bulk_memory_harness("table_fill.wast")
+}
 
-// ///|
-// async test "bulk-memory/table_init.wast" {
-//   run_bulk_memory_harness("table_init.wast")
-// }
+///|
+async test "bulk-memory/table_init.wast" {
+  run_bulk_memory_harness("table_init.wast")
+}
