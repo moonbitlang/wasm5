@@ -1027,26 +1027,19 @@ fn op_table_init(rt : Runtime) -> Runtime {
   for i = 0; i < n; i = i + 1 {
     let expr = elem.init[src + i]
     // Evaluate the init expression to get the reference value
-    match expr.instrs[0] {
-      RefNull(_) => table.data[dest + i] = None
-      RefFunc(idx) => table.data[dest + i] = Some(idx.reinterpret_as_int())
-      GlobalGet(idx) => {
-        let global_idx = idx.reinterpret_as_int()
-        if global_idx >= 0 && global_idx < rt.ctx.globals.length() {
-          match rt.ctx.globals[global_idx] {
-            Ref(ref_val) => table.data[dest + i] = ref_val
-            _ => {
-              rt.ctx.error_detail = "global must be a reference type"
-              return { ..rt, sp: stack_top, status: Trap }
-            }
-          }
-        } else {
-          rt.ctx.error_detail = "global index out of bounds"
+    // Use eval_const_expr to handle all expression types including ref.i31
+    try {
+      let value = eval_const_expr(expr, rt.ctx.globals)
+      match value {
+        Ref(ref_val) => table.data[dest + i] = ref_val
+        _ => {
+          rt.ctx.error_detail = "element init expression must produce a reference"
           return { ..rt, sp: stack_top, status: Trap }
         }
       }
-      _ => {
-        rt.ctx.error_detail = "unsupported init expression in table.init"
+    } catch {
+      e => {
+        rt.ctx.error_detail = "error evaluating element init: \{e}"
         return { ..rt, sp: stack_top, status: Trap }
       }
     }

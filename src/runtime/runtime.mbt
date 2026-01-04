@@ -913,6 +913,12 @@ fn eval_const_expr_with_context(
         let encoded = (i31_value << 1).lor(1)
         stack.push(Ref(Some(encoded)))
       }
+      // Reference conversion operations
+      ExternConvertAny | AnyConvertExtern => {
+        // These are essentially no-ops in our representation
+        // Just leave the reference on the stack unchanged
+        ()
+      }
       _ =>
         raise RuntimeError::UnsupportedInitExpression(
           "unsupported init expression instruction: \{instr}",

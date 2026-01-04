@@ -110,13 +110,14 @@ fn op_struct_get(rt : Runtime) -> Runtime {
   let field_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
 
   let sp = rt.sp - 1
-  let ref_value = rt.stack.unsafe_get(sp).to_int()
+  let ref_raw = rt.stack.unsafe_get(sp)
 
-  // Null check
-  if ref_value == 0 {
-    rt.ctx.error_detail = "struct.get: null reference"
+  // Null check (null is -1 / 0xFFFFFFFFFFFFFFFF)
+  if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
+    rt.ctx.error_detail = "null structure reference"
     return { ..rt, status: Trap }
   }
+  let ref_value = ref_raw.to_int()
 
   match gc_get_object(rt, ref_value) {
     Some(Struct(s)) => {
@@ -214,13 +215,15 @@ fn op_struct_set(rt : Runtime) -> Runtime {
   let field_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
 
   let sp = rt.sp - 2
-  let ref_value = rt.stack.unsafe_get(sp).to_int()
+  let ref_raw = rt.stack.unsafe_get(sp)
   let value = rt.stack.unsafe_get(sp + 1)
 
-  if ref_value == 0 {
-    rt.ctx.error_detail = "struct.set: null reference"
+  // Null check (null is -1 / 0xFFFFFFFFFFFFFFFF)
+  if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
+    rt.ctx.error_detail = "null structure reference"
     return { ..rt, status: Trap }
   }
+  let ref_value = ref_raw.to_int()
 
   match gc_get_object(rt, ref_value) {
     Some(Struct(s)) => {
@@ -592,16 +595,23 @@ fn op_ref_i31(rt : Runtime) -> Runtime {
 /// Pops i31ref, pushes sign-extended i32
 fn op_i31_get_s(rt : Runtime) -> Runtime {
   let sp = rt.sp - 1
-  let encoded = rt.stack.unsafe_get(sp).to_uint()
+  let encoded = rt.stack.unsafe_get(sp)
 
+  // Check for null reference first (null is -1 / 0xFFFFFFFFFFFFFFFF)
+  if encoded == 0xFFFFFFFFFFFFFFFFUL {
+    rt.ctx.error_detail = "null i31 reference"
+    return { ..rt, status: Trap }
+  }
+
+  let encoded_u32 = encoded.to_uint()
   // Check if it's a valid i31ref (lowest bit set)
-  if encoded.land(1U) != 1U {
+  if encoded_u32.land(1U) != 1U {
     rt.ctx.error_detail = "i31.get_s: not an i31ref"
     return { ..rt, status: Trap }
   }
 
   // Decode: (encoded >> 1) with sign extension from bit 30
-  let raw = encoded >> 1
+  let raw = encoded_u32 >> 1
   let signed : UInt = if raw.land(0x40000000U) != 0U {
     raw.lor(0x80000000U) // Sign extend from bit 30
   } else {
@@ -617,16 +627,23 @@ fn op_i31_get_s(rt : Runtime) -> Runtime {
 /// Pops i31ref, pushes zero-extended i32
 fn op_i31_get_u(rt : Runtime) -> Runtime {
   let sp = rt.sp - 1
-  let encoded = rt.stack.unsafe_get(sp).to_uint()
+  let encoded = rt.stack.unsafe_get(sp)
 
+  // Check for null reference first (null is -1 / 0xFFFFFFFFFFFFFFFF)
+  if encoded == 0xFFFFFFFFFFFFFFFFUL {
+    rt.ctx.error_detail = "null i31 reference"
+    return { ..rt, status: Trap }
+  }
+
+  let encoded_u32 = encoded.to_uint()
   // Check if it's a valid i31ref
-  if encoded.land(1U) != 1U {
+  if encoded_u32.land(1U) != 1U {
     rt.ctx.error_detail = "i31.get_u: not an i31ref"
     return { ..rt, status: Trap }
   }
 
   // Decode: (encoded >> 1) masked to 31 bits
-  let value = (encoded >> 1).land(0x7FFFFFFFU)
+  let value = (encoded_u32 >> 1).land(0x7FFFFFFFU)
 
   rt.stack.unsafe_set(sp, value.to_uint64())
   { ..rt, sp: sp + 1, pc: rt.pc + 1 }

@@ -556,55 +556,66 @@ fn validate_module_element_segments(
     let expected_type = @core.ValType::Ref(elem.elem_type, elem.elem_nullable)
     for expr in elem.init {
       let instrs = expr.instrs
-      guard instrs.length() == 1 else {
-        raise ValidationError::ConstantExpressionRequired(
-          "elem init must be a single const expression",
-        )
-      }
-      let instr = instrs[0]
-      let expr_type = match instr {
-        RefNull(ref_type) => {
-          guard elem.elem_nullable else {
-            raise ValidationError::TypeMismatch(
-              "non-nullable elem cannot be initialized with ref.null",
-            )
-          }
-          @core.ValType::Ref(ref_type, true)
-        }
-        RefFunc(func_idx) => {
-          let idx = func_idx.reinterpret_as_int()
-          let total_funcs = import_counts.funcs + m.funcs.length()
-          if idx < 0 || idx >= total_funcs {
-            raise ValidationError::InvalidFunctionIndex(idx)
-          }
-          let type_idx = get_func_type_index(m, idx, import_counts)
-          match elem.elem_type {
-            @core.RefType::TypeIndex(_) =>
-              @core.ValType::Ref(@core.RefType::TypeIndex(type_idx), false)
-            _ => @core.ValType::Ref(@core.RefType::Func, false)
-          }
-        }
-        GlobalGet(global_idx) => {
-          let gidx = global_idx.reinterpret_as_int()
-          let (gtype, mutable) = get_global_type_and_mutable(
-            m, gidx, import_counts,
-          )
-          guard not(mutable) else {
+      // Handle multi-instruction constant expressions (e.g., ref.i31 with i32.const)
+      let expr_type = if instrs.length() == 2 {
+        // Check for I32Const + RefI31 pattern
+        match (instrs[0], instrs[1]) {
+          (I32Const(_), RefI31) => @core.ValType::Ref(@core.RefType::I31, false)
+          _ =>
             raise ValidationError::ConstantExpressionRequired(
-              "elem init global.get must reference immutable global",
+              "elem init must be a valid const expression",
             )
-          }
-          guard is_ref_valtype(gtype) else {
-            raise ValidationError::TypeMismatch(
-              "elem init global.get must reference a reference type",
-            )
-          }
-          gtype
         }
-        _ =>
-          raise ValidationError::ConstantExpressionRequired(
-            "elem init must be ref.null/ref.func/global.get",
-          )
+      } else if instrs.length() == 1 {
+        let instr = instrs[0]
+        match instr {
+          RefNull(ref_type) => {
+            guard elem.elem_nullable else {
+              raise ValidationError::TypeMismatch(
+                "non-nullable elem cannot be initialized with ref.null",
+              )
+            }
+            @core.ValType::Ref(ref_type, true)
+          }
+          RefFunc(func_idx) => {
+            let idx = func_idx.reinterpret_as_int()
+            let total_funcs = import_counts.funcs + m.funcs.length()
+            if idx < 0 || idx >= total_funcs {
+              raise ValidationError::InvalidFunctionIndex(idx)
+            }
+            let type_idx = get_func_type_index(m, idx, import_counts)
+            match elem.elem_type {
+              @core.RefType::TypeIndex(_) =>
+                @core.ValType::Ref(@core.RefType::TypeIndex(type_idx), false)
+              _ => @core.ValType::Ref(@core.RefType::Func, false)
+            }
+          }
+          GlobalGet(global_idx) => {
+            let gidx = global_idx.reinterpret_as_int()
+            let (gtype, mutable) = get_global_type_and_mutable(
+              m, gidx, import_counts,
+            )
+            guard not(mutable) else {
+              raise ValidationError::ConstantExpressionRequired(
+                "elem init global.get must reference immutable global",
+              )
+            }
+            guard is_ref_valtype(gtype) else {
+              raise ValidationError::TypeMismatch(
+                "elem init global.get must reference a reference type",
+              )
+            }
+            gtype
+          }
+          _ =>
+            raise ValidationError::ConstantExpressionRequired(
+              "elem init must be ref.null/ref.func/global.get/ref.i31",
+            )
+        }
+      } else {
+        raise ValidationError::ConstantExpressionRequired(
+          "elem init must be a valid const expression",
+        )
       }
       guard is_subtype(m, expr_type, expected_type) else {
         raise ValidationError::TypeMismatch(

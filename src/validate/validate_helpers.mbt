@@ -368,7 +368,10 @@ fn validate_const_expr_instructions(
       | ArrayNew(_)
       | ArrayNewDefault(_)
       | ArrayNewFixed(_, _)
-      | RefI31 => () // Valid constant expression instructions
+      | RefI31
+      // Reference conversion instructions
+      | ExternConvertAny
+      | AnyConvertExtern => () // Valid constant expression instructions
       _ =>
         raise ValidationError::ConstantExpressionRequired(
           "invalid instruction in constant expression: \{instr}",
@@ -805,6 +808,18 @@ fn is_subtype(
     (Ref(Exn, _), ExnRef) => true
     // Any reference is subtype of AnyRef
     (Ref(_, _), AnyRef) => true
+    // I31/Struct/Array/Eq are subtypes of Any (for Ref types)
+    (Ref(I31, nullable1), Ref(Any, nullable2)) =>
+      nullable2 || not(nullable1)
+    (Ref(Struct, nullable1), Ref(Any, nullable2)) =>
+      nullable2 || not(nullable1)
+    (Ref(Array, nullable1), Ref(Any, nullable2)) =>
+      nullable2 || not(nullable1)
+    (Ref(Eq, nullable1), Ref(Any, nullable2)) => nullable2 || not(nullable1)
+    // TypeIndex is subtype of Ref(Any, _) if it's a struct or array type
+    (Ref(TypeIndex(n), nullable1), Ref(Any, nullable2)) =>
+      (nullable2 || not(nullable1)) &&
+      (is_struct_type_index(module_, n) || is_array_type_index(module_, n))
 
     // Non-reference types are not related by subtyping
     _ => false

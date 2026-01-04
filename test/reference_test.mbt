@@ -567,16 +567,57 @@ async test "utf8-invalid-encoding.wast" {
 }
 
 // =============================================================================
-// WebAssembly GC Spec Tests (commented out - enable when GC support is ready)
+// WebAssembly GC Spec Tests
 // =============================================================================
 
-// Helper for GC tests in the gc subdirectory
-// fn run_gc_harness(filename : String) -> Unit {
-//   let (file_failures, file_skipped) = process_wast_file(
-//     "test/reference_test/gc/", filename,
-//   )
-//   // ... same handling as run_harness
-// }
+///|
+async fn run_gc_harness(filename : String) -> Unit {
+  let (file_failures, file_skipped) = process_wast_file(
+    "test/reference_test/gc/",
+    filename,
+  )
+  if file_failures.length() > 0 {
+    // Group failures by type for organized output
+    let grouped = group_failures_by_type(file_failures)
+
+    // Print header
+    println(
+      "\n╔══════════════════════════════════════════════════════════════════╗",
+    )
+    println("║ TEST FAILURES: gc/\{filename}")
+    println(
+      "╚══════════════════════════════════════════════════════════════════╝",
+    )
+
+    // Print failures grouped by type
+    for test_type, failures in grouped {
+      println(
+        "\n┌─ \{test_type} (\{failures.length()} failures) ─────────────────────",
+      )
+      for failure in failures {
+        println(format_failure_detail(failure))
+      }
+      println(
+        "└────────────────────────────────────────────────────────────────",
+      )
+    }
+
+    // Print summary
+    println(
+      "\n╔══════════════════════════════════════════════════════════════════╗",
+    )
+    println(
+      "║ SUMMARY: \{file_failures.length()} failure(s), \{file_skipped} skipped",
+    )
+    println(
+      "╚══════════════════════════════════════════════════════════════════╝\n",
+    )
+    fail("\{file_failures.length()} failure(s) in gc/\{filename}")
+  }
+  if file_skipped > 0 {
+    println("Skipped \{file_skipped} tests in gc/\{filename}")
+  }
+}
 
 // ///|
 // async test "gc/array.wast" {
@@ -633,10 +674,10 @@ async test "utf8-invalid-encoding.wast" {
 //   run_gc_harness("extern.wast")
 // }
 
-// ///|
-// async test "gc/i31.wast" {
-//   run_gc_harness("i31.wast")
-// }
+///|
+async test "gc/i31.wast" {
+  run_gc_harness("i31.wast")
+}
 
 // ///|
 // async test "gc/ref_cast.wast" {
@@ -653,10 +694,10 @@ async test "utf8-invalid-encoding.wast" {
 //   run_gc_harness("ref_test.wast")
 // }
 
-// ///|
-// async test "gc/struct.wast" {
-//   run_gc_harness("struct.wast")
-// }
+///|
+async test "gc/struct.wast" {
+  run_gc_harness("struct.wast")
+}
 
 // ///|
 // async test "gc/type-subtyping.wast" {

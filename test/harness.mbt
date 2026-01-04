@@ -457,6 +457,10 @@ enum ExpectedValue {
   AnyF64Nan // nan:arithmetic for f64 - any NaN value is acceptable
   AnyFuncRef // any funcref value (including null)
   AnyExternRef // any externref value (including null)
+  AnyI31Ref // any i31ref value (including null)
+  AnyStructRef // any non-null struct reference
+  AnyArrayRef // any non-null array reference
+  AnyEqRef // any non-null eqref value
   // AnyRefNull matches any null reference, regardless of its static type.
   // At runtime, all null references (nullref, nullfuncref, nullexnref,
   // nullexternref) are represented identically as Ref(None). The type
@@ -647,6 +651,14 @@ fn parse_expected_value(expected : Json) -> ExpectedValue raise {
         )
       }
     { "type": "exnref", .. } => AnyFuncRef // Treat as any reference
+    // i31ref: any i31 reference
+    { "type": "i31ref", .. } => AnyI31Ref
+    // structref: any non-null struct reference
+    { "type": "structref", .. } => AnyStructRef
+    // arrayref: any non-null array reference
+    { "type": "arrayref", .. } => AnyArrayRef
+    // eqref: any non-null eqref value (i31, struct, array)
+    { "type": "eqref", .. } => AnyEqRef
     // refnull: any null reference
     { "type": "refnull", .. } => AnyRefNull
     // All null reference types map to AnyRefNull because at runtime, WebAssembly
@@ -686,6 +698,10 @@ fn format_expected_with_bits(e : ExpectedValue) -> String {
     AnyF64Nan => "AnyF64Nan"
     AnyFuncRef => "AnyFuncRef"
     AnyExternRef => "AnyExternRef"
+    AnyI31Ref => "AnyI31Ref"
+    AnyStructRef => "AnyStructRef"
+    AnyArrayRef => "AnyArrayRef"
+    AnyEqRef => "AnyEqRef"
     AnyRefNull => "AnyRefNull"
   }
 }
@@ -728,6 +744,30 @@ fn values_match(
       // Accept any reference value (externref can be null or non-null)
       match actual {
         @wasm5_runtime.Value::Ref(_) => true
+        _ => false
+      }
+    AnyI31Ref =>
+      // Accept any i31ref value (stored as Ref with encoded value)
+      match actual {
+        @wasm5_runtime.Value::Ref(_) => true
+        _ => false
+      }
+    AnyStructRef =>
+      // Accept any non-null struct reference
+      match actual {
+        @wasm5_runtime.Value::Ref(Some(_)) => true
+        _ => false
+      }
+    AnyArrayRef =>
+      // Accept any non-null array reference
+      match actual {
+        @wasm5_runtime.Value::Ref(Some(_)) => true
+        _ => false
+      }
+    AnyEqRef =>
+      // Accept any non-null eqref value (i31, struct, array)
+      match actual {
+        @wasm5_runtime.Value::Ref(Some(_)) => true
         _ => false
       }
     AnyRefNull =>
@@ -923,6 +963,14 @@ fn handle_assert_trap(
             "[\{fn_name}] expected '\{expected_error}' but got table out of bounds",
           )
         }
+      } else if msg.contains("array") && msg.contains("out of bounds") {
+        if not(expected_error.contains("out of bounds array access")) {
+          ctx.fail(
+            line,
+            "assert_trap",
+            "[\{fn_name}] expected '\{expected_error}' but got out of bounds array access",
+          )
+        }
       } else if msg.contains("undefined element") {
         if not(expected_error.contains("undefined element")) {
           ctx.fail(
@@ -953,6 +1001,22 @@ fn handle_assert_trap(
             line,
             "assert_trap",
             "[\{fn_name}] expected '\{expected_error}' but got null function reference",
+          )
+        }
+      } else if msg.contains("null i31 reference") {
+        if not(expected_error.contains("null i31 reference")) {
+          ctx.fail(
+            line,
+            "assert_trap",
+            "[\{fn_name}] expected '\{expected_error}' but got null i31 reference",
+          )
+        }
+      } else if msg.contains("null structure reference") {
+        if not(expected_error.contains("null structure reference")) {
+          ctx.fail(
+            line,
+            "assert_trap",
+            "[\{fn_name}] expected '\{expected_error}' but got null structure reference",
           )
         }
       } else if msg.contains("null reference") {
@@ -998,8 +1062,11 @@ async fn handle_assert_invalid(
     // The WebAssembly spec uses "type mismatch" for various validation errors.
     // Our validator distinguishes TypeMismatch and StackSizeMismatch, but both
     // correspond to the spec's "type mismatch" error message.
-    @wasm5_validate.ValidationError::TypeMismatch(_) =>
-      if not(expected_error.contains("type mismatch")) {
+    @wasm5_validate.ValidationError::TypeMismatch(msg) =>
+      // TypeMismatch covers various validation errors including "type mismatch", "immutable field", and "immutable array"
+      if not(expected_error.contains("type mismatch")) &&
+        not(expected_error.contains("immutable field") && msg.contains("immutable")) &&
+        not(expected_error.contains("immutable array") && msg.contains("immutable")) {
         ctx.fail(
           line,
           "assert_invalid",
