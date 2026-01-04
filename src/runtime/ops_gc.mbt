@@ -1,8 +1,21 @@
 ///|
 /// GC Object representation
 /// GC objects are stored in the gc_heap array
-/// Stack values use the index into gc_heap as reference (shifted by 1 to distinguish from null)
-/// Reference encoding: 0 = null, n > 0 means gc_heap[n-1]
+/// Reference encoding uses tagging in high bits:
+/// - 0xFFFFFFFFFFFFFFFF = null
+/// - Low bit = 1, no high tag = i31ref ((value << 1) | 1)
+/// - Low bit = 0, no high tag = GC ref (index << 1)
+/// - Bit 62 set (0x4000...) = funcref
+/// - Bit 61 set (0x2000...) = externref (including internalized via any.convert_extern)
+
+/// Reference tag constants
+let ref_tag_funcref : UInt64 = 0x4000000000000000UL
+
+let ref_tag_externref : UInt64 = 0x2000000000000000UL
+
+let ref_tag_mask : UInt64 = 0x6000000000000000UL
+
+let ref_null : UInt64 = 0xFFFFFFFFFFFFFFFFUL
 
 ///|
 /// GC Struct instance - stores field values as UInt64 array
@@ -35,7 +48,8 @@ pub(all) enum GcObject {
 fn gc_alloc_struct(rt : Runtime, type_idx : Int, fields : Array[UInt64]) -> Int {
   let obj = GcObject::Struct({ type_idx, fields })
   rt.ctx.gc_heap.push(obj)
-  rt.ctx.gc_heap.length() // 1-based index (0 = null)
+  // Encode as (index << 1) to distinguish from i31refs which have low bit set
+  rt.ctx.gc_heap.length() << 1
 }
 
 ///|
@@ -43,18 +57,22 @@ fn gc_alloc_struct(rt : Runtime, type_idx : Int, fields : Array[UInt64]) -> Int 
 fn gc_alloc_array(rt : Runtime, type_idx : Int, elements : Array[UInt64]) -> Int {
   let obj = GcObject::Array({ type_idx, elements })
   rt.ctx.gc_heap.push(obj)
-  rt.ctx.gc_heap.length() // 1-based index (0 = null)
+  // Encode as (index << 1) to distinguish from i31refs which have low bit set
+  rt.ctx.gc_heap.length() << 1
 }
 
 ///|
-/// Get a GC object by reference (1-based, 0 = null)
+/// Get a GC object by reference
+/// GC refs are encoded as (1-based-index << 1), so we decode by right-shifting
 fn gc_get_object(rt : Runtime, ref_value : Int) -> GcObject? {
-  if ref_value <= 0 {
+  // Decode: right shift to get 1-based index
+  let index = ref_value >> 1
+  if index <= 0 {
     None
-  } else if ref_value > rt.ctx.gc_heap.length() {
+  } else if index > rt.ctx.gc_heap.length() {
     None
   } else {
-    Some(rt.ctx.gc_heap[ref_value - 1])
+    Some(rt.ctx.gc_heap[index - 1])
   }
 }
 
@@ -139,12 +157,14 @@ fn op_struct_get_s(rt : Runtime) -> Runtime {
   let storage_type = rt.ops.unsafe_get(rt.pc + 2).to_int() // 0=i8, 1=i16
 
   let sp = rt.sp - 1
-  let ref_value = rt.stack.unsafe_get(sp).to_int()
+  let ref_raw = rt.stack.unsafe_get(sp)
 
-  if ref_value == 0 {
+  // Null check (null is 0xFFFFFFFFFFFFFFFF)
+  if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "struct.get_s: null reference"
     return { ..rt, status: Trap }
   }
+  let ref_value = ref_raw.to_int()
 
   match gc_get_object(rt, ref_value) {
     Some(Struct(s)) => {
@@ -183,12 +203,14 @@ fn op_struct_get_u(rt : Runtime) -> Runtime {
   let storage_type = rt.ops.unsafe_get(rt.pc + 2).to_int() // 0=i8, 1=i16
 
   let sp = rt.sp - 1
-  let ref_value = rt.stack.unsafe_get(sp).to_int()
+  let ref_raw = rt.stack.unsafe_get(sp)
 
-  if ref_value == 0 {
+  // Null check (null is 0xFFFFFFFFFFFFFFFF)
+  if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "struct.get_u: null reference"
     return { ..rt, status: Trap }
   }
+  let ref_value = ref_raw.to_int()
 
   match gc_get_object(rt, ref_value) {
     Some(Struct(s)) => {
@@ -339,13 +361,15 @@ fn op_array_new_data(rt : Runtime) -> Runtime {
 /// Pops array ref and index, pushes element
 fn op_array_get(rt : Runtime) -> Runtime {
   let sp = rt.sp - 2
-  let ref_value = rt.stack.unsafe_get(sp).to_int()
+  let ref_raw = rt.stack.unsafe_get(sp)
   let index = rt.stack.unsafe_get(sp + 1).to_int()
 
-  if ref_value == 0 {
+  // Null check (null is 0xFFFFFFFFFFFFFFFF)
+  if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "array.get: null reference"
     return { ..rt, status: Trap }
   }
+  let ref_value = ref_raw.to_int()
 
   match gc_get_object(rt, ref_value) {
     Some(Array(a)) => {
@@ -370,13 +394,15 @@ fn op_array_get_s(rt : Runtime) -> Runtime {
   let storage_type = rt.ops.unsafe_get(rt.pc + 1).to_int() // 0=i8, 1=i16
 
   let sp = rt.sp - 2
-  let ref_value = rt.stack.unsafe_get(sp).to_int()
+  let ref_raw = rt.stack.unsafe_get(sp)
   let index = rt.stack.unsafe_get(sp + 1).to_int()
 
-  if ref_value == 0 {
+  // Null check (null is 0xFFFFFFFFFFFFFFFF)
+  if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "array.get_s: null reference"
     return { ..rt, status: Trap }
   }
+  let ref_value = ref_raw.to_int()
 
   match gc_get_object(rt, ref_value) {
     Some(Array(a)) => {
@@ -408,13 +434,15 @@ fn op_array_get_u(rt : Runtime) -> Runtime {
   let storage_type = rt.ops.unsafe_get(rt.pc + 1).to_int() // 0=i8, 1=i16
 
   let sp = rt.sp - 2
-  let ref_value = rt.stack.unsafe_get(sp).to_int()
+  let ref_raw = rt.stack.unsafe_get(sp)
   let index = rt.stack.unsafe_get(sp + 1).to_int()
 
-  if ref_value == 0 {
+  // Null check (null is 0xFFFFFFFFFFFFFFFF)
+  if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "array.get_u: null reference"
     return { ..rt, status: Trap }
   }
+  let ref_value = ref_raw.to_int()
 
   match gc_get_object(rt, ref_value) {
     Some(Array(a)) => {
@@ -443,14 +471,16 @@ fn op_array_get_u(rt : Runtime) -> Runtime {
 /// Pops array ref, index, and value, sets element
 fn op_array_set(rt : Runtime) -> Runtime {
   let sp = rt.sp - 3
-  let ref_value = rt.stack.unsafe_get(sp).to_int()
+  let ref_raw = rt.stack.unsafe_get(sp)
   let index = rt.stack.unsafe_get(sp + 1).to_int()
   let value = rt.stack.unsafe_get(sp + 2)
 
-  if ref_value == 0 {
+  // Null check (null is 0xFFFFFFFFFFFFFFFF)
+  if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "array.set: null reference"
     return { ..rt, status: Trap }
   }
+  let ref_value = ref_raw.to_int()
 
   match gc_get_object(rt, ref_value) {
     Some(Array(a)) => {
@@ -473,12 +503,14 @@ fn op_array_set(rt : Runtime) -> Runtime {
 /// Pops array ref, pushes length
 fn op_array_len(rt : Runtime) -> Runtime {
   let sp = rt.sp - 1
-  let ref_value = rt.stack.unsafe_get(sp).to_int()
+  let ref_raw = rt.stack.unsafe_get(sp)
 
-  if ref_value == 0 {
+  // Null check (null is 0xFFFFFFFFFFFFFFFF)
+  if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "array.len: null reference"
     return { ..rt, status: Trap }
   }
+  let ref_value = ref_raw.to_int()
 
   match gc_get_object(rt, ref_value) {
     Some(Array(a)) => {
@@ -498,15 +530,17 @@ fn op_array_len(rt : Runtime) -> Runtime {
 /// Pops array, offset, value, length and fills the array
 fn op_array_fill(rt : Runtime) -> Runtime {
   let sp = rt.sp - 4
-  let ref_value = rt.stack.unsafe_get(sp).to_int()
+  let ref_raw = rt.stack.unsafe_get(sp)
   let offset = rt.stack.unsafe_get(sp + 1).to_int()
   let value = rt.stack.unsafe_get(sp + 2)
   let length = rt.stack.unsafe_get(sp + 3).to_int()
 
-  if ref_value == 0 {
+  // Null check (null is 0xFFFFFFFFFFFFFFFF)
+  if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "array.fill: null reference"
     return { ..rt, status: Trap }
   }
+  let ref_value = ref_raw.to_int()
 
   match gc_get_object(rt, ref_value) {
     Some(Array(a)) => {
@@ -531,16 +565,19 @@ fn op_array_fill(rt : Runtime) -> Runtime {
 /// Copies elements from src array to dst array
 fn op_array_copy(rt : Runtime) -> Runtime {
   let sp = rt.sp - 5
-  let dst_ref = rt.stack.unsafe_get(sp).to_int()
+  let dst_ref_raw = rt.stack.unsafe_get(sp)
   let dst_offset = rt.stack.unsafe_get(sp + 1).to_int()
-  let src_ref = rt.stack.unsafe_get(sp + 2).to_int()
+  let src_ref_raw = rt.stack.unsafe_get(sp + 2)
   let src_offset = rt.stack.unsafe_get(sp + 3).to_int()
   let length = rt.stack.unsafe_get(sp + 4).to_int()
 
-  if dst_ref == 0 || src_ref == 0 {
+  // Null check (null is 0xFFFFFFFFFFFFFFFF)
+  if dst_ref_raw == 0xFFFFFFFFFFFFFFFFUL || src_ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "array.copy: null reference"
     return { ..rt, status: Trap }
   }
+  let dst_ref = dst_ref_raw.to_int()
+  let src_ref = src_ref_raw.to_int()
 
   match (gc_get_object(rt, dst_ref), gc_get_object(rt, src_ref)) {
     (Some(Array(dst)), Some(Array(src))) => {
@@ -655,17 +692,28 @@ fn op_i31_get_u(rt : Runtime) -> Runtime {
 
 ///|
 /// any.convert_extern
-/// Converts externref to anyref (no-op in our implementation)
+/// Converts externref to anyref
+/// The value keeps its externref tag so it can still be identified as an
+/// "internalized externref" - it matches any/eq but not i31/struct/array
 fn op_any_convert_extern(rt : Runtime) -> Runtime {
-  // externref and anyref use the same representation in our implementation
+  // Value stays unchanged - an internalized externref still has the externref tag
+  // but is now typed as anyref. The tag allows gc_ref_matches_type to correctly
+  // identify it as matching "any" but not more specific types like i31/struct/array.
   { ..rt, pc: rt.pc + 1 }
 }
 
 ///|
 /// extern.convert_any
-/// Converts anyref to externref (no-op in our implementation)
+/// Converts anyref to externref by adding externref tag
 fn op_extern_convert_any(rt : Runtime) -> Runtime {
-  // externref and anyref use the same representation in our implementation
+  let ref_value = rt.stack.unsafe_get(rt.sp - 1)
+  // Null stays as null
+  if ref_value == ref_null {
+    return { ..rt, pc: rt.pc + 1 }
+  }
+  // Add externref tag (bit 61)
+  let tagged = ref_value.lor(0x2000000000000000UL)
+  rt.stack.unsafe_set(rt.sp - 1, tagged)
   { ..rt, pc: rt.pc + 1 }
 }
 
@@ -689,13 +737,58 @@ fn gc_ref_matches_type(
   target_type : Int,
   target_nullable : Bool,
 ) -> Bool {
-  // Check for null reference
-  if ref_value == 0UL {
+  // Check for null reference (stored as -1, i.e., 0xFFFFFFFFFFFFFFFF)
+  if ref_value == ref_null {
     return target_nullable
   }
 
-  // Check for i31ref (encoded with lowest bit set)
-  if ref_value.land(1UL) == 1UL {
+  // Check for funcref tag (bit 62 set)
+  if ref_value.land(ref_tag_funcref) == ref_tag_funcref {
+    // Funcref: matches func (-7) or concrete function types
+    if target_type == -7 {
+      return true // func
+    }
+    if target_type >= 0 {
+      // Check if function type matches target type
+      let func_idx = ref_value.land(ref_tag_funcref.lnot()).to_int()
+      let module_ = rt.ctx.module_
+      let num_imported = count_imported_funcs(module_)
+      if func_idx < num_imported {
+        // Imported function - check type against imports
+        for imp in module_.imports {
+          match imp.desc {
+            Func(type_idx) => {
+              if type_idx.reinterpret_as_int() == target_type {
+                return true
+              }
+            }
+            _ => continue
+          }
+        }
+        return false
+      } else {
+        // Local function
+        let local_idx = func_idx - num_imported
+        if local_idx < module_.funcs.length() {
+          let type_idx = module_.funcs[local_idx].reinterpret_as_int()
+          return gc_is_type_subtype(rt, type_idx, target_type)
+        }
+      }
+    }
+    return false
+  }
+
+  // Check for externref/internalized externref tag (bit 61 set)
+  if ref_value.land(ref_tag_externref) == ref_tag_externref {
+    // Externref or internalized externref
+    // After any.convert_extern, matches any (-2)
+    // Also matches extern (-8) in extern context
+    return target_type == -2 || // any
+      target_type == -8 // extern
+  }
+
+  // Check for i31ref (encoded with lowest bit set, no high tags)
+  if ref_value.land(ref_tag_mask) == 0UL && ref_value.land(1UL) == 1UL {
     // i31ref: check if target is i31, eq, or any
     return target_type == -4 || // I31
       target_type == -3 || // Eq
@@ -757,19 +850,136 @@ fn gc_is_type_subtype(rt : Runtime, type_idx : Int, target_type_idx : Int) -> Bo
     }
   }
 
-  // Check structural subtyping
+  // Check structural type equivalence (not subtyping)
+  // In WebAssembly GC, structurally identical types with the same supertype chain
+  // are considered equivalent and can be used interchangeably
   if type_idx >= 0 &&
     type_idx < module_.types.length() &&
     target_type_idx >= 0 &&
     target_type_idx < module_.types.length() {
     match (module_.types[type_idx], module_.types[target_type_idx]) {
-      (Struct(s1), Struct(s2)) => return gc_is_struct_subtype(rt, s1, s2)
-      (Array(a1), Array(a2)) => return gc_is_array_subtype(rt, a1, a2)
+      (Struct(s1), Struct(s2)) => return gc_is_struct_equivalent(rt, type_idx, s1, target_type_idx, s2)
+      (Array(a1), Array(a2)) => return gc_is_array_equivalent(rt, type_idx, a1, target_type_idx, a2)
       _ => ()
     }
   }
 
   false
+}
+
+///|
+/// Check if two types (by index) are equivalent
+fn gc_types_equivalent(rt : Runtime, type_idx1 : Int, type_idx2 : Int) -> Bool {
+  // Same index = same type
+  if type_idx1 == type_idx2 {
+    return true
+  }
+
+  let module_ = rt.ctx.module_
+  if type_idx1 < 0 ||
+    type_idx1 >= module_.types.length() ||
+    type_idx2 < 0 ||
+    type_idx2 >= module_.types.length() {
+    return false
+  }
+
+  match (module_.types[type_idx1], module_.types[type_idx2]) {
+    (Struct(s1), Struct(s2)) => gc_is_struct_equivalent(rt, type_idx1, s1, type_idx2, s2)
+    (Array(a1), Array(a2)) => gc_is_array_equivalent(rt, type_idx1, a1, type_idx2, a2)
+    (Func(f1), Func(f2)) => f1 == f2 // Function types just need structural equality
+    _ => false
+  }
+}
+
+///|
+/// Check if two struct types are equivalent (same structure and same supertypes)
+fn gc_is_struct_equivalent(
+  rt : Runtime,
+  type_idx1 : Int,
+  struct1 : @core.StructType,
+  type_idx2 : Int,
+  struct2 : @core.StructType,
+) -> Bool {
+  // First check structural equivalence - must have same number of fields with same types
+  if struct1.fields.length() != struct2.fields.length() {
+    return false
+  }
+
+  for i in 0..<struct1.fields.length() {
+    let f1 = struct1.fields[i]
+    let f2 = struct2.fields[i]
+    if f1.mutable != f2.mutable {
+      return false
+    }
+    if f1.storage != f2.storage {
+      return false
+    }
+  }
+
+  // Then check that supertypes are equivalent (not just same index)
+  let supers1 = get_supertypes(rt, type_idx1)
+  let supers2 = get_supertypes(rt, type_idx2)
+  if supers1.length() != supers2.length() {
+    return false
+  }
+  for i in 0..<supers1.length() {
+    if supers1[i] != supers2[i] {
+      // Different indices - check if they're equivalent types
+      if not(gc_types_equivalent(rt, supers1[i], supers2[i])) {
+        return false
+      }
+    }
+  }
+  true
+}
+
+///|
+/// Check if two array types are equivalent
+fn gc_is_array_equivalent(
+  rt : Runtime,
+  type_idx1 : Int,
+  arr1 : @core.ArrayType,
+  type_idx2 : Int,
+  arr2 : @core.ArrayType,
+) -> Bool {
+  if arr1.element.mutable != arr2.element.mutable {
+    return false
+  }
+  if arr1.element.storage != arr2.element.storage {
+    return false
+  }
+
+  // Check supertypes are equivalent (not just same index)
+  let supers1 = get_supertypes(rt, type_idx1)
+  let supers2 = get_supertypes(rt, type_idx2)
+  if supers1.length() != supers2.length() {
+    return false
+  }
+  for i in 0..<supers1.length() {
+    if supers1[i] != supers2[i] {
+      if not(gc_types_equivalent(rt, supers1[i], supers2[i])) {
+        return false
+      }
+    }
+  }
+  true
+}
+
+///|
+/// Get the list of supertypes for a type index
+fn get_supertypes(rt : Runtime, type_idx : Int) -> Array[Int] {
+  let result : Array[Int] = []
+  for group in rt.ctx.module_.type_groups {
+    for subtype_def in group.subtypes {
+      if subtype_def.type_idx.reinterpret_as_int() == type_idx {
+        for supertype in subtype_def.supertypes {
+          result.push(supertype.reinterpret_as_int())
+        }
+        return result
+      }
+    }
+  }
+  result
 }
 
 ///|
@@ -890,11 +1100,8 @@ fn op_ref_test(rt : Runtime) -> Runtime {
   let sp = rt.sp - 1
   let ref_value = rt.stack.unsafe_get(sp)
 
-  let result = if gc_ref_matches_type(rt, ref_value, target_type, target_nullable) {
-    1U
-  } else {
-    0U
-  }
+  let matches = gc_ref_matches_type(rt, ref_value, target_type, target_nullable)
+  let result = if matches { 1U } else { 0U }
 
   rt.stack.unsafe_set(sp, result.to_uint64())
   { ..rt, sp: sp + 1, pc: rt.pc + 3 }
@@ -1049,15 +1256,17 @@ fn op_array_init_data(rt : Runtime) -> Runtime {
   let elem_size = rt.ops.unsafe_get(rt.pc + 3).to_int()
 
   let sp = rt.sp - 4
-  let arr_ref = rt.stack.unsafe_get(sp).to_int()
+  let arr_ref_raw = rt.stack.unsafe_get(sp)
   let arr_offset = rt.stack.unsafe_get(sp + 1).to_int()
   let data_offset = rt.stack.unsafe_get(sp + 2).to_int()
   let length = rt.stack.unsafe_get(sp + 3).to_int()
 
-  if arr_ref == 0 {
+  // Null check (null is 0xFFFFFFFFFFFFFFFF)
+  if arr_ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "array.init_data: null reference"
     return { ..rt, status: Trap }
   }
+  let arr_ref = arr_ref_raw.to_int()
 
   // Get data segment
   if data_idx < 0 || data_idx >= rt.ctx.data_segments.length() {
@@ -1107,15 +1316,17 @@ fn op_array_init_elem(rt : Runtime) -> Runtime {
   let elem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
 
   let sp = rt.sp - 4
-  let arr_ref = rt.stack.unsafe_get(sp).to_int()
+  let arr_ref_raw = rt.stack.unsafe_get(sp)
   let arr_offset = rt.stack.unsafe_get(sp + 1).to_int()
   let elem_offset = rt.stack.unsafe_get(sp + 2).to_int()
   let length = rt.stack.unsafe_get(sp + 3).to_int()
 
-  if arr_ref == 0 {
+  // Null check (null is 0xFFFFFFFFFFFFFFFF)
+  if arr_ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "array.init_elem: null reference"
     return { ..rt, status: Trap }
   }
+  let arr_ref = arr_ref_raw.to_int()
 
   // Get element segment
   if elem_idx < 0 || elem_idx >= rt.ctx.module_.elems.length() {

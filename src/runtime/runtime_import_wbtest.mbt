@@ -18,7 +18,7 @@ test "import resolver add/get and module access" {
   resolver.add_func(b"m", b"f", func)
   resolver.add_global(b"m", b"g", Value::I32(1U))
   resolver.add_global(b"m", b"g2", Value::I64(2UL))
-  let table = RuntimeTable::{ data: [None, None], max: Some(2UL), external_funcrefs: [] }
+  let table = RuntimeTable::{ data: [0xFFFFFFFFFFFFFFFFUL, 0xFFFFFFFFFFFFFFFFUL], max: Some(2UL), external_funcrefs: [] }
   resolver.add_table(b"m", b"t", table)
   resolver.add_table(b"m", b"t2", table)
   let mem = ImportedMemory::{ data: Array::make(4, b'\x00'), max: None }

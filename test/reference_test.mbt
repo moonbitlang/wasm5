@@ -689,10 +689,10 @@ async test "gc/ref_eq.wast" {
   run_gc_harness("ref_eq.wast")
 }
 
-// ///|
-// async test "gc/ref_test.wast" {
-//   run_gc_harness("ref_test.wast")
-// }
+///|
+async test "gc/ref_test.wast" {
+  run_gc_harness("ref_test.wast")
+}
 
 ///|
 async test "gc/struct.wast" {

@@ -363,10 +363,13 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
 
   // Get function reference from table
   let func_ref = table[elem_idx]
-  guard func_ref is Some(func_idx) else {
+  // Check for null (0xFFFFFFFFFFFFFFFF)
+  if func_ref == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "uninitialized element"
     return { ..rt, status: Trap }
   }
+  // Extract func_idx from tagged funcref (remove tag bits)
+  let func_idx = func_ref.land(0x3FFFFFFFFFFFFFFFUL).to_int64().to_int()
 
   // Get the expected type
   let expected_type = match
@@ -375,11 +378,11 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
     None => return { ..rt, status: Trap }
   }
 
-  // Check if this is an external funcref (negative index)
-  // Mapping: -1 → external_funcrefs[0], -2 → [1], etc.
-  // Check table's external_funcrefs first (for shared table funcrefs),
-  // then fall back to runtime's external_funcrefs (for imported funcref globals).
-  if func_idx < 0 {
+  // Check if this is an external funcref (negative index from external_funcrefs)
+  // External funcrefs are stored as funcref tag | negative value
+  // Need to decode and check for external refs
+  let is_external = func_ref.land(0x4000000000000000UL) != 0UL && func_idx < 0
+  if is_external {
     let ext_idx = -(func_idx + 1)
     // First check the table's external_funcrefs (for cross-module table sharing)
     let table = rt.ctx.tables[table_idx]
@@ -573,10 +576,13 @@ fn op_return_call_indirect(rt : Runtime) -> Runtime {
 
   // Get function reference from table
   let func_ref = table[elem_idx]
-  guard func_ref is Some(func_idx) else {
+  // Check for null (0xFFFFFFFFFFFFFFFF)
+  if func_ref == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "uninitialized element"
     return { ..rt, status: Trap }
   }
+  // Extract func_idx from tagged funcref (remove tag bits)
+  let func_idx = func_ref.land(0x3FFFFFFFFFFFFFFFUL).to_int64().to_int()
   let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
 
   // Get the expected type
@@ -1030,13 +1036,8 @@ fn op_table_init(rt : Runtime) -> Runtime {
     // Use eval_const_expr to handle all expression types including ref.i31
     try {
       let value = eval_const_expr(expr, rt.ctx.globals)
-      match value {
-        Ref(ref_val) => table.data[dest + i] = ref_val
-        _ => {
-          rt.ctx.error_detail = "element init expression must produce a reference"
-          return { ..rt, sp: stack_top, status: Trap }
-        }
-      }
+      // Convert Value to UInt64 for table storage
+      table.data[dest + i] = value_to_stack(value)
     } catch {
       e => {
         rt.ctx.error_detail = "error evaluating element init: \{e}"
@@ -1093,8 +1094,8 @@ fn op_table_fill(rt : Runtime) -> Runtime {
   let table_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let stack_top = rt.sp - 3
   let n = rt.stack.unsafe_get(rt.sp - 1).to_uint().reinterpret_as_int()
-  let raw_ref = rt.stack.unsafe_get(rt.sp - 2).to_int()
-  let ref_value : Int? = if raw_ref == -1 { None } else { Some(raw_ref) }
+  // Get the raw 64-bit reference value directly (preserves tags)
+  let ref_value = rt.stack.unsafe_get(rt.sp - 2)
   let dest = rt.stack.unsafe_get(stack_top).to_uint().reinterpret_as_int()
   let table = rt.ctx.tables[table_idx].data
   if dest < 0 || n < 0 || dest + n > table.length() {
@@ -1147,12 +1148,9 @@ fn op_table_get(rt : Runtime) -> Runtime {
     rt.ctx.error_detail = "table element index out of bounds"
     return { ..rt, sp: stack_top, status: Trap }
   }
-  // Return the function reference (or null) - stored as Int64, -1 = null
-  let ref_val = match table[elem_idx] {
-    Some(idx) => idx.to_int64()
-    None => (-1).to_int64()
-  }
-  rt.stack.unsafe_set(stack_top, ref_val.reinterpret_as_uint64())
+  // Return the function reference (or null) directly as UInt64
+  let ref_val = table[elem_idx]
+  rt.stack.unsafe_set(stack_top, ref_val)
   { ..rt, pc: rt.pc + 2 }
 }
 
@@ -1163,10 +1161,9 @@ fn op_table_set(rt : Runtime) -> Runtime {
     rt.ctx.error_detail = "table index out of bounds"
     return { ..rt, status: Trap }
   }
-  // Pop ref value - stored as Int64, -1 = null
+  // Pop ref value as 64-bit (preserves tags)
   let stack_top = rt.sp - 2
-  let raw_ref = rt.stack.unsafe_get(rt.sp - 1).to_int()
-  let ref_value : Int? = if raw_ref == -1 { None } else { Some(raw_ref) }
+  let ref_value = rt.stack.unsafe_get(rt.sp - 1)
   let elem_idx = rt.stack.unsafe_get(stack_top).to_uint().reinterpret_as_int()
   let table = rt.ctx.tables[table_idx].data
   if elem_idx < 0 || elem_idx >= table.length() {
@@ -1186,9 +1183,8 @@ fn op_table_grow(rt : Runtime) -> Runtime {
   }
   let stack_top = rt.sp - 2
   let delta = rt.stack.unsafe_get(rt.sp - 1).to_uint().reinterpret_as_int()
-  // Pop ref value - stored as Int64, -1 = null
-  let raw_ref = rt.stack.unsafe_get(stack_top).to_int()
-  let init_value : Int? = if raw_ref == -1 { None } else { Some(raw_ref) }
+  // Pop ref value as 64-bit (preserves tags)
+  let init_value = rt.stack.unsafe_get(stack_top)
   let runtime_table = rt.ctx.tables[table_idx]
   let table = runtime_table.data
   let old_size = table.length()
@@ -1235,8 +1231,9 @@ fn op_ref_null(rt : Runtime) -> Runtime {
 fn op_ref_func(rt : Runtime) -> Runtime {
   // ref.func pushes a reference to the given function onto the stack
   let func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  // Push func ref as Int64
-  rt.stack.unsafe_set(rt.sp, func_idx.to_int64().reinterpret_as_uint64())
+  // Push func ref tagged with bit 62 (0x4000000000000000)
+  let tagged = func_idx.to_uint64().lor(0x4000000000000000UL)
+  rt.stack.unsafe_set(rt.sp, tagged)
   { ..rt, sp: rt.sp + 1, pc: rt.pc + 2 }
 }
 
@@ -1297,7 +1294,7 @@ fn op_global_set(rt : Runtime) -> Runtime {
     I64(_) => I64
     F32(_) => F32
     F64(_) => F64
-    Ref(_) => FuncRef // Ref types all stored the same way
+    Ref(_) | Funcref(_) | Externref(_) => FuncRef // Ref types all stored the same way
   }
   rt.ctx.globals[idx] = stack_to_value(raw, val_type)
   { ..rt, sp: stack_top, pc: rt.pc + 2 }

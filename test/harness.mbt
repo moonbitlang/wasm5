@@ -332,9 +332,15 @@ fn fix_shared_table_elements(
         for i in 0..<elem.init.length() {
           let addr = off + i
           if addr >= 0 && addr < table.data_length() {
-            // Get the current value - this is a local func index
-            match table.get_data(addr) {
-              Some(func_idx) if func_idx >= 0 => {
+            // Get the current value - this is encoded as a tagged UInt64
+            let data = table.get_data(addr)
+            // Check if it's a funcref (bit 62 set) and not null
+            if data != 0xFFFFFFFFFFFFFFFFUL && (data & 0x4000000000000000UL) != 0UL {
+              // Extract func_idx from lower 62 bits
+              let func_idx_raw = (data & 0x3FFFFFFFFFFFFFFFUL).reinterpret_as_int64().to_int()
+              // Only process if it's a local function (non-negative)
+              if func_idx_raw >= 0 {
+                let func_idx = func_idx_raw
                 // This is a local function index - create a wrapper
                 let type_idx = if func_idx < num_imported_funcs {
                   // Imported function - get type from import
@@ -359,11 +365,15 @@ fn fix_shared_table_elements(
                 let wrapper = make_funcref_wrapper(registered, func_idx, arity)
                 let ext_idx = table.add_external_funcref(wrapper)
 
-                // Store negative index pointing to the wrapper
-                table.set_data(addr, Some(-(ext_idx + 1)))
+                // Store negative index pointing to the wrapper (with funcref tag)
+                // The index must be masked to 62 bits before OR'ing with funcref tag
+                // because -1 as full 64-bit would be 0xFFFFFFFF... which is NULL
+                let neg_val = (-(ext_idx + 1)).to_int64().reinterpret_as_uint64()
+                let masked = neg_val.land(0x3FFFFFFFFFFFFFFFUL) // Mask to lower 62 bits
+                table.set_data(addr, masked.lor(0x4000000000000000UL))
               }
-              _ => () // null or already negative - skip
             }
+            // null or already negative - skip
           }
         }
       }
@@ -556,10 +566,10 @@ fn parse_args(args : Array[Json]) -> Array[@wasm5_runtime.Value] raise {
       // externref: "null" for null, otherwise an integer index
       { "type": "externref", "value": String(v), .. } =>
         if v == "null" {
-          runtime_args.push(@wasm5_runtime.Value::Ref(None))
+          runtime_args.push(@wasm5_runtime.Value::Externref(None))
         } else {
           runtime_args.push(
-            @wasm5_runtime.Value::Ref(
+            @wasm5_runtime.Value::Externref(
               Some(parse_i32_value(v).reinterpret_as_int()),
             ),
           )
@@ -567,10 +577,10 @@ fn parse_args(args : Array[Json]) -> Array[@wasm5_runtime.Value] raise {
       // funcref: "null" for null, otherwise an integer function index
       { "type": "funcref", "value": String(v), .. } =>
         if v == "null" {
-          runtime_args.push(@wasm5_runtime.Value::Ref(None))
+          runtime_args.push(@wasm5_runtime.Value::Funcref(None))
         } else {
           runtime_args.push(
-            @wasm5_runtime.Value::Ref(
+            @wasm5_runtime.Value::Funcref(
               Some(parse_i32_value(v).reinterpret_as_int()),
             ),
           )
