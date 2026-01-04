@@ -1057,29 +1057,47 @@ fn op_table_init(rt : Runtime) -> Runtime {
 
 ///|
 fn op_table_copy(rt : Runtime) -> Runtime {
-  let _dst_table_idx = rt.ops
-    .unsafe_get(rt.pc + 1)
-    .reinterpret_as_int64()
-    .to_int()
-  let _src_table_idx = rt.ops
-    .unsafe_get(rt.pc + 2)
-    .reinterpret_as_int64()
-    .to_int()
+  // Table indices are validated at compile time by the validator
+  let dst_table_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let src_table_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let stack_top = rt.sp - 3
-  let _n = rt.stack.unsafe_get(rt.sp - 1).to_uint()
-  let _src = rt.stack.unsafe_get(rt.sp - 2).to_uint()
-  let _dest = rt.stack.unsafe_get(stack_top).to_uint()
-  // TODO: Implement table.copy
+  let n = rt.stack.unsafe_get(rt.sp - 1).to_uint().reinterpret_as_int()
+  let src = rt.stack.unsafe_get(rt.sp - 2).to_uint().reinterpret_as_int()
+  let dest = rt.stack.unsafe_get(stack_top).to_uint().reinterpret_as_int()
+
+  let dst_table = rt.ctx.tables[dst_table_idx]
+  let src_table = rt.ctx.tables[src_table_idx]
+
+  // Bounds checking - stack values are dynamic, must check at runtime
+  // The < 0 checks catch large unsigned values (>= 2^31) that appear negative when signed
+  if src < 0 ||
+    dest < 0 ||
+    n < 0 ||
+    src + n > src_table.data_length() ||
+    dest + n > dst_table.data_length() {
+    rt.ctx.error_detail = "out of bounds table access"
+    return { ..rt, sp: stack_top, status: Trap }
+  }
+
+  // Copy elements with proper overlap handling
+  if dst_table_idx == src_table_idx && dest > src && dest < src + n {
+    // Overlapping, dest > src: copy backwards
+    for i = n - 1; i >= 0; i = i - 1 {
+      dst_table.set_data(dest + i, src_table.get_data(src + i))
+    }
+  } else {
+    // Non-overlapping or src >= dest: copy forwards
+    for i = 0; i < n; i = i + 1 {
+      dst_table.set_data(dest + i, src_table.get_data(src + i))
+    }
+  }
   { ..rt, sp: stack_top, pc: rt.pc + 3 }
 }
 
 ///|
 fn op_table_fill(rt : Runtime) -> Runtime {
+  // Table index is validated at compile time by the validator
   let table_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  if table_idx < 0 || table_idx >= rt.ctx.tables.length() {
-    rt.ctx.error_detail = "table index out of bounds"
-    return { ..rt, status: Trap }
-  }
   let stack_top = rt.sp - 3
   let n = rt.stack.unsafe_get(rt.sp - 1).to_uint().reinterpret_as_int()
   let raw_ref = rt.stack.unsafe_get(rt.sp - 2).to_int()

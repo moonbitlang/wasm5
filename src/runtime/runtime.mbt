@@ -517,22 +517,25 @@ pub fn Runtime::load_with_resolver(
     let value = eval_const_expr_with_gc(global.init, globals, gc_heap, m)
     globals.push(value)
   }
-  // Initialize data segments (copy data into memory)
+  // Initialize data segments (copy active data segments into memory)
   for data in m.datas {
-    // Evaluate offset expression to get the starting address
-    let offset_value = eval_const_expr(data.offset, globals)
-    let offset = match offset_value {
-      I32(v) => v.reinterpret_as_int()
-      _ =>
-        raise RuntimeError::UnsupportedInitExpression(
-          "data segment offset must be i32",
-        )
-    }
-    // Copy data bytes into memory
-    for i in 0..<data.init.length() {
-      let addr = offset + i
-      if addr >= 0 && addr < memory.length() {
-        memory[addr] = data.init[i]
+    // Only copy active segments - passive segments are used with memory.init
+    if data.is_active {
+      // Evaluate offset expression to get the starting address
+      let offset_value = eval_const_expr(data.offset, globals)
+      let offset = match offset_value {
+        I32(v) => v.reinterpret_as_int()
+        _ =>
+          raise RuntimeError::UnsupportedInitExpression(
+            "data segment offset must be i32",
+          )
+      }
+      // Copy data bytes into memory
+      for i in 0..<data.init.length() {
+        let addr = offset + i
+        if addr >= 0 && addr < memory.length() {
+          memory[addr] = data.init[i]
+        }
       }
     }
   }

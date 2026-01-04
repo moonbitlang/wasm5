@@ -664,21 +664,62 @@ async test "utf8-invalid-encoding.wast" {
 // }
 
 // =============================================================================
-// WebAssembly Bulk Memory Spec Tests (commented out - enable when ready)
+// WebAssembly Bulk Memory Spec Tests
 // =============================================================================
 
-// Helper for bulk-memory tests in the bulk-memory subdirectory
-// fn run_bulk_memory_harness(filename : String) -> Unit {
-//   let (file_failures, file_skipped) = process_wast_file(
-//     "test/reference_test/bulk-memory/", filename,
-//   )
-//   // ... same handling as run_harness
-// }
+///|
+async fn run_bulk_memory_harness(filename : String) -> Unit {
+  let (file_failures, file_skipped) = process_wast_file(
+    "test/reference_test/bulk-memory/",
+    filename,
+  )
+  if file_failures.length() > 0 {
+    // Group failures by type for organized output
+    let grouped = group_failures_by_type(file_failures)
 
-// ///|
-// async test "bulk-memory/bulk.wast" {
-//   run_bulk_memory_harness("bulk.wast")
-// }
+    // Print header
+    println(
+      "\n╔══════════════════════════════════════════════════════════════════╗",
+    )
+    println("║ TEST FAILURES: bulk-memory/\{filename}")
+    println(
+      "╚══════════════════════════════════════════════════════════════════╝",
+    )
+
+    // Print failures grouped by type
+    for test_type, failures in grouped {
+      println(
+        "\n┌─ \{test_type} (\{failures.length()} failures) ─────────────────────",
+      )
+      for failure in failures {
+        println(format_failure_detail(failure))
+      }
+      println(
+        "└────────────────────────────────────────────────────────────────",
+      )
+    }
+
+    // Print summary
+    println(
+      "\n╔══════════════════════════════════════════════════════════════════╗",
+    )
+    println(
+      "║ SUMMARY: \{file_failures.length()} failure(s), \{file_skipped} skipped",
+    )
+    println(
+      "╚══════════════════════════════════════════════════════════════════╝\n",
+    )
+    fail("\{file_failures.length()} failure(s) in bulk-memory/\{filename}")
+  }
+  if file_skipped > 0 {
+    println("Skipped \{file_skipped} tests in bulk-memory/\{filename}")
+  }
+}
+
+///|
+async test "bulk-memory/bulk.wast" {
+  run_bulk_memory_harness("bulk.wast")
+}
 
 // ///|
 // async test "bulk-memory/memory_copy.wast" {
