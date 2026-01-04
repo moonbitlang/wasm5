@@ -4,7 +4,9 @@ fn op_local_get(rt : Runtime) -> Runtime {
   let idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let value = rt.stack.unsafe_get(rt.bp + idx)
   rt.stack.unsafe_set(rt.sp, value)
-  { ..rt, sp: rt.sp + 1, pc: rt.pc + 2 }
+  rt.sp = rt.sp + 1
+  rt.pc = rt.pc + 2
+  rt
 }
 
 ///|
@@ -13,7 +15,9 @@ fn op_local_set(rt : Runtime) -> Runtime {
   let stack_top = rt.sp - 1
   let value = rt.stack.unsafe_get(stack_top)
   rt.stack.unsafe_set(rt.bp + idx, value)
-  { ..rt, sp: stack_top, pc: rt.pc + 2 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 2
+  rt
 }
 
 ///|
@@ -21,7 +25,8 @@ fn op_local_tee(rt : Runtime) -> Runtime {
   let idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let value = rt.stack.unsafe_get(rt.sp - 1)
   rt.stack.unsafe_set(rt.bp + idx, value)
-  { ..rt, pc: rt.pc + 2 }
+  rt.pc = rt.pc + 2
+  rt
 }
 
 // ============================================================================
@@ -30,7 +35,9 @@ fn op_local_tee(rt : Runtime) -> Runtime {
 
 ///|
 fn op_drop(rt : Runtime) -> Runtime {
-  { ..rt, sp: rt.sp - 1, pc: rt.pc + 1 }
+  rt.sp = rt.sp - 1
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -40,7 +47,9 @@ fn op_select(rt : Runtime) -> Runtime {
   let val2 = rt.stack.unsafe_get(rt.sp - 2)
   let val1 = rt.stack.unsafe_get(stack_top)
   rt.stack.unsafe_set(stack_top, if cond != 0U { val1 } else { val2 })
-  { ..rt, sp: stack_top + 1, pc: rt.pc + 1 }
+  rt.sp = stack_top + 1
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -71,11 +80,13 @@ fn op_if(rt : Runtime) -> Runtime {
   let else_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let stack_top = rt.sp - 1
   let cond = rt.stack.unsafe_get(stack_top).to_uint()
+  rt.sp = stack_top
   if cond != 0U {
-    { ..rt, sp: stack_top, pc: rt.pc + 2 }
+    rt.pc = rt.pc + 2
   } else {
-    { ..rt, sp: stack_top, pc: else_pc }
+    rt.pc = else_pc
   }
+  rt
 }
 
 // NOTE: op_else, op_end_block, op_push_block_target, op_push_loop_target removed
@@ -103,7 +114,9 @@ fn op_br(rt : Runtime) -> Runtime {
   }
 
   // Trim stack to remove drop_count values
-  { ..rt, sp: rt.sp - drop_count, pc: target_pc }
+  rt.sp = rt.sp - drop_count
+  rt.pc = target_pc
+  rt
 }
 
 ///|
@@ -127,9 +140,13 @@ fn op_br_if(rt : Runtime) -> Runtime {
     }
 
     // Trim stack to remove drop_count values
-    { ..rt, sp: stack_top - drop_count, pc: target_pc }
+    rt.sp = stack_top - drop_count
+    rt.pc = target_pc
+    rt
   } else {
-    { ..rt, sp: stack_top, pc: rt.pc + 4 }
+    rt.sp = stack_top
+    rt.pc = rt.pc + 4
+    rt
   }
 }
 
@@ -168,7 +185,9 @@ fn op_br_table(rt : Runtime) -> Runtime {
   }
 
   // Trim stack to remove drop_count values
-  { ..rt, sp: stack_top - drop_count, pc: target_pc }
+  rt.sp = stack_top - drop_count
+  rt.pc = target_pc
+  rt
 }
 
 ///|
@@ -196,11 +215,14 @@ fn op_br_on_null(rt : Runtime) -> Runtime {
     }
 
     // Trim stack to remove drop_count values
-    { ..rt, sp: stack_top - drop_count, pc: target_pc }
+    rt.sp = stack_top - drop_count
+    rt.pc = target_pc
+    rt
   } else {
     // Not null - push back the value and continue
     rt.stack.unsafe_set(stack_top, ref_val)
-    { ..rt, pc: rt.pc + 4 }
+    rt.pc = rt.pc + 4
+    rt
   }
 }
 
@@ -232,10 +254,14 @@ fn op_br_on_non_null(rt : Runtime) -> Runtime {
     }
 
     // Trim stack to remove drop_count values
-    { ..rt, sp: stack_top - drop_count, pc: target_pc }
+    rt.sp = stack_top - drop_count
+    rt.pc = target_pc
+    rt
   } else {
     // Null - don't push anything, continue
-    { ..rt, sp: stack_top, pc: rt.pc + 4 }
+    rt.sp = stack_top
+    rt.pc = rt.pc + 4
+    rt
   }
 }
 
@@ -259,7 +285,8 @@ fn op_call_local(rt : Runtime) -> Runtime {
   // Check stack capacity for the callee
   if new_bp + max_stack_height > rt.stack.length() {
     rt.ctx.error_detail = "Stack overflow: need \{max_stack_height} slots"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return rt
   }
 
   // Save caller state on native stack
@@ -268,13 +295,16 @@ fn op_call_local(rt : Runtime) -> Runtime {
   let return_pc = rt.pc + 5 // Next instruction after call (op + 4 immediates)
 
   // Set up callee frame (locals will be initialized by compiled code)
-  let rt = { ..rt, sp: new_bp + num_params, bp: new_bp, num_locals }
+  rt.sp = new_bp + num_params
+  rt.bp = new_bp
+  rt.num_locals = num_locals
 
   // Recursively execute callee using native stack
   let rt = execute_call(rt, callee_pc, caller_bp, caller_num_locals, return_pc) catch {
     err => {
       rt.ctx.error_detail = err.to_string()
-      return { ..rt, status: Trap }
+      rt.status = Trap
+      return rt
     }
   }
   rt
@@ -288,11 +318,15 @@ fn op_call_import(rt : Runtime) -> Runtime {
   let type_idx = get_func_type_idx(rt.ctx.module_, func_idx, num_imported_funcs)
   if type_idx < 0 {
     rt.ctx.error_detail = "call: invalid imported function index"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return rt
   }
   let func_type = match get_func_type_or_error(rt, type_idx, "call") {
     Some(found) => found
-    None => return { ..rt, status: Trap }
+    None => {
+      rt.status = Trap
+      return rt
+    }
   }
   let { rt, args } = pop_arguments(rt, func_type)
   let rt = call_imported_function(
@@ -301,7 +335,8 @@ fn op_call_import(rt : Runtime) -> Runtime {
     args,
     func_type.results.length(),
   )
-  { ..rt, pc: rt.pc + 2 }
+  rt.pc = rt.pc + 2
+  rt
 }
 
 ///|
@@ -327,16 +362,18 @@ fn op_return(rt : Runtime) -> Runtime {
 
   // Trim stack to keep only return values at frame position
   let stack_top = rt.bp + num_return_values
+  rt.sp = stack_top
 
   // Check if this is the entry function (bp == 0) or a nested call
   if rt.bp == 0 {
     // Entry function returning - results are now at stack[0..num_return_values)
-    { ..rt, sp: stack_top, status: Terminated }
+    rt.status = Terminated
   } else {
     // Nested call returning - let native stack unwind
     // Caller's execute_call will restore bp, num_locals, pc
-    { ..rt, sp: stack_top, status: Returned }
+    rt.status = Returned
   }
+  rt
 }
 
 ///|
@@ -348,24 +385,27 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
   // Pop the function index from the stack
   let stack_top = rt.sp - 1
   let elem_idx = rt.stack.unsafe_get(stack_top).to_uint().reinterpret_as_int()
-  let rt = { ..rt, sp: stack_top }
+  rt.sp = stack_top
 
   // Check table bounds
   if table_idx < 0 || table_idx >= rt.ctx.tables.length() {
     rt.ctx.error_detail = "call_indirect: invalid table index"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return rt
   }
   let table = rt.ctx.tables[table_idx].data
   if elem_idx < 0 || elem_idx >= table.length() {
     rt.ctx.error_detail = "undefined element"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return rt
   }
 
   // Get function reference from table
   let func_ref = table[elem_idx]
   guard func_ref is Some(func_idx) else {
     rt.ctx.error_detail = "uninitialized element"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return rt
   }
   let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
 
@@ -373,7 +413,10 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
   let expected_type = match
     get_func_type_or_error(rt, type_idx, "call_indirect") {
     Some(found) => found
-    None => return { ..rt, status: Trap }
+    None => {
+      rt.status = Trap
+      return rt
+    }
   }
 
   // Check if calling an imported function
@@ -386,12 +429,16 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
     )
     if actual_type_idx < 0 {
       rt.ctx.error_detail = "call_indirect: invalid imported function index"
-      return { ..rt, status: Trap }
+      rt.status = Trap
+      return rt
     }
     let actual_type = match
       get_func_type_or_error(rt, actual_type_idx, "call_indirect") {
       Some(found) => found
-      None => return { ..rt, status: Trap }
+      None => {
+        rt.status = Trap
+        return rt
+      }
     }
 
     // Check type signature matches
@@ -408,7 +455,8 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
       args,
       expected_type.results.length(),
     )
-    return { ..rt, pc: rt.pc + 3 }
+    rt.pc = rt.pc + 3
+    return rt
   }
 
   // Adjust to local function index
@@ -417,7 +465,8 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
   // Check function index bounds
   if local_func_idx < 0 || local_func_idx >= rt.ctx.module_.codes.length() {
     rt.ctx.error_detail = "call_indirect: invalid function index"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return rt
   }
 
   // Get the actual function type
@@ -425,7 +474,10 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
   let actual_type = match
     get_func_type_or_error(rt, actual_type_idx, "call_indirect") {
     Some(found) => found
-    None => return { ..rt, status: Trap }
+    None => {
+      rt.status = Trap
+      return rt
+    }
   }
 
   // Check type signature matches
@@ -438,7 +490,8 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
   let code = rt.ctx.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     rt.ctx.error_detail = "Function not compiled: \{func_idx}"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return rt
   }
 
   // Unified stack: arguments are already on stack, they become callee's first locals
@@ -448,7 +501,8 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
   // Check stack capacity for the callee
   if new_bp + code.max_stack_height > rt.stack.length() {
     rt.ctx.error_detail = "Stack overflow: need \{code.max_stack_height} slots"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return rt
   }
 
   // Save caller state on native stack
@@ -457,18 +511,16 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
   let return_pc = rt.pc + 3 // Next instruction after call_indirect
 
   // Set up callee frame (locals will be initialized by compiled code)
-  let rt = {
-    ..rt,
-    sp: new_bp + num_params,
-    bp: new_bp,
-    num_locals: num_params + code.locals.length(),
-  }
+  rt.sp = new_bp + num_params
+  rt.bp = new_bp
+  rt.num_locals = num_params + code.locals.length()
 
   // Recursively execute callee using native stack
   let rt = execute_call(rt, callee_pc, caller_bp, caller_num_locals, return_pc) catch {
     err => {
       rt.ctx.error_detail = err.to_string()
-      return { ..rt, status: Trap }
+      rt.status = Trap
+      return rt
     }
   }
   rt
@@ -497,7 +549,10 @@ fn op_return_call_local(rt : Runtime) -> Runtime {
   }
 
   // Trim stack to bp + num_params (locals will be initialized by compiled code)
-  { ..rt, sp: rt.bp + num_params, num_locals, pc: callee_pc }
+  rt.sp = rt.bp + num_params
+  rt.num_locals = num_locals
+  rt.pc = callee_pc
+  rt
 }
 
 ///|
@@ -508,11 +563,15 @@ fn op_return_call_import(rt : Runtime) -> Runtime {
   let type_idx = get_func_type_idx(rt.ctx.module_, func_idx, num_imported_funcs)
   if type_idx < 0 {
     rt.ctx.error_detail = "return_call: invalid imported function index"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return rt
   }
   let func_type = match get_func_type_or_error(rt, type_idx, "return_call") {
     Some(found) => found
-    None => return { ..rt, status: Trap }
+    None => {
+      rt.status = Trap
+      return rt
+    }
   }
   let { rt, args } = pop_arguments(rt, func_type)
   let rt = call_imported_function(
@@ -532,24 +591,27 @@ fn op_return_call_indirect(rt : Runtime) -> Runtime {
   // Pop the function index from the stack
   let stack_top = rt.sp - 1
   let elem_idx = rt.stack.unsafe_get(stack_top).to_uint().reinterpret_as_int()
-  let rt = { ..rt, sp: stack_top }
+  rt.sp = stack_top
 
   // Check table bounds
   if table_idx < 0 || table_idx >= rt.ctx.tables.length() {
     rt.ctx.error_detail = "return_call_indirect: invalid table index"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return rt
   }
   let table = rt.ctx.tables[table_idx].data
   if elem_idx < 0 || elem_idx >= table.length() {
     rt.ctx.error_detail = "undefined element"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return rt
   }
 
   // Get function reference from table
   let func_ref = table[elem_idx]
   guard func_ref is Some(func_idx) else {
     rt.ctx.error_detail = "uninitialized element"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return rt
   }
   let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
 
@@ -557,7 +619,10 @@ fn op_return_call_indirect(rt : Runtime) -> Runtime {
   let expected_type = match
     get_func_type_or_error(rt, type_idx, "return_call_indirect") {
     Some(found) => found
-    None => return { ..rt, status: Trap }
+    None => {
+      rt.status = Trap
+      return rt
+    }
   }
 
   // Check if calling an imported function
@@ -570,12 +635,16 @@ fn op_return_call_indirect(rt : Runtime) -> Runtime {
     )
     if actual_type_idx < 0 {
       rt.ctx.error_detail = "return_call_indirect: invalid imported function index"
-      return { ..rt, status: Trap }
+      rt.status = Trap
+      return rt
     }
     let actual_type = match
       get_func_type_or_error(rt, actual_type_idx, "return_call_indirect") {
       Some(found) => found
-      None => return { ..rt, status: Trap }
+      None => {
+        rt.status = Trap
+        return rt
+      }
     }
 
     // Check type signature matches
@@ -601,7 +670,8 @@ fn op_return_call_indirect(rt : Runtime) -> Runtime {
   // Check function index bounds
   if local_func_idx < 0 || local_func_idx >= rt.ctx.module_.codes.length() {
     rt.ctx.error_detail = "return_call_indirect: invalid function index"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return rt
   }
 
   // Get the actual function type
@@ -609,7 +679,10 @@ fn op_return_call_indirect(rt : Runtime) -> Runtime {
   let actual_type = match
     get_func_type_or_error(rt, actual_type_idx, "return_call_indirect") {
     Some(found) => found
-    None => return { ..rt, status: Trap }
+    None => {
+      rt.status = Trap
+      return rt
+    }
   }
 
   // Check type signature matches
@@ -622,7 +695,8 @@ fn op_return_call_indirect(rt : Runtime) -> Runtime {
   let code = rt.ctx.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     rt.ctx.error_detail = "Function not compiled: \{func_idx}"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return rt
   }
 
   // Tail call: reuse current frame
@@ -638,12 +712,10 @@ fn op_return_call_indirect(rt : Runtime) -> Runtime {
   }
 
   // Trim stack to bp + num_params (locals will be initialized by compiled code)
-  {
-    ..rt,
-    sp: rt.bp + num_params,
-    num_locals: num_params + code.locals.length(),
-    pc: callee_pc,
-  }
+  rt.sp = rt.bp + num_params
+  rt.num_locals = num_params + code.locals.length()
+  rt.pc = callee_pc
+  rt
 }
 
 ///|
@@ -657,10 +729,11 @@ fn op_call_ref(rt : Runtime) -> Runtime {
     .unsafe_get(stack_top)
     .reinterpret_as_int64()
     .to_int()
-  let rt = { ..rt, sp: stack_top }
+  rt.sp = stack_top
   if func_ref_raw == -1 {
     rt.ctx.error_detail = "call_ref: null function reference"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return rt
   }
   let func_idx = func_ref_raw
   let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
@@ -668,7 +741,10 @@ fn op_call_ref(rt : Runtime) -> Runtime {
   // Get the expected function type
   let func_type = match get_func_type_or_error(rt, type_idx, "call_ref") {
     Some(found) => found
-    None => return { ..rt, status: Trap }
+    None => {
+      rt.status = Trap
+      return rt
+    }
   }
 
   // Check if calling an imported function
@@ -681,12 +757,16 @@ fn op_call_ref(rt : Runtime) -> Runtime {
     )
     if actual_type_idx < 0 {
       rt.ctx.error_detail = "call_ref: invalid imported function index"
-      return { ..rt, status: Trap }
+      rt.status = Trap
+      return rt
     }
     let actual_type = match
       get_func_type_or_error(rt, actual_type_idx, "call_ref") {
       Some(found) => found
-      None => return { ..rt, status: Trap }
+      None => {
+        rt.status = Trap
+        return rt
+      }
     }
 
     // Check type signature matches
@@ -703,20 +783,25 @@ fn op_call_ref(rt : Runtime) -> Runtime {
       args,
       func_type.results.length(),
     )
-    return { ..rt, pc: rt.pc + 2 }
+    rt.pc = rt.pc + 2
+    return rt
   }
 
   // Adjust index for local functions
   let local_func_idx = func_idx - num_imported_funcs
   if local_func_idx < 0 || local_func_idx >= rt.ctx.module_.codes.length() {
     rt.ctx.error_detail = "call_ref: invalid function index"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return rt
   }
   let actual_type_idx = rt.ctx.module_.funcs[local_func_idx].reinterpret_as_int()
   let actual_type = match
     get_func_type_or_error(rt, actual_type_idx, "call_ref") {
     Some(found) => found
-    None => return { ..rt, status: Trap }
+    None => {
+      rt.status = Trap
+      return rt
+    }
   }
 
   // Check type signature matches
@@ -729,7 +814,8 @@ fn op_call_ref(rt : Runtime) -> Runtime {
   let code = rt.ctx.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     rt.ctx.error_detail = "Function not compiled: \{func_idx}"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return rt
   }
 
   // Unified stack: arguments are already on stack, they become callee's first locals
@@ -739,7 +825,8 @@ fn op_call_ref(rt : Runtime) -> Runtime {
   // Check stack capacity for the callee
   if new_bp + code.max_stack_height > rt.stack.length() {
     rt.ctx.error_detail = "Stack overflow: need \{code.max_stack_height} slots"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return rt
   }
 
   // Save caller state on native stack
@@ -748,18 +835,16 @@ fn op_call_ref(rt : Runtime) -> Runtime {
   let return_pc = rt.pc + 2 // Next instruction after call_ref
 
   // Set up callee frame (locals will be initialized by compiled code)
-  let rt = {
-    ..rt,
-    sp: new_bp + num_params,
-    bp: new_bp,
-    num_locals: num_params + code.locals.length(),
-  }
+  rt.sp = new_bp + num_params
+  rt.bp = new_bp
+  rt.num_locals = num_params + code.locals.length()
 
   // Recursively execute callee using native stack
   let rt = execute_call(rt, callee_pc, caller_bp, caller_num_locals, return_pc) catch {
     err => {
       rt.ctx.error_detail = err.to_string()
-      return { ..rt, status: Trap }
+      rt.status = Trap
+      return rt
     }
   }
   rt
@@ -775,10 +860,11 @@ fn op_return_call_ref(rt : Runtime) -> Runtime {
     .unsafe_get(stack_top)
     .reinterpret_as_int64()
     .to_int()
-  let rt = { ..rt, sp: stack_top }
+  rt.sp = stack_top
   if func_ref_raw == -1 {
     rt.ctx.error_detail = "return_call_ref: null function reference"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return rt
   }
   let func_idx = func_ref_raw
   let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
@@ -787,7 +873,10 @@ fn op_return_call_ref(rt : Runtime) -> Runtime {
   let func_type = match
     get_func_type_or_error(rt, type_idx, "return_call_ref") {
     Some(found) => found
-    None => return { ..rt, status: Trap }
+    None => {
+      rt.status = Trap
+      return rt
+    }
   }
 
   // Check if calling an imported function
@@ -800,12 +889,16 @@ fn op_return_call_ref(rt : Runtime) -> Runtime {
     )
     if actual_type_idx < 0 {
       rt.ctx.error_detail = "return_call_ref: invalid imported function index"
-      return { ..rt, status: Trap }
+      rt.status = Trap
+      return rt
     }
     let actual_type = match
       get_func_type_or_error(rt, actual_type_idx, "return_call_ref") {
       Some(found) => found
-      None => return { ..rt, status: Trap }
+      None => {
+        rt.status = Trap
+        return rt
+      }
     }
 
     // Check type signature matches
@@ -829,13 +922,17 @@ fn op_return_call_ref(rt : Runtime) -> Runtime {
   let local_func_idx = func_idx - num_imported_funcs
   if local_func_idx < 0 || local_func_idx >= rt.ctx.module_.codes.length() {
     rt.ctx.error_detail = "return_call_ref: invalid function index"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return rt
   }
   let actual_type_idx = rt.ctx.module_.funcs[local_func_idx].reinterpret_as_int()
   let actual_type = match
     get_func_type_or_error(rt, actual_type_idx, "return_call_ref") {
     Some(found) => found
-    None => return { ..rt, status: Trap }
+    None => {
+      rt.status = Trap
+      return rt
+    }
   }
 
   // Check type signature matches
@@ -848,7 +945,8 @@ fn op_return_call_ref(rt : Runtime) -> Runtime {
   let code = rt.ctx.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
     rt.ctx.error_detail = "Function not compiled: \{func_idx}"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return rt
   }
 
   // Tail call: reuse current frame
@@ -864,17 +962,16 @@ fn op_return_call_ref(rt : Runtime) -> Runtime {
   }
 
   // Trim stack to bp + num_params (locals will be initialized by compiled code)
-  {
-    ..rt,
-    sp: rt.bp + num_params,
-    num_locals: num_params + code.locals.length(),
-    pc: callee_pc,
-  }
+  rt.sp = rt.bp + num_params
+  rt.num_locals = num_params + code.locals.length()
+  rt.pc = callee_pc
+  rt
 }
 
 ///|
 fn op_nop(rt : Runtime) -> Runtime {
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -887,7 +984,9 @@ fn op_init_zeros(rt : Runtime) -> Runtime {
     rt.stack.unsafe_set(sp, 0UL)
     sp += 1
   }
-  { ..rt, sp, pc: rt.pc + 2 }
+  rt.sp = sp
+  rt.pc = rt.pc + 2
+  rt
 }
 
 ///|
@@ -901,7 +1000,9 @@ fn op_init_null_refs(rt : Runtime) -> Runtime {
     rt.stack.unsafe_set(sp, null_ref)
     sp += 1
   }
-  { ..rt, sp, pc: rt.pc + 2 }
+  rt.sp = sp
+  rt.pc = rt.pc + 2
+  rt
 }
 
 ///|
@@ -961,7 +1062,9 @@ fn op_table_init(rt : Runtime) -> Runtime {
   let _src = rt.stack.unsafe_get(rt.sp - 2).to_uint()
   let _dest = rt.stack.unsafe_get(stack_top).to_uint()
   // TODO: Implement table.init
-  { ..rt, sp: stack_top, pc: rt.pc + 3 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 3
+  rt
 }
 
 ///|
@@ -979,7 +1082,9 @@ fn op_table_copy(rt : Runtime) -> Runtime {
   let _src = rt.stack.unsafe_get(rt.sp - 2).to_uint()
   let _dest = rt.stack.unsafe_get(stack_top).to_uint()
   // TODO: Implement table.copy
-  { ..rt, sp: stack_top, pc: rt.pc + 3 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 3
+  rt
 }
 
 ///|
@@ -1002,7 +1107,9 @@ fn op_table_fill(rt : Runtime) -> Runtime {
   for i = 0; i < n; i = i + 1 {
     table[dest + i] = ref_value
   }
-  { ..rt, sp: stack_top, pc: rt.pc + 2 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 2
+  rt
 }
 
 ///|
@@ -1010,7 +1117,8 @@ fn op_elem_drop(rt : Runtime) -> Runtime {
   // Read elem_idx but don't use it (not implemented yet)
   let _elem_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   // TODO: Implement elem.drop
-  { ..rt, pc: rt.pc + 2 }
+  rt.pc = rt.pc + 2
+  rt
 }
 
 // =============================================================================
@@ -1026,7 +1134,9 @@ fn op_table_size(rt : Runtime) -> Runtime {
   }
   let size = rt.ctx.tables[table_idx].data.length()
   rt.stack.unsafe_set(rt.sp, size.reinterpret_as_uint().to_uint64())
-  { ..rt, sp: rt.sp + 1, pc: rt.pc + 2 }
+  rt.sp = rt.sp + 1
+  rt.pc = rt.pc + 2
+  rt
 }
 
 ///|
@@ -1049,7 +1159,8 @@ fn op_table_get(rt : Runtime) -> Runtime {
     None => (-1).to_int64()
   }
   rt.stack.unsafe_set(stack_top, ref_val.reinterpret_as_uint64())
-  { ..rt, pc: rt.pc + 2 }
+  rt.pc = rt.pc + 2
+  rt
 }
 
 ///|
@@ -1070,7 +1181,9 @@ fn op_table_set(rt : Runtime) -> Runtime {
     return { ..rt, sp: stack_top, status: Trap }
   }
   table[elem_idx] = ref_value
-  { ..rt, sp: stack_top, pc: rt.pc + 2 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 2
+  rt
 }
 
 ///|
@@ -1110,7 +1223,9 @@ fn op_table_grow(rt : Runtime) -> Runtime {
     table.push(init_value)
   }
   rt.stack.unsafe_set(stack_top, old_size.reinterpret_as_uint().to_uint64())
-  { ..rt, sp: stack_top + 1, pc: rt.pc + 2 }
+  rt.sp = stack_top + 1
+  rt.pc = rt.pc + 2
+  rt
 }
 
 // =============================================================================
@@ -1124,7 +1239,9 @@ fn op_ref_null(rt : Runtime) -> Runtime {
   let _ = rt.ops.unsafe_get(rt.pc + 1).to_int() // Skip the heap type encoding
   // Push null ref as -1 (Int64)
   rt.stack.unsafe_set(rt.sp, (-1).to_int64().reinterpret_as_uint64())
-  { ..rt, sp: rt.sp + 1, pc: rt.pc + 2 }
+  rt.sp = rt.sp + 1
+  rt.pc = rt.pc + 2
+  rt
 }
 
 ///|
@@ -1133,7 +1250,9 @@ fn op_ref_func(rt : Runtime) -> Runtime {
   let func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   // Push func ref as Int64
   rt.stack.unsafe_set(rt.sp, func_idx.to_int64().reinterpret_as_uint64())
-  { ..rt, sp: rt.sp + 1, pc: rt.pc + 2 }
+  rt.sp = rt.sp + 1
+  rt.pc = rt.pc + 2
+  rt
 }
 
 ///|
@@ -1144,7 +1263,8 @@ fn op_ref_is_null(rt : Runtime) -> Runtime {
   let ref_val = rt.stack.unsafe_get(stack_top).to_int()
   let is_null : UInt64 = if ref_val == -1 { 1UL } else { 0UL }
   rt.stack.unsafe_set(stack_top, is_null)
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -1156,7 +1276,9 @@ fn op_ref_eq(rt : Runtime) -> Runtime {
   let lhs = rt.stack.unsafe_get(stack_top).to_int()
   let eq : UInt64 = if lhs == rhs { 1UL } else { 0UL }
   rt.stack.unsafe_set(stack_top, eq)
-  { ..rt, sp: stack_top + 1, pc: rt.pc + 1 }
+  rt.sp = stack_top + 1
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -1170,7 +1292,8 @@ fn op_ref_as_non_null(rt : Runtime) -> Runtime {
     return { ..rt, status: Trap }
   }
   // Push back the non-null reference (it's already there, just advance pc)
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  rt
 }
 
 ///|
@@ -1178,7 +1301,9 @@ fn op_global_get(rt : Runtime) -> Runtime {
   let idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   // Convert Value to UInt64 for stack
   rt.stack.unsafe_set(rt.sp, value_to_stack(rt.ctx.globals[idx]))
-  { ..rt, sp: rt.sp + 1, pc: rt.pc + 2 }
+  rt.sp = rt.sp + 1
+  rt.pc = rt.pc + 2
+  rt
 }
 
 ///|
@@ -1196,5 +1321,7 @@ fn op_global_set(rt : Runtime) -> Runtime {
     Ref(_) => FuncRef // Ref types all stored the same way
   }
   rt.ctx.globals[idx] = stack_to_value(raw, val_type)
-  { ..rt, sp: stack_top, pc: rt.pc + 2 }
+  rt.sp = stack_top
+  rt.pc = rt.pc + 2
+  rt
 }
