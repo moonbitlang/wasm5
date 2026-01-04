@@ -565,3 +565,152 @@ async test "utf8-import-module.wast" {
 async test "utf8-invalid-encoding.wast" {
   run_harness("utf8-invalid-encoding.wast")
 }
+
+// =============================================================================
+// WebAssembly GC Spec Tests (commented out - enable when GC support is ready)
+// =============================================================================
+
+// Helper for GC tests in the gc subdirectory
+// fn run_gc_harness(filename : String) -> Unit {
+//   let (file_failures, file_skipped) = process_wast_file(
+//     "test/reference_test/gc/", filename,
+//   )
+//   // ... same handling as run_harness
+// }
+
+// ///|
+// async test "gc/array.wast" {
+//   run_gc_harness("array.wast")
+// }
+
+// ///|
+// async test "gc/array_copy.wast" {
+//   run_gc_harness("array_copy.wast")
+// }
+
+// ///|
+// async test "gc/array_fill.wast" {
+//   run_gc_harness("array_fill.wast")
+// }
+
+// ///|
+// async test "gc/array_init_data.wast" {
+//   run_gc_harness("array_init_data.wast")
+// }
+
+// ///|
+// async test "gc/array_init_elem.wast" {
+//   run_gc_harness("array_init_elem.wast")
+// }
+
+// ///|
+// async test "gc/array_new_data.wast" {
+//   run_gc_harness("array_new_data.wast")
+// }
+
+// ///|
+// async test "gc/array_new_elem.wast" {
+//   run_gc_harness("array_new_elem.wast")
+// }
+
+// ///|
+// async test "gc/binary-gc.wast" {
+//   run_gc_harness("binary-gc.wast")
+// }
+
+// ///|
+// async test "gc/br_on_cast.wast" {
+//   run_gc_harness("br_on_cast.wast")
+// }
+
+// ///|
+// async test "gc/br_on_cast_fail.wast" {
+//   run_gc_harness("br_on_cast_fail.wast")
+// }
+
+// ///|
+// async test "gc/extern.wast" {
+//   run_gc_harness("extern.wast")
+// }
+
+// ///|
+// async test "gc/i31.wast" {
+//   run_gc_harness("i31.wast")
+// }
+
+// ///|
+// async test "gc/ref_cast.wast" {
+//   run_gc_harness("ref_cast.wast")
+// }
+
+// ///|
+// async test "gc/ref_eq.wast" {
+//   run_gc_harness("ref_eq.wast")
+// }
+
+// ///|
+// async test "gc/ref_test.wast" {
+//   run_gc_harness("ref_test.wast")
+// }
+
+// ///|
+// async test "gc/struct.wast" {
+//   run_gc_harness("struct.wast")
+// }
+
+// ///|
+// async test "gc/type-subtyping.wast" {
+//   run_gc_harness("type-subtyping.wast")
+// }
+
+// =============================================================================
+// WebAssembly Bulk Memory Spec Tests (commented out - enable when ready)
+// =============================================================================
+
+// Helper for bulk-memory tests in the bulk-memory subdirectory
+// fn run_bulk_memory_harness(filename : String) -> Unit {
+//   let (file_failures, file_skipped) = process_wast_file(
+//     "test/reference_test/bulk-memory/", filename,
+//   )
+//   // ... same handling as run_harness
+// }
+
+// ///|
+// async test "bulk-memory/bulk.wast" {
+//   run_bulk_memory_harness("bulk.wast")
+// }
+
+// ///|
+// async test "bulk-memory/memory_copy.wast" {
+//   run_bulk_memory_harness("memory_copy.wast")
+// }
+
+// ///|
+// async test "bulk-memory/memory_fill.wast" {
+//   run_bulk_memory_harness("memory_fill.wast")
+// }
+
+// ///|
+// async test "bulk-memory/memory_init.wast" {
+//   run_bulk_memory_harness("memory_init.wast")
+// }
+
+// ///|
+// async test "bulk-memory/table-sub.wast" {
+//   run_bulk_memory_harness("table-sub.wast")
+// }
+
+// ///|
+// async test "bulk-memory/table_copy.wast" {
+//   run_bulk_memory_harness("table_copy.wast")
+// }
+
+// ///|
+// async test "bulk-memory/table_fill.wast" {
+//   run_bulk_memory_harness("table_fill.wast")
+// }
+
+// ///|
+// async test "bulk-memory/table_init.wast" {
+//   run_bulk_memory_harness("table_init.wast")
+// }
