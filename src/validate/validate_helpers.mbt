@@ -343,6 +343,7 @@ fn table_index_type(table_type : @core.TableType) -> @core.ValType {
 /// - Reference instructions: ref.null, ref.func
 /// - @core.Global access: global.get
 /// - Arithmetic: i32.add, i32.sub, i32.mul, i64.add, i64.sub, i64.mul
+/// - GC instructions: struct.new, struct.new_default, array.new, array.new_default, etc.
 fn validate_const_expr_instructions(
   expr : @core.Expr,
 ) -> Unit raise ValidationError {
@@ -360,7 +361,14 @@ fn validate_const_expr_instructions(
       | I32Mul
       | I64Add
       | I64Sub
-      | I64Mul => () // Valid constant expression instructions
+      | I64Mul
+      // GC proposal constant expressions
+      | StructNew(_)
+      | StructNewDefault(_)
+      | ArrayNew(_)
+      | ArrayNewDefault(_)
+      | ArrayNewFixed(_, _)
+      | RefI31 => () // Valid constant expression instructions
       _ =>
         raise ValidationError::ConstantExpressionRequired(
           "invalid instruction in constant expression: \{instr}",
@@ -525,6 +533,177 @@ fn validate_storage_type(
 }
 
 ///|
+/// Check if type_idx1 is a declared subtype of type_idx2 via the type hierarchy
+/// This searches the supertype chain in type_groups and also checks structural subtyping
+fn is_type_index_subtype(
+  module_ : @core.Module,
+  type_idx1 : Int,
+  type_idx2 : Int,
+) -> Bool {
+  // Same type is always a subtype of itself
+  if type_idx1 == type_idx2 {
+    return true
+  }
+
+  // Search through type_groups to find explicit supertype declarations
+  for group in module_.type_groups {
+    for subtype_def in group.subtypes {
+      let current_idx = subtype_def.type_idx.reinterpret_as_int()
+      if current_idx == type_idx1 {
+        // Check if type_idx2 is a direct supertype
+        for supertype in subtype_def.supertypes {
+          let super_idx = supertype.reinterpret_as_int()
+          if super_idx == type_idx2 {
+            return true
+          }
+          // Recursively check if the supertype is a subtype of type_idx2
+          if is_type_index_subtype(module_, super_idx, type_idx2) {
+            return true
+          }
+        }
+      }
+    }
+  }
+
+  // Check structural subtyping for struct types
+  // A struct type S1 is a subtype of S2 if S2's fields are a prefix of S1's fields
+  // and corresponding field types are subtypes
+  if type_idx1 >= 0 &&
+    type_idx1 < module_.types.length() &&
+    type_idx2 >= 0 &&
+    type_idx2 < module_.types.length() {
+    match (module_.types[type_idx1], module_.types[type_idx2]) {
+      (Struct(struct1), Struct(struct2)) =>
+        // Check structural subtyping (S1 fields are superset of S2 fields)
+        if is_struct_subtype(module_, struct1, struct2) {
+          return true
+        }
+      (Array(arr1), Array(arr2)) =>
+        // Array types are subtypes if element types are subtypes
+        if is_array_subtype(module_, arr1, arr2) {
+          return true
+        }
+      (Func(func1), Func(func2)) =>
+        // Function types use contravariant parameters and covariant results
+        if is_func_type_subtype(module_, func1, func2) {
+          return true
+        }
+      _ => ()
+    }
+  }
+
+  false
+}
+
+///|
+/// Check if array1 is a subtype of array2
+fn is_array_subtype(
+  module_ : @core.Module,
+  arr1 : @core.ArrayType,
+  arr2 : @core.ArrayType,
+) -> Bool {
+  // Mutability must match
+  if arr1.element.mutable != arr2.element.mutable {
+    return false
+  }
+  is_storage_type_subtype(
+    module_,
+    arr1.element.storage,
+    arr2.element.storage,
+    arr1.element.mutable,
+  )
+}
+
+///|
+/// Check if func1 is a subtype of func2
+/// Parameters are contravariant, results are covariant
+fn is_func_type_subtype(
+  module_ : @core.Module,
+  func1 : @core.FuncType,
+  func2 : @core.FuncType,
+) -> Bool {
+  // Must have same number of params and results
+  if func1.params.length() != func2.params.length() ||
+    func1.results.length() != func2.results.length() {
+    return false
+  }
+
+  // Parameters are contravariant: func2.params[i] <: func1.params[i]
+  for i in 0..<func1.params.length() {
+    if not(is_subtype(module_, func2.params[i], func1.params[i])) {
+      return false
+    }
+  }
+
+  // Results are covariant: func1.results[i] <: func2.results[i]
+  for i in 0..<func1.results.length() {
+    if not(is_subtype(module_, func1.results[i], func2.results[i])) {
+      return false
+    }
+  }
+
+  true
+}
+
+///|
+/// Check if struct1 is a structural subtype of struct2
+/// struct1 <: struct2 if struct2's fields are a prefix of struct1's fields
+/// and each corresponding field type in struct1 is a subtype of struct2's field type
+fn is_struct_subtype(
+  module_ : @core.Module,
+  struct1 : @core.StructType,
+  struct2 : @core.StructType,
+) -> Bool {
+  // struct2 must have <= fields than struct1
+  if struct2.fields.length() > struct1.fields.length() {
+    return false
+  }
+
+  // Each field in struct2 must be compatible with corresponding field in struct1
+  for i in 0..<struct2.fields.length() {
+    let f1 = struct1.fields[i]
+    let f2 = struct2.fields[i]
+
+    // Mutability must match (or struct1 can be const when struct2 is mut for covariance)
+    // Actually in wasm-gc, field mutability must match exactly for subtyping
+    if f1.mutable != f2.mutable {
+      return false
+    }
+
+    // Field types must be subtypes (or equal for mutable fields)
+    if not(is_storage_type_subtype(module_, f1.storage, f2.storage, f1.mutable)) {
+      return false
+    }
+  }
+
+  true
+}
+
+///|
+/// Check if storage1 is a subtype of storage2
+/// For mutable fields, types must be equal (invariant)
+/// For immutable fields, types can be covariant
+fn is_storage_type_subtype(
+  module_ : @core.Module,
+  storage1 : @core.StorageType,
+  storage2 : @core.StorageType,
+  mutable : Bool,
+) -> Bool {
+  match (storage1, storage2) {
+    (Val(v1), Val(v2)) =>
+      if mutable {
+        // Mutable fields must have equal types
+        v1 == v2
+      } else {
+        // Immutable fields can be covariant
+        is_subtype(module_, v1, v2)
+      }
+    (I8, I8) | (I16, I16) => true
+    _ => false
+  }
+}
+
+///|
 /// Check if t1 is a subtype of t2 (t1 <: t2) with module context for type lookups
 /// WebAssembly GC type hierarchy:
 /// - NullRef (none) <: all nullable reference types
@@ -549,6 +728,9 @@ fn is_subtype(
     | (NullRef, I31Ref)
     | (NullRef, StructRef)
     | (NullRef, ArrayRef) => true
+    // NullRef is also a subtype of any nullable typed struct/array reference
+    (NullRef, Ref(TypeIndex(n), true)) =>
+      is_struct_type_index(module_, n) || is_array_type_index(module_, n)
     (NullFuncRef, FuncRef) => true
     // NullFuncRef is the bottom type for all function references,
     // so it's a subtype of any nullable typed function reference
@@ -567,8 +749,17 @@ fn is_subtype(
     (FuncRef, AnyRef) => true
     (ExnRef, AnyRef) => true
 
+    // TypeIndex subtyping: check declared supertype hierarchy FIRST
+    // (Must come before generic Ref pattern to match TypeIndex cases)
+    // Ref(TypeIndex(n1), nullable1) <: Ref(TypeIndex(n2), nullable2)
+    // if n1 is a declared subtype of n2 AND nullable1 <= nullable2
+    (Ref(TypeIndex(n1), nullable1), Ref(TypeIndex(n2), nullable2)) =>
+      // Non-nullable can be subtype of nullable, but not vice versa
+      // If target is nullable, any source is OK; if target is non-nullable, source must be non-nullable
+      (nullable2 || not(nullable1)) && is_type_index_subtype(module_, n1, n2)
     // Typed references: Ref(T, nullable)
     // Non-nullable is subtype of nullable for same heap type
+    // (For non-TypeIndex heap types like Func, Extern, etc.)
     (Ref(ht1, false), Ref(ht2, true)) => ht1 == ht2
     // Ref(Extern, _) is compatible with ExternRef (nullable externref)
     (Ref(Extern, _), ExternRef) => true

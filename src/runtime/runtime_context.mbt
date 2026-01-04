@@ -9,6 +9,7 @@ pub struct RuntimeContext {
   tables : Array[RuntimeTable]
   imported_funcs : Array[ImportedFunc]
   data_segments : Array[Array[Byte]]
+  gc_heap : Array[GcObject] // GC heap for struct/array instances
   mut error_detail : String
 }
 
@@ -31,6 +32,32 @@ fn RuntimeContext::new(
     tables,
     imported_funcs,
     data_segments,
+    gc_heap: [],
+    error_detail: "",
+  }
+}
+
+///|
+/// Create a new RuntimeContext with a pre-initialized gc_heap
+fn RuntimeContext::new_with_gc_heap(
+  module_ : @core.Module,
+  memory : Array[Byte],
+  memory_max : UInt64?,
+  globals : Array[Value],
+  tables : Array[RuntimeTable],
+  imported_funcs : Array[ImportedFunc],
+  data_segments : Array[Array[Byte]],
+  gc_heap : Array[GcObject],
+) -> RuntimeContext {
+  {
+    module_,
+    memory,
+    memory_max,
+    globals,
+    tables,
+    imported_funcs,
+    data_segments,
+    gc_heap,
     error_detail: "",
   }
 }
