@@ -171,10 +171,10 @@ async test "data.wast" {
   run_harness("data.wast")
 }
 
-// Blacklisted: don't know why now
-// async test "elem.wast" {
-//   run_harness("elem.wast")
-// }
+///|
+async test "elem.wast" {
+  run_harness("elem.wast")
+}
 
 ///|
 async test "endianness.wast" {

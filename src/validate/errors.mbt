@@ -28,4 +28,5 @@ pub(all) suberror ValidationError {
   UninitializedLocal(Int) // Local with non-defaultable type used before initialization
   UnknownType(Int) // Type index in ref type doesn't exist
   UndeclaredFunctionReference(Int) // ref.func used for undeclared function
+  InvalidElemIndex(Int) // Element segment index out of range
 } derive(Show)

@@ -534,6 +534,22 @@ fn validate_module_element_segments(
       if table_idx < 0 || table_idx >= total_tables {
         raise ValidationError::UnknownTable(table_idx)
       }
+
+      // Check that element segment type is compatible with table element type
+      let table_type = get_table_type(m, import_counts, elem.table_idx)
+      let elem_type = @core.ValType::Ref(elem.elem_type, elem.elem_nullable)
+      let table_elem_type = @core.ValType::Ref(
+        table_type.elem_type,
+        table_type.nullable,
+      )
+      guard is_subtype(m, elem_type, table_elem_type) else {
+        raise ValidationError::TypeMismatch(
+          "element segment type \{elem_type} is not compatible with table element type \{table_elem_type}",
+        )
+      }
+
+      // Validate offset expression uses only immutable globals
+      validate_const_expr_globals(m, elem.offset, import_counts)
     }
 
     // Validate element init expressions are constant references

@@ -30,20 +30,27 @@ fn parse_element_section(parser : Parser) -> Array[@core.Elem] raise {
       _ => @core.Expr::{ instrs: [I32Const(0U)] } // dummy offset for passive/declarative
     }
     // Read elemkind or reftype for certain flags
+    // For funcidx form (flags 0-3), elem type is non-nullable because ref.func produces non-null
+    // For expr form with explicit type (flags 5-7), use the declared type
+    // For expr form without explicit type (flag 4), default to nullable funcref for compatibility
     let (elem_type, elem_nullable) = match flags {
+      0 => {
+        // funcidx form, no type byte - type is (ref func) non-nullable
+        (@core.RefType::Func, false)
+      }
       1 | 3 => {
         let _elemkind = parser.read_byte()
-        // elemkind (0x00 = funcref)
-        (@core.RefType::Func, true)
+        // elemkind (0x00 = funcref), but funcidx form is non-nullable
+        (@core.RefType::Func, false)
       }
       2 => {
         let _elemkind = parser.read_byte()
-        // elemkind
-        (@core.RefType::Func, true)
+        // elemkind, funcidx form is non-nullable
+        (@core.RefType::Func, false)
       }
       5 | 7 => parser.read_reftype_with_nullability()
       6 => parser.read_reftype_with_nullability()
-      _ => (@core.RefType::Func, true) // flags 0 and 4: default to funcref
+      _ => (@core.RefType::Func, true) // flag 4: expr form, default to nullable funcref
     }
     // Read init vector
     let init_count = parser.read_u32_leb128()

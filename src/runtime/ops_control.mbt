@@ -367,7 +367,6 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
     rt.ctx.error_detail = "uninitialized element"
     return { ..rt, status: Trap }
   }
-  let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
 
   // Get the expected type
   let expected_type = match
@@ -375,6 +374,33 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
     Some(found) => found
     None => return { ..rt, status: Trap }
   }
+
+  // Check if this is an external funcref (negative index)
+  // Mapping: -1 → external_funcrefs[0], -2 → [1], etc.
+  // Check table's external_funcrefs first (for shared table funcrefs),
+  // then fall back to runtime's external_funcrefs (for imported funcref globals).
+  if func_idx < 0 {
+    let ext_idx = -(func_idx + 1)
+    // First check the table's external_funcrefs (for cross-module table sharing)
+    let table = rt.ctx.tables[table_idx]
+    let ext_func = if ext_idx >= 0 && ext_idx < table.external_funcrefs.length() {
+      table.external_funcrefs[ext_idx]
+    } else if ext_idx >= 0 && ext_idx < rt.ctx.external_funcrefs.length() {
+      // Fall back to runtime's external_funcrefs (for imported funcref globals)
+      rt.ctx.external_funcrefs[ext_idx]
+    } else {
+      rt.ctx.error_detail = "call_indirect: invalid external funcref index"
+      return { ..rt, status: Trap }
+    }
+    // Pop arguments and call external function
+    let { rt, args } = pop_arguments(rt, expected_type)
+    let results = (ext_func.func)(args)
+    // Push results back onto the stack
+    let rt = push_results(rt, results)
+    return { ..rt, pc: rt.pc + 3 }
+  }
+
+  let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
 
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
@@ -954,13 +980,78 @@ fn op_gc_unimplemented(rt : Runtime) -> Runtime {
 
 ///|
 fn op_table_init(rt : Runtime) -> Runtime {
-  let _table_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  let _elem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
+  let table_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let elem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let stack_top = rt.sp - 3
-  let _n = rt.stack.unsafe_get(rt.sp - 1).to_uint()
-  let _src = rt.stack.unsafe_get(rt.sp - 2).to_uint()
-  let _dest = rt.stack.unsafe_get(stack_top).to_uint()
-  // TODO: Implement table.init
+  let n = rt.stack.unsafe_get(rt.sp - 1).to_uint().reinterpret_as_int()
+  let src = rt.stack.unsafe_get(rt.sp - 2).to_uint().reinterpret_as_int()
+  let dest = rt.stack.unsafe_get(stack_top).to_uint().reinterpret_as_int()
+
+  // Check if element segment exists and is not dropped
+  if elem_idx < 0 || elem_idx >= rt.ctx.dropped_elems.length() {
+    rt.ctx.error_detail = "out of bounds table access"
+    return { ..rt, sp: stack_top, status: Trap }
+  }
+
+  // Check if segment is dropped (active/declarative segments are dropped after instantiation)
+  if rt.ctx.dropped_elems[elem_idx] {
+    // Dropped segment: any non-zero length is out of bounds
+    if n != 0 || src != 0 {
+      rt.ctx.error_detail = "out of bounds table access"
+      return { ..rt, sp: stack_top, status: Trap }
+    }
+    // n=0, src=0 is valid even for dropped segments
+    return { ..rt, sp: stack_top, pc: rt.pc + 3 }
+  }
+
+  // Check table bounds
+  if table_idx < 0 || table_idx >= rt.ctx.tables.length() {
+    rt.ctx.error_detail = "table index out of bounds"
+    return { ..rt, sp: stack_top, status: Trap }
+  }
+
+  let table = rt.ctx.tables[table_idx]
+  let elem = rt.ctx.module_.elems[elem_idx]
+
+  // Check bounds
+  if n < 0 ||
+    src < 0 ||
+    dest < 0 ||
+    src + n > elem.init.length() ||
+    dest + n > table.data.length() {
+    rt.ctx.error_detail = "out of bounds table access"
+    return { ..rt, sp: stack_top, status: Trap }
+  }
+
+  // Copy elements from segment to table
+  for i = 0; i < n; i = i + 1 {
+    let expr = elem.init[src + i]
+    // Evaluate the init expression to get the reference value
+    match expr.instrs[0] {
+      RefNull(_) => table.data[dest + i] = None
+      RefFunc(idx) => table.data[dest + i] = Some(idx.reinterpret_as_int())
+      GlobalGet(idx) => {
+        let global_idx = idx.reinterpret_as_int()
+        if global_idx >= 0 && global_idx < rt.ctx.globals.length() {
+          match rt.ctx.globals[global_idx] {
+            Ref(ref_val) => table.data[dest + i] = ref_val
+            _ => {
+              rt.ctx.error_detail = "global must be a reference type"
+              return { ..rt, sp: stack_top, status: Trap }
+            }
+          }
+        } else {
+          rt.ctx.error_detail = "global index out of bounds"
+          return { ..rt, sp: stack_top, status: Trap }
+        }
+      }
+      _ => {
+        rt.ctx.error_detail = "unsupported init expression in table.init"
+        return { ..rt, sp: stack_top, status: Trap }
+      }
+    }
+  }
+
   { ..rt, sp: stack_top, pc: rt.pc + 3 }
 }
 
@@ -1007,9 +1098,11 @@ fn op_table_fill(rt : Runtime) -> Runtime {
 
 ///|
 fn op_elem_drop(rt : Runtime) -> Runtime {
-  // Read elem_idx but don't use it (not implemented yet)
-  let _elem_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  // TODO: Implement elem.drop
+  let elem_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  // Mark the element segment as dropped
+  if elem_idx >= 0 && elem_idx < rt.ctx.dropped_elems.length() {
+    rt.ctx.dropped_elems[elem_idx] = true
+  }
   { ..rt, pc: rt.pc + 2 }
 }
 

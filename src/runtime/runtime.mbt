@@ -4,6 +4,7 @@ pub suberror RuntimeError {
   DivisionByZero
   IntegerOverflow
   MemoryOutOfBounds
+  TableOutOfBounds // Out of bounds table access
   InvalidType(String)
   FunctionNotFound(String)
   Unreachable // Unreachable instruction executed
@@ -20,6 +21,8 @@ fn RuntimeError::from_detail(detail : String) -> RuntimeError {
     RuntimeError::DivisionByZero
   } else if detail.has_prefix("integer overflow") {
     RuntimeError::IntegerOverflow
+  } else if detail.has_prefix("out of bounds table access") {
+    RuntimeError::TableOutOfBounds
   } else if detail.has_prefix("out of bounds") {
     RuntimeError::MemoryOutOfBounds
   } else if detail.has_prefix("unreachable") {
@@ -46,6 +49,46 @@ pub(all) enum Value {
 struct RuntimeTable {
   data : Array[Int?] // Table data (function indices, None = null ref)
   max : UInt64? // Maximum size limit (None = no limit)
+  // External funcrefs for cross-module table sharing.
+  // When a module stores its own funcrefs into an imported table,
+  // wrappers are added here and negative indices stored in data.
+  // Mapping: -1 → external_funcrefs[0], -2 → [1], etc.
+  external_funcrefs : Array[ImportedFunc]
+}
+
+///|
+/// Get table data length
+pub fn RuntimeTable::data_length(self : RuntimeTable) -> Int {
+  self.data.length()
+}
+
+///|
+/// Get table element at index
+pub fn RuntimeTable::get_data(self : RuntimeTable, idx : Int) -> Int? {
+  self.data[idx]
+}
+
+///|
+/// Set table element at index
+pub fn RuntimeTable::set_data(self : RuntimeTable, idx : Int, value : Int?) -> Unit {
+  self.data[idx] = value
+}
+
+///|
+/// Get external funcrefs length
+pub fn RuntimeTable::external_funcrefs_length(self : RuntimeTable) -> Int {
+  self.external_funcrefs.length()
+}
+
+///|
+/// Add external funcref and return its index
+pub fn RuntimeTable::add_external_funcref(
+  self : RuntimeTable,
+  func : ImportedFunc,
+) -> Int {
+  let idx = self.external_funcrefs.length()
+  self.external_funcrefs.push(func)
+  idx
 }
 
 ///|
@@ -79,6 +122,8 @@ struct ImportResolverEntry {
   globals : Map[Bytes, Value]
   tables : Map[Bytes, RuntimeTable]
   memories : Map[Bytes, ImportedMemory]
+  // Wrappers for funcref globals - used for cross-module funcref handling
+  funcref_wrappers : Map[Bytes, ImportedFunc]
 }
 
 ///|
@@ -108,6 +153,7 @@ pub fn ImportResolver::add_func(
         globals: Map::new(),
         tables: Map::new(),
         memories: Map::new(),
+        funcref_wrappers: Map::new(),
       }
       entry.funcs[name] = func
       self.modules[module_] = entry
@@ -131,6 +177,7 @@ pub fn ImportResolver::add_global(
         globals: Map::new(),
         tables: Map::new(),
         memories: Map::new(),
+        funcref_wrappers: Map::new(),
       }
       entry.globals[name] = value
       self.modules[module_] = entry
@@ -180,6 +227,7 @@ pub fn ImportResolver::add_table(
         globals: Map::new(),
         tables: Map::new(),
         memories: Map::new(),
+        funcref_wrappers: Map::new(),
       }
       entry.tables[name] = table
       self.modules[module_] = entry
@@ -216,6 +264,7 @@ pub fn ImportResolver::add_memory(
         globals: Map::new(),
         tables: Map::new(),
         memories: Map::new(),
+        funcref_wrappers: Map::new(),
       }
       entry.memories[name] = memory
       self.modules[module_] = entry
@@ -232,6 +281,45 @@ pub fn ImportResolver::get_memory(
 ) -> ImportedMemory? {
   match self.modules.get(module_) {
     Some(entry) => entry.memories.get(name)
+    None => None
+  }
+}
+
+///|
+/// Add a funcref wrapper to the resolver.
+/// This is used for cross-module funcref handling - when a module exports
+/// a funcref global, we also register a wrapper that can call the function.
+pub fn ImportResolver::add_funcref_wrapper(
+  self : ImportResolver,
+  module_ : Bytes,
+  name : Bytes,
+  wrapper : ImportedFunc,
+) -> Unit {
+  match self.modules.get(module_) {
+    Some(entry) => entry.funcref_wrappers[name] = wrapper
+    None => {
+      let entry : ImportResolverEntry = {
+        funcs: Map::new(),
+        globals: Map::new(),
+        tables: Map::new(),
+        memories: Map::new(),
+        funcref_wrappers: Map::new(),
+      }
+      entry.funcref_wrappers[name] = wrapper
+      self.modules[module_] = entry
+    }
+  }
+}
+
+///|
+/// Look up a funcref wrapper
+pub fn ImportResolver::get_funcref_wrapper(
+  self : ImportResolver,
+  module_ : Bytes,
+  name : Bytes,
+) -> ImportedFunc? {
+  match self.modules.get(module_) {
+    Some(entry) => entry.funcref_wrappers.get(name)
     None => None
   }
 }
@@ -311,6 +399,7 @@ pub fn default_import_resolver() -> ImportResolver {
   resolver.add_table(b"spectest", b"table", {
     data: table_data,
     max: Some(20UL),
+    external_funcrefs: [],
   })
   // Add spectest memory (1 page initial, 2 pages max)
   let memory_size = 1 * 65536 // 1 page = 65536 bytes
@@ -376,12 +465,32 @@ pub fn Runtime::load_with_resolver(
   // Initialize globals
   // First, add imported globals - try to get from resolver, otherwise use default values
   let globals : Array[Value] = []
+  // Track external funcrefs for cross-module funcref handling
+  let external_funcrefs : Array[ImportedFunc] = []
   for imp in m.imports {
     match imp.desc {
       Global(gt) => {
         // Try to get the global value from the resolver
         let value = match resolver.get_global(imp.module_, imp.name) {
-          Some(v) => v
+          Some(v) => {
+            // For funcref globals, check if there's a funcref wrapper
+            // and if so, use a negative index to point to external_funcrefs
+            match v {
+              Ref(Some(_)) =>
+                // Check for a funcref wrapper for cross-module calls
+                match resolver.get_funcref_wrapper(imp.module_, imp.name) {
+                  Some(wrapper) => {
+                    // Add wrapper to external_funcrefs and use negative index
+                    // Mapping: -1 → [0], -2 → [1], etc.
+                    let ext_idx = external_funcrefs.length()
+                    external_funcrefs.push(wrapper)
+                    Value::Ref(Some(-(ext_idx + 1)))
+                  }
+                  None => v
+                }
+              _ => v
+            }
+          }
           None =>
             // Fall back to default values (for spectest)
             match gt.val_type {
@@ -441,7 +550,7 @@ pub fn Runtime::load_with_resolver(
             // This shouldn't happen with proper test setup, but provides graceful fallback
             let table_size = 10 // Default size for fallback
             let table_data : Array[Int?] = Array::make(table_size, None)
-            tables.push({ data: table_data, max: Some(20UL) })
+            tables.push({ data: table_data, max: Some(20UL), external_funcrefs: [] })
           }
         }
       _ => ()
@@ -465,11 +574,17 @@ pub fn Runtime::load_with_resolver(
       None => None
     }
     let table_data : Array[Int?] = Array::make(table_size, init_ref)
-    tables.push({ data: table_data, max: table.limits.max })
+    tables.push({ data: table_data, max: table.limits.max, external_funcrefs: [] })
   }
   // Initialize element segments (copy function references into tables)
-  // Only process active segments - skip passive and declarative segments
-  for elem in m.elems {
+  // Track which segments are dropped - active and declarative segments are dropped after instantiation
+  let dropped_elems : Array[Bool] = []
+  for i = 0; i < m.elems.length(); i = i + 1 {
+    let elem = m.elems[i]
+    // Active and declarative segments are dropped after instantiation
+    dropped_elems.push(elem.is_active || elem.is_declarative)
+
+    // Only process active segments - skip passive and declarative segments
     if elem.is_active {
       let table_idx = elem.table_idx.reinterpret_as_int()
       if table_idx >= 0 && table_idx < tables.length() {
@@ -484,10 +599,10 @@ pub fn Runtime::load_with_resolver(
         }
         // Copy element expressions into table
         let table = tables[table_idx]
-        for i in 0..<elem.init.length() {
-          let addr = offset + i
+        for j in 0..<elem.init.length() {
+          let addr = offset + j
           if addr >= 0 && addr < table.data.length() {
-            let value = eval_const_expr(elem.init[i], globals)
+            let value = eval_const_expr(elem.init[j], globals)
             match value {
               Ref(ref_idx) => table.data[addr] = ref_idx
               _ =>
@@ -534,7 +649,16 @@ pub fn Runtime::load_with_resolver(
 
   // Create RuntimeContext with cold data (including gc_heap from const expr evaluation)
   let ctx = RuntimeContext::new_with_gc_heap(
-    m, memory, memory_max_pages, globals, tables, imported_funcs, data_segments, gc_heap,
+    m,
+    memory,
+    memory_max_pages,
+    globals,
+    tables,
+    imported_funcs,
+    data_segments,
+    gc_heap,
+    external_funcrefs~,
+    dropped_elems~,
   )
   Runtime::{
     ops: compiler.finish(),

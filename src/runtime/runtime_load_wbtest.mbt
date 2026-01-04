@@ -79,6 +79,7 @@ test "runtime load with resolver" {
   resolver.add_table(b"m", b"t0", RuntimeTable::{
     data: [None, None],
     max: Some(2UL),
+    external_funcrefs: [],
   })
   resolver.add_memory(b"m", b"mem", ImportedMemory::{
     data: Array::make(8, b'\x00'),
