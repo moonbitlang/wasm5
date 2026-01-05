@@ -1048,10 +1048,19 @@ fn op_table_init(rt : Runtime) -> Runtime {
 
 ///|
 fn op_table_copy(rt : Runtime) -> Runtime {
-  // Table indices are validated at compile time by the validator
   let dst_table_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let src_table_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let stack_top = rt.sp - 3
+
+  // Bounds check table indices
+  if dst_table_idx < 0 ||
+    dst_table_idx >= rt.ctx.tables.length() ||
+    src_table_idx < 0 ||
+    src_table_idx >= rt.ctx.tables.length() {
+    rt.ctx.error_detail = "table index out of bounds"
+    return { ..rt, sp: stack_top, status: Trap }
+  }
+
   let n = rt.stack.unsafe_get(rt.sp - 1).to_uint().reinterpret_as_int()
   let src = rt.stack.unsafe_get(rt.sp - 2).to_uint().reinterpret_as_int()
   let dest = rt.stack.unsafe_get(stack_top).to_uint().reinterpret_as_int()
