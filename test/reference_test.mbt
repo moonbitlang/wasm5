@@ -678,10 +678,10 @@ async test "gc/i31.wast" {
   run_gc_harness("i31.wast")
 }
 
-// ///|
-// async test "gc/ref_cast.wast" {
-//   run_gc_harness("ref_cast.wast")
-// }
+///|
+async test "gc/ref_cast.wast" {
+  run_gc_harness("ref_cast.wast")
+}
 
 ///|
 async test "gc/ref_eq.wast" {

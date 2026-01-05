@@ -1056,6 +1056,14 @@ fn handle_assert_trap(
             "[\{fn_name}] expected '\{expected_error}' but got null array reference",
           )
         }
+      } else if msg.contains("cast failed") {
+        if not(expected_error.contains("cast failure")) {
+          ctx.fail(
+            line,
+            "assert_trap",
+            "[\{fn_name}] expected '\{expected_error}' but got cast failure",
+          )
+        }
       } else if msg.contains("null reference") {
         if not(expected_error.contains("null reference")) {
           ctx.fail(
