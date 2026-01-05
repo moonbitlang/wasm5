@@ -81,10 +81,11 @@ fn parse_instr_prefix_fb(parser : Parser) -> @core.Instr raise {
     0x18 => {
       let flags = parser.read_byte()
       let label = parser.read_u32_leb128()
-      let target_type = parser.read_heap_type()
+      // Binary format: source type first, then target type
       let source_type = parser.read_heap_type()
-      let target_nullable = (flags.to_uint() & 0x01U) != 0U
-      let source_nullable = (flags.to_uint() & 0x02U) != 0U
+      let target_type = parser.read_heap_type()
+      let source_nullable = (flags.to_uint() & 0x01U) != 0U
+      let target_nullable = (flags.to_uint() & 0x02U) != 0U
       BrOnCast(
         label, target_type, target_nullable, source_type, source_nullable,
       )
@@ -92,10 +93,11 @@ fn parse_instr_prefix_fb(parser : Parser) -> @core.Instr raise {
     0x19 => {
       let flags = parser.read_byte()
       let label = parser.read_u32_leb128()
-      let target_type = parser.read_heap_type()
+      // Binary format: source type first, then target type
       let source_type = parser.read_heap_type()
-      let target_nullable = (flags.to_uint() & 0x01U) != 0U
-      let source_nullable = (flags.to_uint() & 0x02U) != 0U
+      let target_type = parser.read_heap_type()
+      let source_nullable = (flags.to_uint() & 0x01U) != 0U
+      let target_nullable = (flags.to_uint() & 0x02U) != 0U
       BrOnCastFail(
         label, target_type, target_nullable, source_type, source_nullable,
       )

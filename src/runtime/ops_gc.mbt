@@ -327,7 +327,7 @@ fn op_array_new_data(rt : Runtime) -> Runtime {
 
   // Bounds check
   if offset < 0 || offset + length * elem_size > data.length() {
-    rt.ctx.error_detail = "array.new_data: out of bounds"
+    rt.ctx.error_detail = "out of bounds memory access"
     return { ..rt, status: Trap }
   }
 
@@ -356,14 +356,14 @@ fn op_array_get(rt : Runtime) -> Runtime {
 
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
-    rt.ctx.error_detail = "array.get: null reference"
+    rt.ctx.error_detail = "null array reference"
     return { ..rt, status: Trap }
   }
   let ref_value = ref_raw.to_int()
   match gc_get_object(rt, ref_value) {
     Some(Array(a)) => {
       if index < 0 || index >= a.elements.length() {
-        rt.ctx.error_detail = "array.get: index out of bounds"
+        rt.ctx.error_detail = "out of bounds array access"
         return { ..rt, status: Trap }
       }
       let value = a.elements[index]
@@ -387,14 +387,14 @@ fn op_array_get_s(rt : Runtime) -> Runtime {
 
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
-    rt.ctx.error_detail = "array.get_s: null reference"
+    rt.ctx.error_detail = "null array reference"
     return { ..rt, status: Trap }
   }
   let ref_value = ref_raw.to_int()
   match gc_get_object(rt, ref_value) {
     Some(Array(a)) => {
       if index < 0 || index >= a.elements.length() {
-        rt.ctx.error_detail = "array.get_s: index out of bounds"
+        rt.ctx.error_detail = "out of bounds array access"
         return { ..rt, status: Trap }
       }
       let raw_value = a.elements[index].to_uint()
@@ -433,14 +433,14 @@ fn op_array_get_u(rt : Runtime) -> Runtime {
 
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
-    rt.ctx.error_detail = "array.get_u: null reference"
+    rt.ctx.error_detail = "null array reference"
     return { ..rt, status: Trap }
   }
   let ref_value = ref_raw.to_int()
   match gc_get_object(rt, ref_value) {
     Some(Array(a)) => {
       if index < 0 || index >= a.elements.length() {
-        rt.ctx.error_detail = "array.get_u: index out of bounds"
+        rt.ctx.error_detail = "out of bounds array access"
         return { ..rt, status: Trap }
       }
       let raw_value = a.elements[index].to_uint()
@@ -470,14 +470,14 @@ fn op_array_set(rt : Runtime) -> Runtime {
 
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
-    rt.ctx.error_detail = "array.set: null reference"
+    rt.ctx.error_detail = "null array reference"
     return { ..rt, status: Trap }
   }
   let ref_value = ref_raw.to_int()
   match gc_get_object(rt, ref_value) {
     Some(Array(a)) => {
       if index < 0 || index >= a.elements.length() {
-        rt.ctx.error_detail = "array.set: index out of bounds"
+        rt.ctx.error_detail = "out of bounds array access"
         return { ..rt, status: Trap }
       }
       a.elements[index] = value
@@ -499,7 +499,7 @@ fn op_array_len(rt : Runtime) -> Runtime {
 
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
-    rt.ctx.error_detail = "array.len: null reference"
+    rt.ctx.error_detail = "null array reference"
     return { ..rt, status: Trap }
   }
   let ref_value = ref_raw.to_int()
@@ -528,14 +528,14 @@ fn op_array_fill(rt : Runtime) -> Runtime {
 
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
-    rt.ctx.error_detail = "array.fill: null reference"
+    rt.ctx.error_detail = "null array reference"
     return { ..rt, status: Trap }
   }
   let ref_value = ref_raw.to_int()
   match gc_get_object(rt, ref_value) {
     Some(Array(a)) => {
       if offset < 0 || offset + length > a.elements.length() {
-        rt.ctx.error_detail = "array.fill: out of bounds"
+        rt.ctx.error_detail = "out of bounds array access"
         return { ..rt, status: Trap }
       }
       for i = 0; i < length; i = i + 1 {
@@ -563,7 +563,7 @@ fn op_array_copy(rt : Runtime) -> Runtime {
 
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if dst_ref_raw == 0xFFFFFFFFFFFFFFFFUL || src_ref_raw == 0xFFFFFFFFFFFFFFFFUL {
-    rt.ctx.error_detail = "array.copy: null reference"
+    rt.ctx.error_detail = "null array reference"
     return { ..rt, status: Trap }
   }
   let dst_ref = dst_ref_raw.to_int()
@@ -574,7 +574,7 @@ fn op_array_copy(rt : Runtime) -> Runtime {
         dst_offset + length > dst.elements.length() ||
         src_offset < 0 ||
         src_offset + length > src.elements.length() {
-        rt.ctx.error_detail = "array.copy: out of bounds"
+        rt.ctx.error_detail = "out of bounds array access"
         return { ..rt, status: Trap }
       }
       // Handle overlapping regions
@@ -1198,7 +1198,7 @@ fn op_array_new_elem(rt : Runtime) -> Runtime {
 
   // Bounds check
   if offset < 0 || offset + length > elem.init.length() {
-    rt.ctx.error_detail = "array.new_elem: out of bounds"
+    rt.ctx.error_detail = "out of bounds table access"
     return { ..rt, status: Trap }
   }
 
@@ -1230,7 +1230,7 @@ fn op_array_init_data(rt : Runtime) -> Runtime {
 
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if arr_ref_raw == 0xFFFFFFFFFFFFFFFFUL {
-    rt.ctx.error_detail = "array.init_data: null reference"
+    rt.ctx.error_detail = "null array reference"
     return { ..rt, status: Trap }
   }
   let arr_ref = arr_ref_raw.to_int()
@@ -1244,14 +1244,14 @@ fn op_array_init_data(rt : Runtime) -> Runtime {
 
   // Bounds check on data segment
   if data_offset < 0 || data_offset + length * elem_size > data.length() {
-    rt.ctx.error_detail = "array.init_data: data segment out of bounds"
+    rt.ctx.error_detail = "out of bounds memory access"
     return { ..rt, status: Trap }
   }
   match gc_get_object(rt, arr_ref) {
     Some(Array(a)) => {
       // Bounds check on array
       if arr_offset < 0 || arr_offset + length > a.elements.length() {
-        rt.ctx.error_detail = "array.init_data: array out of bounds"
+        rt.ctx.error_detail = "out of bounds array access"
         return { ..rt, status: Trap }
       }
 
@@ -1288,7 +1288,7 @@ fn op_array_init_elem(rt : Runtime) -> Runtime {
 
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if arr_ref_raw == 0xFFFFFFFFFFFFFFFFUL {
-    rt.ctx.error_detail = "array.init_elem: null reference"
+    rt.ctx.error_detail = "null array reference"
     return { ..rt, status: Trap }
   }
   let arr_ref = arr_ref_raw.to_int()
@@ -1302,14 +1302,14 @@ fn op_array_init_elem(rt : Runtime) -> Runtime {
 
   // Bounds check on element segment
   if elem_offset < 0 || elem_offset + length > elem.init.length() {
-    rt.ctx.error_detail = "array.init_elem: element segment out of bounds"
+    rt.ctx.error_detail = "out of bounds table access"
     return { ..rt, status: Trap }
   }
   match gc_get_object(rt, arr_ref) {
     Some(Array(a)) => {
       // Bounds check on array
       if arr_offset < 0 || arr_offset + length > a.elements.length() {
-        rt.ctx.error_detail = "array.init_elem: array out of bounds"
+        rt.ctx.error_detail = "out of bounds array access"
         return { ..rt, status: Trap }
       }
 

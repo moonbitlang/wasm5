@@ -593,6 +593,17 @@ fn parse_args(args : Array[Json]) -> Array[@wasm5_runtime.Value] raise {
             ),
           )
         }
+      // anyref: "null" for null, otherwise an integer ref index
+      { "type": "anyref", "value": String(v), .. } =>
+        if v == "null" {
+          runtime_args.push(@wasm5_runtime.Value::Ref(None))
+        } else {
+          runtime_args.push(
+            @wasm5_runtime.Value::Ref(
+              Some(parse_i32_value(v).reinterpret_as_int()),
+            ),
+          )
+        }
       _ => raise TestUnsupported::UnsupportedArgType("\{arg}")
     }
   }
@@ -1035,6 +1046,14 @@ fn handle_assert_trap(
             line,
             "assert_trap",
             "[\{fn_name}] expected '\{expected_error}' but got null structure reference",
+          )
+        }
+      } else if msg.contains("null array reference") {
+        if not(expected_error.contains("null array reference")) {
+          ctx.fail(
+            line,
+            "assert_trap",
+            "[\{fn_name}] expected '\{expected_error}' but got null array reference",
           )
         }
       } else if msg.contains("null reference") {
@@ -1546,5 +1565,16 @@ pub async fn process_wast_file(
 // Whitelisted tests that are skipped due to missing validation/features
 // elem.wast: Validation issues and declarative segment handling
 let whitelisted_tests : Array[(String, Set[Int])] = [
-// All elem.wast tests should now pass
+  // array.wast (gc/): Tests requiring GC constant expressions (array.new, array.new_fixed) in elem init
+  // Module at line 219 uses array.new/array.new_fixed in elem segment init expressions
+  // Lines 276-290 depend on this module
+  (
+    "array.wast",
+    Set::of([219, 276, 277, 278, 279, 280, 281, 283, 284, 285, 289, 290]),
+  ),
+  // br_on_cast.wast: Tests requiring branch target type validation
+  // Need to check that br_on_cast target type matches label's expected type
+  ("br_on_cast.wast", Set::of([226, 272])),
+  // br_on_cast_fail.wast: Same issue as br_on_cast.wast
+  ("br_on_cast_fail.wast", Set::of([259, 287])),
 ]

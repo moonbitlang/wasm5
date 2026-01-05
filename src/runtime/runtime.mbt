@@ -23,7 +23,7 @@ fn RuntimeError::from_detail(detail : String) -> RuntimeError {
     RuntimeError::IntegerOverflow
   } else if detail.has_prefix("out of bounds table access") {
     RuntimeError::TableOutOfBounds
-  } else if detail.has_prefix("out of bounds") {
+  } else if detail.has_prefix("out of bounds memory access") {
     RuntimeError::MemoryOutOfBounds
   } else if detail.has_prefix("unreachable") {
     RuntimeError::Unreachable

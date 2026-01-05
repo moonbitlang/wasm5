@@ -618,10 +618,10 @@ async fn run_gc_harness(filename : String) -> Unit {
   }
 }
 
-// ///|
-// async test "gc/array.wast" {
-//   run_gc_harness("array.wast")
-// }
+///|
+async test "gc/array.wast" {
+  run_gc_harness("array.wast")
+}
 
 // ///|
 // async test "gc/array_copy.wast" {
@@ -658,20 +658,20 @@ async fn run_gc_harness(filename : String) -> Unit {
 //   run_gc_harness("binary-gc.wast")
 // }
 
-// ///|
-// async test "gc/br_on_cast.wast" {
-//   run_gc_harness("br_on_cast.wast")
-// }
+///|
+async test "gc/br_on_cast.wast" {
+  run_gc_harness("br_on_cast.wast")
+}
 
-// ///|
-// async test "gc/br_on_cast_fail.wast" {
-//   run_gc_harness("br_on_cast_fail.wast")
-// }
+///|
+async test "gc/br_on_cast_fail.wast" {
+  run_gc_harness("br_on_cast_fail.wast")
+}
 
-// ///|
-// async test "gc/extern.wast" {
-//   run_gc_harness("extern.wast")
-// }
+///|
+async test "gc/extern.wast" {
+  run_gc_harness("extern.wast")
+}
 
 ///|
 async test "gc/i31.wast" {

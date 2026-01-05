@@ -301,14 +301,25 @@ fn validate_instruction_gc(
     }
     BrOnCast(
       _label,
-      _target_type,
-      _target_nullable,
+      target_type,
+      target_nullable,
       source_type,
       source_nullable
     ) => {
       let source_val = heap_type_valtype(source_type, source_nullable)
+      let target_val = heap_type_valtype(target_type, target_nullable)
+      // Target type must be a subtype of source type (you can only downcast)
+      guard is_subtype(module_, target_val, source_val) else {
+        raise ValidationError::TypeMismatch(
+          "br_on_cast target type must be subtype of source type",
+        )
+      }
       ctx.poly_pop_expect(module_, source_val, "br_on_cast ref")
-      stack.push(source_val)
+      // Fallthrough type is the difference type: rt1 \ rt2
+      // If target is nullable, the fallthrough is non-nullable (null would have branched)
+      let diff_nullable = source_nullable && not(target_nullable)
+      let diff_val = heap_type_valtype(source_type, diff_nullable)
+      stack.push(diff_val)
     }
     BrOnCastFail(
       _label,
@@ -319,7 +330,14 @@ fn validate_instruction_gc(
     ) => {
       let source_val = heap_type_valtype(source_type, source_nullable)
       let target_val = heap_type_valtype(target_type, target_nullable)
+      // Target type must be a subtype of source type (you can only downcast)
+      guard is_subtype(module_, target_val, source_val) else {
+        raise ValidationError::TypeMismatch(
+          "br_on_cast_fail target type must be subtype of source type",
+        )
+      }
       ctx.poly_pop_expect(module_, source_val, "br_on_cast_fail ref")
+      // Fallthrough type is the target type (cast succeeded)
       stack.push(target_val)
     }
     AnyConvertExtern => {
