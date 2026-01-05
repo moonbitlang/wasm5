@@ -72,7 +72,11 @@ pub fn RuntimeTable::get_data(self : RuntimeTable, idx : Int) -> UInt64 {
 
 ///|
 /// Set table element at index (value is 64-bit tagged ref)
-pub fn RuntimeTable::set_data(self : RuntimeTable, idx : Int, value : UInt64) -> Unit {
+pub fn RuntimeTable::set_data(
+  self : RuntimeTable,
+  idx : Int,
+  value : UInt64,
+) -> Unit {
   self.data[idx] = value
 }
 
@@ -474,7 +478,7 @@ pub fn Runtime::load_with_resolver(
       Global(gt) => {
         // Try to get the global value from the resolver
         let value = match resolver.get_global(imp.module_, imp.name) {
-          Some(v) => {
+          Some(v) =>
             // For funcref globals, check if there's a funcref wrapper
             // and if so, use a negative index to point to external_funcrefs
             match v {
@@ -492,7 +496,6 @@ pub fn Runtime::load_with_resolver(
                 }
               _ => v
             }
-          }
           None =>
             // Fall back to default values (for spectest)
             match gt.val_type {
@@ -554,8 +557,14 @@ pub fn Runtime::load_with_resolver(
             // Fall back to creating an empty table if resolver doesn't provide one
             // This shouldn't happen with proper test setup, but provides graceful fallback
             let table_size = 10 // Default size for fallback
-            let table_data : Array[UInt64] = Array::make(table_size, 0xFFFFFFFFFFFFFFFFUL)
-            tables.push({ data: table_data, max: Some(20UL), external_funcrefs: [] })
+            let table_data : Array[UInt64] = Array::make(
+              table_size, 0xFFFFFFFFFFFFFFFFUL,
+            )
+            tables.push({
+              data: table_data,
+              max: Some(20UL),
+              external_funcrefs: [],
+            })
           }
         }
       _ => ()
@@ -569,11 +578,11 @@ pub fn Runtime::load_with_resolver(
       Some(init_expr) => {
         let init_value = eval_const_expr(init_expr, globals)
         match init_value {
-          Ref(Some(idx)) => idx.to_uint64().lor(0x4000000000000000UL) // funcref tag
+          Ref(Some(idx)) => idx.to_uint64() | 0x4000000000000000UL // funcref tag
           Ref(None) => 0xFFFFFFFFFFFFFFFFUL
-          Funcref(Some(idx)) => idx.to_uint64().lor(0x4000000000000000UL)
+          Funcref(Some(idx)) => idx.to_uint64() | 0x4000000000000000UL
           Funcref(None) => 0xFFFFFFFFFFFFFFFFUL
-          Externref(Some(idx)) => idx.to_uint64().lor(0x2000000000000000UL)
+          Externref(Some(idx)) => idx.to_uint64() | 0x2000000000000000UL
           Externref(None) => 0xFFFFFFFFFFFFFFFFUL
           _ =>
             raise RuntimeError::UnsupportedInitExpression(
@@ -584,7 +593,11 @@ pub fn Runtime::load_with_resolver(
       None => 0xFFFFFFFFFFFFFFFFUL
     }
     let table_data : Array[UInt64] = Array::make(table_size, init_ref)
-    tables.push({ data: table_data, max: table.limits.max, external_funcrefs: [] })
+    tables.push({
+      data: table_data,
+      max: table.limits.max,
+      external_funcrefs: [],
+    })
   }
   // Initialize element segments (copy function references into tables)
   // Track which segments are dropped - active and declarative segments are dropped after instantiation
@@ -626,22 +639,24 @@ pub fn Runtime::load_with_resolver(
                     // Funcref - add funcref tag
                     // Must mask to 62 bits because negative indices (external funcrefs)
                     // would otherwise produce 0xFFFF... which equals NULL
-                    let masked = idx.to_int64().reinterpret_as_uint64().land(0x3FFFFFFFFFFFFFFFUL)
-                    masked.lor(0x4000000000000000UL)
+                    let masked = idx.to_int64().reinterpret_as_uint64() &
+                      0x3FFFFFFFFFFFFFFFUL
+                    masked | 0x4000000000000000UL
                   }
                   @core.Extern | @core.NoExtern => {
                     // Externref - add externref tag
-                    let masked = idx.to_int64().reinterpret_as_uint64().land(0x3FFFFFFFFFFFFFFFUL)
-                    masked.lor(0x2000000000000000UL)
+                    let masked = idx.to_int64().reinterpret_as_uint64() &
+                      0x3FFFFFFFFFFFFFFFUL
+                    masked | 0x2000000000000000UL
                   }
                   _ =>
                     // i31, struct, array, or other GC ref - already encoded
                     idx.to_int64().reinterpret_as_uint64()
                 }
               Ref(None) => 0xFFFFFFFFFFFFFFFFUL
-              Funcref(Some(idx)) => idx.to_uint64().lor(0x4000000000000000UL)
+              Funcref(Some(idx)) => idx.to_uint64() | 0x4000000000000000UL
               Funcref(None) => 0xFFFFFFFFFFFFFFFFUL
-              Externref(Some(idx)) => idx.to_uint64().lor(0x2000000000000000UL)
+              Externref(Some(idx)) => idx.to_uint64() | 0x2000000000000000UL
               Externref(None) => 0xFFFFFFFFFFFFFFFFUL
               _ =>
                 raise RuntimeError::UnsupportedInitExpression(
@@ -866,12 +881,12 @@ fn eval_const_expr_with_context(
               }
             Funcref(r) =>
               fields[i] = match r {
-                Some(idx) => idx.to_uint64().lor(0x4000000000000000UL)
+                Some(idx) => idx.to_uint64() | 0x4000000000000000UL
                 None => 0xFFFFFFFFFFFFFFFFUL
               }
             Externref(r) =>
               fields[i] = match r {
-                Some(idx) => idx.to_uint64().lor(0x2000000000000000UL)
+                Some(idx) => idx.to_uint64() | 0x2000000000000000UL
                 None => 0xFFFFFFFFFFFFFFFFUL
               }
           }
@@ -917,12 +932,12 @@ fn eval_const_expr_with_context(
             }
           Funcref(r) =>
             match r {
-              Some(idx) => idx.to_uint64().lor(0x4000000000000000UL)
+              Some(idx) => idx.to_uint64() | 0x4000000000000000UL
               None => 0xFFFFFFFFFFFFFFFFUL
             }
           Externref(r) =>
             match r {
-              Some(idx) => idx.to_uint64().lor(0x2000000000000000UL)
+              Some(idx) => idx.to_uint64() | 0x2000000000000000UL
               None => 0xFFFFFFFFFFFFFFFFUL
             }
         }
@@ -963,12 +978,12 @@ fn eval_const_expr_with_context(
               }
             Funcref(r) =>
               elements[i] = match r {
-                Some(idx) => idx.to_uint64().lor(0x4000000000000000UL)
+                Some(idx) => idx.to_uint64() | 0x4000000000000000UL
                 None => 0xFFFFFFFFFFFFFFFFUL
               }
             Externref(r) =>
               elements[i] = match r {
-                Some(idx) => idx.to_uint64().lor(0x2000000000000000UL)
+                Some(idx) => idx.to_uint64() | 0x2000000000000000UL
                 None => 0xFFFFFFFFFFFFFFFFUL
               }
           }
@@ -985,18 +1000,18 @@ fn eval_const_expr_with_context(
           _ => 0
         }
         // Encode i31ref: (value << 1) | 1
-        let i31_value = value.land(0x7FFFFFFF)
-        let encoded = (i31_value << 1).lor(1)
+        let i31_value = value & 0x7FFFFFFF
+        let encoded = (i31_value << 1) | 1
         stack.push(Ref(Some(encoded)))
       }
       // Reference conversion operations
-      ExternConvertAny => {
+      ExternConvertAny =>
         // Convert anyref to externref by adding externref tag
         match stack.unsafe_pop() {
           Ref(None) => stack.push(Externref(None)) // null stays null
           Ref(Some(ref_val)) => {
             // Add externref tag (bit 61)
-            let tagged = ref_val.to_int64().to_uint64().lor(0x2000000000000000UL)
+            let tagged = ref_val.to_int64().to_uint64() | 0x2000000000000000UL
             stack.push(Externref(Some(tagged.to_int64().to_int())))
           }
           _ =>
@@ -1004,23 +1019,20 @@ fn eval_const_expr_with_context(
               "extern.convert_any expects reference on stack",
             )
         }
-      }
-      AnyConvertExtern => {
+      AnyConvertExtern =>
         // Convert externref to anyref - value keeps its externref tag
         // so it can still be identified as an "internalized externref"
         match stack.unsafe_pop() {
           Externref(None) => stack.push(Ref(None)) // null stays null
-          Externref(Some(ref_val)) => {
+          Externref(Some(ref_val)) =>
             // Keep the value as-is (it already has the externref tag from Externref encoding)
             // Just wrap it as Ref so it's typed as anyref
             stack.push(Ref(Some(ref_val)))
-          }
           _ =>
             raise RuntimeError::UnsupportedInitExpression(
               "any.convert_extern expects reference on stack",
             )
         }
-      }
       _ =>
         raise RuntimeError::UnsupportedInitExpression(
           "unsupported init expression instruction: \{instr}",

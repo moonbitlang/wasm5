@@ -59,9 +59,7 @@ fn validate_instruction_reference(
         let lhs = stack.unsafe_pop()
         // Both operands must be subtypes of eqref
         guard is_subtype(module_, lhs, EqRef) && is_subtype(module_, rhs, EqRef) else {
-          raise ValidationError::TypeMismatch(
-            "ref.eq expects eqref operands",
-          )
+          raise ValidationError::TypeMismatch("ref.eq expects eqref operands")
         }
       }
       stack.push(I32)

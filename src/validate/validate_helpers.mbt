@@ -594,7 +594,6 @@ fn is_type_index_subtype(
       _ => ()
     }
   }
-
   false
 }
 
@@ -644,7 +643,6 @@ fn is_func_type_subtype(
       return false
     }
   }
-
   true
 }
 
@@ -678,7 +676,6 @@ fn is_struct_subtype(
       return false
     }
   }
-
   true
 }
 
@@ -809,12 +806,9 @@ fn is_subtype(
     // Any reference is subtype of AnyRef
     (Ref(_, _), AnyRef) => true
     // I31/Struct/Array/Eq are subtypes of Any (for Ref types)
-    (Ref(I31, nullable1), Ref(Any, nullable2)) =>
-      nullable2 || not(nullable1)
-    (Ref(Struct, nullable1), Ref(Any, nullable2)) =>
-      nullable2 || not(nullable1)
-    (Ref(Array, nullable1), Ref(Any, nullable2)) =>
-      nullable2 || not(nullable1)
+    (Ref(I31, nullable1), Ref(Any, nullable2)) => nullable2 || not(nullable1)
+    (Ref(Struct, nullable1), Ref(Any, nullable2)) => nullable2 || not(nullable1)
+    (Ref(Array, nullable1), Ref(Any, nullable2)) => nullable2 || not(nullable1)
     (Ref(Eq, nullable1), Ref(Any, nullable2)) => nullable2 || not(nullable1)
     // TypeIndex is subtype of Ref(Any, _) if it's a struct or array type
     (Ref(TypeIndex(n), nullable1), Ref(Any, nullable2)) =>

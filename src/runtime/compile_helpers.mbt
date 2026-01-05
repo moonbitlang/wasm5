@@ -426,10 +426,10 @@ fn value_to_stack(v : Value) -> UInt64 {
     Ref(None) => 0xFFFFFFFFFFFFFFFFUL // null
     Ref(Some(idx)) => idx.to_int64().reinterpret_as_uint64()
     Funcref(None) => 0xFFFFFFFFFFFFFFFFUL // null
-    Funcref(Some(idx)) => idx.to_uint64().lor(0x4000000000000000UL) // tag bit 62
+    Funcref(Some(idx)) => idx.to_uint64() | 0x4000000000000000UL // tag bit 62
     Externref(None) => 0xFFFFFFFFFFFFFFFFUL // null
-    Externref(Some(idx)) => idx.to_uint64().lor(0x2000000000000000UL) // tag bit 61
-  }
+    Externref(Some(idx)) => idx.to_uint64() | 0x2000000000000000UL
+  } // tag bit 61
 }
 
 ///|

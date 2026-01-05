@@ -161,7 +161,13 @@ test "ops control table grow and globals" {
     [],
     None,
     [],
-    [RuntimeTable::{ data: [0xFFFFFFFFFFFFFFFFUL, 0xFFFFFFFFFFFFFFFFUL], max: Some(3UL), external_funcrefs: [] }],
+    [
+      RuntimeTable::{
+        data: [0xFFFFFFFFFFFFFFFFUL, 0xFFFFFFFFFFFFFFFFUL],
+        max: Some(3UL),
+        external_funcrefs: [],
+      },
+    ],
     [],
     [],
   )
@@ -186,7 +192,13 @@ test "ops control table grow and globals" {
     [],
     None,
     [],
-    [RuntimeTable::{ data: [0xFFFFFFFFFFFFFFFFUL], max: Some(3UL), external_funcrefs: [] }],
+    [
+      RuntimeTable::{
+        data: [0xFFFFFFFFFFFFFFFFUL],
+        max: Some(3UL),
+        external_funcrefs: [],
+      },
+    ],
     [],
     [],
   )

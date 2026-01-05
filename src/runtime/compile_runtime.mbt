@@ -178,7 +178,6 @@ pub fn Runtime::call_by_index(
       "Invalid local function index: \{func_idx}",
     )
   }
-
   let type_idx = self.ctx.module_.funcs[local_idx].reinterpret_as_int()
   let func_type = require_func_type(self.ctx.module_, type_idx, "call_by_index")
   let code = self.ctx.module_.codes[local_idx]

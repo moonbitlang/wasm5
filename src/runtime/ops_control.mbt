@@ -381,7 +381,7 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
   // Check if this is an external funcref (negative index from external_funcrefs)
   // External funcrefs are stored as funcref tag | negative value
   // Need to decode and check for external refs
-  let is_external = func_ref.land(0x4000000000000000UL) != 0UL && func_idx < 0
+  let is_external = (func_ref & 0x4000000000000000UL) != 0UL && func_idx < 0
   if is_external {
     let ext_idx = -(func_idx + 1)
     // First check the table's external_funcrefs (for cross-module table sharing)
@@ -402,7 +402,6 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
     let rt = push_results(rt, results)
     return { ..rt, pc: rt.pc + 3 }
   }
-
   let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
 
   // Check if calling an imported function
@@ -1015,7 +1014,6 @@ fn op_table_init(rt : Runtime) -> Runtime {
     rt.ctx.error_detail = "table index out of bounds"
     return { ..rt, sp: stack_top, status: Trap }
   }
-
   let table = rt.ctx.tables[table_idx]
   let elem = rt.ctx.module_.elems[elem_idx]
 
@@ -1045,7 +1043,6 @@ fn op_table_init(rt : Runtime) -> Runtime {
       }
     }
   }
-
   { ..rt, sp: stack_top, pc: rt.pc + 3 }
 }
 
@@ -1058,7 +1055,6 @@ fn op_table_copy(rt : Runtime) -> Runtime {
   let n = rt.stack.unsafe_get(rt.sp - 1).to_uint().reinterpret_as_int()
   let src = rt.stack.unsafe_get(rt.sp - 2).to_uint().reinterpret_as_int()
   let dest = rt.stack.unsafe_get(stack_top).to_uint().reinterpret_as_int()
-
   let dst_table = rt.ctx.tables[dst_table_idx]
   let src_table = rt.ctx.tables[src_table_idx]
 
@@ -1232,7 +1228,7 @@ fn op_ref_func(rt : Runtime) -> Runtime {
   // ref.func pushes a reference to the given function onto the stack
   let func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   // Push func ref tagged with bit 62 (0x4000000000000000)
-  let tagged = func_idx.to_uint64().lor(0x4000000000000000UL)
+  let tagged = func_idx.to_uint64() | 0x4000000000000000UL
   rt.stack.unsafe_set(rt.sp, tagged)
   { ..rt, sp: rt.sp + 1, pc: rt.pc + 2 }
 }

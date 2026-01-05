@@ -84,9 +84,7 @@ fn validate_instruction_gc(
       let field = get_field(struct_type, field_idx, "struct.set")
       // Check that field is mutable
       guard field.mutable else {
-        raise ValidationError::TypeMismatch(
-          "struct.set: immutable field",
-        )
+        raise ValidationError::TypeMismatch("struct.set: immutable field")
       }
       let value_type = storage_value_type(field.storage)
       ctx.poly_pop_expect(module_, value_type, "struct.set value")
@@ -213,9 +211,7 @@ fn validate_instruction_gc(
       )
       // Check that array is mutable
       guard array_type.element.mutable else {
-        raise ValidationError::TypeMismatch(
-          "array.set: immutable array",
-        )
+        raise ValidationError::TypeMismatch("array.set: immutable array")
       }
       let elem_type = storage_value_type(array_type.element.storage)
       ctx.poly_pop_expect(module_, elem_type, "array.set value")
