@@ -623,15 +623,15 @@ async test "gc/array.wast" {
   run_gc_harness("array.wast")
 }
 
-// ///|
-// async test "gc/array_copy.wast" {
-//   run_gc_harness("array_copy.wast")
-// }
+///|
+async test "gc/array_copy.wast" {
+  run_gc_harness("array_copy.wast")
+}
 
-// ///|
-// async test "gc/array_fill.wast" {
-//   run_gc_harness("array_fill.wast")
-// }
+///|
+async test "gc/array_fill.wast" {
+  run_gc_harness("array_fill.wast")
+}
 
 // ///|
 // async test "gc/array_init_data.wast" {

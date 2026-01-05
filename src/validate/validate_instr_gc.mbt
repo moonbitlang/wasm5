@@ -232,6 +232,10 @@ fn validate_instruction_gc(
         type_idx.reinterpret_as_int(),
         "array.fill",
       )
+      // Array must be mutable
+      guard array_type.element.mutable else {
+        raise ValidationError::TypeMismatch("immutable array")
+      }
       let elem_type = storage_value_type(array_type.element.storage)
       ctx.poly_pop_expect(module_, I32, "array.fill length")
       ctx.poly_pop_expect(module_, elem_type, "array.fill value")
@@ -243,16 +247,26 @@ fn validate_instruction_gc(
       )
     }
     ArrayCopy(dst_type, src_type) => {
-      let _ = require_array_type(
+      let dst_arr_type = require_array_type(
         module_,
         dst_type.reinterpret_as_int(),
         "array.copy",
       )
-      let _ = require_array_type(
+      let src_arr_type = require_array_type(
         module_,
         src_type.reinterpret_as_int(),
         "array.copy",
       )
+      // Destination array must be mutable
+      guard dst_arr_type.element.mutable else {
+        raise ValidationError::TypeMismatch("immutable array")
+      }
+      // Element types must match (source must be subtype of destination)
+      let dst_elem = dst_arr_type.element.storage
+      let src_elem = src_arr_type.element.storage
+      guard dst_elem == src_elem else {
+        raise ValidationError::TypeMismatch("array types do not match")
+      }
       ctx.poly_pop_expect(module_, I32, "array.copy length")
       ctx.poly_pop_expect(module_, I32, "array.copy src index")
       ctx.poly_pop_expect(
