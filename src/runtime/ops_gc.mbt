@@ -70,6 +70,30 @@ fn gc_alloc_array(
 }
 
 ///|
+/// Get the element storage type of an array type
+fn get_array_element_type(rt : Runtime, type_idx : Int) -> @core.StorageType? {
+  if type_idx < 0 || type_idx >= rt.ctx.module_.types.length() {
+    return None
+  }
+  match rt.ctx.module_.types[type_idx] {
+    Array(arr_type) => Some(arr_type.element.storage)
+    _ => None
+  }
+}
+
+///|
+/// Get the default value for a storage type
+/// Reference types default to null (0xFFFFFFFFFFFFFFFF)
+/// Numeric types default to 0
+fn storage_default_value(storage : @core.StorageType) -> UInt64 {
+  match storage {
+    I8 | I16 => 0UL
+    Val(I32) | Val(I64) | Val(F32) | Val(F64) | Val(V128) => 0UL
+    Val(_) => 0xFFFFFFFFFFFFFFFFUL // Reference types: null
+  }
+}
+
+///|
 /// Get a GC object by reference
 /// GC refs are encoded as (1-based-index << 1), so we decode by right-shifting
 fn gc_get_object(rt : Runtime, ref_value : Int) -> GcObject? {
@@ -284,7 +308,14 @@ fn op_array_new_default(rt : Runtime) -> Runtime {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let sp = rt.sp - 1
   let length = rt.stack.unsafe_get(sp).to_int()
-  let elements : Array[UInt64] = Array::make(length, 0UL)
+  // Determine default value based on element type
+  // For reference types, default is null (0xFFFFFFFFFFFFFFFF)
+  // For numeric types, default is 0
+  let default_value : UInt64 = match get_array_element_type(rt, type_idx) {
+    Some(storage) => storage_default_value(storage)
+    None => 0UL
+  }
+  let elements : Array[UInt64] = Array::make(length, default_value)
   let ref_value = gc_alloc_array(rt, type_idx, elements)
   rt.stack.unsafe_set(sp, ref_value.to_uint64())
   { ..rt, sp: sp + 1, pc: rt.pc + 2 }
@@ -1242,16 +1273,17 @@ fn op_array_init_data(rt : Runtime) -> Runtime {
   }
   let data = rt.ctx.data_segments[data_idx]
 
-  // Bounds check on data segment
-  if data_offset < 0 || data_offset + length * elem_size > data.length() {
-    rt.ctx.error_detail = "out of bounds memory access"
-    return { ..rt, status: Trap }
-  }
   match gc_get_object(rt, arr_ref) {
     Some(Array(a)) => {
-      // Bounds check on array
+      // Check array bounds first (spec requires this order)
       if arr_offset < 0 || arr_offset + length > a.elements.length() {
         rt.ctx.error_detail = "out of bounds array access"
+        return { ..rt, status: Trap }
+      }
+
+      // Bounds check on data segment
+      if data_offset < 0 || data_offset + length * elem_size > data.length() {
+        rt.ctx.error_detail = "out of bounds memory access"
         return { ..rt, status: Trap }
       }
 
@@ -1300,16 +1332,29 @@ fn op_array_init_elem(rt : Runtime) -> Runtime {
   }
   let elem = rt.ctx.module_.elems[elem_idx]
 
-  // Bounds check on element segment
-  if elem_offset < 0 || elem_offset + length > elem.init.length() {
-    rt.ctx.error_detail = "out of bounds table access"
-    return { ..rt, status: Trap }
-  }
   match gc_get_object(rt, arr_ref) {
     Some(Array(a)) => {
-      // Bounds check on array
+      // Check array bounds first (spec requires this order)
       if arr_offset < 0 || arr_offset + length > a.elements.length() {
         rt.ctx.error_detail = "out of bounds array access"
+        return { ..rt, status: Trap }
+      }
+
+      // Check if segment is dropped (active/declarative segments are dropped after instantiation)
+      if elem_idx >= 0 && elem_idx < rt.ctx.dropped_elems.length() &&
+        rt.ctx.dropped_elems[elem_idx] {
+        // Dropped segment: any non-zero length or offset is out of bounds
+        if length != 0 || elem_offset != 0 {
+          rt.ctx.error_detail = "out of bounds table access"
+          return { ..rt, status: Trap }
+        }
+        // n=0, src=0 is valid even for dropped segments
+        return { ..rt, sp, pc: rt.pc + 3 }
+      }
+
+      // Bounds check on element segment
+      if elem_offset < 0 || elem_offset + length > elem.init.length() {
+        rt.ctx.error_detail = "out of bounds table access"
         return { ..rt, status: Trap }
       }
 

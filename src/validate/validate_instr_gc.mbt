@@ -282,11 +282,20 @@ fn validate_instruction_gc(
       )
     }
     ArrayInitData(type_idx, data_idx) => {
-      let _ = require_array_type(
+      let array_type = require_array_type(
         module_,
         type_idx.reinterpret_as_int(),
         "array.init_data",
       )
+      guard array_type.element.mutable else {
+        raise ValidationError::TypeMismatch("immutable array")
+      }
+      // Element type must be numeric or vector (not a reference type)
+      guard is_numeric_or_vector_storage(array_type.element.storage) else {
+        raise ValidationError::TypeMismatch(
+          "array type is not numeric or vector",
+        )
+      }
       validate_data_index(module_, data_idx, "array.init_data")
       ctx.poly_pop_expect(module_, I32, "array.init_data length")
       ctx.poly_pop_expect(module_, I32, "array.init_data offset")
@@ -298,12 +307,37 @@ fn validate_instruction_gc(
       )
     }
     ArrayInitElem(type_idx, elem_idx) => {
-      let _ = require_array_type(
+      let array_type = require_array_type(
         module_,
         type_idx.reinterpret_as_int(),
         "array.init_elem",
       )
+      guard array_type.element.mutable else {
+        raise ValidationError::TypeMismatch("immutable array")
+      }
+      // Array element type must be a reference type
+      let arr_elem_val = match array_type.element.storage {
+        Val(v) => v
+        _ =>
+          raise ValidationError::TypeMismatch(
+            "array.init_elem: element type must be reference",
+          )
+      }
+      guard arr_elem_val.is_ref_type() else {
+        raise ValidationError::TypeMismatch(
+          "array.init_elem: element type must be reference",
+        )
+      }
+      // Element segment type must be subtype of array element type
       validate_elem_index(module_, elem_idx, "array.init_elem")
+      let elem_idx_int = elem_idx.reinterpret_as_int()
+      let elem = module_.elems[elem_idx_int]
+      let elem_val = reftype_to_valtype(elem.elem_type)
+      if not(is_subtype(module_, elem_val, arr_elem_val)) {
+        raise ValidationError::TypeMismatch(
+          "array.init_elem: element segment type not subtype of array element",
+        )
+      }
       ctx.poly_pop_expect(module_, I32, "array.init_elem length")
       ctx.poly_pop_expect(module_, I32, "array.init_elem offset")
       ctx.poly_pop_expect(module_, I32, "array.init_elem index")
@@ -435,6 +469,15 @@ fn is_packed_storage(storage : @core.StorageType) -> Bool {
   match storage {
     I8 | I16 => true
     Val(_) => false
+  }
+}
+
+///|
+fn is_numeric_or_vector_storage(storage : @core.StorageType) -> Bool {
+  match storage {
+    I8 | I16 => true
+    Val(I32) | Val(I64) | Val(F32) | Val(F64) | Val(V128) => true
+    _ => false // Reference types
   }
 }
 

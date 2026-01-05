@@ -954,7 +954,26 @@ fn eval_const_expr_with_context(
           I32(v) => v.reinterpret_as_int()
           _ => 0
         }
-        let elements : Array[UInt64] = Array::make(length, 0UL)
+        // Determine default value based on element type
+        // Reference types default to null (0xFFFFFFFFFFFFFFFF)
+        let default_value : UInt64 = match ctx.module_ {
+          Some(m) =>
+            if type_idx_int >= 0 && type_idx_int < m.types.length() {
+              match m.types[type_idx_int] {
+                Array(arr_type) =>
+                  match arr_type.element.storage {
+                    I8 | I16 => 0UL
+                    Val(I32) | Val(I64) | Val(F32) | Val(F64) | Val(V128) => 0UL
+                    Val(_) => 0xFFFFFFFFFFFFFFFFUL // Reference types: null
+                  }
+                _ => 0UL
+              }
+            } else {
+              0UL
+            }
+          None => 0UL
+        }
+        let elements : Array[UInt64] = Array::make(length, default_value)
         let obj = GcObject::Array({ type_idx: type_idx_int, elements })
         ctx.gc_heap.push(obj)
         // Encode as (1-based-index << 1) to distinguish from i31refs

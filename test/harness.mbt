@@ -1108,7 +1108,7 @@ async fn handle_assert_invalid(
     // Our validator distinguishes TypeMismatch and StackSizeMismatch, but both
     // correspond to the spec's "type mismatch" error message.
     @wasm5_validate.ValidationError::TypeMismatch(msg) =>
-      // TypeMismatch covers various validation errors including "type mismatch", "immutable field", "immutable array", and "array types do not match"
+      // TypeMismatch covers various validation errors including "type mismatch", "immutable field", "immutable array", "array types do not match", and "array type is not numeric or vector"
       if not(expected_error.contains("type mismatch")) &&
         not(
           expected_error.contains("immutable field") &&
@@ -1121,6 +1121,10 @@ async fn handle_assert_invalid(
         not(
           expected_error.contains("array types do not match") &&
           msg.contains("array types do not match"),
+        ) &&
+        not(
+          expected_error.contains("array type is not numeric or vector") &&
+          msg.contains("array type is not numeric or vector"),
         ) {
         ctx.fail(
           line,
