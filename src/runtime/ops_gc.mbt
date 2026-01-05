@@ -1377,20 +1377,25 @@ fn op_array_init_elem(rt : Runtime) -> Runtime {
 ///|
 /// Evaluate an element segment expression to get a reference value
 fn eval_elem_expr(expr : @core.Expr) -> UInt64 {
-  // Element expressions are typically simple: ref.func or ref.null
+  // Element expressions can include ref.func, ref.null, ref.i31, etc.
+  // Use a simple stack-based evaluation
+  let mut result : UInt64 = 0UL
   for instr in expr.instrs {
     match instr {
       RefFunc(idx) =>
-        // Function reference - return the function index
-        return idx.to_uint64()
+        // Function reference - return the function index with funcref tag
+        result = idx.to_uint64() | 0x4000000000000000UL
       RefNull(_) =>
         // Null reference
-        return 0UL
-      I32Const(v) => return v.to_uint64()
-      I64Const(v) => return v
+        result = 0xFFFFFFFFFFFFFFFFUL
+      I32Const(v) => result = v.to_uint64()
+      I64Const(v) => result = v
+      RefI31 =>
+        // ref.i31 takes an i32 from the stack (last computed value) and wraps it
+        // i31ref encoding: value with low bit set to 1
+        result = (result & 0x7FFFFFFFUL) << 1 | 1UL
       _ => ()
     }
   }
-  // Default to null if expression is not recognized
-  0UL
+  result
 }

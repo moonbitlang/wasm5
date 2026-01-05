@@ -643,20 +643,20 @@ async test "gc/array_init_elem.wast" {
   run_gc_harness("array_init_elem.wast")
 }
 
-// ///|
-// async test "gc/array_new_data.wast" {
-//   run_gc_harness("array_new_data.wast")
-// }
+///|
+async test "gc/array_new_data.wast" {
+  run_gc_harness("array_new_data.wast")
+}
 
-// ///|
-// async test "gc/array_new_elem.wast" {
-//   run_gc_harness("array_new_elem.wast")
-// }
+///|
+async test "gc/array_new_elem.wast" {
+  run_gc_harness("array_new_elem.wast")
+}
 
-// ///|
-// async test "gc/binary-gc.wast" {
-//   run_gc_harness("binary-gc.wast")
-// }
+///|
+async test "gc/binary-gc.wast" {
+  run_gc_harness("binary-gc.wast")
+}
 
 ///|
 async test "gc/br_on_cast.wast" {
