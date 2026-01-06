@@ -38,7 +38,16 @@ fn base_runtime(
   for i in 0..<stack_len {
     stack_buf[i] = stack64[i]
   }
-  let ctx = RuntimeContext::new(module_, [], None, [], [], [], [])
+  let ctx = RuntimeContext::new_with_gc_heap(
+    module_,
+    [],
+    None,
+    [],
+    [],
+    [],
+    [],
+    [],
+  )
   Runtime::{
     ops: FixedArray::from_array(ops),
     stack: stack_buf,
@@ -156,7 +165,7 @@ test "ops control branching" {
 ///|
 test "ops control table grow and globals" {
   let module_local = base_module([], [], [], [])
-  let ctx_table_size = RuntimeContext::new(
+  let ctx_table_size = RuntimeContext::new_with_gc_heap(
     module_local,
     [],
     None,
@@ -168,6 +177,7 @@ test "ops control table grow and globals" {
         external_funcrefs: [],
       },
     ],
+    [],
     [],
     [],
   )
@@ -187,7 +197,7 @@ test "ops control table grow and globals" {
   let stack_grow = FixedArray::make(64, 0UL)
   stack_grow[0] = 0xFFFFFFFF_FFFFFFFFUL // Ref(None)=-1
   stack_grow[1] = 1UL // I32(1)
-  let ctx_table_grow = RuntimeContext::new(
+  let ctx_table_grow = RuntimeContext::new_with_gc_heap(
     module_local,
     [],
     None,
@@ -199,6 +209,7 @@ test "ops control table grow and globals" {
         external_funcrefs: [],
       },
     ],
+    [],
     [],
     [],
   )
@@ -217,11 +228,12 @@ test "ops control table grow and globals" {
   assert_ctrl_stack_eq(rt_table_grow.stack.unsafe_get(0), Value::I32(1U))
   let stack_global = FixedArray::make(64, 0UL)
   stack_global[0] = 9UL
-  let ctx_global = RuntimeContext::new(
+  let ctx_global = RuntimeContext::new_with_gc_heap(
     module_local,
     [],
     None,
     [Value::I32(1U)],
+    [],
     [],
     [],
     [],

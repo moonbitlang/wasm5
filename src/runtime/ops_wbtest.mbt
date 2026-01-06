@@ -44,10 +44,11 @@ fn make_runtime(
   for i in 0..<stack_len {
     stack_buf[i] = stack64[i]
   }
-  let ctx = RuntimeContext::new(
+  let ctx = RuntimeContext::new_with_gc_heap(
     empty_module(),
     Array::make(memory_size, b'\x00'),
     None,
+    [],
     [],
     [],
     [],
@@ -775,10 +776,11 @@ test "ops memory load/store and size" {
   assert_stack_elem_eq(rt_size.stack.unsafe_get(0), Value::I32(1U))
   let stack_grow = FixedArray::make(64, 0UL)
   stack_grow[0] = 1UL // i32(1) as UInt64
-  let ctx_grow = RuntimeContext::new(
+  let ctx_grow = RuntimeContext::new_with_gc_heap(
     empty_module(),
     Array::make(65536, b'\x00'),
     Some(2UL),
+    [],
     [],
     [],
     [],
@@ -846,7 +848,7 @@ test "ops memory out of bounds and bulk ops" {
   stack_init[0] = 0UL
   stack_init[1] = 0UL
   stack_init[2] = 2UL // i32 values as UInt64
-  let ctx_init = RuntimeContext::new(
+  let ctx_init = RuntimeContext::new_with_gc_heap(
     empty_module(),
     Array::make(4, b'\x00'),
     None,
@@ -854,6 +856,7 @@ test "ops memory out of bounds and bulk ops" {
     [],
     [],
     [[1U.to_byte(), 2U.to_byte(), 3U.to_byte()]],
+    [],
   )
   let rt_init = Runtime::{
     ops: FixedArray::from_array([idx(0), idx(0)]),
@@ -869,7 +872,7 @@ test "ops memory out of bounds and bulk ops" {
   assert_ok(rt_init)
   assert_eq(rt_init.ctx.memory[0], 1U.to_byte())
   assert_eq(rt_init.ctx.memory[1], 2U.to_byte())
-  let ctx_drop = RuntimeContext::new(
+  let ctx_drop = RuntimeContext::new_with_gc_heap(
     empty_module(),
     Array::make(1, b'\x00'),
     None,
@@ -877,6 +880,7 @@ test "ops memory out of bounds and bulk ops" {
     [],
     [],
     [[1U.to_byte()]],
+    [],
   )
   let rt_drop = Runtime::{
     ops: FixedArray::from_array([idx(0), idx(0)]),

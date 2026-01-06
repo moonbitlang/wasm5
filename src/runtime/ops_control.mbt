@@ -369,7 +369,10 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
     return { ..rt, status: Trap }
   }
   // Extract func_idx from tagged funcref (remove tag bits)
-  let func_idx = func_ref.land(0x3FFFFFFFFFFFFFFFUL).to_int64().to_int()
+  let func_idx = func_ref
+    .land(0x3FFFFFFFFFFFFFFFUL)
+    .reinterpret_as_int64()
+    .to_int()
 
   // Get the expected type
   let expected_type = match
@@ -578,7 +581,10 @@ fn op_return_call_indirect(rt : Runtime) -> Runtime {
     return { ..rt, status: Trap }
   }
   // Extract func_idx from tagged funcref (remove tag bits)
-  let func_idx = func_ref.land(0x3FFFFFFFFFFFFFFFUL).to_int64().to_int()
+  let func_idx = func_ref
+    .land(0x3FFFFFFFFFFFFFFFUL)
+    .reinterpret_as_int64()
+    .to_int()
   let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
 
   // Get the expected type
@@ -971,11 +977,6 @@ fn op_atomic_unimplemented(rt : Runtime) -> Runtime {
   { ..rt, status: Trap }
 }
 
-///|
-fn op_gc_unimplemented(rt : Runtime) -> Runtime {
-  rt.ctx.error_detail = "gc instruction not implemented"
-  { ..rt, status: Trap }
-}
 // =============================================================================
 // Table bulk operations (stub implementations)
 // =============================================================================

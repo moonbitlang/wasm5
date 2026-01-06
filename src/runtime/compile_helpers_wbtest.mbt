@@ -63,13 +63,14 @@ test "compile helpers func type lookup with non func imports" {
 
 ///|
 test "compile helpers imported func result truncation" {
-  let ctx = RuntimeContext::new(
+  let ctx = RuntimeContext::new_with_gc_heap(
     empty_module(),
     [],
     None,
     [],
     [],
     [ImportedFunc::new(0U, fn(_args) { [Value::I32(1U), Value::I32(2U)] })],
+    [],
     [],
   )
   let rt = Runtime::{

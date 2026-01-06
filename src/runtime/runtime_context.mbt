@@ -21,34 +21,6 @@ pub struct RuntimeContext {
 }
 
 ///|
-/// Create a new RuntimeContext
-fn RuntimeContext::new(
-  module_ : @core.Module,
-  memory : Array[Byte],
-  memory_max : UInt64?,
-  globals : Array[Value],
-  tables : Array[RuntimeTable],
-  imported_funcs : Array[ImportedFunc],
-  data_segments : Array[Array[Byte]],
-  external_funcrefs? : Array[ImportedFunc] = [],
-  dropped_elems? : Array[Bool] = [],
-) -> RuntimeContext {
-  {
-    module_,
-    memory,
-    memory_max,
-    globals,
-    tables,
-    imported_funcs,
-    data_segments,
-    gc_heap: [],
-    external_funcrefs,
-    dropped_elems,
-    error_detail: "",
-  }
-}
-
-///|
 /// Create a new RuntimeContext with a pre-initialized gc_heap
 fn RuntimeContext::new_with_gc_heap(
   module_ : @core.Module,
