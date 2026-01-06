@@ -46,7 +46,8 @@ fn validate_instruction_reference(
       stack.push(I32) // Push result
     }
     RefEq => {
-      // ref.eq pops two references and pushes i32
+      // ref.eq pops two eqref values and pushes i32
+      // ref.eq only works with eqref subtypes (i31, struct, array), not anyref/funcref/externref
       if ctx.is_unreachable && stack.length() == 0 {
         // Unreachable - stack is polymorphic, don't pop anything
       } else if stack.length() < 2 {
@@ -56,10 +57,9 @@ fn validate_instruction_reference(
       } else {
         let rhs = stack.unsafe_pop()
         let lhs = stack.unsafe_pop()
-        guard is_ref_valtype(lhs) && is_ref_valtype(rhs) else {
-          raise ValidationError::TypeMismatch(
-            "ref.eq expects reference operands",
-          )
+        // Both operands must be subtypes of eqref
+        guard is_subtype(module_, lhs, EqRef) && is_subtype(module_, rhs, EqRef) else {
+          raise ValidationError::TypeMismatch("ref.eq expects eqref operands")
         }
       }
       stack.push(I32)

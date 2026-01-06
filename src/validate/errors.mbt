@@ -29,4 +29,6 @@ pub(all) suberror ValidationError {
   UnknownType(Int) // Type index in ref type doesn't exist
   UndeclaredFunctionReference(Int) // ref.func used for undeclared function
   InvalidElemIndex(Int) // Element segment index out of range
+  UnknownDataSegment(Int) // Data segment index out of range
+  InvalidSubtype(String) // Subtype declaration error (e.g., extending final type)
 } derive(Show)

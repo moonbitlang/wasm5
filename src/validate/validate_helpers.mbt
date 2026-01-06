@@ -368,7 +368,10 @@ fn validate_const_expr_instructions(
       | ArrayNew(_)
       | ArrayNewDefault(_)
       | ArrayNewFixed(_, _)
-      | RefI31 => () // Valid constant expression instructions
+      | RefI31
+      // Reference conversion instructions
+      | ExternConvertAny
+      | AnyConvertExtern => () // Valid constant expression instructions
       _ =>
         raise ValidationError::ConstantExpressionRequired(
           "invalid instruction in constant expression: \{instr}",
@@ -545,15 +548,22 @@ fn is_type_index_subtype(
     return true
   }
 
+  // Check if types are equivalent using rec group-aware equivalence
+  if gc_types_equivalent_validate(module_, type_idx1, type_idx2) {
+    return true
+  }
+
   // Search through type_groups to find explicit supertype declarations
+  // In WebAssembly GC, subtyping between defined types requires explicit declaration
   for group in module_.type_groups {
     for subtype_def in group.subtypes {
       let current_idx = subtype_def.type_idx.reinterpret_as_int()
       if current_idx == type_idx1 {
-        // Check if type_idx2 is a direct supertype
+        // Check if type_idx2 is a direct supertype or equivalent to one
         for supertype in subtype_def.supertypes {
           let super_idx = supertype.reinterpret_as_int()
-          if super_idx == type_idx2 {
+          if super_idx == type_idx2 ||
+            gc_types_equivalent_validate(module_, super_idx, type_idx2) {
             return true
           }
           // Recursively check if the supertype is a subtype of type_idx2
@@ -564,34 +574,8 @@ fn is_type_index_subtype(
       }
     }
   }
-
-  // Check structural subtyping for struct types
-  // A struct type S1 is a subtype of S2 if S2's fields are a prefix of S1's fields
-  // and corresponding field types are subtypes
-  if type_idx1 >= 0 &&
-    type_idx1 < module_.types.length() &&
-    type_idx2 >= 0 &&
-    type_idx2 < module_.types.length() {
-    match (module_.types[type_idx1], module_.types[type_idx2]) {
-      (Struct(struct1), Struct(struct2)) =>
-        // Check structural subtyping (S1 fields are superset of S2 fields)
-        if is_struct_subtype(module_, struct1, struct2) {
-          return true
-        }
-      (Array(arr1), Array(arr2)) =>
-        // Array types are subtypes if element types are subtypes
-        if is_array_subtype(module_, arr1, arr2) {
-          return true
-        }
-      (Func(func1), Func(func2)) =>
-        // Function types use contravariant parameters and covariant results
-        if is_func_type_subtype(module_, func1, func2) {
-          return true
-        }
-      _ => ()
-    }
-  }
-
+  // In WebAssembly GC, defined types only have subtype relationships through
+  // explicit declarations, not through structural matching
   false
 }
 
@@ -641,7 +625,6 @@ fn is_func_type_subtype(
       return false
     }
   }
-
   true
 }
 
@@ -675,7 +658,6 @@ fn is_struct_subtype(
       return false
     }
   }
-
   true
 }
 
@@ -757,6 +739,26 @@ fn is_subtype(
       // Non-nullable can be subtype of nullable, but not vice versa
       // If target is nullable, any source is OK; if target is non-nullable, source must be non-nullable
       (nullable2 || not(nullable1)) && is_type_index_subtype(module_, n1, n2)
+    // TypeIndex -> abstract type cases MUST come before generic Ref pattern
+    // Ref(TypeIndex(n), _) is a typed function reference, compatible with FuncRef
+    // only if type n is actually a function type
+    (Ref(TypeIndex(n), _), FuncRef) => is_func_type_index(module_, n)
+    // Typed function reference is also compatible with (ref func) and (ref null func)
+    (Ref(TypeIndex(n), false), Ref(Func, false)) =>
+      is_func_type_index(module_, n)
+    (Ref(TypeIndex(n), _), Ref(Func, true)) => is_func_type_index(module_, n)
+    // Typed struct/array references are compatible with structref/arrayref
+    (Ref(TypeIndex(n), _), StructRef) => is_struct_type_index(module_, n)
+    (Ref(TypeIndex(n), _), ArrayRef) => is_array_type_index(module_, n)
+    (Ref(TypeIndex(n), _), EqRef) =>
+      is_struct_type_index(module_, n) || is_array_type_index(module_, n)
+    (Ref(TypeIndex(n), false), Ref(Struct, false)) =>
+      is_struct_type_index(module_, n)
+    (Ref(TypeIndex(n), _), Ref(Struct, true)) =>
+      is_struct_type_index(module_, n)
+    (Ref(TypeIndex(n), false), Ref(Array, false)) =>
+      is_array_type_index(module_, n)
+    (Ref(TypeIndex(n), _), Ref(Array, true)) => is_array_type_index(module_, n)
     // Typed references: Ref(T, nullable)
     // Non-nullable is subtype of nullable for same heap type
     // (For non-TypeIndex heap types like Func, Extern, etc.)
@@ -776,25 +778,6 @@ fn is_subtype(
     // i31ref/structref/arrayref are eqref
     (Ref(I31, _), EqRef) | (Ref(Struct, _), EqRef) | (Ref(Array, _), EqRef) =>
       true
-    // Ref(TypeIndex(n), _) is a typed function reference, compatible with FuncRef
-    // only if type n is actually a function type
-    (Ref(TypeIndex(n), _), FuncRef) => is_func_type_index(module_, n)
-    // Typed function reference is also compatible with non-nullable (ref func)
-    (Ref(TypeIndex(n), false), Ref(Func, false)) =>
-      is_func_type_index(module_, n)
-    (Ref(TypeIndex(n), _), Ref(Func, true)) => is_func_type_index(module_, n)
-    // Typed struct/array references are compatible with structref/arrayref
-    (Ref(TypeIndex(n), _), StructRef) => is_struct_type_index(module_, n)
-    (Ref(TypeIndex(n), _), ArrayRef) => is_array_type_index(module_, n)
-    (Ref(TypeIndex(n), _), EqRef) =>
-      is_struct_type_index(module_, n) || is_array_type_index(module_, n)
-    (Ref(TypeIndex(n), false), Ref(Struct, false)) =>
-      is_struct_type_index(module_, n)
-    (Ref(TypeIndex(n), _), Ref(Struct, true)) =>
-      is_struct_type_index(module_, n)
-    (Ref(TypeIndex(n), false), Ref(Array, false)) =>
-      is_array_type_index(module_, n)
-    (Ref(TypeIndex(n), _), Ref(Array, true)) => is_array_type_index(module_, n)
     // NOTE: FuncRef is NOT a subtype of typed function references
     // General funcref cannot be used where specific typed reference is required
     // (FuncRef, Ref(TypeIndex(n), true)) => false
@@ -805,6 +788,15 @@ fn is_subtype(
     (Ref(Exn, _), ExnRef) => true
     // Any reference is subtype of AnyRef
     (Ref(_, _), AnyRef) => true
+    // I31/Struct/Array/Eq are subtypes of Any (for Ref types)
+    (Ref(I31, nullable1), Ref(Any, nullable2)) => nullable2 || not(nullable1)
+    (Ref(Struct, nullable1), Ref(Any, nullable2)) => nullable2 || not(nullable1)
+    (Ref(Array, nullable1), Ref(Any, nullable2)) => nullable2 || not(nullable1)
+    (Ref(Eq, nullable1), Ref(Any, nullable2)) => nullable2 || not(nullable1)
+    // TypeIndex is subtype of Ref(Any, _) if it's a struct or array type
+    (Ref(TypeIndex(n), nullable1), Ref(Any, nullable2)) =>
+      (nullable2 || not(nullable1)) &&
+      (is_struct_type_index(module_, n) || is_array_type_index(module_, n))
 
     // Non-reference types are not related by subtyping
     _ => false
@@ -864,4 +856,617 @@ fn collect_declared_funcs(m : @core.Module) -> Set[Int] {
     }
   }
   declared
+}
+
+///|
+/// Validate an element init constant expression and return its resulting type
+/// This handles all valid constant expressions including GC instructions
+fn validate_elem_init_const_expr(
+  m : @core.Module,
+  expr : @core.Expr,
+  import_counts : ImportCounts,
+  elem_nullable : Bool,
+) -> @core.ValType raise ValidationError {
+  // First validate all instructions are valid in constant expressions
+  validate_const_expr_instructions(expr)
+
+  // Stack-based type checking for the constant expression
+  let stack : Array[@core.ValType] = []
+  for instr in expr.instrs {
+    match instr {
+      I32Const(_) => stack.push(I32)
+      I64Const(_) => stack.push(I64)
+      F32Const(_) => stack.push(F32)
+      F64Const(_) => stack.push(F64)
+      RefNull(ref_type) => {
+        guard elem_nullable else {
+          raise ValidationError::TypeMismatch(
+            "non-nullable elem cannot be initialized with ref.null",
+          )
+        }
+        stack.push(@core.ValType::Ref(ref_type, true))
+      }
+      RefFunc(func_idx) => {
+        let idx = func_idx.reinterpret_as_int()
+        let total_funcs = import_counts.funcs + m.funcs.length()
+        if idx < 0 || idx >= total_funcs {
+          raise ValidationError::InvalidFunctionIndex(idx)
+        }
+        // Get the actual function type index for this function
+        let type_idx = get_func_type_index(m, idx, import_counts)
+        // RefFunc produces a non-null reference to the specific function type
+        stack.push(
+          @core.ValType::Ref(@core.RefType::TypeIndex(type_idx), false),
+        )
+      }
+      GlobalGet(global_idx) => {
+        let gidx = global_idx.reinterpret_as_int()
+        let (gtype, mutable) = get_global_type_and_mutable(
+          m, gidx, import_counts,
+        )
+        guard not(mutable) else {
+          raise ValidationError::ConstantExpressionRequired(
+            "elem init global.get must reference immutable global",
+          )
+        }
+        stack.push(gtype)
+      }
+      RefI31 => {
+        // Pop i32, push i31ref
+        guard stack.length() > 0 else {
+          raise ValidationError::TypeMismatch("ref.i31 requires i32 on stack")
+        }
+        let _ = stack.unsafe_pop()
+        stack.push(@core.ValType::Ref(@core.RefType::I31, false))
+      }
+      StructNew(type_idx) => {
+        let type_idx_int = type_idx.reinterpret_as_int()
+        if type_idx_int < 0 || type_idx_int >= m.types.length() {
+          raise ValidationError::UnknownType(type_idx_int)
+        }
+        let num_fields = match m.types[type_idx_int] {
+          Struct(s) => s.fields.length()
+          _ =>
+            raise ValidationError::TypeMismatch(
+              "struct.new requires struct type",
+            )
+        }
+        // Pop fields from stack
+        for i = 0; i < num_fields; i = i + 1 {
+          guard stack.length() > 0 else {
+            raise ValidationError::TypeMismatch(
+              "struct.new: not enough values on stack",
+            )
+          }
+          let _ = stack.unsafe_pop()
+
+        }
+        stack.push(
+          @core.ValType::Ref(@core.RefType::TypeIndex(type_idx_int), false),
+        )
+      }
+      StructNewDefault(type_idx) => {
+        let type_idx_int = type_idx.reinterpret_as_int()
+        if type_idx_int < 0 || type_idx_int >= m.types.length() {
+          raise ValidationError::UnknownType(type_idx_int)
+        }
+        match m.types[type_idx_int] {
+          Struct(_) => ()
+          _ =>
+            raise ValidationError::TypeMismatch(
+              "struct.new_default requires struct type",
+            )
+        }
+        stack.push(
+          @core.ValType::Ref(@core.RefType::TypeIndex(type_idx_int), false),
+        )
+      }
+      ArrayNew(type_idx) => {
+        let type_idx_int = type_idx.reinterpret_as_int()
+        if type_idx_int < 0 || type_idx_int >= m.types.length() {
+          raise ValidationError::UnknownType(type_idx_int)
+        }
+        match m.types[type_idx_int] {
+          Array(_) => ()
+          _ =>
+            raise ValidationError::TypeMismatch("array.new requires array type")
+        }
+        // Pop length (i32) and init value
+        guard stack.length() >= 2 else {
+          raise ValidationError::TypeMismatch(
+            "array.new requires init value and length",
+          )
+        }
+        let _ = stack.unsafe_pop() // length
+        let _ = stack.unsafe_pop() // init value
+        stack.push(
+          @core.ValType::Ref(@core.RefType::TypeIndex(type_idx_int), false),
+        )
+      }
+      ArrayNewDefault(type_idx) => {
+        let type_idx_int = type_idx.reinterpret_as_int()
+        if type_idx_int < 0 || type_idx_int >= m.types.length() {
+          raise ValidationError::UnknownType(type_idx_int)
+        }
+        match m.types[type_idx_int] {
+          Array(_) => ()
+          _ =>
+            raise ValidationError::TypeMismatch(
+              "array.new_default requires array type",
+            )
+        }
+        // Pop length (i32)
+        guard stack.length() >= 1 else {
+          raise ValidationError::TypeMismatch(
+            "array.new_default requires length",
+          )
+        }
+        let _ = stack.unsafe_pop()
+        stack.push(
+          @core.ValType::Ref(@core.RefType::TypeIndex(type_idx_int), false),
+        )
+      }
+      ArrayNewFixed(type_idx, len) => {
+        let type_idx_int = type_idx.reinterpret_as_int()
+        let length = len.reinterpret_as_int()
+        if type_idx_int < 0 || type_idx_int >= m.types.length() {
+          raise ValidationError::UnknownType(type_idx_int)
+        }
+        match m.types[type_idx_int] {
+          Array(_) => ()
+          _ =>
+            raise ValidationError::TypeMismatch(
+              "array.new_fixed requires array type",
+            )
+        }
+        // Pop 'length' elements from stack
+        guard stack.length() >= length else {
+          raise ValidationError::TypeMismatch(
+            "array.new_fixed: not enough values on stack",
+          )
+        }
+        for i = 0; i < length; i = i + 1 {
+          let _ = stack.unsafe_pop()
+
+        }
+        stack.push(
+          @core.ValType::Ref(@core.RefType::TypeIndex(type_idx_int), false),
+        )
+      }
+      I32Add | I32Sub | I32Mul => {
+        guard stack.length() >= 2 else {
+          raise ValidationError::TypeMismatch(
+            "i32 arithmetic requires 2 operands",
+          )
+        }
+        let _ = stack.unsafe_pop()
+        let _ = stack.unsafe_pop()
+        stack.push(I32)
+      }
+      I64Add | I64Sub | I64Mul => {
+        guard stack.length() >= 2 else {
+          raise ValidationError::TypeMismatch(
+            "i64 arithmetic requires 2 operands",
+          )
+        }
+        let _ = stack.unsafe_pop()
+        let _ = stack.unsafe_pop()
+        stack.push(I64)
+      }
+      ExternConvertAny => {
+        guard stack.length() >= 1 else {
+          raise ValidationError::TypeMismatch(
+            "extern.convert_any requires operand",
+          )
+        }
+        let _ = stack.unsafe_pop()
+        stack.push(ExternRef)
+      }
+      AnyConvertExtern => {
+        guard stack.length() >= 1 else {
+          raise ValidationError::TypeMismatch(
+            "any.convert_extern requires operand",
+          )
+        }
+        let _ = stack.unsafe_pop()
+        stack.push(AnyRef)
+      }
+      _ =>
+        raise ValidationError::ConstantExpressionRequired(
+          "invalid instruction in elem init: \{instr}",
+        )
+    }
+  }
+  // Expression should produce exactly one value
+  guard stack.length() == 1 else {
+    raise ValidationError::TypeMismatch(
+      "elem init expression must produce exactly one value, got \{stack.length()}",
+    )
+  }
+  stack[0]
+}
+
+///|
+/// Get rec group info for a type index: returns (group_index, position_in_group)
+fn get_rec_group_info_validate(
+  module_ : @core.Module,
+  type_idx : Int,
+) -> (Int, Int) {
+  for i, group in module_.type_groups {
+    for j, subtype_def in group.subtypes {
+      if subtype_def.type_idx.reinterpret_as_int() == type_idx {
+        return (i, j)
+      }
+    }
+  }
+  (-1, -1)
+}
+
+///|
+/// Get all type indices in a rec group
+fn get_rec_group_types_validate(
+  module_ : @core.Module,
+  group_idx : Int,
+) -> Array[Int] {
+  let result : Array[Int] = []
+  if group_idx >= 0 && group_idx < module_.type_groups.length() {
+    let group = module_.type_groups[group_idx]
+    for subtype_def in group.subtypes {
+      result.push(subtype_def.type_idx.reinterpret_as_int())
+    }
+  }
+  result
+}
+
+///|
+/// Check if a type index is within a given rec group
+fn is_in_rec_group_validate(types : Array[Int], type_idx : Int) -> Bool {
+  for t in types {
+    if t == type_idx {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Get the position of a type within its rec group
+fn get_position_in_group_validate(types : Array[Int], type_idx : Int) -> Int {
+  for i, t in types {
+    if t == type_idx {
+      return i
+    }
+  }
+  -1
+}
+
+///|
+/// Check if a type index is final (cannot be extended)
+fn is_type_final_validate(module_ : @core.Module, type_idx : Int) -> Bool {
+  for group in module_.type_groups {
+    for subtype_def in group.subtypes {
+      if subtype_def.type_idx.reinterpret_as_int() == type_idx {
+        return subtype_def.is_final
+      }
+    }
+  }
+  true // Default to final
+}
+
+///|
+/// Get the list of supertypes for a type index
+fn get_supertypes_validate(
+  module_ : @core.Module,
+  type_idx : Int,
+) -> Array[Int] {
+  let result : Array[Int] = []
+  for group in module_.type_groups {
+    for subtype_def in group.subtypes {
+      if subtype_def.type_idx.reinterpret_as_int() == type_idx {
+        for sup in subtype_def.supertypes {
+          result.push(sup.reinterpret_as_int())
+        }
+        return result
+      }
+    }
+  }
+  result
+}
+
+///|
+/// Check if two rec groups are structurally equivalent
+fn rec_groups_equivalent_validate(
+  module_ : @core.Module,
+  group1_idx : Int,
+  group2_idx : Int,
+  visited : Array[(Int, Int)],
+) -> Bool {
+  // Same group is equivalent
+  if group1_idx == group2_idx {
+    return true
+  }
+  // Check if we've already determined these groups are equivalent (cycle detection)
+  for v in visited {
+    if (v.0 == group1_idx && v.1 == group2_idx) ||
+      (v.0 == group2_idx && v.1 == group1_idx) {
+      return true
+    }
+  }
+  let types1 = get_rec_group_types_validate(module_, group1_idx)
+  let types2 = get_rec_group_types_validate(module_, group2_idx)
+  // Groups must have same number of types
+  if types1.length() != types2.length() {
+    return false
+  }
+  // Mark as being compared to handle cycles
+  visited.push((group1_idx, group2_idx))
+  // Check each corresponding type
+  for i in 0..<types1.length() {
+    let t1 = types1[i]
+    let t2 = types2[i]
+    if not(
+        types_equivalent_in_context_validate(
+          module_, t1, t2, types1, types2, visited,
+        ),
+      ) {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// Check if two types are equivalent in the context of their rec groups
+fn types_equivalent_in_context_validate(
+  module_ : @core.Module,
+  type_idx1 : Int,
+  type_idx2 : Int,
+  group1_types : Array[Int],
+  group2_types : Array[Int],
+  visited : Array[(Int, Int)],
+) -> Bool {
+  if type_idx1 < 0 ||
+    type_idx1 >= module_.types.length() ||
+    type_idx2 < 0 ||
+    type_idx2 >= module_.types.length() {
+    return false
+  }
+  // Check structural type match
+  match (module_.types[type_idx1], module_.types[type_idx2]) {
+    (Func(f1), Func(f2)) => {
+      // Check finality
+      if is_type_final_validate(module_, type_idx1) !=
+        is_type_final_validate(module_, type_idx2) {
+        return false
+      }
+      // Check params and results, handling recursive references
+      if f1.params.length() != f2.params.length() ||
+        f1.results.length() != f2.results.length() {
+        return false
+      }
+      for i in 0..<f1.params.length() {
+        if not(
+            valtypes_equivalent_in_context_validate(
+              module_,
+              f1.params[i],
+              f2.params[i],
+              group1_types,
+              group2_types,
+              visited,
+            ),
+          ) {
+          return false
+        }
+      }
+      for i in 0..<f1.results.length() {
+        if not(
+            valtypes_equivalent_in_context_validate(
+              module_,
+              f1.results[i],
+              f2.results[i],
+              group1_types,
+              group2_types,
+              visited,
+            ),
+          ) {
+          return false
+        }
+      }
+      // Check supertypes are equivalent
+      let supers1 = get_supertypes_validate(module_, type_idx1)
+      let supers2 = get_supertypes_validate(module_, type_idx2)
+      if supers1.length() != supers2.length() {
+        return false
+      }
+      for i in 0..<supers1.length() {
+        if not(
+            type_refs_equivalent_in_context_validate(
+              module_,
+              supers1[i],
+              supers2[i],
+              group1_types,
+              group2_types,
+              visited,
+            ),
+          ) {
+          return false
+        }
+      }
+      true
+    }
+    (Struct(s1), Struct(s2)) => {
+      if is_type_final_validate(module_, type_idx1) !=
+        is_type_final_validate(module_, type_idx2) {
+        return false
+      }
+      if s1.fields.length() != s2.fields.length() {
+        return false
+      }
+      for i in 0..<s1.fields.length() {
+        if s1.fields[i].mutable != s2.fields[i].mutable {
+          return false
+        }
+        if not(
+            storage_types_equivalent_in_context_validate(
+              module_,
+              s1.fields[i].storage,
+              s2.fields[i].storage,
+              group1_types,
+              group2_types,
+              visited,
+            ),
+          ) {
+          return false
+        }
+      }
+      let supers1 = get_supertypes_validate(module_, type_idx1)
+      let supers2 = get_supertypes_validate(module_, type_idx2)
+      if supers1.length() != supers2.length() {
+        return false
+      }
+      for i in 0..<supers1.length() {
+        if not(
+            type_refs_equivalent_in_context_validate(
+              module_,
+              supers1[i],
+              supers2[i],
+              group1_types,
+              group2_types,
+              visited,
+            ),
+          ) {
+          return false
+        }
+      }
+      true
+    }
+    (Array(a1), Array(a2)) => {
+      if is_type_final_validate(module_, type_idx1) !=
+        is_type_final_validate(module_, type_idx2) {
+        return false
+      }
+      if a1.element.mutable != a2.element.mutable {
+        return false
+      }
+      if not(
+          storage_types_equivalent_in_context_validate(
+            module_,
+            a1.element.storage,
+            a2.element.storage,
+            group1_types,
+            group2_types,
+            visited,
+          ),
+        ) {
+        return false
+      }
+      let supers1 = get_supertypes_validate(module_, type_idx1)
+      let supers2 = get_supertypes_validate(module_, type_idx2)
+      if supers1.length() != supers2.length() {
+        return false
+      }
+      for i in 0..<supers1.length() {
+        if not(
+            type_refs_equivalent_in_context_validate(
+              module_,
+              supers1[i],
+              supers2[i],
+              group1_types,
+              group2_types,
+              visited,
+            ),
+          ) {
+          return false
+        }
+      }
+      true
+    }
+    _ => false
+  }
+}
+
+///|
+/// Check if two type references are equivalent considering rec group context
+fn type_refs_equivalent_in_context_validate(
+  module_ : @core.Module,
+  ref1 : Int,
+  ref2 : Int,
+  group1_types : Array[Int],
+  group2_types : Array[Int],
+  visited : Array[(Int, Int)],
+) -> Bool {
+  let in_group1 = is_in_rec_group_validate(group1_types, ref1)
+  let in_group2 = is_in_rec_group_validate(group2_types, ref2)
+  if in_group1 && in_group2 {
+    // Both are internal references - must be at same position
+    let pos1 = get_position_in_group_validate(group1_types, ref1)
+    let pos2 = get_position_in_group_validate(group2_types, ref2)
+    pos1 == pos2
+  } else if not(in_group1) && not(in_group2) {
+    // Both are external references - must point to equivalent types
+    if ref1 == ref2 {
+      return true
+    }
+    let (g1, _) = get_rec_group_info_validate(module_, ref1)
+    let (g2, _) = get_rec_group_info_validate(module_, ref2)
+    rec_groups_equivalent_validate(module_, g1, g2, visited)
+  } else {
+    // One internal, one external - not equivalent
+    false
+  }
+}
+
+///|
+/// Check if two value types are equivalent in rec group context
+fn valtypes_equivalent_in_context_validate(
+  module_ : @core.Module,
+  vt1 : @core.ValType,
+  vt2 : @core.ValType,
+  group1_types : Array[Int],
+  group2_types : Array[Int],
+  visited : Array[(Int, Int)],
+) -> Bool {
+  match (vt1, vt2) {
+    (Ref(TypeIndex(idx1), n1), Ref(TypeIndex(idx2), n2)) =>
+      n1 == n2 &&
+      type_refs_equivalent_in_context_validate(
+        module_, idx1, idx2, group1_types, group2_types, visited,
+      )
+    _ => vt1 == vt2
+  }
+}
+
+///|
+/// Check if two storage types are equivalent in rec group context
+fn storage_types_equivalent_in_context_validate(
+  module_ : @core.Module,
+  st1 : @core.StorageType,
+  st2 : @core.StorageType,
+  group1_types : Array[Int],
+  group2_types : Array[Int],
+  visited : Array[(Int, Int)],
+) -> Bool {
+  match (st1, st2) {
+    (Val(vt1), Val(vt2)) =>
+      valtypes_equivalent_in_context_validate(
+        module_, vt1, vt2, group1_types, group2_types, visited,
+      )
+    _ => st1 == st2
+  }
+}
+
+///|
+/// Check if two GC types are equivalent considering rec group membership
+fn gc_types_equivalent_validate(
+  module_ : @core.Module,
+  type_idx1 : Int,
+  type_idx2 : Int,
+) -> Bool {
+  if type_idx1 == type_idx2 {
+    return true
+  }
+  let (group1_idx, _) = get_rec_group_info_validate(module_, type_idx1)
+  let (group2_idx, _) = get_rec_group_info_validate(module_, type_idx2)
+  let visited : Array[(Int, Int)] = []
+  rec_groups_equivalent_validate(module_, group1_idx, group2_idx, visited)
 }

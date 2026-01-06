@@ -82,6 +82,10 @@ fn validate_instruction_gc(
         "struct.set",
       )
       let field = get_field(struct_type, field_idx, "struct.set")
+      // Check that field is mutable
+      guard field.mutable else {
+        raise ValidationError::TypeMismatch("struct.set: immutable field")
+      }
       let value_type = storage_value_type(field.storage)
       ctx.poly_pop_expect(module_, value_type, "struct.set value")
       ctx.poly_pop_expect(
@@ -205,6 +209,10 @@ fn validate_instruction_gc(
         type_idx.reinterpret_as_int(),
         "array.set",
       )
+      // Check that array is mutable
+      guard array_type.element.mutable else {
+        raise ValidationError::TypeMismatch("array.set: immutable array")
+      }
       let elem_type = storage_value_type(array_type.element.storage)
       ctx.poly_pop_expect(module_, elem_type, "array.set value")
       ctx.poly_pop_expect(module_, I32, "array.set index")
@@ -224,6 +232,10 @@ fn validate_instruction_gc(
         type_idx.reinterpret_as_int(),
         "array.fill",
       )
+      // Array must be mutable
+      guard array_type.element.mutable else {
+        raise ValidationError::TypeMismatch("immutable array")
+      }
       let elem_type = storage_value_type(array_type.element.storage)
       ctx.poly_pop_expect(module_, I32, "array.fill length")
       ctx.poly_pop_expect(module_, elem_type, "array.fill value")
@@ -235,16 +247,26 @@ fn validate_instruction_gc(
       )
     }
     ArrayCopy(dst_type, src_type) => {
-      let _ = require_array_type(
+      let dst_arr_type = require_array_type(
         module_,
         dst_type.reinterpret_as_int(),
         "array.copy",
       )
-      let _ = require_array_type(
+      let src_arr_type = require_array_type(
         module_,
         src_type.reinterpret_as_int(),
         "array.copy",
       )
+      // Destination array must be mutable
+      guard dst_arr_type.element.mutable else {
+        raise ValidationError::TypeMismatch("immutable array")
+      }
+      // Element types must match (source must be subtype of destination)
+      let dst_elem = dst_arr_type.element.storage
+      let src_elem = src_arr_type.element.storage
+      guard dst_elem == src_elem else {
+        raise ValidationError::TypeMismatch("array types do not match")
+      }
       ctx.poly_pop_expect(module_, I32, "array.copy length")
       ctx.poly_pop_expect(module_, I32, "array.copy src index")
       ctx.poly_pop_expect(
@@ -260,11 +282,20 @@ fn validate_instruction_gc(
       )
     }
     ArrayInitData(type_idx, data_idx) => {
-      let _ = require_array_type(
+      let array_type = require_array_type(
         module_,
         type_idx.reinterpret_as_int(),
         "array.init_data",
       )
+      guard array_type.element.mutable else {
+        raise ValidationError::TypeMismatch("immutable array")
+      }
+      // Element type must be numeric or vector (not a reference type)
+      guard is_numeric_or_vector_storage(array_type.element.storage) else {
+        raise ValidationError::TypeMismatch(
+          "array type is not numeric or vector",
+        )
+      }
       validate_data_index(module_, data_idx, "array.init_data")
       ctx.poly_pop_expect(module_, I32, "array.init_data length")
       ctx.poly_pop_expect(module_, I32, "array.init_data offset")
@@ -276,12 +307,37 @@ fn validate_instruction_gc(
       )
     }
     ArrayInitElem(type_idx, elem_idx) => {
-      let _ = require_array_type(
+      let array_type = require_array_type(
         module_,
         type_idx.reinterpret_as_int(),
         "array.init_elem",
       )
+      guard array_type.element.mutable else {
+        raise ValidationError::TypeMismatch("immutable array")
+      }
+      // Array element type must be a reference type
+      let arr_elem_val = match array_type.element.storage {
+        Val(v) => v
+        _ =>
+          raise ValidationError::TypeMismatch(
+            "array.init_elem: element type must be reference",
+          )
+      }
+      guard arr_elem_val.is_ref_type() else {
+        raise ValidationError::TypeMismatch(
+          "array.init_elem: element type must be reference",
+        )
+      }
+      // Element segment type must be subtype of array element type
       validate_elem_index(module_, elem_idx, "array.init_elem")
+      let elem_idx_int = elem_idx.reinterpret_as_int()
+      let elem = module_.elems[elem_idx_int]
+      let elem_val = reftype_to_valtype(elem.elem_type)
+      if not(is_subtype(module_, elem_val, arr_elem_val)) {
+        raise ValidationError::TypeMismatch(
+          "array.init_elem: element segment type not subtype of array element",
+        )
+      }
       ctx.poly_pop_expect(module_, I32, "array.init_elem length")
       ctx.poly_pop_expect(module_, I32, "array.init_elem offset")
       ctx.poly_pop_expect(module_, I32, "array.init_elem index")
@@ -291,19 +347,67 @@ fn validate_instruction_gc(
         "array.init_elem ref",
       )
     }
-    BrOnCast(
-      _label,
-      _target_type,
-      _target_nullable,
-      source_type,
-      source_nullable
-    ) => {
+    BrOnCast(label, target_type, target_nullable, source_type, source_nullable) => {
       let source_val = heap_type_valtype(source_type, source_nullable)
+      let target_val = heap_type_valtype(target_type, target_nullable)
+      // Target type must be a subtype of source type (you can only downcast)
+      guard is_subtype(module_, target_val, source_val) else {
+        raise ValidationError::TypeMismatch(
+          "br_on_cast target type must be subtype of source type",
+        )
+      }
+      // Per https://github.com/WebAssembly/gc/issues/516:
+      // br_on_cast needs to validate ALL values being sent to the label
+      // The label expects [t* t'] where t' is the expected ref type
+      // Stack should have [t1* rt] where rt is the input ref
+      // On branch, stack sends [t1* target_val] to label
+      // After fallthrough, stack is normalized to [t* diff_val] (label's prefix types!)
+      let label_types = ctx.get_label_types(label)
+      // Check we have enough values on stack for label_types
+      if not(ctx.is_unreachable) && stack.length() < label_types.length() {
+        raise ValidationError::TypeMismatch(
+          "br_on_cast: stack has \{stack.length()} values, label expects \{label_types.length()}",
+        )
+      }
+      // For the last position (the ref being cast), check target_val is subtype of label's last type
+      if label_types.length() > 0 {
+        let label_last_type = label_types[label_types.length() - 1]
+        guard is_subtype(module_, target_val, label_last_type) else {
+          raise ValidationError::TypeMismatch(
+            "br_on_cast: cast type \{target_val} not subtype of label's \{label_last_type}",
+          )
+        }
+        // Check other stack values match their corresponding label types
+        for i = 0; i < label_types.length() - 1; i = i + 1 {
+          let stack_idx = stack.length() - label_types.length() + i
+          if stack_idx >= 0 && stack_idx < stack.length() {
+            let stack_type = stack[stack_idx]
+            let label_type = label_types[i]
+            guard is_subtype(module_, stack_type, label_type) else {
+              raise ValidationError::TypeMismatch(
+                "br_on_cast: stack type \{stack_type} not subtype of label's \{label_type}",
+              )
+            }
+          }
+        }
+      }
+      // Pop the source value (already validated above)
       ctx.poly_pop_expect(module_, source_val, "br_on_cast ref")
-      stack.push(source_val)
+      // Pop the prefix values (in reverse order)
+      for i = label_types.length() - 2; i >= 0; i = i - 1 {
+        ctx.poly_pop_expect(module_, label_types[i], "br_on_cast prefix")
+      }
+      // Fallthrough: push back label's prefix types (normalized) plus diff type
+      // This normalization is key per GC issue #516
+      let diff_nullable = source_nullable && not(target_nullable)
+      let diff_val = heap_type_valtype(source_type, diff_nullable)
+      for i = 0; i < label_types.length() - 1; i = i + 1 {
+        stack.push(label_types[i])
+      }
+      stack.push(diff_val)
     }
     BrOnCastFail(
-      _label,
+      label,
       target_type,
       target_nullable,
       source_type,
@@ -311,7 +415,58 @@ fn validate_instruction_gc(
     ) => {
       let source_val = heap_type_valtype(source_type, source_nullable)
       let target_val = heap_type_valtype(target_type, target_nullable)
+      // Target type must be a subtype of source type (you can only downcast)
+      guard is_subtype(module_, target_val, source_val) else {
+        raise ValidationError::TypeMismatch(
+          "br_on_cast_fail target type must be subtype of source type",
+        )
+      }
+      // The diff type (sent to label when cast fails) is source minus target
+      let diff_nullable = source_nullable && not(target_nullable)
+      let diff_val = heap_type_valtype(source_type, diff_nullable)
+      // Per https://github.com/WebAssembly/gc/issues/516:
+      // br_on_cast_fail needs to validate ALL values being sent to the label
+      // After fallthrough, stack is normalized to [t* target_val] (label's prefix types!)
+      let label_types = ctx.get_label_types(label)
+      // Check we have enough values on stack for label_types
+      if not(ctx.is_unreachable) && stack.length() < label_types.length() {
+        raise ValidationError::TypeMismatch(
+          "br_on_cast_fail: stack has \{stack.length()} values, label expects \{label_types.length()}",
+        )
+      }
+      // For the last position, check diff_val is subtype of label's last type
+      if label_types.length() > 0 {
+        let label_last_type = label_types[label_types.length() - 1]
+        guard is_subtype(module_, diff_val, label_last_type) else {
+          raise ValidationError::TypeMismatch(
+            "br_on_cast_fail: diff type \{diff_val} not subtype of label's \{label_last_type}",
+          )
+        }
+        // Check other stack values match their corresponding label types
+        for i = 0; i < label_types.length() - 1; i = i + 1 {
+          let stack_idx = stack.length() - label_types.length() + i
+          if stack_idx >= 0 && stack_idx < stack.length() {
+            let stack_type = stack[stack_idx]
+            let label_type = label_types[i]
+            guard is_subtype(module_, stack_type, label_type) else {
+              raise ValidationError::TypeMismatch(
+                "br_on_cast_fail: stack type \{stack_type} not subtype of label's \{label_type}",
+              )
+            }
+          }
+        }
+      }
+      // Pop the source value (already validated above)
       ctx.poly_pop_expect(module_, source_val, "br_on_cast_fail ref")
+      // Pop the prefix values (in reverse order)
+      for i = label_types.length() - 2; i >= 0; i = i - 1 {
+        ctx.poly_pop_expect(module_, label_types[i], "br_on_cast_fail prefix")
+      }
+      // Fallthrough: push back label's prefix types (normalized) plus target type
+      // This normalization is key per GC issue #516
+      for i = 0; i < label_types.length() - 1; i = i + 1 {
+        stack.push(label_types[i])
+      }
       stack.push(target_val)
     }
     AnyConvertExtern => {
@@ -395,6 +550,15 @@ fn is_packed_storage(storage : @core.StorageType) -> Bool {
   match storage {
     I8 | I16 => true
     Val(_) => false
+  }
+}
+
+///|
+fn is_numeric_or_vector_storage(storage : @core.StorageType) -> Bool {
+  match storage {
+    I8 | I16 => true
+    Val(I32) | Val(I64) | Val(F32) | Val(F64) | Val(V128) => true
+    _ => false // Reference types
   }
 }
 

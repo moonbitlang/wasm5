@@ -161,7 +161,13 @@ test "ops control table grow and globals" {
     [],
     None,
     [],
-    [RuntimeTable::{ data: [None, None], max: Some(3UL), external_funcrefs: [] }],
+    [
+      RuntimeTable::{
+        data: [0xFFFFFFFFFFFFFFFFUL, 0xFFFFFFFFFFFFFFFFUL],
+        max: Some(3UL),
+        external_funcrefs: [],
+      },
+    ],
     [],
     [],
   )
@@ -186,7 +192,13 @@ test "ops control table grow and globals" {
     [],
     None,
     [],
-    [RuntimeTable::{ data: [None], max: Some(3UL), external_funcrefs: [] }],
+    [
+      RuntimeTable::{
+        data: [0xFFFFFFFFFFFFFFFFUL],
+        max: Some(3UL),
+        external_funcrefs: [],
+      },
+    ],
     [],
     [],
   )
@@ -279,13 +291,14 @@ test "ops control table bulk stubs" {
   ])
   let rt_table_init = op_table_init(rt_table_init)
   assert_trap(rt_table_init) // Traps: element segment 0 doesn't exist
+  // table.copy with non-existent table should trap
   let rt_table_copy = base_runtime(module_local, [idx(0), idx(0), idx(0)], [
     Value::I32(0U),
     Value::I32(0U),
     Value::I32(0U),
   ])
   let rt_table_copy = op_table_copy(rt_table_copy)
-  assert_ok(rt_table_copy)
+  assert_trap(rt_table_copy)
   let rt_elem_drop = base_runtime(module_local, [idx(0), idx(0)], [])
   let rt_elem_drop = op_elem_drop(rt_elem_drop)
   assert_ok(rt_elem_drop)

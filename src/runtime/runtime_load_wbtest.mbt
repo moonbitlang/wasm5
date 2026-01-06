@@ -76,9 +76,15 @@ test "runtime load with resolver" {
   let resolver = ImportResolver::new()
   resolver.add_func(b"m", b"f", ImportedFunc::new(0U, fn(_args) { [] }))
   resolver.add_global(b"m", b"g0", Value::I32(42U))
+  resolver.add_global(b"m", b"g1", Value::F64(666.6))
   resolver.add_table(b"m", b"t0", RuntimeTable::{
-    data: [None, None],
+    data: [0xFFFFFFFFFFFFFFFFUL, 0xFFFFFFFFFFFFFFFFUL],
     max: Some(2UL),
+    external_funcrefs: [],
+  })
+  resolver.add_table(b"m", b"t1", RuntimeTable::{
+    data: Array::make(10, 0xFFFFFFFFFFFFFFFFUL),
+    max: Some(20UL),
     external_funcrefs: [],
   })
   resolver.add_memory(b"m", b"mem", ImportedMemory::{
@@ -100,7 +106,8 @@ test "runtime load with resolver" {
   assert_eq(rt.ctx.tables[0].data.length(), 2)
   assert_eq(rt.ctx.tables[1].data.length(), 10)
   assert_eq(rt.ctx.tables[2].data.length(), 1)
-  assert_eq(rt.ctx.tables[0].data[0], Some(0))
+  // Table entry contains funcref with tag bit 62 set (0x4000000000000000 | func_idx)
+  assert_eq(rt.ctx.tables[0].data[0], 0x4000000000000000UL)
   assert_eq(rt.ctx.data_segments.length(), 1)
   assert_eq(rt.ctx.data_segments[0][0], b'h')
 }

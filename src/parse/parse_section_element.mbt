@@ -34,10 +34,9 @@ fn parse_element_section(parser : Parser) -> Array[@core.Elem] raise {
     // For expr form with explicit type (flags 5-7), use the declared type
     // For expr form without explicit type (flag 4), default to nullable funcref for compatibility
     let (elem_type, elem_nullable) = match flags {
-      0 => {
+      0 =>
         // funcidx form, no type byte - type is (ref func) non-nullable
         (@core.RefType::Func, false)
-      }
       1 | 3 => {
         let _elemkind = parser.read_byte()
         // elemkind (0x00 = funcref), but funcidx form is non-nullable

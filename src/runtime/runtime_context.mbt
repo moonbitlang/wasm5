@@ -30,8 +30,8 @@ fn RuntimeContext::new(
   tables : Array[RuntimeTable],
   imported_funcs : Array[ImportedFunc],
   data_segments : Array[Array[Byte]],
-  external_funcrefs~ : Array[ImportedFunc] = [],
-  dropped_elems~ : Array[Bool] = [],
+  external_funcrefs? : Array[ImportedFunc] = [],
+  dropped_elems? : Array[Bool] = [],
 ) -> RuntimeContext {
   {
     module_,
@@ -59,8 +59,8 @@ fn RuntimeContext::new_with_gc_heap(
   imported_funcs : Array[ImportedFunc],
   data_segments : Array[Array[Byte]],
   gc_heap : Array[GcObject],
-  external_funcrefs~ : Array[ImportedFunc] = [],
-  dropped_elems~ : Array[Bool] = [],
+  external_funcrefs? : Array[ImportedFunc] = [],
+  dropped_elems? : Array[Bool] = [],
 ) -> RuntimeContext {
   {
     module_,

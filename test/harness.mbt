@@ -312,7 +312,6 @@ fn fix_shared_table_elements(
       _ => ()
     }
   }
-
   let tables = runtime.get_tables()
 
   // Process each active element segment
@@ -321,7 +320,9 @@ fn fix_shared_table_elements(
       let table_idx = elem.table_idx.reinterpret_as_int()
 
       // Only fix imported tables (indices 0..num_imported_tables-1)
-      if table_idx >= 0 && table_idx < num_imported_tables && table_idx < tables.length() {
+      if table_idx >= 0 &&
+        table_idx < num_imported_tables &&
+        table_idx < tables.length() {
         let table = tables[table_idx]
 
         // Evaluate offset - we need to match the runtime's evaluation
@@ -332,9 +333,18 @@ fn fix_shared_table_elements(
         for i in 0..<elem.init.length() {
           let addr = off + i
           if addr >= 0 && addr < table.data_length() {
-            // Get the current value - this is a local func index
-            match table.get_data(addr) {
-              Some(func_idx) if func_idx >= 0 => {
+            // Get the current value - this is encoded as a tagged UInt64
+            let data = table.get_data(addr)
+            // Check if it's a funcref (bit 62 set) and not null
+            if data != 0xFFFFFFFFFFFFFFFFUL &&
+              (data & 0x4000000000000000UL) != 0UL {
+              // Extract func_idx from lower 62 bits
+              let func_idx_raw = (data & 0x3FFFFFFFFFFFFFFFUL)
+                .reinterpret_as_int64()
+                .to_int()
+              // Only process if it's a local function (non-negative)
+              if func_idx_raw >= 0 {
+                let func_idx = func_idx_raw
                 // This is a local function index - create a wrapper
                 let type_idx = if func_idx < num_imported_funcs {
                   // Imported function - get type from import
@@ -348,7 +358,6 @@ fn fix_shared_table_elements(
                     0
                   }
                 }
-
                 let arity : UInt = match module_.types.get(type_idx) {
                   Some(@wasm5_core.TypeDef::Func(ft)) =>
                     ft.params.length().reinterpret_as_uint()
@@ -359,11 +368,17 @@ fn fix_shared_table_elements(
                 let wrapper = make_funcref_wrapper(registered, func_idx, arity)
                 let ext_idx = table.add_external_funcref(wrapper)
 
-                // Store negative index pointing to the wrapper
-                table.set_data(addr, Some(-(ext_idx + 1)))
+                // Store negative index pointing to the wrapper (with funcref tag)
+                // The index must be masked to 62 bits before OR'ing with funcref tag
+                // because -1 as full 64-bit would be 0xFFFFFFFF... which is NULL
+                let neg_val = (-(ext_idx + 1))
+                  .to_int64()
+                  .reinterpret_as_uint64()
+                let masked = neg_val & 0x3FFFFFFFFFFFFFFFUL // Mask to lower 62 bits
+                table.set_data(addr, masked | 0x4000000000000000UL)
               }
-              _ => () // null or already negative - skip
             }
+            // null or already negative - skip
           }
         }
       }
@@ -399,7 +414,10 @@ fn eval_elem_offset(
 
 ///|
 /// Get the type index for an imported function
-fn get_import_func_type_idx(module_ : @wasm5_core.Module, func_idx : Int) -> Int {
+fn get_import_func_type_idx(
+  module_ : @wasm5_core.Module,
+  func_idx : Int,
+) -> Int {
   let mut import_idx = 0
   for imp in module_.imports {
     match imp.desc {
@@ -457,6 +475,10 @@ enum ExpectedValue {
   AnyF64Nan // nan:arithmetic for f64 - any NaN value is acceptable
   AnyFuncRef // any funcref value (including null)
   AnyExternRef // any externref value (including null)
+  AnyI31Ref // any i31ref value (including null)
+  AnyStructRef // any non-null struct reference
+  AnyArrayRef // any non-null array reference
+  AnyEqRef // any non-null eqref value
   // AnyRefNull matches any null reference, regardless of its static type.
   // At runtime, all null references (nullref, nullfuncref, nullexnref,
   // nullexternref) are represented identically as Ref(None). The type
@@ -552,16 +574,27 @@ fn parse_args(args : Array[Json]) -> Array[@wasm5_runtime.Value] raise {
       // externref: "null" for null, otherwise an integer index
       { "type": "externref", "value": String(v), .. } =>
         if v == "null" {
-          runtime_args.push(@wasm5_runtime.Value::Ref(None))
+          runtime_args.push(@wasm5_runtime.Value::Externref(None))
         } else {
           runtime_args.push(
-            @wasm5_runtime.Value::Ref(
+            @wasm5_runtime.Value::Externref(
               Some(parse_i32_value(v).reinterpret_as_int()),
             ),
           )
         }
       // funcref: "null" for null, otherwise an integer function index
       { "type": "funcref", "value": String(v), .. } =>
+        if v == "null" {
+          runtime_args.push(@wasm5_runtime.Value::Funcref(None))
+        } else {
+          runtime_args.push(
+            @wasm5_runtime.Value::Funcref(
+              Some(parse_i32_value(v).reinterpret_as_int()),
+            ),
+          )
+        }
+      // anyref: "null" for null, otherwise an integer ref index
+      { "type": "anyref", "value": String(v), .. } =>
         if v == "null" {
           runtime_args.push(@wasm5_runtime.Value::Ref(None))
         } else {
@@ -647,6 +680,14 @@ fn parse_expected_value(expected : Json) -> ExpectedValue raise {
         )
       }
     { "type": "exnref", .. } => AnyFuncRef // Treat as any reference
+    // i31ref: any i31 reference
+    { "type": "i31ref", .. } => AnyI31Ref
+    // structref: any non-null struct reference
+    { "type": "structref", .. } => AnyStructRef
+    // arrayref: any non-null array reference
+    { "type": "arrayref", .. } => AnyArrayRef
+    // eqref: any non-null eqref value (i31, struct, array)
+    { "type": "eqref", .. } => AnyEqRef
     // refnull: any null reference
     { "type": "refnull", .. } => AnyRefNull
     // All null reference types map to AnyRefNull because at runtime, WebAssembly
@@ -686,6 +727,10 @@ fn format_expected_with_bits(e : ExpectedValue) -> String {
     AnyF64Nan => "AnyF64Nan"
     AnyFuncRef => "AnyFuncRef"
     AnyExternRef => "AnyExternRef"
+    AnyI31Ref => "AnyI31Ref"
+    AnyStructRef => "AnyStructRef"
+    AnyArrayRef => "AnyArrayRef"
+    AnyEqRef => "AnyEqRef"
     AnyRefNull => "AnyRefNull"
   }
 }
@@ -730,6 +775,30 @@ fn values_match(
         @wasm5_runtime.Value::Ref(_) => true
         _ => false
       }
+    AnyI31Ref =>
+      // Accept any i31ref value (stored as Ref with encoded value)
+      match actual {
+        @wasm5_runtime.Value::Ref(_) => true
+        _ => false
+      }
+    AnyStructRef =>
+      // Accept any non-null struct reference
+      match actual {
+        @wasm5_runtime.Value::Ref(Some(_)) => true
+        _ => false
+      }
+    AnyArrayRef =>
+      // Accept any non-null array reference
+      match actual {
+        @wasm5_runtime.Value::Ref(Some(_)) => true
+        _ => false
+      }
+    AnyEqRef =>
+      // Accept any non-null eqref value (i31, struct, array)
+      match actual {
+        @wasm5_runtime.Value::Ref(Some(_)) => true
+        _ => false
+      }
     AnyRefNull =>
       // Accept only null references
       match actual {
@@ -745,7 +814,7 @@ async fn handle_module(
   ctx : TestContext,
   filename : String,
   line : Int,
-  name~ : String? = None,
+  name? : String? = None,
 ) -> Unit {
   try {
     let runtime = parse_and_compile(ctx.dir, filename, ctx.resolver)
@@ -796,7 +865,7 @@ fn handle_assert_return(
   args : Array[Json],
   expected : Array[Json],
   line : Int,
-  module_name~ : String? = None,
+  module_name? : String? = None,
 ) -> Unit {
   try {
     let runtime_args = parse_args(args)
@@ -845,7 +914,7 @@ fn handle_assert_trap(
   args : Array[Json],
   expected_error : String,
   line : Int,
-  module_name~ : String? = None,
+  module_name? : String? = None,
 ) -> Unit {
   let runtime_args = parse_args(args) catch {
     e => {
@@ -923,6 +992,14 @@ fn handle_assert_trap(
             "[\{fn_name}] expected '\{expected_error}' but got table out of bounds",
           )
         }
+      } else if msg.contains("array") && msg.contains("out of bounds") {
+        if not(expected_error.contains("out of bounds array access")) {
+          ctx.fail(
+            line,
+            "assert_trap",
+            "[\{fn_name}] expected '\{expected_error}' but got out of bounds array access",
+          )
+        }
       } else if msg.contains("undefined element") {
         if not(expected_error.contains("undefined element")) {
           ctx.fail(
@@ -953,6 +1030,38 @@ fn handle_assert_trap(
             line,
             "assert_trap",
             "[\{fn_name}] expected '\{expected_error}' but got null function reference",
+          )
+        }
+      } else if msg.contains("null i31 reference") {
+        if not(expected_error.contains("null i31 reference")) {
+          ctx.fail(
+            line,
+            "assert_trap",
+            "[\{fn_name}] expected '\{expected_error}' but got null i31 reference",
+          )
+        }
+      } else if msg.contains("null structure reference") {
+        if not(expected_error.contains("null structure reference")) {
+          ctx.fail(
+            line,
+            "assert_trap",
+            "[\{fn_name}] expected '\{expected_error}' but got null structure reference",
+          )
+        }
+      } else if msg.contains("null array reference") {
+        if not(expected_error.contains("null array reference")) {
+          ctx.fail(
+            line,
+            "assert_trap",
+            "[\{fn_name}] expected '\{expected_error}' but got null array reference",
+          )
+        }
+      } else if msg.contains("cast failed") {
+        if not(expected_error.contains("cast failure")) {
+          ctx.fail(
+            line,
+            "assert_trap",
+            "[\{fn_name}] expected '\{expected_error}' but got cast failure",
           )
         }
       } else if msg.contains("null reference") {
@@ -998,8 +1107,25 @@ async fn handle_assert_invalid(
     // The WebAssembly spec uses "type mismatch" for various validation errors.
     // Our validator distinguishes TypeMismatch and StackSizeMismatch, but both
     // correspond to the spec's "type mismatch" error message.
-    @wasm5_validate.ValidationError::TypeMismatch(_) =>
-      if not(expected_error.contains("type mismatch")) {
+    @wasm5_validate.ValidationError::TypeMismatch(msg) =>
+      // TypeMismatch covers various validation errors including "type mismatch", "immutable field", "immutable array", "array types do not match", and "array type is not numeric or vector"
+      if not(expected_error.contains("type mismatch")) &&
+        not(
+          expected_error.contains("immutable field") &&
+          msg.contains("immutable"),
+        ) &&
+        not(
+          expected_error.contains("immutable array") &&
+          msg.contains("immutable"),
+        ) &&
+        not(
+          expected_error.contains("array types do not match") &&
+          msg.contains("array types do not match"),
+        ) &&
+        not(
+          expected_error.contains("array type is not numeric or vector") &&
+          msg.contains("array type is not numeric or vector"),
+        ) {
         ctx.fail(
           line,
           "assert_invalid",
@@ -1110,6 +1236,22 @@ async fn handle_assert_invalid(
           "expected '\{expected_error}' but got UninitializedLocal",
         )
       }
+    @wasm5_validate.ValidationError::UnknownDataSegment(_) =>
+      if not(expected_error.contains("unknown data segment")) {
+        ctx.fail(
+          line,
+          "assert_invalid",
+          "expected '\{expected_error}' but got UnknownDataSegment",
+        )
+      }
+    @wasm5_validate.ValidationError::InvalidElemIndex(_) =>
+      if not(expected_error.contains("unknown elem segment")) {
+        ctx.fail(
+          line,
+          "assert_invalid",
+          "expected '\{expected_error}' but got InvalidElemIndex",
+        )
+      }
     _ => () // Other validation errors are acceptable
   }
 }
@@ -1144,13 +1286,14 @@ fn handle_assert_return_get(
   field : String,
   expected : Array[Json],
   line : Int,
-  module_name~ : String? = None,
+  module_name? : String? = None,
 ) -> Unit {
   try {
     guard get_runtime_for_module(ctx, module_name) is Some(rt) else {
       let msg = match module_name {
         Some(name) => "[get \{field}] module '\{name}' not registered"
-        None => "[get \{field}] no module loaded (previous module failed to load)"
+        None =>
+          "[get \{field}] no module loaded (previous module failed to load)"
       }
       ctx.fail(line, "assert_return", msg)
       return
@@ -1172,14 +1315,18 @@ fn handle_assert_return_get(
     }
     guard global_idx is Some(idx) else {
       ctx.fail(
-        line, "assert_return", "[get \{field}] global '\{field}' not exported",
+        line,
+        "assert_return",
+        "[get \{field}] global '\{field}' not exported",
       )
       return
     }
     let globals = rt.get_globals()
     if idx < 0 || idx >= globals.length() {
       ctx.fail(
-        line, "assert_return", "[get \{field}] global index \{idx} out of bounds",
+        line,
+        "assert_return",
+        "[get \{field}] global index \{idx} out of bounds",
       )
       return
     }
@@ -1236,19 +1383,45 @@ async fn process_command(ctx : TestContext, cmd : Json) -> Unit {
       "expected": Array(expected),
       ..
     } => {
-      let module_name = if module_name is Some(String(n)) { Some(n) } else { None }
-      handle_assert_return(ctx, fn_name, args, expected, line.to_int(), module_name~)
+      let module_name = if module_name is Some(String(n)) {
+        Some(n)
+      } else {
+        None
+      }
+      handle_assert_return(
+        ctx,
+        fn_name,
+        args,
+        expected,
+        line.to_int(),
+        module_name~,
+      )
     }
     // Assert function returns expected value (get action - read global)
     {
       "type": "assert_return",
       "line": Number(line, ..),
-      "action": { "type": "get", "field": String(field), "module"? : module_name, .. },
+      "action": {
+        "type": "get",
+        "field": String(field),
+        "module"? : module_name,
+        ..
+      },
       "expected": Array(expected),
       ..
     } => {
-      let module_name = if module_name is Some(String(n)) { Some(n) } else { None }
-      handle_assert_return_get(ctx, field, expected, line.to_int(), module_name~)
+      let module_name = if module_name is Some(String(n)) {
+        Some(n)
+      } else {
+        None
+      }
+      handle_assert_return_get(
+        ctx,
+        field,
+        expected,
+        line.to_int(),
+        module_name~,
+      )
     }
     // Assert function returns (unsupported action type)
     { "type": "assert_return", "line": Number(line, ..), "action": action, .. } =>
@@ -1271,8 +1444,19 @@ async fn process_command(ctx : TestContext, cmd : Json) -> Unit {
       "text": String(expected_error),
       ..
     } => {
-      let module_name = if module_name is Some(String(n)) { Some(n) } else { None }
-      handle_assert_trap(ctx, fn_name, args, expected_error, line.to_int(), module_name~)
+      let module_name = if module_name is Some(String(n)) {
+        Some(n)
+      } else {
+        None
+      }
+      handle_assert_trap(
+        ctx,
+        fn_name,
+        args,
+        expected_error,
+        line.to_int(),
+        module_name~,
+      )
     }
     {
       "type": "assert_invalid",
@@ -1395,7 +1579,5 @@ pub async fn process_wast_file(
 /// Whitelist of individual tests to skip (file, line)
 /// These are known failing tests due to missing features
 // Whitelisted tests that are skipped due to missing validation/features
-// elem.wast: Validation issues and declarative segment handling
-let whitelisted_tests : Array[(String, Set[Int])] = [
-  // All elem.wast tests should now pass
-]
+// Currently all GC tests pass!
+let whitelisted_tests : Array[(String, Set[Int])] = []

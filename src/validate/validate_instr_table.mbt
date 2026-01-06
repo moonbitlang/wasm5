@@ -40,6 +40,14 @@ fn validate_instruction_table(
           "table.copy requires matching table index types",
         )
       }
+      // Check that source element type is subtype of destination element type
+      let src_elem = @core.ValType::Ref(src_type.elem_type, src_type.nullable)
+      let dst_elem = @core.ValType::Ref(dst_type.elem_type, dst_type.nullable)
+      guard is_subtype(module_, src_elem, dst_elem) else {
+        raise ValidationError::TypeMismatch(
+          "table.copy: source element type is not compatible with destination",
+        )
+      }
       let idx_type = table_index_type(dst_type)
       ctx.poly_pop_expect(module_, idx_type, "table.copy n")
       ctx.poly_pop_expect(module_, idx_type, "table.copy src")
@@ -65,7 +73,12 @@ fn validate_instruction_table(
       }
       ctx.poly_pop_expect(module_, idx_type, "table.fill dest")
     }
-    ElemDrop(_) => ()
+    ElemDrop(elem_idx) => {
+      let elem_idx_int = elem_idx.reinterpret_as_int()
+      if elem_idx_int < 0 || elem_idx_int >= module_.elems.length() {
+        raise ValidationError::InvalidElemIndex(elem_idx_int)
+      }
+    }
 
     // Table instructions
     TableSize(table_idx) => {

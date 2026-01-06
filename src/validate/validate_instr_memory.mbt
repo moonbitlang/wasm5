@@ -281,25 +281,22 @@ fn validate_instruction_memory(
       let mem_type = get_memtype(module_, import_counts, mem_idx)
       let addr_type = memory_addr_type(mem_type)
       // Validate data segment index
-      if data_idx.reinterpret_as_int() < 0 ||
-        data_idx.reinterpret_as_int() >= module_.datas.length() {
-        raise ValidationError::TypeMismatch(
-          "memory.init: data segment index out of range",
-        )
+      let data_idx_int = data_idx.reinterpret_as_int()
+      if data_idx_int < 0 || data_idx_int >= module_.datas.length() {
+        raise ValidationError::UnknownDataSegment(data_idx_int)
       }
       // memory.init pops: n, src, dest (address type)
       ctx.poly_pop_expect(module_, addr_type, "memory.init n")
       ctx.poly_pop_expect(module_, addr_type, "memory.init src")
       ctx.poly_pop_expect(module_, addr_type, "memory.init dest")
     }
-    DataDrop(data_idx) =>
+    DataDrop(data_idx) => {
       // Validate data segment index
-      if data_idx.reinterpret_as_int() < 0 ||
-        data_idx.reinterpret_as_int() >= module_.datas.length() {
-        raise ValidationError::TypeMismatch(
-          "data.drop: data segment index out of range",
-        )
+      let data_idx_int = data_idx.reinterpret_as_int()
+      if data_idx_int < 0 || data_idx_int >= module_.datas.length() {
+        raise ValidationError::UnknownDataSegment(data_idx_int)
       }
+    }
     MemoryCopy(dst_idx, src_idx) => {
       let dst_type = get_memtype(module_, import_counts, dst_idx)
       let src_type = get_memtype(module_, import_counts, src_idx)

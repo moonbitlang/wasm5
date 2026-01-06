@@ -23,7 +23,7 @@ fn RuntimeError::from_detail(detail : String) -> RuntimeError {
     RuntimeError::IntegerOverflow
   } else if detail.has_prefix("out of bounds table access") {
     RuntimeError::TableOutOfBounds
-  } else if detail.has_prefix("out of bounds") {
+  } else if detail.has_prefix("out of bounds memory access") {
     RuntimeError::MemoryOutOfBounds
   } else if detail.has_prefix("unreachable") {
     RuntimeError::Unreachable
@@ -41,18 +41,20 @@ pub(all) enum Value {
   I64(UInt64)
   F32(Float)
   F64(Double)
-  Ref(Int?) // For FuncRef and ExternRef (using index or null)
+  Ref(Int?) // For GC refs (struct, array, i31)
+  Funcref(Int?) // For function references
+  Externref(Int?) // For external references
 } derive(Eq, Show)
 
 ///|
 /// Table with its limits
 struct RuntimeTable {
-  data : Array[Int?] // Table data (function indices, None = null ref)
+  data : Array[UInt64] // Table data (64-bit tagged refs, 0xFFFFFFFFFFFFFFFF = null)
   max : UInt64? // Maximum size limit (None = no limit)
   // External funcrefs for cross-module table sharing.
   // When a module stores its own funcrefs into an imported table,
   // wrappers are added here and negative indices stored in data.
-  // Mapping: -1 → external_funcrefs[0], -2 → [1], etc.
+  // Mapping: use funcref tag (0x4000...) with negative indices
   external_funcrefs : Array[ImportedFunc]
 }
 
@@ -63,14 +65,18 @@ pub fn RuntimeTable::data_length(self : RuntimeTable) -> Int {
 }
 
 ///|
-/// Get table element at index
-pub fn RuntimeTable::get_data(self : RuntimeTable, idx : Int) -> Int? {
+/// Get table element at index (returns 64-bit tagged ref)
+pub fn RuntimeTable::get_data(self : RuntimeTable, idx : Int) -> UInt64 {
   self.data[idx]
 }
 
 ///|
-/// Set table element at index
-pub fn RuntimeTable::set_data(self : RuntimeTable, idx : Int, value : Int?) -> Unit {
+/// Set table element at index (value is 64-bit tagged ref)
+pub fn RuntimeTable::set_data(
+  self : RuntimeTable,
+  idx : Int,
+  value : UInt64,
+) -> Unit {
   self.data[idx] = value
 }
 
@@ -395,7 +401,7 @@ pub fn default_import_resolver() -> ImportResolver {
     func: spectest_print_f64_f64,
   })
   // Add spectest table (10 funcref, max 20)
-  let table_data : Array[Int?] = Array::make(10, None)
+  let table_data : Array[UInt64] = Array::make(10, 0xFFFFFFFFFFFFFFFFUL)
   resolver.add_table(b"spectest", b"table", {
     data: table_data,
     max: Some(20UL),
@@ -472,7 +478,7 @@ pub fn Runtime::load_with_resolver(
       Global(gt) => {
         // Try to get the global value from the resolver
         let value = match resolver.get_global(imp.module_, imp.name) {
-          Some(v) => {
+          Some(v) =>
             // For funcref globals, check if there's a funcref wrapper
             // and if so, use a negative index to point to external_funcrefs
             match v {
@@ -490,7 +496,6 @@ pub fn Runtime::load_with_resolver(
                 }
               _ => v
             }
-          }
           None =>
             // Fall back to default values (for spectest)
             match gt.val_type {
@@ -517,22 +522,25 @@ pub fn Runtime::load_with_resolver(
     let value = eval_const_expr_with_gc(global.init, globals, gc_heap, m)
     globals.push(value)
   }
-  // Initialize data segments (copy data into memory)
+  // Initialize data segments (copy active data segments into memory)
   for data in m.datas {
-    // Evaluate offset expression to get the starting address
-    let offset_value = eval_const_expr(data.offset, globals)
-    let offset = match offset_value {
-      I32(v) => v.reinterpret_as_int()
-      _ =>
-        raise RuntimeError::UnsupportedInitExpression(
-          "data segment offset must be i32",
-        )
-    }
-    // Copy data bytes into memory
-    for i in 0..<data.init.length() {
-      let addr = offset + i
-      if addr >= 0 && addr < memory.length() {
-        memory[addr] = data.init[i]
+    // Only copy active segments - passive segments are used with memory.init
+    if data.is_active {
+      // Evaluate offset expression to get the starting address
+      let offset_value = eval_const_expr(data.offset, globals)
+      let offset = match offset_value {
+        I32(v) => v.reinterpret_as_int()
+        _ =>
+          raise RuntimeError::UnsupportedInitExpression(
+            "data segment offset must be i32",
+          )
+      }
+      // Copy data bytes into memory
+      for i in 0..<data.init.length() {
+        let addr = offset + i
+        if addr >= 0 && addr < memory.length() {
+          memory[addr] = data.init[i]
+        }
       }
     }
   }
@@ -549,8 +557,14 @@ pub fn Runtime::load_with_resolver(
             // Fall back to creating an empty table if resolver doesn't provide one
             // This shouldn't happen with proper test setup, but provides graceful fallback
             let table_size = 10 // Default size for fallback
-            let table_data : Array[Int?] = Array::make(table_size, None)
-            tables.push({ data: table_data, max: Some(20UL), external_funcrefs: [] })
+            let table_data : Array[UInt64] = Array::make(
+              table_size, 0xFFFFFFFFFFFFFFFFUL,
+            )
+            tables.push({
+              data: table_data,
+              max: Some(20UL),
+              external_funcrefs: [],
+            })
           }
         }
       _ => ()
@@ -560,21 +574,30 @@ pub fn Runtime::load_with_resolver(
   for table in m.tables {
     let table_size = table.limits.min.to_int()
     // Initialize table with default value (null unless table has init expr)
-    let init_ref = match table.init {
+    let init_ref : UInt64 = match table.init {
       Some(init_expr) => {
         let init_value = eval_const_expr(init_expr, globals)
         match init_value {
-          Ref(ref_idx) => ref_idx
+          Ref(Some(idx)) => idx.to_uint64() | 0x4000000000000000UL // funcref tag
+          Ref(None) => 0xFFFFFFFFFFFFFFFFUL
+          Funcref(Some(idx)) => idx.to_uint64() | 0x4000000000000000UL
+          Funcref(None) => 0xFFFFFFFFFFFFFFFFUL
+          Externref(Some(idx)) => idx.to_uint64() | 0x2000000000000000UL
+          Externref(None) => 0xFFFFFFFFFFFFFFFFUL
           _ =>
             raise RuntimeError::UnsupportedInitExpression(
               "table init expression must produce a reference",
             )
         }
       }
-      None => None
+      None => 0xFFFFFFFFFFFFFFFFUL
     }
-    let table_data : Array[Int?] = Array::make(table_size, init_ref)
-    tables.push({ data: table_data, max: table.limits.max, external_funcrefs: [] })
+    let table_data : Array[UInt64] = Array::make(table_size, init_ref)
+    tables.push({
+      data: table_data,
+      max: table.limits.max,
+      external_funcrefs: [],
+    })
   }
   // Initialize element segments (copy function references into tables)
   // Track which segments are dropped - active and declarative segments are dropped after instantiation
@@ -602,14 +625,50 @@ pub fn Runtime::load_with_resolver(
         for j in 0..<elem.init.length() {
           let addr = offset + j
           if addr >= 0 && addr < table.data.length() {
-            let value = eval_const_expr(elem.init[j], globals)
-            match value {
-              Ref(ref_idx) => table.data[addr] = ref_idx
+            let value = eval_const_expr_with_gc(
+              elem.init[j],
+              globals,
+              gc_heap,
+              m,
+            )
+            // Convert reference value to table storage format
+            // Check elem_type to determine how to encode the value:
+            // - Func element type means Ref(Some(idx)) is a funcref -> add funcref tag
+            // - Extern element type means Ref(Some(idx)) is an externref -> add externref tag
+            // - Other types (i31, struct, array, etc.) are already properly encoded in Ref
+            let ref_val : UInt64 = match value {
+              Ref(Some(idx)) =>
+                // Determine encoding based on elem_type
+                match elem.elem_type {
+                  @core.Func | @core.NoFunc => {
+                    // Funcref - add funcref tag
+                    // Must mask to 62 bits because negative indices (external funcrefs)
+                    // would otherwise produce 0xFFFF... which equals NULL
+                    let masked = idx.to_int64().reinterpret_as_uint64() &
+                      0x3FFFFFFFFFFFFFFFUL
+                    masked | 0x4000000000000000UL
+                  }
+                  @core.Extern | @core.NoExtern => {
+                    // Externref - add externref tag
+                    let masked = idx.to_int64().reinterpret_as_uint64() &
+                      0x3FFFFFFFFFFFFFFFUL
+                    masked | 0x2000000000000000UL
+                  }
+                  _ =>
+                    // i31, struct, array, or other GC ref - already encoded
+                    idx.to_int64().reinterpret_as_uint64()
+                }
+              Ref(None) => 0xFFFFFFFFFFFFFFFFUL
+              Funcref(Some(idx)) => idx.to_uint64() | 0x4000000000000000UL
+              Funcref(None) => 0xFFFFFFFFFFFFFFFFUL
+              Externref(Some(idx)) => idx.to_uint64() | 0x2000000000000000UL
+              Externref(None) => 0xFFFFFFFFFFFFFFFFUL
               _ =>
                 raise RuntimeError::UnsupportedInitExpression(
                   "elem segment init must produce a reference",
                 )
             }
+            table.data[addr] = ref_val
           }
         }
       }
@@ -718,7 +777,12 @@ fn eval_const_expr_with_context(
       I64Const(v) => stack.push(I64(v))
       F32Const(v) => stack.push(F32(v))
       F64Const(v) => stack.push(F64(v))
-      RefNull(_) => stack.push(Ref(None))
+      RefNull(ref_type) =>
+        match ref_type {
+          @core.Func | @core.NoFunc => stack.push(Funcref(None))
+          @core.Extern | @core.NoExtern => stack.push(Externref(None))
+          _ => stack.push(Ref(None))
+        }
       RefFunc(idx) => stack.push(Ref(Some(idx.reinterpret_as_int())))
       GlobalGet(idx) => {
         let idx_int = idx.reinterpret_as_int()
@@ -818,13 +882,24 @@ fn eval_const_expr_with_context(
             Ref(r) =>
               fields[i] = match r {
                 Some(idx) => idx.to_uint64()
-                None => 0UL
+                None => 0xFFFFFFFFFFFFFFFFUL
+              }
+            Funcref(r) =>
+              fields[i] = match r {
+                Some(idx) => idx.to_uint64() | 0x4000000000000000UL
+                None => 0xFFFFFFFFFFFFFFFFUL
+              }
+            Externref(r) =>
+              fields[i] = match r {
+                Some(idx) => idx.to_uint64() | 0x2000000000000000UL
+                None => 0xFFFFFFFFFFFFFFFFUL
               }
           }
         }
         let obj = GcObject::Struct({ type_idx: type_idx_int, fields })
         ctx.gc_heap.push(obj)
-        let ref_value = ctx.gc_heap.length() // 1-based index
+        // Encode as (1-based-index << 1) to distinguish from i31refs
+        let ref_value = ctx.gc_heap.length() << 1
         stack.push(Ref(Some(ref_value)))
       }
       StructNewDefault(type_idx) => {
@@ -840,7 +915,8 @@ fn eval_const_expr_with_context(
         let fields : Array[UInt64] = Array::make(num_fields, 0UL)
         let obj = GcObject::Struct({ type_idx: type_idx_int, fields })
         ctx.gc_heap.push(obj)
-        let ref_value = ctx.gc_heap.length()
+        // Encode as (1-based-index << 1) to distinguish from i31refs
+        let ref_value = ctx.gc_heap.length() << 1
         stack.push(Ref(Some(ref_value)))
       }
       ArrayNew(type_idx) => {
@@ -857,13 +933,24 @@ fn eval_const_expr_with_context(
           Ref(r) =>
             match r {
               Some(idx) => idx.to_uint64()
-              None => 0UL
+              None => 0xFFFFFFFFFFFFFFFFUL
+            }
+          Funcref(r) =>
+            match r {
+              Some(idx) => idx.to_uint64() | 0x4000000000000000UL
+              None => 0xFFFFFFFFFFFFFFFFUL
+            }
+          Externref(r) =>
+            match r {
+              Some(idx) => idx.to_uint64() | 0x2000000000000000UL
+              None => 0xFFFFFFFFFFFFFFFFUL
             }
         }
         let elements = Array::make(length, init_value)
         let obj = GcObject::Array({ type_idx: type_idx_int, elements })
         ctx.gc_heap.push(obj)
-        let ref_value = ctx.gc_heap.length()
+        // Encode as (1-based-index << 1) to distinguish from i31refs
+        let ref_value = ctx.gc_heap.length() << 1
         stack.push(Ref(Some(ref_value)))
       }
       ArrayNewDefault(type_idx) => {
@@ -872,10 +959,30 @@ fn eval_const_expr_with_context(
           I32(v) => v.reinterpret_as_int()
           _ => 0
         }
-        let elements : Array[UInt64] = Array::make(length, 0UL)
+        // Determine default value based on element type
+        // Reference types default to null (0xFFFFFFFFFFFFFFFF)
+        let default_value : UInt64 = match ctx.module_ {
+          Some(m) =>
+            if type_idx_int >= 0 && type_idx_int < m.types.length() {
+              match m.types[type_idx_int] {
+                Array(arr_type) =>
+                  match arr_type.element.storage {
+                    I8 | I16 => 0UL
+                    Val(I32) | Val(I64) | Val(F32) | Val(F64) | Val(V128) => 0UL
+                    Val(_) => 0xFFFFFFFFFFFFFFFFUL // Reference types: null
+                  }
+                _ => 0UL
+              }
+            } else {
+              0UL
+            }
+          None => 0UL
+        }
+        let elements : Array[UInt64] = Array::make(length, default_value)
         let obj = GcObject::Array({ type_idx: type_idx_int, elements })
         ctx.gc_heap.push(obj)
-        let ref_value = ctx.gc_heap.length()
+        // Encode as (1-based-index << 1) to distinguish from i31refs
+        let ref_value = ctx.gc_heap.length() << 1
         stack.push(Ref(Some(ref_value)))
       }
       ArrayNewFixed(type_idx, len) => {
@@ -891,13 +998,24 @@ fn eval_const_expr_with_context(
             Ref(r) =>
               elements[i] = match r {
                 Some(idx) => idx.to_uint64()
-                None => 0UL
+                None => 0xFFFFFFFFFFFFFFFFUL
+              }
+            Funcref(r) =>
+              elements[i] = match r {
+                Some(idx) => idx.to_uint64() | 0x4000000000000000UL
+                None => 0xFFFFFFFFFFFFFFFFUL
+              }
+            Externref(r) =>
+              elements[i] = match r {
+                Some(idx) => idx.to_uint64() | 0x2000000000000000UL
+                None => 0xFFFFFFFFFFFFFFFFUL
               }
           }
         }
         let obj = GcObject::Array({ type_idx: type_idx_int, elements })
         ctx.gc_heap.push(obj)
-        let ref_value = ctx.gc_heap.length()
+        // Encode as (1-based-index << 1) to distinguish from i31refs
+        let ref_value = ctx.gc_heap.length() << 1
         stack.push(Ref(Some(ref_value)))
       }
       RefI31 => {
@@ -906,10 +1024,39 @@ fn eval_const_expr_with_context(
           _ => 0
         }
         // Encode i31ref: (value << 1) | 1
-        let i31_value = value.land(0x7FFFFFFF)
-        let encoded = (i31_value << 1).lor(1)
+        let i31_value = value & 0x7FFFFFFF
+        let encoded = (i31_value << 1) | 1
         stack.push(Ref(Some(encoded)))
       }
+      // Reference conversion operations
+      ExternConvertAny =>
+        // Convert anyref to externref by adding externref tag
+        match stack.unsafe_pop() {
+          Ref(None) => stack.push(Externref(None)) // null stays null
+          Ref(Some(ref_val)) => {
+            // Add externref tag (bit 61)
+            let tagged = ref_val.to_int64().to_uint64() | 0x2000000000000000UL
+            stack.push(Externref(Some(tagged.to_int64().to_int())))
+          }
+          _ =>
+            raise RuntimeError::UnsupportedInitExpression(
+              "extern.convert_any expects reference on stack",
+            )
+        }
+      AnyConvertExtern =>
+        // Convert externref to anyref - value keeps its externref tag
+        // so it can still be identified as an "internalized externref"
+        match stack.unsafe_pop() {
+          Externref(None) => stack.push(Ref(None)) // null stays null
+          Externref(Some(ref_val)) =>
+            // Keep the value as-is (it already has the externref tag from Externref encoding)
+            // Just wrap it as Ref so it's typed as anyref
+            stack.push(Ref(Some(ref_val)))
+          _ =>
+            raise RuntimeError::UnsupportedInitExpression(
+              "any.convert_extern expects reference on stack",
+            )
+        }
       _ =>
         raise RuntimeError::UnsupportedInitExpression(
           "unsupported init expression instruction: \{instr}",
