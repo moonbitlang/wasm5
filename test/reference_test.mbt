@@ -698,10 +698,10 @@ async test "gc/struct.wast" {
   run_gc_harness("struct.wast")
 }
 
-// ///|
-// async test "gc/type-subtyping.wast" {
-//   run_gc_harness("type-subtyping.wast")
-// }
+///|
+async test "gc/type-subtyping.wast" {
+  run_gc_harness("type-subtyping.wast")
+}
 
 // =============================================================================
 // WebAssembly Bulk Memory Spec Tests

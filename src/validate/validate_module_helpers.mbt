@@ -1,4 +1,109 @@
 ///|
+/// Check if a field type is a valid subtype of another field type
+fn is_field_type_subtype(
+  m : @core.Module,
+  sub_field : @core.FieldType,
+  super_field : @core.FieldType,
+) -> Bool {
+  // If supertype is mutable, subtype must also be mutable
+  // (can't have immutable subtype of mutable field)
+  if super_field.mutable && not(sub_field.mutable) {
+    return false
+  }
+  // If subtype is mutable, supertype must also be mutable
+  // (can't have mutable subtype of immutable field)
+  if sub_field.mutable && not(super_field.mutable) {
+    return false
+  }
+  // Check storage types with appropriate variance
+  is_storage_type_subtype(
+    m,
+    sub_field.storage,
+    super_field.storage,
+    super_field.mutable,
+  )
+}
+
+///|
+/// Check if a type definition is a valid subtype of another type definition
+fn is_typedef_subtype(
+  m : @core.Module,
+  sub_type : @core.TypeDef,
+  super_type : @core.TypeDef,
+) -> Bool {
+  match (sub_type, super_type) {
+    (Func(sub_func), Func(super_func)) => {
+      // Function subtyping: contravariant params, covariant results
+      // Subtype can have fewer parameters (take more general args)
+      // Subtype can have more results (return more specific values)
+      // For WebAssembly GC: params must match exactly, results must match exactly
+      // (Full contravariant/covariant is optional in spec)
+      if sub_func.params.length() != super_func.params.length() {
+        return false
+      }
+      if sub_func.results.length() != super_func.results.length() {
+        return false
+      }
+      // Contravariant parameters: supertype param must be subtype of subtype param
+      for i = 0; i < sub_func.params.length(); i = i + 1 {
+        if not(is_subtype(m, super_func.params[i], sub_func.params[i])) {
+          return false
+        }
+      }
+      // Covariant results: subtype result must be subtype of supertype result
+      for i = 0; i < sub_func.results.length(); i = i + 1 {
+        if not(is_subtype(m, sub_func.results[i], super_func.results[i])) {
+          return false
+        }
+      }
+      true
+    }
+    (Struct(sub_struct), Struct(super_struct)) => {
+      // Struct subtyping: subtype must have at least as many fields
+      // Each supertype field must match corresponding subtype field
+      if sub_struct.fields.length() < super_struct.fields.length() {
+        return false
+      }
+      for i = 0; i < super_struct.fields.length(); i = i + 1 {
+        if not(
+            is_field_type_subtype(
+              m,
+              sub_struct.fields[i],
+              super_struct.fields[i],
+            ),
+          ) {
+          return false
+        }
+      }
+      true
+    }
+    (Array(sub_arr), Array(super_arr)) =>
+      // Array subtyping: element types must match
+      is_field_type_subtype(m, sub_arr.element, super_arr.element)
+    _ => false // Different kinds cannot be subtypes
+  }
+}
+
+///|
+/// Check if a type at the given index is final (cannot be subtyped)
+/// A type is final if:
+/// - It has no SubTypeDef in type_groups (implicitly final), OR
+/// - Its SubTypeDef has is_final=true
+fn is_type_final(m : @core.Module, type_idx : Int) -> Bool {
+  let tidx = type_idx.reinterpret_as_uint()
+  // Search through all type groups for this type's subtype definition
+  for group in m.type_groups {
+    for subtype_def in group.subtypes {
+      if subtype_def.type_idx == tidx {
+        return subtype_def.is_final
+      }
+    }
+  }
+  // Type not found in any SubTypeDef - implicitly final
+  true
+}
+
+///|
 fn validate_module_type_indices(m : @core.Module) -> Unit raise ValidationError {
   // Validate that all type indices in type definitions are valid
   for type_def in m.types {
@@ -16,6 +121,33 @@ fn validate_module_type_indices(m : @core.Module) -> Unit raise ValidationError 
           validate_storage_type(m, field.storage)
         }
       Array(array_type) => validate_storage_type(m, array_type.element.storage)
+    }
+  }
+
+  // Validate subtype declarations in type_groups
+  // Check that supertypes exist, are not final, and type definitions are compatible
+  for group in m.type_groups {
+    for subtype_def in group.subtypes {
+      let sub_idx = subtype_def.type_idx.reinterpret_as_int()
+      let sub_type = m.types[sub_idx]
+      for supertype_idx in subtype_def.supertypes {
+        let super_idx = supertype_idx.reinterpret_as_int()
+        // Check supertype index is valid
+        if super_idx < 0 || super_idx >= m.types.length() {
+          raise ValidationError::UnknownType(super_idx)
+        }
+        // Check supertype is not final
+        if is_type_final(m, super_idx) {
+          raise ValidationError::InvalidSubtype(
+            "sub type: cannot extend final type",
+          )
+        }
+        // Check that type definition is a valid subtype (kind match + content)
+        let super_type = m.types[super_idx]
+        if not(is_typedef_subtype(m, sub_type, super_type)) {
+          raise ValidationError::InvalidSubtype("sub type")
+        }
+      }
     }
   }
 

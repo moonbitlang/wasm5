@@ -347,13 +347,7 @@ fn validate_instruction_gc(
         "array.init_elem ref",
       )
     }
-    BrOnCast(
-      _label,
-      target_type,
-      target_nullable,
-      source_type,
-      source_nullable
-    ) => {
+    BrOnCast(_label, target_type, target_nullable, source_type, source_nullable) => {
       let source_val = heap_type_valtype(source_type, source_nullable)
       let target_val = heap_type_valtype(target_type, target_nullable)
       // Target type must be a subtype of source type (you can only downcast)

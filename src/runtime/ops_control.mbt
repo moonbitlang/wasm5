@@ -422,12 +422,10 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
       None => return { ..rt, status: Trap }
     }
 
-    // Check type signature matches
-    let rt = check_type_signature_match(
-      expected_type, actual_type, "indirect call type mismatch", rt,
-    )
-    if rt.status == Trap {
-      return rt
+    // Check type matches using nominal typing (GC proposal)
+    if not(gc_is_type_subtype(rt, actual_type_idx, type_idx)) {
+      rt.ctx.error_detail = "indirect call type mismatch"
+      return { ..rt, status: Trap }
     }
     let { rt, args } = pop_arguments(rt, actual_type)
     let rt = call_imported_function(
@@ -456,12 +454,11 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
     None => return { ..rt, status: Trap }
   }
 
-  // Check type signature matches
-  let rt = check_type_signature_match(
-    expected_type, actual_type, "indirect call type mismatch", rt,
-  )
-  if rt.status == Trap {
-    return rt
+  // Check type matches using nominal typing (GC proposal)
+  // For call_indirect, actual type must match expected type via type index subtyping
+  if not(gc_is_type_subtype(rt, actual_type_idx, type_idx)) {
+    rt.ctx.error_detail = "indirect call type mismatch"
+    return { ..rt, status: Trap }
   }
   let code = rt.ctx.module_.codes[local_func_idx]
   guard code.compiled is Some(callee_pc) else {
@@ -1060,7 +1057,6 @@ fn op_table_copy(rt : Runtime) -> Runtime {
     rt.ctx.error_detail = "table index out of bounds"
     return { ..rt, sp: stack_top, status: Trap }
   }
-
   let n = rt.stack.unsafe_get(rt.sp - 1).to_uint().reinterpret_as_int()
   let src = rt.stack.unsafe_get(rt.sp - 2).to_uint().reinterpret_as_int()
   let dest = rt.stack.unsafe_get(stack_top).to_uint().reinterpret_as_int()

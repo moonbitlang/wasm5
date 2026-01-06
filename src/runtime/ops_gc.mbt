@@ -879,6 +879,8 @@ fn gc_is_type_subtype(
         return gc_is_struct_equivalent(rt, type_idx, s1, target_type_idx, s2)
       (Array(a1), Array(a2)) =>
         return gc_is_array_equivalent(rt, type_idx, a1, target_type_idx, a2)
+      (Func(f1), Func(f2)) =>
+        return gc_is_func_equivalent(rt, type_idx, f1, target_type_idx, f2)
       _ => ()
     }
   }
@@ -904,13 +906,14 @@ fn gc_types_equivalent(rt : Runtime, type_idx1 : Int, type_idx2 : Int) -> Bool {
       gc_is_struct_equivalent(rt, type_idx1, s1, type_idx2, s2)
     (Array(a1), Array(a2)) =>
       gc_is_array_equivalent(rt, type_idx1, a1, type_idx2, a2)
-    (Func(f1), Func(f2)) => f1 == f2 // Function types just need structural equality
+    (Func(f1), Func(f2)) =>
+      gc_is_func_equivalent(rt, type_idx1, f1, type_idx2, f2)
     _ => false
   }
 }
 
 ///|
-/// Check if two struct types are equivalent (same structure and same supertypes)
+/// Check if two struct types are equivalent (same structure, finality, and supertypes)
 fn gc_is_struct_equivalent(
   rt : Runtime,
   type_idx1 : Int,
@@ -918,7 +921,13 @@ fn gc_is_struct_equivalent(
   type_idx2 : Int,
   struct2 : @core.StructType,
 ) -> Bool {
-  // First check structural equivalence - must have same number of fields with same types
+  // Check finality must match
+  if is_type_final_runtime(rt, type_idx1) !=
+    is_type_final_runtime(rt, type_idx2) {
+    return false
+  }
+
+  // Check structural equivalence - must have same number of fields with same types
   if struct1.fields.length() != struct2.fields.length() {
     return false
   }
@@ -951,7 +960,7 @@ fn gc_is_struct_equivalent(
 }
 
 ///|
-/// Check if two array types are equivalent
+/// Check if two array types are equivalent (same structure, finality, and supertypes)
 fn gc_is_array_equivalent(
   rt : Runtime,
   type_idx1 : Int,
@@ -959,6 +968,11 @@ fn gc_is_array_equivalent(
   type_idx2 : Int,
   arr2 : @core.ArrayType,
 ) -> Bool {
+  // Check finality must match
+  if is_type_final_runtime(rt, type_idx1) !=
+    is_type_final_runtime(rt, type_idx2) {
+    return false
+  }
   if arr1.element.mutable != arr2.element.mutable {
     return false
   }
@@ -983,6 +997,54 @@ fn gc_is_array_equivalent(
 }
 
 ///|
+/// Check if two func types are equivalent (same structure, finality, and supertypes)
+fn gc_is_func_equivalent(
+  rt : Runtime,
+  type_idx1 : Int,
+  func1 : @core.FuncType,
+  type_idx2 : Int,
+  func2 : @core.FuncType,
+) -> Bool {
+  // Check finality must match
+  if is_type_final_runtime(rt, type_idx1) !=
+    is_type_final_runtime(rt, type_idx2) {
+    return false
+  }
+
+  // Check structural equivalence - must have same params and results
+  if func1.params.length() != func2.params.length() ||
+    func1.results.length() != func2.results.length() {
+    return false
+  }
+  for i in 0..<func1.params.length() {
+    if func1.params[i] != func2.params[i] {
+      return false
+    }
+  }
+  for i in 0..<func1.results.length() {
+    if func1.results[i] != func2.results[i] {
+      return false
+    }
+  }
+
+  // Then check that supertypes are equivalent (not just same index)
+  let supers1 = get_supertypes(rt, type_idx1)
+  let supers2 = get_supertypes(rt, type_idx2)
+  if supers1.length() != supers2.length() {
+    return false
+  }
+  for i in 0..<supers1.length() {
+    if supers1[i] != supers2[i] {
+      // Different indices - check if they're equivalent types
+      if not(gc_types_equivalent(rt, supers1[i], supers2[i])) {
+        return false
+      }
+    }
+  }
+  true
+}
+
+///|
 /// Get the list of supertypes for a type index
 fn get_supertypes(rt : Runtime, type_idx : Int) -> Array[Int] {
   let result : Array[Int] = []
@@ -997,6 +1059,20 @@ fn get_supertypes(rt : Runtime, type_idx : Int) -> Array[Int] {
     }
   }
   result
+}
+
+///|
+/// Check if a type at the given index is final at runtime
+fn is_type_final_runtime(rt : Runtime, type_idx : Int) -> Bool {
+  for group in rt.ctx.module_.type_groups {
+    for subtype_def in group.subtypes {
+      if subtype_def.type_idx.reinterpret_as_int() == type_idx {
+        return subtype_def.is_final
+      }
+    }
+  }
+  // Type not found in any SubTypeDef - implicitly final
+  true
 }
 
 ///|
@@ -1272,7 +1348,6 @@ fn op_array_init_data(rt : Runtime) -> Runtime {
     return { ..rt, status: Trap }
   }
   let data = rt.ctx.data_segments[data_idx]
-
   match gc_get_object(rt, arr_ref) {
     Some(Array(a)) => {
       // Check array bounds first (spec requires this order)
@@ -1331,7 +1406,6 @@ fn op_array_init_elem(rt : Runtime) -> Runtime {
     return { ..rt, status: Trap }
   }
   let elem = rt.ctx.module_.elems[elem_idx]
-
   match gc_get_object(rt, arr_ref) {
     Some(Array(a)) => {
       // Check array bounds first (spec requires this order)
@@ -1341,7 +1415,8 @@ fn op_array_init_elem(rt : Runtime) -> Runtime {
       }
 
       // Check if segment is dropped (active/declarative segments are dropped after instantiation)
-      if elem_idx >= 0 && elem_idx < rt.ctx.dropped_elems.length() &&
+      if elem_idx >= 0 &&
+        elem_idx < rt.ctx.dropped_elems.length() &&
         rt.ctx.dropped_elems[elem_idx] {
         // Dropped segment: any non-zero length or offset is out of bounds
         if length != 0 || elem_offset != 0 {
@@ -1393,7 +1468,7 @@ fn eval_elem_expr(expr : @core.Expr) -> UInt64 {
       RefI31 =>
         // ref.i31 takes an i32 from the stack (last computed value) and wraps it
         // i31ref encoding: value with low bit set to 1
-        result = (result & 0x7FFFFFFFUL) << 1 | 1UL
+        result = ((result & 0x7FFFFFFFUL) << 1) | 1UL
       _ => ()
     }
   }
