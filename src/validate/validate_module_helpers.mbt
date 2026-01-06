@@ -104,23 +104,114 @@ fn is_type_final(m : @core.Module, type_idx : Int) -> Bool {
 }
 
 ///|
-fn validate_module_type_indices(m : @core.Module) -> Unit raise ValidationError {
-  // Validate that all type indices in type definitions are valid
-  for type_def in m.types {
-    match type_def {
-      Func(func_type) => {
-        for param in func_type.params {
-          validate_valtype(m, param)
-        }
-        for result in func_type.results {
-          validate_valtype(m, result)
-        }
+/// Validate a type reference considering forward reference constraints.
+/// A type reference to index `ref_idx` is valid if:
+/// - `ref_idx` is less than the start of the current rec group (already defined), OR
+/// - `ref_idx` is within the current rec group (forward reference within group allowed)
+fn validate_type_ref_in_context(
+  m : @core.Module,
+  ref_idx : Int,
+  group_start : Int,
+  group_end : Int,
+) -> Unit raise ValidationError {
+  if ref_idx < 0 || ref_idx >= m.types.length() {
+    raise ValidationError::UnknownType(ref_idx)
+  }
+  // Forward reference check: if ref_idx >= group_start, it must be within the group
+  if ref_idx >= group_start && ref_idx > group_end {
+    raise ValidationError::UnknownType(ref_idx)
+  }
+}
+
+///|
+/// Validate a value type considering forward reference constraints
+fn validate_valtype_in_context(
+  m : @core.Module,
+  val_type : @core.ValType,
+  group_start : Int,
+  group_end : Int,
+) -> Unit raise ValidationError {
+  match val_type {
+    Ref(TypeIndex(idx), _) =>
+      validate_type_ref_in_context(m, idx, group_start, group_end)
+    _ => ()
+  }
+}
+
+///|
+/// Validate a storage type considering forward reference constraints
+fn validate_storage_type_in_context(
+  m : @core.Module,
+  storage_type : @core.StorageType,
+  group_start : Int,
+  group_end : Int,
+) -> Unit raise ValidationError {
+  match storage_type {
+    Val(val_type) =>
+      validate_valtype_in_context(m, val_type, group_start, group_end)
+    I8 | I16 => ()
+  }
+}
+
+///|
+/// Validate a type definition considering forward reference constraints
+fn validate_typedef_in_context(
+  m : @core.Module,
+  type_def : @core.TypeDef,
+  group_start : Int,
+  group_end : Int,
+) -> Unit raise ValidationError {
+  match type_def {
+    Func(func_type) => {
+      for param in func_type.params {
+        validate_valtype_in_context(m, param, group_start, group_end)
       }
-      Struct(struct_type) =>
-        for field in struct_type.fields {
-          validate_storage_type(m, field.storage)
-        }
-      Array(array_type) => validate_storage_type(m, array_type.element.storage)
+      for result in func_type.results {
+        validate_valtype_in_context(m, result, group_start, group_end)
+      }
+    }
+    Struct(struct_type) =>
+      for field in struct_type.fields {
+        validate_storage_type_in_context(
+          m,
+          field.storage,
+          group_start,
+          group_end,
+        )
+      }
+    Array(array_type) =>
+      validate_storage_type_in_context(
+        m,
+        array_type.element.storage,
+        group_start,
+        group_end,
+      )
+  }
+}
+
+///|
+fn validate_module_type_indices(m : @core.Module) -> Unit raise ValidationError {
+  // Validate type definitions with proper forward reference checking.
+  // Forward references are only allowed within the same rec group.
+  for group in m.type_groups {
+    // Find the range of type indices in this group
+    let mut group_start = m.types.length()
+    let mut group_end = -1
+    for subtype_def in group.subtypes {
+      let idx = subtype_def.type_idx.reinterpret_as_int()
+      if idx < group_start {
+        group_start = idx
+      }
+      if idx > group_end {
+        group_end = idx
+      }
+    }
+
+    // Validate each type in the group with the group's bounds
+    for subtype_def in group.subtypes {
+      let type_idx = subtype_def.type_idx.reinterpret_as_int()
+      let type_def = m.types[type_idx]
+      validate_typedef_in_context(m, type_def, group_start, group_end)
     }
   }
 

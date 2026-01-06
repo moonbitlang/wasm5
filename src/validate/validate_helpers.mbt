@@ -525,17 +525,6 @@ fn validate_valtype(
 }
 
 ///|
-fn validate_storage_type(
-  module_ : @core.Module,
-  storage_type : @core.StorageType,
-) -> Unit raise ValidationError {
-  match storage_type {
-    Val(val_type) => validate_valtype(module_, val_type)
-    I8 | I16 => ()
-  }
-}
-
-///|
 /// Check if type_idx1 is a declared subtype of type_idx2 via the type hierarchy
 /// This searches the supertype chain in type_groups and also checks structural subtyping
 fn is_type_index_subtype(
