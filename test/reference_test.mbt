@@ -573,7 +573,7 @@ async test "utf8-invalid-encoding.wast" {
 ///|
 async fn run_gc_harness(filename : String) -> Unit {
   let (file_failures, file_skipped) = process_wast_file(
-    "test/reference_test/gc/", filename,
+    "test/reference_tests/gc/", filename,
   )
   if file_failures.length() > 0 {
     // Group failures by type for organized output
@@ -710,7 +710,7 @@ async test "gc/type-subtyping.wast" {
 ///|
 async fn run_bulk_memory_harness(filename : String) -> Unit {
   let (file_failures, file_skipped) = process_wast_file(
-    "test/reference_test/bulk-memory/", filename,
+    "test/reference_tests/bulk-memory/", filename,
   )
   if file_failures.length() > 0 {
     // Group failures by type for organized output
