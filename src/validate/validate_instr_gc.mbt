@@ -358,9 +358,10 @@ fn validate_instruction_gc(
       }
       // Per https://github.com/WebAssembly/gc/issues/516:
       // br_on_cast needs to validate ALL values being sent to the label
-      // The label expects [t1* t2] where t2 is the ref type being cast
+      // The label expects [t* t'] where t' is the expected ref type
       // Stack should have [t1* rt] where rt is the input ref
       // On branch, stack sends [t1* target_val] to label
+      // After fallthrough, stack is normalized to [t* diff_val] (label's prefix types!)
       let label_types = ctx.get_label_types(label)
       // Check we have enough values on stack for label_types
       if not(ctx.is_unreachable) && stack.length() < label_types.length() {
@@ -390,11 +391,19 @@ fn validate_instruction_gc(
           }
         }
       }
+      // Pop the source value (already validated above)
       ctx.poly_pop_expect(module_, source_val, "br_on_cast ref")
-      // Fallthrough type is the difference type: rt1 \ rt2
-      // If target is nullable, the fallthrough is non-nullable (null would have branched)
+      // Pop the prefix values (in reverse order)
+      for i = label_types.length() - 2; i >= 0; i = i - 1 {
+        ctx.poly_pop_expect(module_, label_types[i], "br_on_cast prefix")
+      }
+      // Fallthrough: push back label's prefix types (normalized) plus diff type
+      // This normalization is key per GC issue #516
       let diff_nullable = source_nullable && not(target_nullable)
       let diff_val = heap_type_valtype(source_type, diff_nullable)
+      for i = 0; i < label_types.length() - 1; i = i + 1 {
+        stack.push(label_types[i])
+      }
       stack.push(diff_val)
     }
     BrOnCastFail(
@@ -417,6 +426,7 @@ fn validate_instruction_gc(
       let diff_val = heap_type_valtype(source_type, diff_nullable)
       // Per https://github.com/WebAssembly/gc/issues/516:
       // br_on_cast_fail needs to validate ALL values being sent to the label
+      // After fallthrough, stack is normalized to [t* target_val] (label's prefix types!)
       let label_types = ctx.get_label_types(label)
       // Check we have enough values on stack for label_types
       if not(ctx.is_unreachable) && stack.length() < label_types.length() {
@@ -446,8 +456,17 @@ fn validate_instruction_gc(
           }
         }
       }
+      // Pop the source value (already validated above)
       ctx.poly_pop_expect(module_, source_val, "br_on_cast_fail ref")
-      // Fallthrough type is the target type (cast succeeded)
+      // Pop the prefix values (in reverse order)
+      for i = label_types.length() - 2; i >= 0; i = i - 1 {
+        ctx.poly_pop_expect(module_, label_types[i], "br_on_cast_fail prefix")
+      }
+      // Fallthrough: push back label's prefix types (normalized) plus target type
+      // This normalization is key per GC issue #516
+      for i = 0; i < label_types.length() - 1; i = i + 1 {
+        stack.push(label_types[i])
+      }
       stack.push(target_val)
     }
     AnyConvertExtern => {

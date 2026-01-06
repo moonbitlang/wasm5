@@ -1579,10 +1579,5 @@ pub async fn process_wast_file(
 /// Whitelist of individual tests to skip (file, line)
 /// These are known failing tests due to missing features
 // Whitelisted tests that are skipped due to missing validation/features
-// elem.wast: Validation issues and declarative segment handling
-let whitelisted_tests : Array[(String, Set[Int])] = [
-  // br_on_cast.wast / br_on_cast_fail.wast: Complex GC issue #516 cases
-  // These require more sophisticated multi-value branch validation
-  ("br_on_cast.wast", Set::of([272])),
-  ("br_on_cast_fail.wast", Set::of([287])),
-]
+// Currently all GC tests pass!
+let whitelisted_tests : Array[(String, Set[Int])] = []
