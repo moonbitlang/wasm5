@@ -1303,6 +1303,22 @@ fn op_array_new_elem(rt : Runtime) -> Runtime {
   }
   let elem = rt.ctx.module_.elems[elem_idx]
 
+  // Check if segment is dropped (active/declarative segments are dropped after instantiation)
+  if elem_idx >= 0 &&
+    elem_idx < rt.ctx.dropped_elems.length() &&
+    rt.ctx.dropped_elems[elem_idx] {
+    // Dropped segment: any non-zero length or offset is out of bounds
+    if length != 0 || offset != 0 {
+      rt.ctx.error_detail = "out of bounds table access"
+      return { ..rt, status: Trap }
+    }
+    // n=0, src=0 is valid even for dropped segments - create empty array
+    let elements : Array[UInt64] = []
+    let ref_value = gc_alloc_array(rt, type_idx, elements)
+    rt.stack.unsafe_set(sp, ref_value.to_uint64())
+    return { ..rt, sp: sp + 1, pc: rt.pc + 3 }
+  }
+
   // Bounds check
   if offset < 0 || offset + length > elem.init.length() {
     rt.ctx.error_detail = "out of bounds table access"
@@ -1313,8 +1329,8 @@ fn op_array_new_elem(rt : Runtime) -> Runtime {
   let elements : Array[UInt64] = Array::make(length, 0UL)
   for i = 0; i < length; i = i + 1 {
     let expr = elem.init[offset + i]
-    // Evaluate the element expression (typically ref.func or ref.null)
-    let value = eval_elem_expr(expr)
+    // Evaluate the element expression using full GC-aware evaluator
+    let value = eval_elem_expr_gc(rt, expr, elem.elem_type)
     elements[i] = value
   }
   let ref_value = gc_alloc_array(rt, type_idx, elements)
@@ -1436,7 +1452,7 @@ fn op_array_init_elem(rt : Runtime) -> Runtime {
       // Copy element expressions to array elements
       for i = 0; i < length; i = i + 1 {
         let expr = elem.init[elem_offset + i]
-        let value = eval_elem_expr(expr)
+        let value = eval_elem_expr_gc(rt, expr, elem.elem_type)
         a.elements[arr_offset + i] = value
       }
       ignore(type_idx)
@@ -1451,26 +1467,42 @@ fn op_array_init_elem(rt : Runtime) -> Runtime {
 
 ///|
 /// Evaluate an element segment expression to get a reference value
-fn eval_elem_expr(expr : @core.Expr) -> UInt64 {
-  // Element expressions can include ref.func, ref.null, ref.i31, etc.
-  // Use a simple stack-based evaluation
-  let mut result : UInt64 = 0UL
-  for instr in expr.instrs {
-    match instr {
-      RefFunc(idx) =>
-        // Function reference - return the function index with funcref tag
-        result = idx.to_uint64() | 0x4000000000000000UL
-      RefNull(_) =>
-        // Null reference
-        result = 0xFFFFFFFFFFFFFFFFUL
-      I32Const(v) => result = v.to_uint64()
-      I64Const(v) => result = v
-      RefI31 =>
-        // ref.i31 takes an i32 from the stack (last computed value) and wraps it
-        // i31ref encoding: value with low bit set to 1
-        result = ((result & 0x7FFFFFFFUL) << 1) | 1UL
-      _ => ()
-    }
+fn eval_elem_expr_gc(
+  rt : Runtime,
+  expr : @core.Expr,
+  elem_type : @core.RefType,
+) -> UInt64 {
+  // Use the full GC-aware constant expression evaluator
+  let ctx = ConstExprContext::{
+    gc_heap: rt.ctx.gc_heap,
+    module_: Some(rt.ctx.module_),
   }
-  result
+  let value = eval_const_expr_with_context(expr, rt.ctx.globals, ctx) catch {
+    _ => return 0xFFFFFFFFFFFFFFFFUL // Return null on error
+  }
+  // Convert Value to UInt64 with proper encoding
+  match value {
+    Ref(Some(idx)) =>
+      // For GC refs (struct, array, i31), the idx is already properly encoded
+      // For typed function refs, check elem_type
+      match elem_type {
+        @core.Func | @core.NoFunc =>
+          // Funcref - add funcref tag
+          (idx.to_int64().reinterpret_as_uint64() & 0x3FFFFFFFFFFFFFFFUL) |
+          0x4000000000000000UL
+        @core.Extern | @core.NoExtern =>
+          // Externref - add externref tag
+          (idx.to_int64().reinterpret_as_uint64() & 0x3FFFFFFFFFFFFFFFUL) |
+          0x2000000000000000UL
+        _ =>
+          // i31, struct, array, or other GC ref - already encoded
+          idx.to_int64().reinterpret_as_uint64()
+      }
+    Ref(None) => 0xFFFFFFFFFFFFFFFFUL
+    Funcref(Some(idx)) => idx.to_uint64() | 0x4000000000000000UL
+    Funcref(None) => 0xFFFFFFFFFFFFFFFFUL
+    Externref(Some(idx)) => idx.to_uint64() | 0x2000000000000000UL
+    Externref(None) => 0xFFFFFFFFFFFFFFFFUL
+    _ => 0xFFFFFFFFFFFFFFFFUL // Shouldn't happen for elem expressions
+  }
 }

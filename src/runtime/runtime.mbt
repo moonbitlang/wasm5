@@ -625,7 +625,12 @@ pub fn Runtime::load_with_resolver(
         for j in 0..<elem.init.length() {
           let addr = offset + j
           if addr >= 0 && addr < table.data.length() {
-            let value = eval_const_expr(elem.init[j], globals)
+            let value = eval_const_expr_with_gc(
+              elem.init[j],
+              globals,
+              gc_heap,
+              m,
+            )
             // Convert reference value to table storage format
             // Check elem_type to determine how to encode the value:
             // - Func element type means Ref(Some(idx)) is a funcref -> add funcref tag

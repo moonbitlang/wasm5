@@ -347,7 +347,7 @@ fn validate_instruction_gc(
         "array.init_elem ref",
       )
     }
-    BrOnCast(_label, target_type, target_nullable, source_type, source_nullable) => {
+    BrOnCast(label, target_type, target_nullable, source_type, source_nullable) => {
       let source_val = heap_type_valtype(source_type, source_nullable)
       let target_val = heap_type_valtype(target_type, target_nullable)
       // Target type must be a subtype of source type (you can only downcast)
@@ -355,6 +355,40 @@ fn validate_instruction_gc(
         raise ValidationError::TypeMismatch(
           "br_on_cast target type must be subtype of source type",
         )
+      }
+      // Per https://github.com/WebAssembly/gc/issues/516:
+      // br_on_cast needs to validate ALL values being sent to the label
+      // The label expects [t1* t2] where t2 is the ref type being cast
+      // Stack should have [t1* rt] where rt is the input ref
+      // On branch, stack sends [t1* target_val] to label
+      let label_types = ctx.get_label_types(label)
+      // Check we have enough values on stack for label_types
+      if not(ctx.is_unreachable) && stack.length() < label_types.length() {
+        raise ValidationError::TypeMismatch(
+          "br_on_cast: stack has \{stack.length()} values, label expects \{label_types.length()}",
+        )
+      }
+      // For the last position (the ref being cast), check target_val is subtype of label's last type
+      if label_types.length() > 0 {
+        let label_last_type = label_types[label_types.length() - 1]
+        guard is_subtype(module_, target_val, label_last_type) else {
+          raise ValidationError::TypeMismatch(
+            "br_on_cast: cast type \{target_val} not subtype of label's \{label_last_type}",
+          )
+        }
+        // Check other stack values match their corresponding label types
+        for i = 0; i < label_types.length() - 1; i = i + 1 {
+          let stack_idx = stack.length() - label_types.length() + i
+          if stack_idx >= 0 && stack_idx < stack.length() {
+            let stack_type = stack[stack_idx]
+            let label_type = label_types[i]
+            guard is_subtype(module_, stack_type, label_type) else {
+              raise ValidationError::TypeMismatch(
+                "br_on_cast: stack type \{stack_type} not subtype of label's \{label_type}",
+              )
+            }
+          }
+        }
       }
       ctx.poly_pop_expect(module_, source_val, "br_on_cast ref")
       // Fallthrough type is the difference type: rt1 \ rt2
@@ -364,7 +398,7 @@ fn validate_instruction_gc(
       stack.push(diff_val)
     }
     BrOnCastFail(
-      _label,
+      label,
       target_type,
       target_nullable,
       source_type,
@@ -377,6 +411,40 @@ fn validate_instruction_gc(
         raise ValidationError::TypeMismatch(
           "br_on_cast_fail target type must be subtype of source type",
         )
+      }
+      // The diff type (sent to label when cast fails) is source minus target
+      let diff_nullable = source_nullable && not(target_nullable)
+      let diff_val = heap_type_valtype(source_type, diff_nullable)
+      // Per https://github.com/WebAssembly/gc/issues/516:
+      // br_on_cast_fail needs to validate ALL values being sent to the label
+      let label_types = ctx.get_label_types(label)
+      // Check we have enough values on stack for label_types
+      if not(ctx.is_unreachable) && stack.length() < label_types.length() {
+        raise ValidationError::TypeMismatch(
+          "br_on_cast_fail: stack has \{stack.length()} values, label expects \{label_types.length()}",
+        )
+      }
+      // For the last position, check diff_val is subtype of label's last type
+      if label_types.length() > 0 {
+        let label_last_type = label_types[label_types.length() - 1]
+        guard is_subtype(module_, diff_val, label_last_type) else {
+          raise ValidationError::TypeMismatch(
+            "br_on_cast_fail: diff type \{diff_val} not subtype of label's \{label_last_type}",
+          )
+        }
+        // Check other stack values match their corresponding label types
+        for i = 0; i < label_types.length() - 1; i = i + 1 {
+          let stack_idx = stack.length() - label_types.length() + i
+          if stack_idx >= 0 && stack_idx < stack.length() {
+            let stack_type = stack[stack_idx]
+            let label_type = label_types[i]
+            guard is_subtype(module_, stack_type, label_type) else {
+              raise ValidationError::TypeMismatch(
+                "br_on_cast_fail: stack type \{stack_type} not subtype of label's \{label_type}",
+              )
+            }
+          }
+        }
       }
       ctx.poly_pop_expect(module_, source_val, "br_on_cast_fail ref")
       // Fallthrough type is the target type (cast succeeded)

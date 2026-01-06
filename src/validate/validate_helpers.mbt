@@ -757,6 +757,26 @@ fn is_subtype(
       // Non-nullable can be subtype of nullable, but not vice versa
       // If target is nullable, any source is OK; if target is non-nullable, source must be non-nullable
       (nullable2 || not(nullable1)) && is_type_index_subtype(module_, n1, n2)
+    // TypeIndex -> abstract type cases MUST come before generic Ref pattern
+    // Ref(TypeIndex(n), _) is a typed function reference, compatible with FuncRef
+    // only if type n is actually a function type
+    (Ref(TypeIndex(n), _), FuncRef) => is_func_type_index(module_, n)
+    // Typed function reference is also compatible with (ref func) and (ref null func)
+    (Ref(TypeIndex(n), false), Ref(Func, false)) =>
+      is_func_type_index(module_, n)
+    (Ref(TypeIndex(n), _), Ref(Func, true)) => is_func_type_index(module_, n)
+    // Typed struct/array references are compatible with structref/arrayref
+    (Ref(TypeIndex(n), _), StructRef) => is_struct_type_index(module_, n)
+    (Ref(TypeIndex(n), _), ArrayRef) => is_array_type_index(module_, n)
+    (Ref(TypeIndex(n), _), EqRef) =>
+      is_struct_type_index(module_, n) || is_array_type_index(module_, n)
+    (Ref(TypeIndex(n), false), Ref(Struct, false)) =>
+      is_struct_type_index(module_, n)
+    (Ref(TypeIndex(n), _), Ref(Struct, true)) =>
+      is_struct_type_index(module_, n)
+    (Ref(TypeIndex(n), false), Ref(Array, false)) =>
+      is_array_type_index(module_, n)
+    (Ref(TypeIndex(n), _), Ref(Array, true)) => is_array_type_index(module_, n)
     // Typed references: Ref(T, nullable)
     // Non-nullable is subtype of nullable for same heap type
     // (For non-TypeIndex heap types like Func, Extern, etc.)
@@ -776,25 +796,6 @@ fn is_subtype(
     // i31ref/structref/arrayref are eqref
     (Ref(I31, _), EqRef) | (Ref(Struct, _), EqRef) | (Ref(Array, _), EqRef) =>
       true
-    // Ref(TypeIndex(n), _) is a typed function reference, compatible with FuncRef
-    // only if type n is actually a function type
-    (Ref(TypeIndex(n), _), FuncRef) => is_func_type_index(module_, n)
-    // Typed function reference is also compatible with non-nullable (ref func)
-    (Ref(TypeIndex(n), false), Ref(Func, false)) =>
-      is_func_type_index(module_, n)
-    (Ref(TypeIndex(n), _), Ref(Func, true)) => is_func_type_index(module_, n)
-    // Typed struct/array references are compatible with structref/arrayref
-    (Ref(TypeIndex(n), _), StructRef) => is_struct_type_index(module_, n)
-    (Ref(TypeIndex(n), _), ArrayRef) => is_array_type_index(module_, n)
-    (Ref(TypeIndex(n), _), EqRef) =>
-      is_struct_type_index(module_, n) || is_array_type_index(module_, n)
-    (Ref(TypeIndex(n), false), Ref(Struct, false)) =>
-      is_struct_type_index(module_, n)
-    (Ref(TypeIndex(n), _), Ref(Struct, true)) =>
-      is_struct_type_index(module_, n)
-    (Ref(TypeIndex(n), false), Ref(Array, false)) =>
-      is_array_type_index(module_, n)
-    (Ref(TypeIndex(n), _), Ref(Array, true)) => is_array_type_index(module_, n)
     // NOTE: FuncRef is NOT a subtype of typed function references
     // General funcref cannot be used where specific typed reference is required
     // (FuncRef, Ref(TypeIndex(n), true)) => false
@@ -873,4 +874,232 @@ fn collect_declared_funcs(m : @core.Module) -> Set[Int] {
     }
   }
   declared
+}
+
+///|
+/// Validate an element init constant expression and return its resulting type
+/// This handles all valid constant expressions including GC instructions
+fn validate_elem_init_const_expr(
+  m : @core.Module,
+  expr : @core.Expr,
+  import_counts : ImportCounts,
+  elem_nullable : Bool,
+) -> @core.ValType raise ValidationError {
+  // First validate all instructions are valid in constant expressions
+  validate_const_expr_instructions(expr)
+
+  // Stack-based type checking for the constant expression
+  let stack : Array[@core.ValType] = []
+  for instr in expr.instrs {
+    match instr {
+      I32Const(_) => stack.push(I32)
+      I64Const(_) => stack.push(I64)
+      F32Const(_) => stack.push(F32)
+      F64Const(_) => stack.push(F64)
+      RefNull(ref_type) => {
+        guard elem_nullable else {
+          raise ValidationError::TypeMismatch(
+            "non-nullable elem cannot be initialized with ref.null",
+          )
+        }
+        stack.push(@core.ValType::Ref(ref_type, true))
+      }
+      RefFunc(func_idx) => {
+        let idx = func_idx.reinterpret_as_int()
+        let total_funcs = import_counts.funcs + m.funcs.length()
+        if idx < 0 || idx >= total_funcs {
+          raise ValidationError::InvalidFunctionIndex(idx)
+        }
+        // Get the actual function type index for this function
+        let type_idx = get_func_type_index(m, idx, import_counts)
+        // RefFunc produces a non-null reference to the specific function type
+        stack.push(
+          @core.ValType::Ref(@core.RefType::TypeIndex(type_idx), false),
+        )
+      }
+      GlobalGet(global_idx) => {
+        let gidx = global_idx.reinterpret_as_int()
+        let (gtype, mutable) = get_global_type_and_mutable(
+          m, gidx, import_counts,
+        )
+        guard not(mutable) else {
+          raise ValidationError::ConstantExpressionRequired(
+            "elem init global.get must reference immutable global",
+          )
+        }
+        stack.push(gtype)
+      }
+      RefI31 => {
+        // Pop i32, push i31ref
+        guard stack.length() > 0 else {
+          raise ValidationError::TypeMismatch("ref.i31 requires i32 on stack")
+        }
+        let _ = stack.unsafe_pop()
+        stack.push(@core.ValType::Ref(@core.RefType::I31, false))
+      }
+      StructNew(type_idx) => {
+        let type_idx_int = type_idx.reinterpret_as_int()
+        if type_idx_int < 0 || type_idx_int >= m.types.length() {
+          raise ValidationError::UnknownType(type_idx_int)
+        }
+        let num_fields = match m.types[type_idx_int] {
+          Struct(s) => s.fields.length()
+          _ =>
+            raise ValidationError::TypeMismatch(
+              "struct.new requires struct type",
+            )
+        }
+        // Pop fields from stack
+        for i = 0; i < num_fields; i = i + 1 {
+          guard stack.length() > 0 else {
+            raise ValidationError::TypeMismatch(
+              "struct.new: not enough values on stack",
+            )
+          }
+          let _ = stack.unsafe_pop()
+
+        }
+        stack.push(
+          @core.ValType::Ref(@core.RefType::TypeIndex(type_idx_int), false),
+        )
+      }
+      StructNewDefault(type_idx) => {
+        let type_idx_int = type_idx.reinterpret_as_int()
+        if type_idx_int < 0 || type_idx_int >= m.types.length() {
+          raise ValidationError::UnknownType(type_idx_int)
+        }
+        match m.types[type_idx_int] {
+          Struct(_) => ()
+          _ =>
+            raise ValidationError::TypeMismatch(
+              "struct.new_default requires struct type",
+            )
+        }
+        stack.push(
+          @core.ValType::Ref(@core.RefType::TypeIndex(type_idx_int), false),
+        )
+      }
+      ArrayNew(type_idx) => {
+        let type_idx_int = type_idx.reinterpret_as_int()
+        if type_idx_int < 0 || type_idx_int >= m.types.length() {
+          raise ValidationError::UnknownType(type_idx_int)
+        }
+        match m.types[type_idx_int] {
+          Array(_) => ()
+          _ =>
+            raise ValidationError::TypeMismatch("array.new requires array type")
+        }
+        // Pop length (i32) and init value
+        guard stack.length() >= 2 else {
+          raise ValidationError::TypeMismatch(
+            "array.new requires init value and length",
+          )
+        }
+        let _ = stack.unsafe_pop() // length
+        let _ = stack.unsafe_pop() // init value
+        stack.push(
+          @core.ValType::Ref(@core.RefType::TypeIndex(type_idx_int), false),
+        )
+      }
+      ArrayNewDefault(type_idx) => {
+        let type_idx_int = type_idx.reinterpret_as_int()
+        if type_idx_int < 0 || type_idx_int >= m.types.length() {
+          raise ValidationError::UnknownType(type_idx_int)
+        }
+        match m.types[type_idx_int] {
+          Array(_) => ()
+          _ =>
+            raise ValidationError::TypeMismatch(
+              "array.new_default requires array type",
+            )
+        }
+        // Pop length (i32)
+        guard stack.length() >= 1 else {
+          raise ValidationError::TypeMismatch(
+            "array.new_default requires length",
+          )
+        }
+        let _ = stack.unsafe_pop()
+        stack.push(
+          @core.ValType::Ref(@core.RefType::TypeIndex(type_idx_int), false),
+        )
+      }
+      ArrayNewFixed(type_idx, len) => {
+        let type_idx_int = type_idx.reinterpret_as_int()
+        let length = len.reinterpret_as_int()
+        if type_idx_int < 0 || type_idx_int >= m.types.length() {
+          raise ValidationError::UnknownType(type_idx_int)
+        }
+        match m.types[type_idx_int] {
+          Array(_) => ()
+          _ =>
+            raise ValidationError::TypeMismatch(
+              "array.new_fixed requires array type",
+            )
+        }
+        // Pop 'length' elements from stack
+        guard stack.length() >= length else {
+          raise ValidationError::TypeMismatch(
+            "array.new_fixed: not enough values on stack",
+          )
+        }
+        for i = 0; i < length; i = i + 1 {
+          let _ = stack.unsafe_pop()
+
+        }
+        stack.push(
+          @core.ValType::Ref(@core.RefType::TypeIndex(type_idx_int), false),
+        )
+      }
+      I32Add | I32Sub | I32Mul => {
+        guard stack.length() >= 2 else {
+          raise ValidationError::TypeMismatch(
+            "i32 arithmetic requires 2 operands",
+          )
+        }
+        let _ = stack.unsafe_pop()
+        let _ = stack.unsafe_pop()
+        stack.push(I32)
+      }
+      I64Add | I64Sub | I64Mul => {
+        guard stack.length() >= 2 else {
+          raise ValidationError::TypeMismatch(
+            "i64 arithmetic requires 2 operands",
+          )
+        }
+        let _ = stack.unsafe_pop()
+        let _ = stack.unsafe_pop()
+        stack.push(I64)
+      }
+      ExternConvertAny => {
+        guard stack.length() >= 1 else {
+          raise ValidationError::TypeMismatch(
+            "extern.convert_any requires operand",
+          )
+        }
+        let _ = stack.unsafe_pop()
+        stack.push(ExternRef)
+      }
+      AnyConvertExtern => {
+        guard stack.length() >= 1 else {
+          raise ValidationError::TypeMismatch(
+            "any.convert_extern requires operand",
+          )
+        }
+        let _ = stack.unsafe_pop()
+        stack.push(AnyRef)
+      }
+      _ =>
+        raise ValidationError::ConstantExpressionRequired(
+          "invalid instruction in elem init: \{instr}",
+        )
+    }
+  }
+  // Expression should produce exactly one value
+  guard stack.length() == 1 else {
+    raise ValidationError::TypeMismatch(
+      "elem init expression must produce exactly one value, got \{stack.length()}",
+    )
+  }
+  stack[0]
 }
