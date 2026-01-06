@@ -17,7 +17,22 @@ pub struct RuntimeContext {
   // Track which element segments have been dropped.
   // Active segments are dropped after instantiation, declarative segments are always dropped.
   dropped_elems : Array[Bool]
+  // Cached count of imported functions (avoids linear scan at runtime)
+  num_imported_funcs : Int
   mut error_detail : String
+}
+
+///|
+/// Count the number of imported functions in a module
+fn count_module_imported_funcs(module_ : @core.Module) -> Int {
+  let mut count = 0
+  for imp in module_.imports {
+    match imp.desc {
+      Func(_) => count += 1
+      _ => ()
+    }
+  }
+  count
 }
 
 ///|
@@ -45,6 +60,7 @@ fn RuntimeContext::new_with_gc_heap(
     gc_heap,
     external_funcrefs,
     dropped_elems,
+    num_imported_funcs: count_module_imported_funcs(module_),
     error_detail: "",
   }
 }

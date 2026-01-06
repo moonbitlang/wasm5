@@ -82,16 +82,17 @@ fn op_if(rt : Runtime) -> Runtime {
 // Branch targets are now computed at compile time and embedded directly in branch instructions
 
 ///|
-fn op_br(rt : Runtime) -> Runtime {
-  let target_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  let arity = rt.ops.unsafe_get(rt.pc + 2).to_int()
-  let drop_count = rt.ops.unsafe_get(rt.pc + 3).to_int()
-
-  // In-place stack shuffle: move arity values down by drop_count positions
-  // Stack: [..., drop_values (drop_count), result_values (arity)]
-  // Want:  [..., result_values (arity)]
+/// In-place stack shuffle for branch operations: move arity values down by drop_count positions
+/// Stack: [..., drop_values (drop_count), result_values (arity)]
+/// Want:  [..., result_values (arity)]
+fn shuffle_stack_for_branch(
+  rt : Runtime,
+  stack_top : Int,
+  arity : Int,
+  drop_count : Int,
+) -> Unit {
   if drop_count > 0 && arity > 0 {
-    let result_start = rt.sp - arity
+    let result_start = stack_top - arity
     let target_start = result_start - drop_count
     // Copy forward is safe since target_start < result_start
     for i = 0; i < arity; i = i + 1 {
@@ -101,8 +102,14 @@ fn op_br(rt : Runtime) -> Runtime {
       )
     }
   }
+}
 
-  // Trim stack to remove drop_count values
+///|
+fn op_br(rt : Runtime) -> Runtime {
+  let target_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let arity = rt.ops.unsafe_get(rt.pc + 2).to_int()
+  let drop_count = rt.ops.unsafe_get(rt.pc + 3).to_int()
+  shuffle_stack_for_branch(rt, rt.sp, arity, drop_count)
   { ..rt, sp: rt.sp - drop_count, pc: target_pc }
 }
 
@@ -114,19 +121,7 @@ fn op_br_if(rt : Runtime) -> Runtime {
   let stack_top = rt.sp - 1
   let cond = rt.stack.unsafe_get(stack_top).to_uint()
   if cond != 0U {
-    // In-place stack shuffle: move arity values down by drop_count positions
-    if drop_count > 0 && arity > 0 {
-      let result_start = stack_top - arity
-      let target_start = result_start - drop_count
-      for i = 0; i < arity; i = i + 1 {
-        rt.stack.unsafe_set(
-          target_start + i,
-          rt.stack.unsafe_get(result_start + i),
-        )
-      }
-    }
-
-    // Trim stack to remove drop_count values
+    shuffle_stack_for_branch(rt, stack_top, arity, drop_count)
     { ..rt, sp: stack_top - drop_count, pc: target_pc }
   } else {
     { ..rt, sp: stack_top, pc: rt.pc + 4 }
@@ -154,20 +149,7 @@ fn op_br_table(rt : Runtime) -> Runtime {
     .unsafe_get(label_base + 1)
     .reinterpret_as_int64()
     .to_int()
-
-  // In-place stack shuffle: move arity values down by drop_count positions
-  if drop_count > 0 && arity > 0 {
-    let result_start = stack_top - arity
-    let target_start = result_start - drop_count
-    for i = 0; i < arity; i = i + 1 {
-      rt.stack.unsafe_set(
-        target_start + i,
-        rt.stack.unsafe_get(result_start + i),
-      )
-    }
-  }
-
-  // Trim stack to remove drop_count values
+  shuffle_stack_for_branch(rt, stack_top, arity, drop_count)
   { ..rt, sp: stack_top - drop_count, pc: target_pc }
 }
 
@@ -180,22 +162,9 @@ fn op_br_on_null(rt : Runtime) -> Runtime {
   let stack_top = rt.sp - 1
   let ref_val = rt.stack.unsafe_get(stack_top)
   let ref_idx = ref_val.to_int()
-  let is_null = ref_idx == -1
-  if is_null {
+  if ref_idx == -1 {
     // Ref is consumed (not passed to branch target), just shuffle remaining values
-    // In-place stack shuffle: move arity values down by drop_count positions
-    if drop_count > 0 && arity > 0 {
-      let result_start = stack_top - arity
-      let target_start = result_start - drop_count
-      for i = 0; i < arity; i = i + 1 {
-        rt.stack.unsafe_set(
-          target_start + i,
-          rt.stack.unsafe_get(result_start + i),
-        )
-      }
-    }
-
-    // Trim stack to remove drop_count values
+    shuffle_stack_for_branch(rt, stack_top, arity, drop_count)
     { ..rt, sp: stack_top - drop_count, pc: target_pc }
   } else {
     // Not null - push back the value and continue
@@ -213,25 +182,11 @@ fn op_br_on_non_null(rt : Runtime) -> Runtime {
   let stack_top = rt.sp - 1
   let ref_val = rt.stack.unsafe_get(stack_top)
   let ref_idx = ref_val.to_int()
-  let is_non_null = ref_idx != -1
-  if is_non_null {
+  if ref_idx != -1 {
     // Push ref back first - arity values include the ref we just pushed
     rt.stack.unsafe_set(stack_top, ref_val)
     let stack_top = stack_top + 1
-
-    // In-place stack shuffle: move arity values down by drop_count positions
-    if drop_count > 0 && arity > 0 {
-      let result_start = stack_top - arity
-      let target_start = result_start - drop_count
-      for i = 0; i < arity; i = i + 1 {
-        rt.stack.unsafe_set(
-          target_start + i,
-          rt.stack.unsafe_get(result_start + i),
-        )
-      }
-    }
-
-    // Trim stack to remove drop_count values
+    shuffle_stack_for_branch(rt, stack_top, arity, drop_count)
     { ..rt, sp: stack_top - drop_count, pc: target_pc }
   } else {
     // Null - don't push anything, continue
@@ -284,7 +239,7 @@ fn op_call_local(rt : Runtime) -> Runtime {
 /// Call an imported function. Immediate is the original func_idx.
 fn op_call_import(rt : Runtime) -> Runtime {
   let func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
+  let num_imported_funcs = rt.ctx.num_imported_funcs
   let type_idx = get_func_type_idx(rt.ctx.module_, func_idx, num_imported_funcs)
   if type_idx < 0 {
     rt.ctx.error_detail = "call: invalid imported function index"
@@ -405,7 +360,7 @@ fn op_call_indirect(rt : Runtime) -> Runtime {
     let rt = push_results(rt, results)
     return { ..rt, pc: rt.pc + 3 }
   }
-  let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
+  let num_imported_funcs = rt.ctx.num_imported_funcs
 
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
@@ -532,7 +487,7 @@ fn op_return_call_local(rt : Runtime) -> Runtime {
 /// Tail call an imported function. Immediate is the original func_idx.
 fn op_return_call_import(rt : Runtime) -> Runtime {
   let func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
+  let num_imported_funcs = rt.ctx.num_imported_funcs
   let type_idx = get_func_type_idx(rt.ctx.module_, func_idx, num_imported_funcs)
   if type_idx < 0 {
     rt.ctx.error_detail = "return_call: invalid imported function index"
@@ -585,7 +540,7 @@ fn op_return_call_indirect(rt : Runtime) -> Runtime {
     .land(0x3FFFFFFFFFFFFFFFUL)
     .reinterpret_as_int64()
     .to_int()
-  let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
+  let num_imported_funcs = rt.ctx.num_imported_funcs
 
   // Get the expected type
   let expected_type = match
@@ -697,7 +652,7 @@ fn op_call_ref(rt : Runtime) -> Runtime {
     return { ..rt, status: Trap }
   }
   let func_idx = func_ref_raw
-  let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
+  let num_imported_funcs = rt.ctx.num_imported_funcs
 
   // Get the expected function type
   let func_type = match get_func_type_or_error(rt, type_idx, "call_ref") {
@@ -815,7 +770,7 @@ fn op_return_call_ref(rt : Runtime) -> Runtime {
     return { ..rt, status: Trap }
   }
   let func_idx = func_ref_raw
-  let num_imported_funcs = count_imported_funcs(rt.ctx.module_)
+  let num_imported_funcs = rt.ctx.num_imported_funcs
 
   // Get the expected function type
   let func_type = match

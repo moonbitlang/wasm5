@@ -767,7 +767,7 @@ fn gc_ref_matches_type(
       // Check if function type matches target type
       let func_idx = ref_value.land(ref_tag_funcref.lnot()).to_int()
       let module_ = rt.ctx.module_
-      let num_imported = count_imported_funcs(module_)
+      let num_imported = rt.ctx.num_imported_funcs
       if func_idx < num_imported {
         // Imported function - check type against imports
         for imp in module_.imports {
