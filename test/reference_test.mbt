@@ -508,15 +508,15 @@ async test "type-canon.wast" {
   run_test_harness("", "type-canon.wast")
 }
 
-// Blacklisted: Requires advanced type equivalence
-// async test "type-equivalence.wast" {
-//   run_test_harness("","type-equivalence.wast")
-// }
+///|
+async test "type-equivalence.wast" {
+  run_test_harness("", "type-equivalence.wast")
+}
 
-// Blacklisted: Requires recursive types
-// async test "type-rec.wast" {
-//   run_test_harness("","type-rec.wast")
-// }
+///|
+async test "type-rec.wast" {
+  run_test_harness("", "type-rec.wast")
+}
 
 ///|
 async test "type.wast" {

@@ -1035,8 +1035,9 @@ fn eval_const_expr_with_context(
           Ref(None) => stack.push(Externref(None)) // null stays null
           Ref(Some(ref_val)) => {
             // Add externref tag (bit 61)
-            let tagged = ref_val.to_int64().to_uint64() | 0x2000000000000000UL
-            stack.push(Externref(Some(tagged.to_int64().to_int())))
+            let tagged = ref_val.to_int64().reinterpret_as_uint64() |
+              0x2000000000000000UL
+            stack.push(Externref(Some(tagged.reinterpret_as_int64().to_int())))
           }
           _ =>
             raise RuntimeError::UnsupportedInitExpression(
