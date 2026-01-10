@@ -85,6 +85,7 @@ pub(all) struct Code {
   locals : Array[ValType]
   body : Expr
   mut compiled : Int?
+  mut max_stack_height : Int
 }
 
 pub(all) enum CustomPlacement {
@@ -183,6 +184,8 @@ pub(all) enum Instr {
   Block(BlockType, Array[Instr])
   Loop(BlockType, Array[Instr])
   If(BlockType, Array[Instr], Array[Instr])
+  Try(BlockType, Array[Instr], Array[TryCatch])
+  TryDelegate(BlockType, Array[Instr], UInt)
   TryTable(BlockType, Array[CatchClause], Array[Instr])
   Br(UInt)
   BrIf(UInt)
@@ -197,6 +200,7 @@ pub(all) enum Instr {
   CallRef(UInt)
   ReturnCallRef(UInt)
   Throw(UInt)
+  ThrowRef
   Rethrow(UInt)
   Simd(SimdInstr)
   Atomic(AtomicInstr)
@@ -570,6 +574,12 @@ pub(all) struct Tag {
   type_idx : UInt
 }
 
+pub(all) enum TryCatch {
+  Catch(UInt, Array[Instr])
+  CatchAll(Array[Instr])
+}
+pub impl Show for TryCatch
+
 pub(all) enum TypeDef {
   Func(FuncType)
   Struct(StructType)
@@ -606,6 +616,8 @@ pub(all) enum ValType {
   Ref(RefType, Bool)
 }
 pub fn ValType::is_defaultable(Self) -> Bool
+pub fn ValType::is_ref_type(Self) -> Bool
+pub fn ValType::to_non_nullable(Self) -> Self
 pub impl Eq for ValType
 pub impl Show for ValType
 

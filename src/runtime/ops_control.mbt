@@ -921,6 +921,12 @@ fn op_rethrow(rt : Runtime) -> Runtime {
 }
 
 ///|
+fn op_throw_ref(rt : Runtime) -> Runtime {
+  rt.ctx.error_detail = "throw_ref not implemented"
+  { ..rt, status: Trap }
+}
+
+///|
 fn op_simd_unimplemented(rt : Runtime) -> Runtime {
   rt.ctx.error_detail = "simd instruction not implemented"
   { ..rt, status: Trap }

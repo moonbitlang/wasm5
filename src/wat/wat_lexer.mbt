@@ -70,6 +70,41 @@ fn Lexer::read_string(self : Lexer) -> Bytes raise WatError {
         b'n' => out.push(b'\n')
         b't' => out.push(b'\t')
         b'r' => out.push(b'\r')
+        b'u' => {
+          guard not(self.eof()) else {
+            raise WatError::InvalidSyntax("unterminated unicode escape")
+          }
+          let brace = self.next_byte()
+          guard brace == b'{' else {
+            raise WatError::InvalidSyntax("invalid unicode escape")
+          }
+          let mut codepoint = 0U
+          let mut digits = 0
+          while true {
+            guard not(self.eof()) else {
+              raise WatError::InvalidSyntax("unterminated unicode escape")
+            }
+            let ch = self.next_byte()
+            if ch == b'}' {
+              break
+            }
+            guard is_hex(ch) else {
+              raise WatError::InvalidSyntax("invalid unicode escape")
+            }
+            codepoint = codepoint * 16U + hex_value(ch)
+            digits = digits + 1
+            guard codepoint <= 0x10FFFFU else {
+              raise WatError::InvalidSyntax("invalid unicode escape")
+            }
+          }
+          guard digits > 0 else {
+            raise WatError::InvalidSyntax("invalid unicode escape")
+          }
+          if codepoint >= 0xD800U && codepoint <= 0xDFFFU {
+            raise WatError::InvalidSyntax("invalid unicode escape")
+          }
+          append_utf8(out, codepoint)
+        }
         _ =>
           if is_hex(esc) {
             let hi = hex_value(esc) catch {
@@ -180,6 +215,32 @@ fn is_hex(b : Byte) -> Bool {
   (b >= b'0' && b <= b'9') ||
   (b >= b'a' && b <= b'f') ||
   (b >= b'A' && b <= b'F')
+}
+
+///|
+fn append_utf8(out : Array[Byte], codepoint : UInt) -> Unit raise WatError {
+  if codepoint <= 0x7FU {
+    out.push(codepoint.to_byte())
+    return
+  }
+  if codepoint <= 0x7FFU {
+    out.push((0xC0U | (codepoint >> 6)).to_byte())
+    out.push((0x80U | (codepoint & 0x3FU)).to_byte())
+    return
+  }
+  if codepoint <= 0xFFFFU {
+    out.push((0xE0U | (codepoint >> 12)).to_byte())
+    out.push((0x80U | ((codepoint >> 6) & 0x3FU)).to_byte())
+    out.push((0x80U | (codepoint & 0x3FU)).to_byte())
+    return
+  }
+  guard codepoint <= 0x10FFFFU else {
+    raise WatError::InvalidSyntax("invalid unicode escape")
+  }
+  out.push((0xF0U | (codepoint >> 18)).to_byte())
+  out.push((0x80U | ((codepoint >> 12) & 0x3FU)).to_byte())
+  out.push((0x80U | ((codepoint >> 6) & 0x3FU)).to_byte())
+  out.push((0x80U | (codepoint & 0x3FU)).to_byte())
 }
 
 ///|
