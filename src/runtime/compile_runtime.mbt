@@ -1,8 +1,7 @@
 ///|
 /// Run the start function if present.
 /// Returns the runtime after start function execution (if any).
-/// Note: Compilation now happens during Runtime::load.
-pub fn Runtime::compile(self : Runtime) -> Runtime raise RuntimeError {
+pub fn Runtime::run_start(self : Runtime) -> Runtime raise RuntimeError {
   // Execute the start function if present
   match self.ctx.module_.start {
     Some(start_idx) => {

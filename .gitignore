@@ -9,3 +9,4 @@ _build/
 .claude/
 TODO.md
 wasm3.md
+wasm3/

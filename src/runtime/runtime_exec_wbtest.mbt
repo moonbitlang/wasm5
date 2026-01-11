@@ -36,7 +36,7 @@ test "runtime compile start function" {
   }
   let module_ = module_with([func_type], [0U], [code], [], [], Some(0U))
   let rt = Runtime::load_with_resolver(module_, ImportResolver::new())
-  let rt = rt.compile()
+  let rt = rt.run_start()
   assert_eq(rt.ops.length() > 0, true)
   // Stack is cleared after start function execution (unified stack model)
   assert_eq(rt.sp, 0)

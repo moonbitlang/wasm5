@@ -33,7 +33,7 @@ pub(all) enum SimdStackEffect {
 } derive(Show)
 
 ///|
-pub let simd_specs : Array[SimdSpec] = [
+let simd_specs : Array[SimdSpec] = [
   { name: b"v128.load", opcode: 0x00U, imm: MemArg },
   { name: b"v128.load8x8_s", opcode: 0x01U, imm: MemArg },
   { name: b"v128.load8x8_u", opcode: 0x02U, imm: MemArg },

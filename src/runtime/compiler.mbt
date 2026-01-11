@@ -4,7 +4,7 @@
 
 ///|
 /// Pending call patch for forward references
-struct PendingCallPatch {
+priv struct PendingCallPatch {
   local_func_idx : Int // Which function is being called
   slot : Int // Which slot in ops needs the callee_pc
 }
@@ -12,7 +12,7 @@ struct PendingCallPatch {
 ///|
 /// Compiler holds the instruction array during compilation.
 /// After compilation, the ops array is converted to FixedArray for runtime.
-pub struct Compiler {
+priv struct Compiler {
   module_ : @core.Module
   ops : Array[UInt64]
   pending_call_patches : Array[PendingCallPatch] // Forward call references to patch
@@ -20,7 +20,7 @@ pub struct Compiler {
 
 ///|
 /// Create a new compiler for a module
-pub fn Compiler::new(module_ : @core.Module) -> Compiler {
+fn Compiler::new(module_ : @core.Module) -> Compiler {
   { module_, ops: [], pending_call_patches: [] }
 }
 
@@ -44,7 +44,7 @@ fn Compiler::emit_idx(self : Compiler, value : Int) -> Unit {
 
 ///|
 /// Finish compilation and return the FixedArray of instructions
-pub fn Compiler::finish(self : Compiler) -> FixedArray[UInt64] {
+fn Compiler::finish(self : Compiler) -> FixedArray[UInt64] {
   FixedArray::from_array(self.ops)
 }
 
@@ -156,7 +156,7 @@ fn Compiler::compile_func(
 }
 
 ///|
-pub fn Compiler::compile(self : Compiler) -> Unit raise RuntimeError {
+fn Compiler::compile(self : Compiler) -> Unit raise RuntimeError {
   for i, code in self.module_.codes {
     self.compile_func(i, code)
   }

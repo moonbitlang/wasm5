@@ -21,7 +21,7 @@ async test "runtime parse imported wasm file with host side effects" {
   )
   resolver.add_global(b"host", b"g", Value::I32(42U))
   let rt = Runtime::load_with_resolver(module_, resolver)
-  let rt = rt.compile()
+  let rt = rt.run_start()
   let (_, results) = rt.call_compiled(b"run", [])
   assert_eq(results.length(), 0)
   assert_eq(calls, [42U])

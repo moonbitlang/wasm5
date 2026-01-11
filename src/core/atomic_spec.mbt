@@ -25,7 +25,7 @@ pub(all) enum AtomicStackEffect {
 } derive(Show)
 
 ///|
-pub let atomic_specs : Array[AtomicSpec] = [
+let atomic_specs : Array[AtomicSpec] = [
   { name: b"memory.atomic.notify", opcode: 0x00U, imm: MemArg },
   { name: b"memory.atomic.wait32", opcode: 0x01U, imm: MemArg },
   { name: b"memory.atomic.wait64", opcode: 0x02U, imm: MemArg },
