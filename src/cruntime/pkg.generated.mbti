@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/wasm5/src/cruntime"
+
+import(
+  "moonbitlang/wasm5/src/core"
+)
+
+// Values
+pub fn call(CompiledModule, Int, Array[UInt64]) -> UInt64
+
+pub fn call0(CompiledModule, Int) -> UInt64
+
+pub fn call1_i32(CompiledModule, Int, Int) -> UInt64
+
+pub fn call2_i32(CompiledModule, Int, Int, Int) -> UInt64
+
+pub fn compile(@core.Module) -> CompiledModule
+
+// Errors
+
+// Types and methods
+pub struct CompiledModule {
+  code : FixedArray[UInt64]
+  func_entries : FixedArray[Int]
+  func_num_locals : FixedArray[Int]
+  func_max_stack : FixedArray[Int]
+}
+
+// Type aliases
+
+// Traits
+

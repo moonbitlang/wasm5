@@ -9,6 +9,10 @@
       "path": "moonbitlang/wasm5/src/parse",
       "alias": "wasm5_parse"
     },
+    {
+      "path": "moonbitlang/wasm5/src/cruntime",
+      "alias": "wasm5_cruntime"
+    },
     "moonbitlang/async",
     "moonbitlang/async/fs"
   ]
