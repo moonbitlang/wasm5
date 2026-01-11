@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdlib.h>
+#include <math.h>
 
 typedef struct {
     uint64_t* pc;      // Program counter into code array
@@ -535,3 +536,961 @@ void op_i32_popcnt(CRuntime* crt) {
 uint64_t i32_popcnt(void) {
     return (uint64_t)op_i32_popcnt;
 }
+
+// i64 arithmetic
+
+void op_i64_add(CRuntime* crt) {
+    uint64_t b = crt->sp[-1];
+    uint64_t a = crt->sp[-2];
+    crt->sp--;
+    crt->sp[-1] = a + b;
+    NEXT();
+}
+
+uint64_t i64_add(void) { return (uint64_t)op_i64_add; }
+
+void op_i64_sub(CRuntime* crt) {
+    uint64_t b = crt->sp[-1];
+    uint64_t a = crt->sp[-2];
+    crt->sp--;
+    crt->sp[-1] = a - b;
+    NEXT();
+}
+
+uint64_t i64_sub(void) { return (uint64_t)op_i64_sub; }
+
+void op_i64_mul(CRuntime* crt) {
+    uint64_t b = crt->sp[-1];
+    uint64_t a = crt->sp[-2];
+    crt->sp--;
+    crt->sp[-1] = a * b;
+    NEXT();
+}
+
+uint64_t i64_mul(void) { return (uint64_t)op_i64_mul; }
+
+void op_i64_div_s(CRuntime* crt) {
+    int64_t b = (int64_t)crt->sp[-1];
+    int64_t a = (int64_t)crt->sp[-2];
+    crt->sp--;
+    if (b == 0) { crt->running = 0; return; }
+    crt->sp[-1] = (uint64_t)(a / b);
+    NEXT();
+}
+
+uint64_t i64_div_s(void) { return (uint64_t)op_i64_div_s; }
+
+void op_i64_div_u(CRuntime* crt) {
+    uint64_t b = crt->sp[-1];
+    uint64_t a = crt->sp[-2];
+    crt->sp--;
+    if (b == 0) { crt->running = 0; return; }
+    crt->sp[-1] = a / b;
+    NEXT();
+}
+
+uint64_t i64_div_u(void) { return (uint64_t)op_i64_div_u; }
+
+void op_i64_rem_s(CRuntime* crt) {
+    int64_t b = (int64_t)crt->sp[-1];
+    int64_t a = (int64_t)crt->sp[-2];
+    crt->sp--;
+    if (b == 0) { crt->running = 0; return; }
+    crt->sp[-1] = (uint64_t)(a % b);
+    NEXT();
+}
+
+uint64_t i64_rem_s(void) { return (uint64_t)op_i64_rem_s; }
+
+void op_i64_rem_u(CRuntime* crt) {
+    uint64_t b = crt->sp[-1];
+    uint64_t a = crt->sp[-2];
+    crt->sp--;
+    if (b == 0) { crt->running = 0; return; }
+    crt->sp[-1] = a % b;
+    NEXT();
+}
+
+uint64_t i64_rem_u(void) { return (uint64_t)op_i64_rem_u; }
+
+void op_i64_and(CRuntime* crt) {
+    uint64_t b = crt->sp[-1];
+    uint64_t a = crt->sp[-2];
+    crt->sp--;
+    crt->sp[-1] = a & b;
+    NEXT();
+}
+
+uint64_t i64_and(void) { return (uint64_t)op_i64_and; }
+
+void op_i64_or(CRuntime* crt) {
+    uint64_t b = crt->sp[-1];
+    uint64_t a = crt->sp[-2];
+    crt->sp--;
+    crt->sp[-1] = a | b;
+    NEXT();
+}
+
+uint64_t i64_or(void) { return (uint64_t)op_i64_or; }
+
+void op_i64_xor(CRuntime* crt) {
+    uint64_t b = crt->sp[-1];
+    uint64_t a = crt->sp[-2];
+    crt->sp--;
+    crt->sp[-1] = a ^ b;
+    NEXT();
+}
+
+uint64_t i64_xor(void) { return (uint64_t)op_i64_xor; }
+
+void op_i64_shl(CRuntime* crt) {
+    uint64_t b = crt->sp[-1];
+    uint64_t a = crt->sp[-2];
+    crt->sp--;
+    crt->sp[-1] = a << (b & 63);
+    NEXT();
+}
+
+uint64_t i64_shl(void) { return (uint64_t)op_i64_shl; }
+
+void op_i64_shr_s(CRuntime* crt) {
+    uint64_t b = crt->sp[-1];
+    int64_t a = (int64_t)crt->sp[-2];
+    crt->sp--;
+    crt->sp[-1] = (uint64_t)(a >> (b & 63));
+    NEXT();
+}
+
+uint64_t i64_shr_s(void) { return (uint64_t)op_i64_shr_s; }
+
+void op_i64_shr_u(CRuntime* crt) {
+    uint64_t b = crt->sp[-1];
+    uint64_t a = crt->sp[-2];
+    crt->sp--;
+    crt->sp[-1] = a >> (b & 63);
+    NEXT();
+}
+
+uint64_t i64_shr_u(void) { return (uint64_t)op_i64_shr_u; }
+
+void op_i64_rotl(CRuntime* crt) {
+    uint64_t b = crt->sp[-1] & 63;
+    uint64_t a = crt->sp[-2];
+    crt->sp--;
+    crt->sp[-1] = (a << b) | (a >> (64 - b));
+    NEXT();
+}
+
+uint64_t i64_rotl(void) { return (uint64_t)op_i64_rotl; }
+
+void op_i64_rotr(CRuntime* crt) {
+    uint64_t b = crt->sp[-1] & 63;
+    uint64_t a = crt->sp[-2];
+    crt->sp--;
+    crt->sp[-1] = (a >> b) | (a << (64 - b));
+    NEXT();
+}
+
+uint64_t i64_rotr(void) { return (uint64_t)op_i64_rotr; }
+
+// i64 comparison
+
+void op_i64_eqz(CRuntime* crt) {
+    uint64_t a = crt->sp[-1];
+    crt->sp[-1] = (a == 0 ? 1 : 0);
+    NEXT();
+}
+
+uint64_t i64_eqz(void) { return (uint64_t)op_i64_eqz; }
+
+void op_i64_eq(CRuntime* crt) {
+    uint64_t b = crt->sp[-1];
+    uint64_t a = crt->sp[-2];
+    crt->sp--;
+    crt->sp[-1] = (a == b ? 1 : 0);
+    NEXT();
+}
+
+uint64_t i64_eq(void) { return (uint64_t)op_i64_eq; }
+
+void op_i64_ne(CRuntime* crt) {
+    uint64_t b = crt->sp[-1];
+    uint64_t a = crt->sp[-2];
+    crt->sp--;
+    crt->sp[-1] = (a != b ? 1 : 0);
+    NEXT();
+}
+
+uint64_t i64_ne(void) { return (uint64_t)op_i64_ne; }
+
+void op_i64_lt_s(CRuntime* crt) {
+    int64_t b = (int64_t)crt->sp[-1];
+    int64_t a = (int64_t)crt->sp[-2];
+    crt->sp--;
+    crt->sp[-1] = (a < b ? 1 : 0);
+    NEXT();
+}
+
+uint64_t i64_lt_s(void) { return (uint64_t)op_i64_lt_s; }
+
+void op_i64_lt_u(CRuntime* crt) {
+    uint64_t b = crt->sp[-1];
+    uint64_t a = crt->sp[-2];
+    crt->sp--;
+    crt->sp[-1] = (a < b ? 1 : 0);
+    NEXT();
+}
+
+uint64_t i64_lt_u(void) { return (uint64_t)op_i64_lt_u; }
+
+void op_i64_gt_s(CRuntime* crt) {
+    int64_t b = (int64_t)crt->sp[-1];
+    int64_t a = (int64_t)crt->sp[-2];
+    crt->sp--;
+    crt->sp[-1] = (a > b ? 1 : 0);
+    NEXT();
+}
+
+uint64_t i64_gt_s(void) { return (uint64_t)op_i64_gt_s; }
+
+void op_i64_gt_u(CRuntime* crt) {
+    uint64_t b = crt->sp[-1];
+    uint64_t a = crt->sp[-2];
+    crt->sp--;
+    crt->sp[-1] = (a > b ? 1 : 0);
+    NEXT();
+}
+
+uint64_t i64_gt_u(void) { return (uint64_t)op_i64_gt_u; }
+
+void op_i64_le_s(CRuntime* crt) {
+    int64_t b = (int64_t)crt->sp[-1];
+    int64_t a = (int64_t)crt->sp[-2];
+    crt->sp--;
+    crt->sp[-1] = (a <= b ? 1 : 0);
+    NEXT();
+}
+
+uint64_t i64_le_s(void) { return (uint64_t)op_i64_le_s; }
+
+void op_i64_le_u(CRuntime* crt) {
+    uint64_t b = crt->sp[-1];
+    uint64_t a = crt->sp[-2];
+    crt->sp--;
+    crt->sp[-1] = (a <= b ? 1 : 0);
+    NEXT();
+}
+
+uint64_t i64_le_u(void) { return (uint64_t)op_i64_le_u; }
+
+void op_i64_ge_s(CRuntime* crt) {
+    int64_t b = (int64_t)crt->sp[-1];
+    int64_t a = (int64_t)crt->sp[-2];
+    crt->sp--;
+    crt->sp[-1] = (a >= b ? 1 : 0);
+    NEXT();
+}
+
+uint64_t i64_ge_s(void) { return (uint64_t)op_i64_ge_s; }
+
+void op_i64_ge_u(CRuntime* crt) {
+    uint64_t b = crt->sp[-1];
+    uint64_t a = crt->sp[-2];
+    crt->sp--;
+    crt->sp[-1] = (a >= b ? 1 : 0);
+    NEXT();
+}
+
+uint64_t i64_ge_u(void) { return (uint64_t)op_i64_ge_u; }
+
+// i64 unary
+
+void op_i64_clz(CRuntime* crt) {
+    uint64_t a = crt->sp[-1];
+    crt->sp[-1] = (a == 0 ? 64 : __builtin_clzll(a));
+    NEXT();
+}
+
+uint64_t i64_clz(void) { return (uint64_t)op_i64_clz; }
+
+void op_i64_ctz(CRuntime* crt) {
+    uint64_t a = crt->sp[-1];
+    crt->sp[-1] = (a == 0 ? 64 : __builtin_ctzll(a));
+    NEXT();
+}
+
+uint64_t i64_ctz(void) { return (uint64_t)op_i64_ctz; }
+
+void op_i64_popcnt(CRuntime* crt) {
+    uint64_t a = crt->sp[-1];
+    crt->sp[-1] = __builtin_popcountll(a);
+    NEXT();
+}
+
+uint64_t i64_popcnt(void) { return (uint64_t)op_i64_popcnt; }
+
+// f32 helpers
+static inline float as_f32(uint64_t v) {
+    union { uint32_t i; float f; } u = { .i = (uint32_t)v };
+    return u.f;
+}
+
+static inline uint64_t from_f32(float f) {
+    union { float f; uint32_t i; } u = { .f = f };
+    return u.i;
+}
+
+// f64 helpers
+static inline double as_f64(uint64_t v) {
+    union { uint64_t i; double f; } u = { .i = v };
+    return u.f;
+}
+
+static inline uint64_t from_f64(double f) {
+    union { double f; uint64_t i; } u = { .f = f };
+    return u.i;
+}
+
+// f32 arithmetic
+
+void op_f32_add(CRuntime* crt) {
+    float b = as_f32(crt->sp[-1]);
+    float a = as_f32(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = from_f32(a + b);
+    NEXT();
+}
+
+uint64_t f32_add(void) { return (uint64_t)op_f32_add; }
+
+void op_f32_sub(CRuntime* crt) {
+    float b = as_f32(crt->sp[-1]);
+    float a = as_f32(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = from_f32(a - b);
+    NEXT();
+}
+
+uint64_t f32_sub(void) { return (uint64_t)op_f32_sub; }
+
+void op_f32_mul(CRuntime* crt) {
+    float b = as_f32(crt->sp[-1]);
+    float a = as_f32(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = from_f32(a * b);
+    NEXT();
+}
+
+uint64_t f32_mul(void) { return (uint64_t)op_f32_mul; }
+
+void op_f32_div(CRuntime* crt) {
+    float b = as_f32(crt->sp[-1]);
+    float a = as_f32(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = from_f32(a / b);
+    NEXT();
+}
+
+uint64_t f32_div(void) { return (uint64_t)op_f32_div; }
+
+void op_f32_min(CRuntime* crt) {
+    float b = as_f32(crt->sp[-1]);
+    float a = as_f32(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = from_f32(fminf(a, b));
+    NEXT();
+}
+
+uint64_t f32_min(void) { return (uint64_t)op_f32_min; }
+
+void op_f32_max(CRuntime* crt) {
+    float b = as_f32(crt->sp[-1]);
+    float a = as_f32(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = from_f32(fmaxf(a, b));
+    NEXT();
+}
+
+uint64_t f32_max(void) { return (uint64_t)op_f32_max; }
+
+void op_f32_copysign(CRuntime* crt) {
+    float b = as_f32(crt->sp[-1]);
+    float a = as_f32(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = from_f32(copysignf(a, b));
+    NEXT();
+}
+
+uint64_t f32_copysign(void) { return (uint64_t)op_f32_copysign; }
+
+// f32 comparison
+
+void op_f32_eq(CRuntime* crt) {
+    float b = as_f32(crt->sp[-1]);
+    float a = as_f32(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = (a == b ? 1 : 0);
+    NEXT();
+}
+
+uint64_t f32_eq(void) { return (uint64_t)op_f32_eq; }
+
+void op_f32_ne(CRuntime* crt) {
+    float b = as_f32(crt->sp[-1]);
+    float a = as_f32(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = (a != b ? 1 : 0);
+    NEXT();
+}
+
+uint64_t f32_ne(void) { return (uint64_t)op_f32_ne; }
+
+void op_f32_lt(CRuntime* crt) {
+    float b = as_f32(crt->sp[-1]);
+    float a = as_f32(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = (a < b ? 1 : 0);
+    NEXT();
+}
+
+uint64_t f32_lt(void) { return (uint64_t)op_f32_lt; }
+
+void op_f32_gt(CRuntime* crt) {
+    float b = as_f32(crt->sp[-1]);
+    float a = as_f32(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = (a > b ? 1 : 0);
+    NEXT();
+}
+
+uint64_t f32_gt(void) { return (uint64_t)op_f32_gt; }
+
+void op_f32_le(CRuntime* crt) {
+    float b = as_f32(crt->sp[-1]);
+    float a = as_f32(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = (a <= b ? 1 : 0);
+    NEXT();
+}
+
+uint64_t f32_le(void) { return (uint64_t)op_f32_le; }
+
+void op_f32_ge(CRuntime* crt) {
+    float b = as_f32(crt->sp[-1]);
+    float a = as_f32(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = (a >= b ? 1 : 0);
+    NEXT();
+}
+
+uint64_t f32_ge(void) { return (uint64_t)op_f32_ge; }
+
+// f32 unary
+
+void op_f32_abs(CRuntime* crt) {
+    float a = as_f32(crt->sp[-1]);
+    crt->sp[-1] = from_f32(fabsf(a));
+    NEXT();
+}
+
+uint64_t f32_abs(void) { return (uint64_t)op_f32_abs; }
+
+void op_f32_neg(CRuntime* crt) {
+    float a = as_f32(crt->sp[-1]);
+    crt->sp[-1] = from_f32(-a);
+    NEXT();
+}
+
+uint64_t f32_neg(void) { return (uint64_t)op_f32_neg; }
+
+void op_f32_ceil(CRuntime* crt) {
+    float a = as_f32(crt->sp[-1]);
+    crt->sp[-1] = from_f32(ceilf(a));
+    NEXT();
+}
+
+uint64_t f32_ceil(void) { return (uint64_t)op_f32_ceil; }
+
+void op_f32_floor(CRuntime* crt) {
+    float a = as_f32(crt->sp[-1]);
+    crt->sp[-1] = from_f32(floorf(a));
+    NEXT();
+}
+
+uint64_t f32_floor(void) { return (uint64_t)op_f32_floor; }
+
+void op_f32_trunc(CRuntime* crt) {
+    float a = as_f32(crt->sp[-1]);
+    crt->sp[-1] = from_f32(truncf(a));
+    NEXT();
+}
+
+uint64_t f32_trunc(void) { return (uint64_t)op_f32_trunc; }
+
+void op_f32_nearest(CRuntime* crt) {
+    float a = as_f32(crt->sp[-1]);
+    crt->sp[-1] = from_f32(rintf(a));
+    NEXT();
+}
+
+uint64_t f32_nearest(void) { return (uint64_t)op_f32_nearest; }
+
+void op_f32_sqrt(CRuntime* crt) {
+    float a = as_f32(crt->sp[-1]);
+    crt->sp[-1] = from_f32(sqrtf(a));
+    NEXT();
+}
+
+uint64_t f32_sqrt(void) { return (uint64_t)op_f32_sqrt; }
+
+// f64 arithmetic
+
+void op_f64_add(CRuntime* crt) {
+    double b = as_f64(crt->sp[-1]);
+    double a = as_f64(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = from_f64(a + b);
+    NEXT();
+}
+
+uint64_t f64_add(void) { return (uint64_t)op_f64_add; }
+
+void op_f64_sub(CRuntime* crt) {
+    double b = as_f64(crt->sp[-1]);
+    double a = as_f64(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = from_f64(a - b);
+    NEXT();
+}
+
+uint64_t f64_sub(void) { return (uint64_t)op_f64_sub; }
+
+void op_f64_mul(CRuntime* crt) {
+    double b = as_f64(crt->sp[-1]);
+    double a = as_f64(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = from_f64(a * b);
+    NEXT();
+}
+
+uint64_t f64_mul(void) { return (uint64_t)op_f64_mul; }
+
+void op_f64_div(CRuntime* crt) {
+    double b = as_f64(crt->sp[-1]);
+    double a = as_f64(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = from_f64(a / b);
+    NEXT();
+}
+
+uint64_t f64_div(void) { return (uint64_t)op_f64_div; }
+
+void op_f64_min(CRuntime* crt) {
+    double b = as_f64(crt->sp[-1]);
+    double a = as_f64(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = from_f64(fmin(a, b));
+    NEXT();
+}
+
+uint64_t f64_min(void) { return (uint64_t)op_f64_min; }
+
+void op_f64_max(CRuntime* crt) {
+    double b = as_f64(crt->sp[-1]);
+    double a = as_f64(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = from_f64(fmax(a, b));
+    NEXT();
+}
+
+uint64_t f64_max(void) { return (uint64_t)op_f64_max; }
+
+void op_f64_copysign(CRuntime* crt) {
+    double b = as_f64(crt->sp[-1]);
+    double a = as_f64(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = from_f64(copysign(a, b));
+    NEXT();
+}
+
+uint64_t f64_copysign(void) { return (uint64_t)op_f64_copysign; }
+
+// f64 comparison
+
+void op_f64_eq(CRuntime* crt) {
+    double b = as_f64(crt->sp[-1]);
+    double a = as_f64(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = (a == b ? 1 : 0);
+    NEXT();
+}
+
+uint64_t f64_eq(void) { return (uint64_t)op_f64_eq; }
+
+void op_f64_ne(CRuntime* crt) {
+    double b = as_f64(crt->sp[-1]);
+    double a = as_f64(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = (a != b ? 1 : 0);
+    NEXT();
+}
+
+uint64_t f64_ne(void) { return (uint64_t)op_f64_ne; }
+
+void op_f64_lt(CRuntime* crt) {
+    double b = as_f64(crt->sp[-1]);
+    double a = as_f64(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = (a < b ? 1 : 0);
+    NEXT();
+}
+
+uint64_t f64_lt(void) { return (uint64_t)op_f64_lt; }
+
+void op_f64_gt(CRuntime* crt) {
+    double b = as_f64(crt->sp[-1]);
+    double a = as_f64(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = (a > b ? 1 : 0);
+    NEXT();
+}
+
+uint64_t f64_gt(void) { return (uint64_t)op_f64_gt; }
+
+void op_f64_le(CRuntime* crt) {
+    double b = as_f64(crt->sp[-1]);
+    double a = as_f64(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = (a <= b ? 1 : 0);
+    NEXT();
+}
+
+uint64_t f64_le(void) { return (uint64_t)op_f64_le; }
+
+void op_f64_ge(CRuntime* crt) {
+    double b = as_f64(crt->sp[-1]);
+    double a = as_f64(crt->sp[-2]);
+    crt->sp--;
+    crt->sp[-1] = (a >= b ? 1 : 0);
+    NEXT();
+}
+
+uint64_t f64_ge(void) { return (uint64_t)op_f64_ge; }
+
+// f64 unary
+
+void op_f64_abs(CRuntime* crt) {
+    double a = as_f64(crt->sp[-1]);
+    crt->sp[-1] = from_f64(fabs(a));
+    NEXT();
+}
+
+uint64_t f64_abs(void) { return (uint64_t)op_f64_abs; }
+
+void op_f64_neg(CRuntime* crt) {
+    double a = as_f64(crt->sp[-1]);
+    crt->sp[-1] = from_f64(-a);
+    NEXT();
+}
+
+uint64_t f64_neg(void) { return (uint64_t)op_f64_neg; }
+
+void op_f64_ceil(CRuntime* crt) {
+    double a = as_f64(crt->sp[-1]);
+    crt->sp[-1] = from_f64(ceil(a));
+    NEXT();
+}
+
+uint64_t f64_ceil(void) { return (uint64_t)op_f64_ceil; }
+
+void op_f64_floor(CRuntime* crt) {
+    double a = as_f64(crt->sp[-1]);
+    crt->sp[-1] = from_f64(floor(a));
+    NEXT();
+}
+
+uint64_t f64_floor(void) { return (uint64_t)op_f64_floor; }
+
+void op_f64_trunc(CRuntime* crt) {
+    double a = as_f64(crt->sp[-1]);
+    crt->sp[-1] = from_f64(trunc(a));
+    NEXT();
+}
+
+uint64_t f64_trunc(void) { return (uint64_t)op_f64_trunc; }
+
+void op_f64_nearest(CRuntime* crt) {
+    double a = as_f64(crt->sp[-1]);
+    crt->sp[-1] = from_f64(rint(a));
+    NEXT();
+}
+
+uint64_t f64_nearest(void) { return (uint64_t)op_f64_nearest; }
+
+void op_f64_sqrt(CRuntime* crt) {
+    double a = as_f64(crt->sp[-1]);
+    crt->sp[-1] = from_f64(sqrt(a));
+    NEXT();
+}
+
+uint64_t f64_sqrt(void) { return (uint64_t)op_f64_sqrt; }
+
+// Conversions
+
+void op_i32_wrap_i64(CRuntime* crt) {
+    crt->sp[-1] = (uint32_t)crt->sp[-1];
+    NEXT();
+}
+
+uint64_t i32_wrap_i64(void) { return (uint64_t)op_i32_wrap_i64; }
+
+void op_i32_trunc_f32_s(CRuntime* crt) {
+    float a = as_f32(crt->sp[-1]);
+    crt->sp[-1] = (uint64_t)(uint32_t)(int32_t)a;
+    NEXT();
+}
+
+uint64_t i32_trunc_f32_s(void) { return (uint64_t)op_i32_trunc_f32_s; }
+
+void op_i32_trunc_f32_u(CRuntime* crt) {
+    float a = as_f32(crt->sp[-1]);
+    crt->sp[-1] = (uint64_t)(uint32_t)a;
+    NEXT();
+}
+
+uint64_t i32_trunc_f32_u(void) { return (uint64_t)op_i32_trunc_f32_u; }
+
+void op_i32_trunc_f64_s(CRuntime* crt) {
+    double a = as_f64(crt->sp[-1]);
+    crt->sp[-1] = (uint64_t)(uint32_t)(int32_t)a;
+    NEXT();
+}
+
+uint64_t i32_trunc_f64_s(void) { return (uint64_t)op_i32_trunc_f64_s; }
+
+void op_i32_trunc_f64_u(CRuntime* crt) {
+    double a = as_f64(crt->sp[-1]);
+    crt->sp[-1] = (uint64_t)(uint32_t)a;
+    NEXT();
+}
+
+uint64_t i32_trunc_f64_u(void) { return (uint64_t)op_i32_trunc_f64_u; }
+
+void op_i64_extend_i32_s(CRuntime* crt) {
+    int32_t a = (int32_t)crt->sp[-1];
+    crt->sp[-1] = (uint64_t)(int64_t)a;
+    NEXT();
+}
+
+uint64_t i64_extend_i32_s(void) { return (uint64_t)op_i64_extend_i32_s; }
+
+void op_i64_extend_i32_u(CRuntime* crt) {
+    uint32_t a = (uint32_t)crt->sp[-1];
+    crt->sp[-1] = (uint64_t)a;
+    NEXT();
+}
+
+uint64_t i64_extend_i32_u(void) { return (uint64_t)op_i64_extend_i32_u; }
+
+void op_i64_trunc_f32_s(CRuntime* crt) {
+    float a = as_f32(crt->sp[-1]);
+    crt->sp[-1] = (uint64_t)(int64_t)a;
+    NEXT();
+}
+
+uint64_t i64_trunc_f32_s(void) { return (uint64_t)op_i64_trunc_f32_s; }
+
+void op_i64_trunc_f32_u(CRuntime* crt) {
+    float a = as_f32(crt->sp[-1]);
+    crt->sp[-1] = (uint64_t)a;
+    NEXT();
+}
+
+uint64_t i64_trunc_f32_u(void) { return (uint64_t)op_i64_trunc_f32_u; }
+
+void op_i64_trunc_f64_s(CRuntime* crt) {
+    double a = as_f64(crt->sp[-1]);
+    crt->sp[-1] = (uint64_t)(int64_t)a;
+    NEXT();
+}
+
+uint64_t i64_trunc_f64_s(void) { return (uint64_t)op_i64_trunc_f64_s; }
+
+void op_i64_trunc_f64_u(CRuntime* crt) {
+    double a = as_f64(crt->sp[-1]);
+    crt->sp[-1] = (uint64_t)a;
+    NEXT();
+}
+
+uint64_t i64_trunc_f64_u(void) { return (uint64_t)op_i64_trunc_f64_u; }
+
+void op_f32_convert_i32_s(CRuntime* crt) {
+    int32_t a = (int32_t)crt->sp[-1];
+    crt->sp[-1] = from_f32((float)a);
+    NEXT();
+}
+
+uint64_t f32_convert_i32_s(void) { return (uint64_t)op_f32_convert_i32_s; }
+
+void op_f32_convert_i32_u(CRuntime* crt) {
+    uint32_t a = (uint32_t)crt->sp[-1];
+    crt->sp[-1] = from_f32((float)a);
+    NEXT();
+}
+
+uint64_t f32_convert_i32_u(void) { return (uint64_t)op_f32_convert_i32_u; }
+
+void op_f32_convert_i64_s(CRuntime* crt) {
+    int64_t a = (int64_t)crt->sp[-1];
+    crt->sp[-1] = from_f32((float)a);
+    NEXT();
+}
+
+uint64_t f32_convert_i64_s(void) { return (uint64_t)op_f32_convert_i64_s; }
+
+void op_f32_convert_i64_u(CRuntime* crt) {
+    uint64_t a = crt->sp[-1];
+    crt->sp[-1] = from_f32((float)a);
+    NEXT();
+}
+
+uint64_t f32_convert_i64_u(void) { return (uint64_t)op_f32_convert_i64_u; }
+
+void op_f32_demote_f64(CRuntime* crt) {
+    double a = as_f64(crt->sp[-1]);
+    crt->sp[-1] = from_f32((float)a);
+    NEXT();
+}
+
+uint64_t f32_demote_f64(void) { return (uint64_t)op_f32_demote_f64; }
+
+void op_f64_convert_i32_s(CRuntime* crt) {
+    int32_t a = (int32_t)crt->sp[-1];
+    crt->sp[-1] = from_f64((double)a);
+    NEXT();
+}
+
+uint64_t f64_convert_i32_s(void) { return (uint64_t)op_f64_convert_i32_s; }
+
+void op_f64_convert_i32_u(CRuntime* crt) {
+    uint32_t a = (uint32_t)crt->sp[-1];
+    crt->sp[-1] = from_f64((double)a);
+    NEXT();
+}
+
+uint64_t f64_convert_i32_u(void) { return (uint64_t)op_f64_convert_i32_u; }
+
+void op_f64_convert_i64_s(CRuntime* crt) {
+    int64_t a = (int64_t)crt->sp[-1];
+    crt->sp[-1] = from_f64((double)a);
+    NEXT();
+}
+
+uint64_t f64_convert_i64_s(void) { return (uint64_t)op_f64_convert_i64_s; }
+
+void op_f64_convert_i64_u(CRuntime* crt) {
+    uint64_t a = crt->sp[-1];
+    crt->sp[-1] = from_f64((double)a);
+    NEXT();
+}
+
+uint64_t f64_convert_i64_u(void) { return (uint64_t)op_f64_convert_i64_u; }
+
+void op_f64_promote_f32(CRuntime* crt) {
+    float a = as_f32(crt->sp[-1]);
+    crt->sp[-1] = from_f64((double)a);
+    NEXT();
+}
+
+uint64_t f64_promote_f32(void) { return (uint64_t)op_f64_promote_f32; }
+
+void op_i32_reinterpret_f32(CRuntime* crt) {
+    // Already stored as bits, just mask to 32 bits
+    crt->sp[-1] = crt->sp[-1] & 0xFFFFFFFF;
+    NEXT();
+}
+
+uint64_t i32_reinterpret_f32(void) { return (uint64_t)op_i32_reinterpret_f32; }
+
+void op_i64_reinterpret_f64(CRuntime* crt) {
+    // Already stored as bits, nothing to do
+    NEXT();
+}
+
+uint64_t i64_reinterpret_f64(void) { return (uint64_t)op_i64_reinterpret_f64; }
+
+void op_f32_reinterpret_i32(CRuntime* crt) {
+    // Already stored as bits, nothing to do
+    NEXT();
+}
+
+uint64_t f32_reinterpret_i32(void) { return (uint64_t)op_f32_reinterpret_i32; }
+
+void op_f64_reinterpret_i64(CRuntime* crt) {
+    // Already stored as bits, nothing to do
+    NEXT();
+}
+
+uint64_t f64_reinterpret_i64(void) { return (uint64_t)op_f64_reinterpret_i64; }
+
+// Sign extension
+
+void op_i32_extend8_s(CRuntime* crt) {
+    int8_t a = (int8_t)crt->sp[-1];
+    crt->sp[-1] = (uint64_t)(uint32_t)(int32_t)a;
+    NEXT();
+}
+
+uint64_t i32_extend8_s(void) { return (uint64_t)op_i32_extend8_s; }
+
+void op_i32_extend16_s(CRuntime* crt) {
+    int16_t a = (int16_t)crt->sp[-1];
+    crt->sp[-1] = (uint64_t)(uint32_t)(int32_t)a;
+    NEXT();
+}
+
+uint64_t i32_extend16_s(void) { return (uint64_t)op_i32_extend16_s; }
+
+void op_i64_extend8_s(CRuntime* crt) {
+    int8_t a = (int8_t)crt->sp[-1];
+    crt->sp[-1] = (uint64_t)(int64_t)a;
+    NEXT();
+}
+
+uint64_t i64_extend8_s(void) { return (uint64_t)op_i64_extend8_s; }
+
+void op_i64_extend16_s(CRuntime* crt) {
+    int16_t a = (int16_t)crt->sp[-1];
+    crt->sp[-1] = (uint64_t)(int64_t)a;
+    NEXT();
+}
+
+uint64_t i64_extend16_s(void) { return (uint64_t)op_i64_extend16_s; }
+
+void op_i64_extend32_s(CRuntime* crt) {
+    int32_t a = (int32_t)crt->sp[-1];
+    crt->sp[-1] = (uint64_t)(int64_t)a;
+    NEXT();
+}
+
+uint64_t i64_extend32_s(void) { return (uint64_t)op_i64_extend32_s; }
+
+// Stack operations
+
+void op_wasm_drop(CRuntime* crt) {
+    crt->sp--;
+    NEXT();
+}
+
+uint64_t wasm_drop(void) { return (uint64_t)op_wasm_drop; }
+
+void op_wasm_select(CRuntime* crt) {
+    uint32_t c = (uint32_t)crt->sp[-1];
+    uint64_t b = crt->sp[-2];
+    uint64_t a = crt->sp[-3];
+    crt->sp -= 2;
+    crt->sp[-1] = c ? a : b;
+    NEXT();
+}
+
+uint64_t wasm_select(void) { return (uint64_t)op_wasm_select; }

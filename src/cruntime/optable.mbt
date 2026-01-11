@@ -148,3 +148,330 @@ extern "C" fn i32_ctz() -> UInt64 = "i32_ctz"
 
 ///|
 extern "C" fn i32_popcnt() -> UInt64 = "i32_popcnt"
+
+// i64 arithmetic
+
+///|
+extern "C" fn i64_add() -> UInt64 = "i64_add"
+
+///|
+extern "C" fn i64_sub() -> UInt64 = "i64_sub"
+
+///|
+extern "C" fn i64_mul() -> UInt64 = "i64_mul"
+
+///|
+extern "C" fn i64_div_s() -> UInt64 = "i64_div_s"
+
+///|
+extern "C" fn i64_div_u() -> UInt64 = "i64_div_u"
+
+///|
+extern "C" fn i64_rem_s() -> UInt64 = "i64_rem_s"
+
+///|
+extern "C" fn i64_rem_u() -> UInt64 = "i64_rem_u"
+
+///|
+extern "C" fn i64_and() -> UInt64 = "i64_and"
+
+///|
+extern "C" fn i64_or() -> UInt64 = "i64_or"
+
+///|
+extern "C" fn i64_xor() -> UInt64 = "i64_xor"
+
+///|
+extern "C" fn i64_shl() -> UInt64 = "i64_shl"
+
+///|
+extern "C" fn i64_shr_s() -> UInt64 = "i64_shr_s"
+
+///|
+extern "C" fn i64_shr_u() -> UInt64 = "i64_shr_u"
+
+///|
+extern "C" fn i64_rotl() -> UInt64 = "i64_rotl"
+
+///|
+extern "C" fn i64_rotr() -> UInt64 = "i64_rotr"
+
+// i64 comparison
+
+///|
+extern "C" fn i64_eqz() -> UInt64 = "i64_eqz"
+
+///|
+extern "C" fn i64_eq() -> UInt64 = "i64_eq"
+
+///|
+extern "C" fn i64_ne() -> UInt64 = "i64_ne"
+
+///|
+extern "C" fn i64_lt_s() -> UInt64 = "i64_lt_s"
+
+///|
+extern "C" fn i64_lt_u() -> UInt64 = "i64_lt_u"
+
+///|
+extern "C" fn i64_gt_s() -> UInt64 = "i64_gt_s"
+
+///|
+extern "C" fn i64_gt_u() -> UInt64 = "i64_gt_u"
+
+///|
+extern "C" fn i64_le_s() -> UInt64 = "i64_le_s"
+
+///|
+extern "C" fn i64_le_u() -> UInt64 = "i64_le_u"
+
+///|
+extern "C" fn i64_ge_s() -> UInt64 = "i64_ge_s"
+
+///|
+extern "C" fn i64_ge_u() -> UInt64 = "i64_ge_u"
+
+// i64 unary
+
+///|
+extern "C" fn i64_clz() -> UInt64 = "i64_clz"
+
+///|
+extern "C" fn i64_ctz() -> UInt64 = "i64_ctz"
+
+///|
+extern "C" fn i64_popcnt() -> UInt64 = "i64_popcnt"
+
+// f32 arithmetic
+
+///|
+extern "C" fn f32_add() -> UInt64 = "f32_add"
+
+///|
+extern "C" fn f32_sub() -> UInt64 = "f32_sub"
+
+///|
+extern "C" fn f32_mul() -> UInt64 = "f32_mul"
+
+///|
+extern "C" fn f32_div() -> UInt64 = "f32_div"
+
+///|
+extern "C" fn f32_min() -> UInt64 = "f32_min"
+
+///|
+extern "C" fn f32_max() -> UInt64 = "f32_max"
+
+///|
+extern "C" fn f32_copysign() -> UInt64 = "f32_copysign"
+
+// f32 comparison
+
+///|
+extern "C" fn f32_eq() -> UInt64 = "f32_eq"
+
+///|
+extern "C" fn f32_ne() -> UInt64 = "f32_ne"
+
+///|
+extern "C" fn f32_lt() -> UInt64 = "f32_lt"
+
+///|
+extern "C" fn f32_gt() -> UInt64 = "f32_gt"
+
+///|
+extern "C" fn f32_le() -> UInt64 = "f32_le"
+
+///|
+extern "C" fn f32_ge() -> UInt64 = "f32_ge"
+
+// f32 unary
+
+///|
+extern "C" fn f32_abs() -> UInt64 = "f32_abs"
+
+///|
+extern "C" fn f32_neg() -> UInt64 = "f32_neg"
+
+///|
+extern "C" fn f32_ceil() -> UInt64 = "f32_ceil"
+
+///|
+extern "C" fn f32_floor() -> UInt64 = "f32_floor"
+
+///|
+extern "C" fn f32_trunc() -> UInt64 = "f32_trunc"
+
+///|
+extern "C" fn f32_nearest() -> UInt64 = "f32_nearest"
+
+///|
+extern "C" fn f32_sqrt() -> UInt64 = "f32_sqrt"
+
+// f64 arithmetic
+
+///|
+extern "C" fn f64_add() -> UInt64 = "f64_add"
+
+///|
+extern "C" fn f64_sub() -> UInt64 = "f64_sub"
+
+///|
+extern "C" fn f64_mul() -> UInt64 = "f64_mul"
+
+///|
+extern "C" fn f64_div() -> UInt64 = "f64_div"
+
+///|
+extern "C" fn f64_min() -> UInt64 = "f64_min"
+
+///|
+extern "C" fn f64_max() -> UInt64 = "f64_max"
+
+///|
+extern "C" fn f64_copysign() -> UInt64 = "f64_copysign"
+
+// f64 comparison
+
+///|
+extern "C" fn f64_eq() -> UInt64 = "f64_eq"
+
+///|
+extern "C" fn f64_ne() -> UInt64 = "f64_ne"
+
+///|
+extern "C" fn f64_lt() -> UInt64 = "f64_lt"
+
+///|
+extern "C" fn f64_gt() -> UInt64 = "f64_gt"
+
+///|
+extern "C" fn f64_le() -> UInt64 = "f64_le"
+
+///|
+extern "C" fn f64_ge() -> UInt64 = "f64_ge"
+
+// f64 unary
+
+///|
+extern "C" fn f64_abs() -> UInt64 = "f64_abs"
+
+///|
+extern "C" fn f64_neg() -> UInt64 = "f64_neg"
+
+///|
+extern "C" fn f64_ceil() -> UInt64 = "f64_ceil"
+
+///|
+extern "C" fn f64_floor() -> UInt64 = "f64_floor"
+
+///|
+extern "C" fn f64_trunc() -> UInt64 = "f64_trunc"
+
+///|
+extern "C" fn f64_nearest() -> UInt64 = "f64_nearest"
+
+///|
+extern "C" fn f64_sqrt() -> UInt64 = "f64_sqrt"
+
+// Conversions
+
+///|
+extern "C" fn i32_wrap_i64() -> UInt64 = "i32_wrap_i64"
+
+///|
+extern "C" fn i32_trunc_f32_s() -> UInt64 = "i32_trunc_f32_s"
+
+///|
+extern "C" fn i32_trunc_f32_u() -> UInt64 = "i32_trunc_f32_u"
+
+///|
+extern "C" fn i32_trunc_f64_s() -> UInt64 = "i32_trunc_f64_s"
+
+///|
+extern "C" fn i32_trunc_f64_u() -> UInt64 = "i32_trunc_f64_u"
+
+///|
+extern "C" fn i64_extend_i32_s() -> UInt64 = "i64_extend_i32_s"
+
+///|
+extern "C" fn i64_extend_i32_u() -> UInt64 = "i64_extend_i32_u"
+
+///|
+extern "C" fn i64_trunc_f32_s() -> UInt64 = "i64_trunc_f32_s"
+
+///|
+extern "C" fn i64_trunc_f32_u() -> UInt64 = "i64_trunc_f32_u"
+
+///|
+extern "C" fn i64_trunc_f64_s() -> UInt64 = "i64_trunc_f64_s"
+
+///|
+extern "C" fn i64_trunc_f64_u() -> UInt64 = "i64_trunc_f64_u"
+
+///|
+extern "C" fn f32_convert_i32_s() -> UInt64 = "f32_convert_i32_s"
+
+///|
+extern "C" fn f32_convert_i32_u() -> UInt64 = "f32_convert_i32_u"
+
+///|
+extern "C" fn f32_convert_i64_s() -> UInt64 = "f32_convert_i64_s"
+
+///|
+extern "C" fn f32_convert_i64_u() -> UInt64 = "f32_convert_i64_u"
+
+///|
+extern "C" fn f32_demote_f64() -> UInt64 = "f32_demote_f64"
+
+///|
+extern "C" fn f64_convert_i32_s() -> UInt64 = "f64_convert_i32_s"
+
+///|
+extern "C" fn f64_convert_i32_u() -> UInt64 = "f64_convert_i32_u"
+
+///|
+extern "C" fn f64_convert_i64_s() -> UInt64 = "f64_convert_i64_s"
+
+///|
+extern "C" fn f64_convert_i64_u() -> UInt64 = "f64_convert_i64_u"
+
+///|
+extern "C" fn f64_promote_f32() -> UInt64 = "f64_promote_f32"
+
+///|
+extern "C" fn i32_reinterpret_f32() -> UInt64 = "i32_reinterpret_f32"
+
+///|
+extern "C" fn i64_reinterpret_f64() -> UInt64 = "i64_reinterpret_f64"
+
+///|
+extern "C" fn f32_reinterpret_i32() -> UInt64 = "f32_reinterpret_i32"
+
+///|
+extern "C" fn f64_reinterpret_i64() -> UInt64 = "f64_reinterpret_i64"
+
+// Sign extension
+
+///|
+extern "C" fn i32_extend8_s() -> UInt64 = "i32_extend8_s"
+
+///|
+extern "C" fn i32_extend16_s() -> UInt64 = "i32_extend16_s"
+
+///|
+extern "C" fn i64_extend8_s() -> UInt64 = "i64_extend8_s"
+
+///|
+extern "C" fn i64_extend16_s() -> UInt64 = "i64_extend16_s"
+
+///|
+extern "C" fn i64_extend32_s() -> UInt64 = "i64_extend32_s"
+
+// Stack operations
+
+///|
+extern "C" fn drop() -> UInt64 = "wasm_drop"
+
+///|
+extern "C" fn select() -> UInt64 = "wasm_select"

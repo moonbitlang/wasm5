@@ -165,6 +165,131 @@ fn compile_instr(ctx : CompileCtx, instr : @core.Instr) -> Unit {
     I32Ctz => ctx.emit(i32_ctz())
     I32Popcnt => ctx.emit(i32_popcnt())
 
+    // i64 arithmetic
+    I64Add => ctx.emit(i64_add())
+    I64Sub => ctx.emit(i64_sub())
+    I64Mul => ctx.emit(i64_mul())
+    I64DivS => ctx.emit(i64_div_s())
+    I64DivU => ctx.emit(i64_div_u())
+    I64RemS => ctx.emit(i64_rem_s())
+    I64RemU => ctx.emit(i64_rem_u())
+    I64And => ctx.emit(i64_and())
+    I64Or => ctx.emit(i64_or())
+    I64Xor => ctx.emit(i64_xor())
+    I64Shl => ctx.emit(i64_shl())
+    I64ShrS => ctx.emit(i64_shr_s())
+    I64ShrU => ctx.emit(i64_shr_u())
+    I64Rotl => ctx.emit(i64_rotl())
+    I64Rotr => ctx.emit(i64_rotr())
+
+    // i64 comparison
+    I64Eqz => ctx.emit(i64_eqz())
+    I64Eq => ctx.emit(i64_eq())
+    I64Ne => ctx.emit(i64_ne())
+    I64LtS => ctx.emit(i64_lt_s())
+    I64LtU => ctx.emit(i64_lt_u())
+    I64GtS => ctx.emit(i64_gt_s())
+    I64GtU => ctx.emit(i64_gt_u())
+    I64LeS => ctx.emit(i64_le_s())
+    I64LeU => ctx.emit(i64_le_u())
+    I64GeS => ctx.emit(i64_ge_s())
+    I64GeU => ctx.emit(i64_ge_u())
+
+    // i64 unary
+    I64Clz => ctx.emit(i64_clz())
+    I64Ctz => ctx.emit(i64_ctz())
+    I64Popcnt => ctx.emit(i64_popcnt())
+
+    // f32 arithmetic
+    F32Add => ctx.emit(f32_add())
+    F32Sub => ctx.emit(f32_sub())
+    F32Mul => ctx.emit(f32_mul())
+    F32Div => ctx.emit(f32_div())
+    F32Min => ctx.emit(f32_min())
+    F32Max => ctx.emit(f32_max())
+    F32Copysign => ctx.emit(f32_copysign())
+
+    // f32 comparison
+    F32Eq => ctx.emit(f32_eq())
+    F32Ne => ctx.emit(f32_ne())
+    F32Lt => ctx.emit(f32_lt())
+    F32Gt => ctx.emit(f32_gt())
+    F32Le => ctx.emit(f32_le())
+    F32Ge => ctx.emit(f32_ge())
+
+    // f32 unary
+    F32Abs => ctx.emit(f32_abs())
+    F32Neg => ctx.emit(f32_neg())
+    F32Ceil => ctx.emit(f32_ceil())
+    F32Floor => ctx.emit(f32_floor())
+    F32Trunc => ctx.emit(f32_trunc())
+    F32Nearest => ctx.emit(f32_nearest())
+    F32Sqrt => ctx.emit(f32_sqrt())
+
+    // f64 arithmetic
+    F64Add => ctx.emit(f64_add())
+    F64Sub => ctx.emit(f64_sub())
+    F64Mul => ctx.emit(f64_mul())
+    F64Div => ctx.emit(f64_div())
+    F64Min => ctx.emit(f64_min())
+    F64Max => ctx.emit(f64_max())
+    F64Copysign => ctx.emit(f64_copysign())
+
+    // f64 comparison
+    F64Eq => ctx.emit(f64_eq())
+    F64Ne => ctx.emit(f64_ne())
+    F64Lt => ctx.emit(f64_lt())
+    F64Gt => ctx.emit(f64_gt())
+    F64Le => ctx.emit(f64_le())
+    F64Ge => ctx.emit(f64_ge())
+
+    // f64 unary
+    F64Abs => ctx.emit(f64_abs())
+    F64Neg => ctx.emit(f64_neg())
+    F64Ceil => ctx.emit(f64_ceil())
+    F64Floor => ctx.emit(f64_floor())
+    F64Trunc => ctx.emit(f64_trunc())
+    F64Nearest => ctx.emit(f64_nearest())
+    F64Sqrt => ctx.emit(f64_sqrt())
+
+    // Conversions
+    I32WrapI64 => ctx.emit(i32_wrap_i64())
+    I32TruncF32S => ctx.emit(i32_trunc_f32_s())
+    I32TruncF32U => ctx.emit(i32_trunc_f32_u())
+    I32TruncF64S => ctx.emit(i32_trunc_f64_s())
+    I32TruncF64U => ctx.emit(i32_trunc_f64_u())
+    I64ExtendI32S => ctx.emit(i64_extend_i32_s())
+    I64ExtendI32U => ctx.emit(i64_extend_i32_u())
+    I64TruncF32S => ctx.emit(i64_trunc_f32_s())
+    I64TruncF32U => ctx.emit(i64_trunc_f32_u())
+    I64TruncF64S => ctx.emit(i64_trunc_f64_s())
+    I64TruncF64U => ctx.emit(i64_trunc_f64_u())
+    F32ConvertI32S => ctx.emit(f32_convert_i32_s())
+    F32ConvertI32U => ctx.emit(f32_convert_i32_u())
+    F32ConvertI64S => ctx.emit(f32_convert_i64_s())
+    F32ConvertI64U => ctx.emit(f32_convert_i64_u())
+    F32DemoteF64 => ctx.emit(f32_demote_f64())
+    F64ConvertI32S => ctx.emit(f64_convert_i32_s())
+    F64ConvertI32U => ctx.emit(f64_convert_i32_u())
+    F64ConvertI64S => ctx.emit(f64_convert_i64_s())
+    F64ConvertI64U => ctx.emit(f64_convert_i64_u())
+    F64PromoteF32 => ctx.emit(f64_promote_f32())
+    I32ReinterpretF32 => ctx.emit(i32_reinterpret_f32())
+    I64ReinterpretF64 => ctx.emit(i64_reinterpret_f64())
+    F32ReinterpretI32 => ctx.emit(f32_reinterpret_i32())
+    F64ReinterpretI64 => ctx.emit(f64_reinterpret_i64())
+
+    // Sign extension
+    I32Extend8S => ctx.emit(i32_extend8_s())
+    I32Extend16S => ctx.emit(i32_extend16_s())
+    I64Extend8S => ctx.emit(i64_extend8_s())
+    I64Extend16S => ctx.emit(i64_extend16_s())
+    I64Extend32S => ctx.emit(i64_extend32_s())
+
+    // Stack operations
+    Drop => ctx.emit(drop())
+    Select(_) => ctx.emit(select())
+
     // Block structures - TODO: need proper control flow handling
     Block(_, body) => compile_expr(ctx, { instrs: body })
     Loop(_, body) => compile_expr(ctx, { instrs: body })
