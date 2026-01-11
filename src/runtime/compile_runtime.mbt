@@ -1,7 +1,6 @@
 ///|
 /// Run the start function if present.
-/// Returns the runtime after start function execution (if any).
-pub fn Runtime::run_start(self : Runtime) -> Runtime raise RuntimeError {
+pub fn Runtime::run_start(self : Runtime) -> Unit raise RuntimeError {
   // Execute the start function if present
   match self.ctx.module_.start {
     Some(start_idx) => {
@@ -31,16 +30,11 @@ pub fn Runtime::run_start(self : Runtime) -> Runtime raise RuntimeError {
 
         // Execute start function, ignoring runtime errors
         // (e.g., calls to unimplemented imported functions)
-        let rt = execute(rt) catch {
-          _ => rt // Ignore runtime errors in start function
-        }
+        let _ = execute(rt) catch { _ => rt }
 
-        // Return with cleared stack
-        return { ..rt, sp: 0 }
       }
-      self
     }
-    None => self
+    None => ()
   }
 }
 
@@ -86,12 +80,11 @@ fn execute_call(
 
 ///|
 /// Call a compiled function by name with the given arguments.
-/// Returns tuple of (updated Runtime, results).
 pub fn Runtime::call_compiled(
   self : Runtime,
   func_name : Bytes,
   args : Array[Value],
-) -> (Runtime, Array[Value]) raise RuntimeError {
+) -> Array[Value] raise RuntimeError {
   let mut func_idx : Int? = None
   for exp in self.ctx.module_.exports {
     if exp.name == func_name {
@@ -112,7 +105,7 @@ pub fn Runtime::call_compiled(
   // Check if it's an imported function - call it directly via import resolver
   if idx < num_imported_funcs {
     let imported_func = self.ctx.imported_funcs[idx]
-    return (self, (imported_func.func)(args))
+    return (imported_func.func)(args)
   }
 
   // Adjust to local function index
@@ -146,7 +139,7 @@ pub fn Runtime::call_compiled(
       results.push(stack_to_value(rt.stack.unsafe_get(i), result_types[i]))
     }
   }
-  (rt, results)
+  results
 }
 
 ///|
@@ -156,7 +149,7 @@ pub fn Runtime::call_by_index(
   self : Runtime,
   func_idx : Int,
   args : Array[Value],
-) -> (Runtime, Array[Value]) raise RuntimeError {
+) -> Array[Value] raise RuntimeError {
   let num_imported_funcs = count_imported_funcs(self.ctx.module_)
 
   // Check if it's an imported function - call it directly via import resolver
@@ -167,7 +160,7 @@ pub fn Runtime::call_by_index(
       )
     }
     let imported_func = self.ctx.imported_funcs[func_idx]
-    return (self, (imported_func.func)(args))
+    return (imported_func.func)(args)
   }
 
   // Adjust to local function index
@@ -205,5 +198,5 @@ pub fn Runtime::call_by_index(
       results.push(stack_to_value(rt.stack.unsafe_get(i), result_types[i]))
     }
   }
-  (rt, results)
+  results
 }
