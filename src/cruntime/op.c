@@ -15,7 +15,14 @@ typedef struct {
 
 typedef void (*OpFn)(CRuntime*);
 
-#define NEXT() ((OpFn)*crt->pc++)(crt)
+// Force tail call optimization for threaded code dispatch
+#if defined(__clang__) || (defined(__GNUC__) && __GNUC__ >= 13)
+#define MUSTTAIL __attribute__((musttail))
+#else
+#define MUSTTAIL
+#endif
+
+#define NEXT() MUSTTAIL return ((OpFn)*crt->pc++)(crt)
 
 // Execute threaded code starting at entry point
 // Returns the top of stack value (result), or 0 if stack is empty
