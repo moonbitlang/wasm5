@@ -30,13 +30,14 @@ async fn run_wasm_c(wasm_path : String, export_name : String) -> Unit {
   let wasm_bytes = @fs.read_file(wasm_path).binary()
   let module_ = @wasm5_parse.parse(wasm_bytes)
 
-  // Compile to threaded code for C runtime
-  let compiled = @wasm5_cruntime.compile(module_)
-  println("Compiled \{compiled.func_entries.length()} functions")
-  println("Exports: \{compiled.exports.keys().collect()}")
+  // Load and compile for C runtime
+  let runtime = @wasm5_cruntime.CRuntime::load(module_)
+  runtime.run_start()
   println("Calling '\{export_name}'...")
-  match @wasm5_cruntime.call(compiled, export_name, []) {
-    Some(result) => println("Result: \{result}")
-    None => println("Export '\{export_name}' not found")
+  let results = runtime.call(@encoding/utf8.encode(export_name), [])
+  if results.length() > 0 {
+    println("Result: \{results}")
+  } else {
+    println("No results (function may not exist or returns void)")
   }
 }
