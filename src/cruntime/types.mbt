@@ -10,4 +10,6 @@ pub struct CompiledModule {
   func_num_locals : FixedArray[Int]
   /// Maximum stack height for each function
   func_max_stack : FixedArray[Int]
+  /// Exported functions: name -> function index (into func_entries)
+  exports : Map[String, Int]
 }

@@ -15,52 +15,23 @@ extern "C" fn c_execute(
 ) -> UInt64 = "execute"
 
 ///|
-/// Call a compiled function by index
+/// Call a compiled function by export name.
+/// This is the only public invocation API.
+/// Returns the function result, or None if export not found.
 pub fn call(
   compiled : CompiledModule,
-  func_idx : Int,
+  export_name : String,
   args : Array[UInt64],
-) -> UInt64 {
-  let entry = compiled.func_entries[func_idx]
-  let num_locals = compiled.func_num_locals[func_idx]
-  let args_fixed = FixedArray::from_array(args)
-  c_execute(compiled.code, entry, num_locals, args_fixed, args.length())
-}
-
-///|
-/// Call a compiled function with no arguments
-pub fn call0(compiled : CompiledModule, func_idx : Int) -> UInt64 {
-  let entry = compiled.func_entries[func_idx]
-  let num_locals = compiled.func_num_locals[func_idx]
-  c_execute(compiled.code, entry, num_locals, [], 0)
-}
-
-///|
-/// Call a compiled function with one i32 argument
-pub fn call1_i32(
-  compiled : CompiledModule,
-  func_idx : Int,
-  arg : Int,
-) -> UInt64 {
-  let entry = compiled.func_entries[func_idx]
-  let num_locals = compiled.func_num_locals[func_idx]
-  let args : FixedArray[UInt64] = [arg.reinterpret_as_uint().to_uint64()]
-  c_execute(compiled.code, entry, num_locals, args, 1)
-}
-
-///|
-/// Call a compiled function with two i32 arguments
-pub fn call2_i32(
-  compiled : CompiledModule,
-  func_idx : Int,
-  arg1 : Int,
-  arg2 : Int,
-) -> UInt64 {
-  let entry = compiled.func_entries[func_idx]
-  let num_locals = compiled.func_num_locals[func_idx]
-  let args : FixedArray[UInt64] = [
-    arg1.reinterpret_as_uint().to_uint64(),
-    arg2.reinterpret_as_uint().to_uint64(),
-  ]
-  c_execute(compiled.code, entry, num_locals, args, 2)
+) -> UInt64? {
+  match compiled.exports.get(export_name) {
+    Some(func_idx) => {
+      let entry = compiled.func_entries[func_idx]
+      let num_locals = compiled.func_num_locals[func_idx]
+      let args_fixed = FixedArray::from_array(args)
+      Some(
+        c_execute(compiled.code, entry, num_locals, args_fixed, args.length()),
+      )
+    }
+    None => None
+  }
 }

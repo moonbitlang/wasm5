@@ -6,13 +6,7 @@ import(
 )
 
 // Values
-pub fn call(CompiledModule, Int, Array[UInt64]) -> UInt64
-
-pub fn call0(CompiledModule, Int) -> UInt64
-
-pub fn call1_i32(CompiledModule, Int, Int) -> UInt64
-
-pub fn call2_i32(CompiledModule, Int, Int, Int) -> UInt64
+pub fn call(CompiledModule, String, Array[UInt64]) -> UInt64?
 
 pub fn compile(@core.Module) -> CompiledModule
 
@@ -24,6 +18,7 @@ pub struct CompiledModule {
   func_entries : FixedArray[Int]
   func_num_locals : FixedArray[Int]
   func_max_stack : FixedArray[Int]
+  exports : Map[String, Int]
 }
 
 // Type aliases

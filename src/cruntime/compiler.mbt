@@ -2,6 +2,7 @@
 /// Compile a module to threaded code for C runtime.
 pub fn compile(mod_ : @core.Module) -> CompiledModule {
   let ctx = CompileCtx::new()
+  let num_imported_funcs = count_imported_funcs(mod_)
 
   // Compile all functions
   let func_entries : Array[Int] = []
@@ -12,7 +13,7 @@ pub fn compile(mod_ : @core.Module) -> CompiledModule {
     func_entries.push(entry)
 
     // Count locals (params + locals)
-    let func_idx = count_imported_funcs(mod_) + i
+    let func_idx = num_imported_funcs + i
     let type_idx = mod_.funcs[func_idx].reinterpret_as_int()
     let func_type = get_func_type(mod_, type_idx)
     let num_params = func_type.params.length()
@@ -28,11 +29,25 @@ pub fn compile(mod_ : @core.Module) -> CompiledModule {
     // Record max stack (placeholder - would need proper analysis)
     func_max_stack.push(16) // TODO: compute actual max stack
   }
+
+  // Collect function exports
+  let exports : Map[String, Int] = {}
+  for exp in mod_.exports {
+    if exp.desc is Func(idx) {
+      // Convert absolute func index to local index (excluding imports)
+      let local_idx = idx.reinterpret_as_int() - num_imported_funcs
+      if local_idx >= 0 {
+        let name = @encoding/utf8.decode(exp.name) catch { _ => continue }
+        exports[name] = local_idx
+      }
+    }
+  }
   {
     code: FixedArray::from_array(ctx.code),
     func_entries: FixedArray::from_array(func_entries),
     func_num_locals: FixedArray::from_array(func_num_locals),
     func_max_stack: FixedArray::from_array(func_max_stack),
+    exports,
   }
 }
 
