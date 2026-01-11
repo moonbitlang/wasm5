@@ -75,7 +75,7 @@ async fn parse_and_compile(
   let content = file.read_all().binary()
   let module_ = @wasm5_parse.parse(content)
   let runtime = @wasm5_runtime.Runtime::load_with_resolver(module_, resolver)
-  let runtime = runtime.compile()
+  let runtime = runtime.run_start()
   runtime
 }
 
