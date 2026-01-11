@@ -14,7 +14,7 @@ pub enum RuntimeStatus {
 
 ///|
 /// Block kind for compile-time control flow tracking
-pub enum CompileBlockKind {
+priv enum CompileBlockKind {
   BlockKind // br jumps to end, uses results
   LoopKind // br jumps to start, uses params
   IfKind // br jumps to end, uses results
@@ -22,7 +22,7 @@ pub enum CompileBlockKind {
 
 ///|
 /// Compile-time control frame for tracking block types and stack heights
-pub struct CompileBlock {
+priv struct CompileBlock {
   kind : CompileBlockKind
   params : Array[@core.ValType]
   results : Array[@core.ValType]
@@ -36,7 +36,7 @@ pub struct CompileBlock {
 
 ///|
 /// Compile-time context for tracking types during compilation
-pub struct CompileCtx {
+priv struct CompileCtx {
   type_stack : Array[@core.ValType]
   control_stack : Array[CompileBlock]
   func_result_count : Int // Number of results the function returns

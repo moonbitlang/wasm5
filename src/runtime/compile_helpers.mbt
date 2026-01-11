@@ -33,11 +33,11 @@
 ///|
 /// Canonical NaN values for WebAssembly
 /// f64 canonical NaN: 0x7FF8000000000000
-pub let canonical_nan_f64 : Double = 0x7ff8_0000_0000_0000UL.reinterpret_as_double()
+let canonical_nan_f64 : Double = 0x7ff8_0000_0000_0000UL.reinterpret_as_double()
 
 ///|
 /// f32 canonical NaN: 0x7FC00000
-pub let canonical_nan_f32 : Float = Float::reinterpret_from_uint(0x7fc0_0000U)
+let canonical_nan_f32 : Float = Float::reinterpret_from_uint(0x7fc0_0000U)
 
 ///|
 /// Canonicalize NaN values - if value is NaN, return canonical NaN.
@@ -62,10 +62,10 @@ fn canonicalize_f32(v : Float) -> Float {
 }
 
 ///|
-pub extern "C" fn rint(x : Double) -> Double = "rint"
+extern "C" fn rint(x : Double) -> Double = "rint"
 
 ///|
-pub extern "C" fn rintf(x : Float) -> Float = "rintf"
+extern "C" fn rintf(x : Float) -> Float = "rintf"
 
 ///|
 /// Count the number of imported functions in a module

@@ -6,68 +6,50 @@ import(
 )
 
 // Values
-pub let canonical_nan_f32 : Float
-
-pub let canonical_nan_f64 : Double
-
 pub fn default_import_resolver() -> ImportResolver
-
-pub fn rint(Double) -> Double
-
-pub fn rintf(Float) -> Float
 
 // Errors
 pub suberror RuntimeError {
   DivisionByZero
   IntegerOverflow
   MemoryOutOfBounds
+  TableOutOfBounds
   InvalidType(String)
   FunctionNotFound(String)
-  UnimplementedInstruction(String)
   Unreachable
   FunctionNotCompiled(String)
-  UnsupportedLocalType(String)
   UnsupportedInitExpression(String)
+  StackOverflow
 }
 pub impl Show for RuntimeError
 
 // Types and methods
-pub struct CallFrame {
-  return_pc : Int
-  caller_sp : Int
-  caller_num_locals : Int
+pub(all) struct GcArray {
+  type_idx : Int
+  elements : Array[UInt64]
 }
 
-pub struct CompileBlock {
-  kind : CompileBlockKind
-  params : Array[@core.ValType]
-  results : Array[@core.ValType]
-  stack_height_at_entry : Int
-  target_pc : Int
-  pending_br_patches : Array[Int]
+pub(all) enum GcObject {
+  Struct(GcStruct)
+  Array(GcArray)
+  I31(Int)
 }
 
-pub enum CompileBlockKind {
-  BlockKind
-  LoopKind
-  IfKind
-}
-pub impl Eq for CompileBlockKind
-
-pub struct CompileCtx {
-  type_stack : Array[@core.ValType]
-  control_stack : Array[CompileBlock]
-  func_result_count : Int
+pub(all) struct GcStruct {
+  type_idx : Int
+  fields : Array[UInt64]
 }
 
 pub struct ImportResolver {
   modules : Map[Bytes, ImportResolverEntry]
 }
 pub fn ImportResolver::add_func(Self, Bytes, Bytes, ImportedFunc) -> Unit
+pub fn ImportResolver::add_funcref_wrapper(Self, Bytes, Bytes, ImportedFunc) -> Unit
 pub fn ImportResolver::add_global(Self, Bytes, Bytes, Value) -> Unit
 pub fn ImportResolver::add_memory(Self, Bytes, Bytes, ImportedMemory) -> Unit
 pub fn ImportResolver::add_table(Self, Bytes, Bytes, RuntimeTable) -> Unit
 pub fn ImportResolver::get_func(Self, Bytes, Bytes) -> ImportedFunc?
+pub fn ImportResolver::get_funcref_wrapper(Self, Bytes, Bytes) -> ImportedFunc?
 pub fn ImportResolver::get_global(Self, Bytes, Bytes) -> Value?
 pub fn ImportResolver::get_memory(Self, Bytes, Bytes) -> ImportedMemory?
 pub fn ImportResolver::get_table(Self, Bytes, Bytes) -> RuntimeTable?
@@ -86,49 +68,55 @@ pub struct ImportedMemory {
   max : UInt64?
 }
 
-pub enum MInstr {
-  WasmInstr((Runtime) -> RetCode)
-  ImmediateI32(UInt)
-  ImmediateIdx(Int)
-}
-
-pub enum RetCode {
-  OK
-  DivisionByZero
-  IntegerOverflow
-  MemoryOutOfBounds
-  Unreachable
-  InvalidType
-  FunctionNotCompiled
-  UnsupportedLocalType
-}
-pub impl Eq for RetCode
-
 pub struct Runtime {
+  ops : FixedArray[UInt64]
+  stack : FixedArray[UInt64]
+  sp : Int
+  bp : Int
+  num_locals : Int
+  pc : Int
+  status : RuntimeStatus
+  ctx : RuntimeContext
+}
+pub fn Runtime::call_by_index(Self, Int, Array[Value]) -> (Self, Array[Value]) raise RuntimeError
+pub fn Runtime::call_compiled(Self, Bytes, Array[Value]) -> (Self, Array[Value]) raise RuntimeError
+pub fn Runtime::get_globals(Self) -> Array[Value]
+pub fn Runtime::get_module(Self) -> @core.Module
+pub fn Runtime::get_tables(Self) -> Array[RuntimeTable]
+pub fn Runtime::load(@core.Module) -> Self raise RuntimeError
+pub fn Runtime::load_with_resolver(@core.Module, ImportResolver) -> Self raise RuntimeError
+pub fn Runtime::run_start(Self) -> Self raise RuntimeError
+
+pub struct RuntimeContext {
   module_ : @core.Module
-  ops : Array[MInstr]
-  stack : Array[UInt64]
-  mut sp : Int
-  mut num_locals : Int
-  mut pc : Int
-  mut running : Bool
-  call_stack : Array[CallFrame]
   memory : Array[Byte]
   memory_max : UInt64?
   globals : Array[Value]
   tables : Array[RuntimeTable]
   imported_funcs : Array[ImportedFunc]
   data_segments : Array[Array[Byte]]
+  gc_heap : Array[GcObject]
+  external_funcrefs : Array[ImportedFunc]
+  dropped_elems : Array[Bool]
+  num_imported_funcs : Int
   mut error_detail : String
 }
-pub fn Runtime::call_compiled(Self, Bytes, Array[Value]) -> Array[Value] raise RuntimeError
-pub fn Runtime::compile(Self) -> Unit raise RuntimeError
-pub fn Runtime::get_globals(Self) -> Array[Value]
-pub fn Runtime::get_module(Self) -> @core.Module
-pub fn Runtime::load(@core.Module) -> Self raise RuntimeError
-pub fn Runtime::load_with_resolver(@core.Module, ImportResolver) -> Self raise RuntimeError
+
+pub enum RuntimeStatus {
+  Running
+  Terminated
+  Trap
+  Returned
+}
+pub impl Eq for RuntimeStatus
+pub impl Show for RuntimeStatus
 
 type RuntimeTable
+pub fn RuntimeTable::add_external_funcref(Self, ImportedFunc) -> Int
+pub fn RuntimeTable::data_length(Self) -> Int
+pub fn RuntimeTable::external_funcrefs_length(Self) -> Int
+pub fn RuntimeTable::get_data(Self, Int) -> UInt64
+pub fn RuntimeTable::set_data(Self, Int, UInt64) -> Unit
 
 pub(all) enum Value {
   I32(UInt)
@@ -136,6 +124,8 @@ pub(all) enum Value {
   F32(Float)
   F64(Double)
   Ref(Int?)
+  Funcref(Int?)
+  Externref(Int?)
 }
 pub impl Eq for Value
 pub impl Show for Value

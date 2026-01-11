@@ -6,15 +6,11 @@ pub fn atomic_spec_by_name(Bytes) -> AtomicSpec?
 
 pub fn atomic_spec_by_opcode(UInt) -> AtomicSpec?
 
-pub let atomic_specs : Array[AtomicSpec]
-
 pub fn atomic_stack_effect(Bytes) -> AtomicStackEffect
 
 pub fn simd_spec_by_name(Bytes) -> SimdSpec?
 
 pub fn simd_spec_by_opcode(UInt) -> SimdSpec?
-
-pub let simd_specs : Array[SimdSpec]
 
 pub fn simd_stack_effect(Bytes) -> SimdStackEffect
 
@@ -85,6 +81,7 @@ pub(all) struct Code {
   locals : Array[ValType]
   body : Expr
   mut compiled : Int?
+  mut max_stack_height : Int
 }
 
 pub(all) enum CustomPlacement {
@@ -606,6 +603,8 @@ pub(all) enum ValType {
   Ref(RefType, Bool)
 }
 pub fn ValType::is_defaultable(Self) -> Bool
+pub fn ValType::is_ref_type(Self) -> Bool
+pub fn ValType::to_non_nullable(Self) -> Self
 pub impl Eq for ValType
 pub impl Show for ValType
 
