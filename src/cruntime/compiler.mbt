@@ -20,11 +20,17 @@ pub fn compile(mod_ : @core.Module) -> CompiledModule {
     let num_locals = num_params + code.locals.length()
     func_num_locals.push(num_locals)
 
+    // Initialize slot tracking for this function
+    ctx.init_function(num_locals)
+
     // Compile function body
     compile_expr(ctx, code.body)
 
     // Emit implicit return/end
     ctx.emit(end())
+
+    // Emit deferred resolution blocks (for br_if, br_table)
+    ctx.emit_deferred_blocks()
 
     // Record max stack (placeholder - would need proper analysis)
     func_max_stack.push(16) // TODO: compute actual max stack
@@ -52,14 +58,263 @@ pub fn compile(mod_ : @core.Module) -> CompiledModule {
 }
 
 ///|
-/// Compilation context
+/// Control frame kind
+priv enum ControlKind {
+  Block
+  Loop
+  If
+} derive(Eq)
+
+///|
+/// Control frame for tracking nested blocks
+priv struct ControlFrame {
+  kind : ControlKind
+  target_pc : Int          // For loops: start PC. For blocks/ifs: patched at end
+  arity : Int              // Number of results (for br target)
+  result_slots : Array[Int]  // Pre-allocated result slot positions
+  sp_at_entry : Int        // Stack pointer (slot) at block entry
+  pending_patches : Array[Int]  // Code positions that need patching
+}
+
+///|
+/// Deferred resolution block (emitted at end of function)
+priv struct DeferredBlock {
+  patch_pos : Int          // Position in code to patch with block address
+  src_slots : Array[Int]   // Source slot positions (captured at branch time)
+  dst_slots : Array[Int]   // Destination (pre-allocated) result slots
+  target_sp : Int          // Stack pointer after branch
+  target_label : Int       // Label depth for final jump target
+  is_loop : Bool           // Whether target is a loop (known PC) or block (needs patch)
+  loop_pc : Int            // Loop PC if is_loop is true
+}
+
+///|
+/// Compilation context with slot-based tracking (wasm3 style)
 priv struct CompileCtx {
   code : Array[UInt64]
+  control_stack : Array[ControlFrame]
+  deferred_blocks : Array[DeferredBlock]  // Resolution blocks to emit at end
+  slot_stack : Array[Int]  // Maps logical stack index to slot number
+  mut next_slot : Int      // Next available slot for allocation
+  mut num_locals : Int     // Number of locals (slots 0..num_locals-1)
 }
 
 ///|
 fn CompileCtx::new() -> CompileCtx {
-  { code: [] }
+  { code: [], control_stack: [], deferred_blocks: [], slot_stack: [], next_slot: 0, num_locals: 0 }
+}
+
+///|
+/// Initialize context for a function with given number of locals
+fn CompileCtx::init_function(self : CompileCtx, num_locals : Int) -> Unit {
+  self.slot_stack.clear()
+  self.num_locals = num_locals
+  self.next_slot = num_locals  // Operand slots start after locals
+}
+
+///|
+/// Current stack height (number of values on operand stack)
+fn CompileCtx::stack_height(self : CompileCtx) -> Int {
+  self.slot_stack.length()
+}
+
+///|
+/// Current stack pointer (next slot after top of stack)
+fn CompileCtx::current_sp(self : CompileCtx) -> Int {
+  self.next_slot
+}
+
+///|
+/// Push a value, allocating a new slot
+fn CompileCtx::push_slot(self : CompileCtx) -> Int {
+  let slot = self.next_slot
+  self.slot_stack.push(slot)
+  self.next_slot += 1
+  slot
+}
+
+///|
+/// Pop a value, returning its slot (slot can be reused)
+fn CompileCtx::pop_slot(self : CompileCtx) -> Int {
+  guard self.slot_stack.length() > 0 else { return 0 }
+  let slot = self.slot_stack.pop().unwrap()
+  // Reclaim slot for reuse if it was the last allocated
+  if slot + 1 == self.next_slot {
+    self.next_slot = slot
+  }
+  slot
+}
+
+///|
+/// Peek at top slot without popping
+fn CompileCtx::top_slot(self : CompileCtx) -> Int {
+  guard self.slot_stack.length() > 0 else { return 0 }
+  self.slot_stack[self.slot_stack.length() - 1]
+}
+
+///|
+/// Get slot at stack depth (0 = top)
+fn CompileCtx::slot_at(self : CompileCtx, depth : Int) -> Int {
+  let idx = self.slot_stack.length() - 1 - depth
+  guard idx >= 0 else { return 0 }
+  self.slot_stack[idx]
+}
+
+///|
+/// Push a control frame with pre-allocated result slots
+fn CompileCtx::push_control(
+  self : CompileCtx,
+  kind : ControlKind,
+  arity : Int,
+  target_pc : Int,
+) -> Unit {
+  // Pre-allocate result slots (wasm3 style)
+  let result_slots : Array[Int] = []
+  for _ in 0..<arity {
+    result_slots.push(self.push_slot())
+  }
+  // Pop them back - they're reserved but not "on stack" yet
+  for _ in 0..<arity {
+    ignore(self.pop_slot())
+  }
+  self.control_stack.push({
+    kind,
+    target_pc,
+    arity,
+    result_slots,
+    sp_at_entry: self.current_sp(),
+    pending_patches: [],
+  })
+}
+
+///|
+/// Pop a control frame and patch pending branches
+fn CompileCtx::pop_control(self : CompileCtx) -> Unit {
+  guard self.control_stack.length() > 0 else { return }
+  let frame = self.control_stack.pop().unwrap()
+  let end_pc = self.code.length()
+  // Patch all pending forward branches to point here
+  for patch_pos in frame.pending_patches {
+    self.code[patch_pos] = end_pc.reinterpret_as_uint().to_uint64()
+  }
+}
+
+///|
+/// Get branch target info: (target_pc, result_slots, target_sp)
+fn CompileCtx::get_branch_target(self : CompileCtx, label : Int) -> (Int, Array[Int], Int) {
+  let idx = self.control_stack.length() - 1 - label
+  guard idx >= 0 else { return (0, [], 0) }
+  let frame = self.control_stack[idx]
+  // For loops, branch back to start; for blocks, branch to end
+  // Target sp is after result slots
+  let target_sp = frame.sp_at_entry
+  (frame.target_pc, frame.result_slots, target_sp)
+}
+
+///|
+/// Register a patch location for a forward branch
+fn CompileCtx::add_patch(self : CompileCtx, label : Int, patch_pos : Int) -> Unit {
+  let idx = self.control_stack.length() - 1 - label
+  guard idx >= 0 else { return }
+  self.control_stack[idx].pending_patches.push(patch_pos)
+}
+
+///|
+/// Check if branch target is a loop (backward branch)
+fn CompileCtx::is_loop_target(self : CompileCtx, label : Int) -> Bool {
+  let idx = self.control_stack.length() - 1 - label
+  guard idx >= 0 else { return false }
+  self.control_stack[idx].kind == Loop
+}
+
+///|
+/// Get block result arity from block type
+fn get_block_arity(bt : @core.BlockType) -> Int {
+  match bt {
+    Empty => 0
+    Value(_) => 1
+    TypeIndex(_) => 1 // Simplified - would need type lookup for multi-value
+  }
+}
+
+///|
+/// Emit stack resolution: copy current top values to pre-allocated result slots, set sp
+fn CompileCtx::emit_resolution(self : CompileCtx, result_slots : Array[Int], target_sp : Int) -> Unit {
+  let arity = result_slots.length()
+  // Copy each result from current slot to pre-allocated slot
+  for i in 0..<arity {
+    let src_slot = self.slot_at(arity - 1 - i)  // Get slot of i-th result (from bottom)
+    let dst_slot = result_slots[i]
+    if src_slot != dst_slot {
+      self.emit(copy_slot())
+      self.emit_idx(src_slot)
+      self.emit_idx(dst_slot)
+    }
+  }
+  // Set sp to target position
+  self.emit(set_sp())
+  self.emit_idx(target_sp)
+}
+
+///|
+/// Capture current slot positions for results
+fn CompileCtx::capture_result_slots(self : CompileCtx, arity : Int) -> Array[Int] {
+  let slots : Array[Int] = []
+  for i in 0..<arity {
+    slots.push(self.slot_at(arity - 1 - i))
+  }
+  slots
+}
+
+///|
+/// Add a deferred resolution block
+fn CompileCtx::defer_resolution(
+  self : CompileCtx,
+  patch_pos : Int,
+  src_slots : Array[Int],
+  dst_slots : Array[Int],
+  target_sp : Int,
+  target_label : Int,
+  is_loop : Bool,
+  loop_pc : Int,
+) -> Unit {
+  self.deferred_blocks.push({ patch_pos, src_slots, dst_slots, target_sp, target_label, is_loop, loop_pc })
+}
+
+///|
+/// Emit all deferred resolution blocks (call at end of function)
+fn CompileCtx::emit_deferred_blocks(self : CompileCtx) -> Unit {
+  for block in self.deferred_blocks {
+    // Patch the reference to point here
+    let block_pc = self.code.length()
+    self.code[block.patch_pos] = block_pc.reinterpret_as_uint().to_uint64()
+
+    // Emit resolution code: copy from captured src slots to dst slots
+    for i in 0..<block.src_slots.length() {
+      let src_slot = block.src_slots[i]
+      let dst_slot = block.dst_slots[i]
+      if src_slot != dst_slot {
+        self.emit(copy_slot())
+        self.emit_idx(src_slot)
+        self.emit_idx(dst_slot)
+      }
+    }
+    // Set sp to target position
+    self.emit(set_sp())
+    self.emit_idx(block.target_sp)
+
+    // Emit final jump
+    self.emit(br())
+    if block.is_loop {
+      self.emit_idx(block.loop_pc)
+    } else {
+      // Need to patch this to block end - add to pending patches
+      let patch_pos = self.code.length()
+      self.emit_idx(0)
+      self.add_patch(block.target_label, patch_pos)
+    }
+  }
+  self.deferred_blocks.clear()
 }
 
 ///|
@@ -302,17 +557,150 @@ fn compile_instr(ctx : CompileCtx, instr : @core.Instr) -> Unit {
     I64Extend32S => ctx.emit(i64_extend32_s())
 
     // Stack operations
-    Drop => ctx.emit(drop())
-    Select(_) => ctx.emit(select())
+    Drop => {
+      ctx.emit(drop())
+      ignore(ctx.pop_slot())
+    }
+    Select(_) => {
+      ctx.emit(select())
+      ignore(ctx.pop_slot()) // condition
+      ignore(ctx.pop_slot()) // val2
+      // val1 stays, result goes to new slot
+      ignore(ctx.pop_slot())
+      ignore(ctx.push_slot())
+    }
 
-    // Block structures - TODO: need proper control flow handling
-    Block(_, body) => compile_expr(ctx, { instrs: body })
-    Loop(_, body) => compile_expr(ctx, { instrs: body })
-    If(_, then_body, else_body) => {
-      // Simplified: just compile both branches sequentially for now
-      // Real implementation needs branch handling
+    // Block structures
+    Block(bt, body) => {
+      let arity = get_block_arity(bt)
+      ctx.push_control(Block, arity, 0) // target_pc will be patched at end
+      compile_expr(ctx, { instrs: body })
+      // At block end, copy results to pre-allocated slots
+      let frame = ctx.control_stack[ctx.control_stack.length() - 1]
+      ctx.emit_resolution(frame.result_slots, frame.sp_at_entry)
+      ctx.pop_control()
+      // Push result slots back onto logical stack
+      for slot in frame.result_slots {
+        ctx.slot_stack.push(slot)
+      }
+    }
+    Loop(bt, body) => {
+      let arity = get_block_arity(bt)
+      let loop_start = ctx.code.length()
+      ctx.push_control(Loop, arity, loop_start)
+      compile_expr(ctx, { instrs: body })
+      // Loop falls through (no resolution needed at end)
+      let frame = ctx.control_stack[ctx.control_stack.length() - 1]
+      ctx.pop_control()
+      // Push result slots back onto logical stack
+      for slot in frame.result_slots {
+        ctx.slot_stack.push(slot)
+      }
+    }
+    If(bt, then_body, else_body) => {
+      ignore(ctx.pop_slot()) // Consume condition
+      let arity = get_block_arity(bt)
+      ctx.emit(wasm_if())
+      let else_patch = ctx.code.length()
+      ctx.emit_idx(0) // Placeholder for else_pc
+      ctx.push_control(If, arity, 0)
+      let frame = ctx.control_stack[ctx.control_stack.length() - 1]
+      // Compile then branch
       compile_expr(ctx, { instrs: then_body })
-      compile_expr(ctx, { instrs: else_body })
+      // Copy results to pre-allocated slots
+      ctx.emit_resolution(frame.result_slots, frame.sp_at_entry)
+      if else_body.length() > 0 {
+        // Emit branch to skip else
+        ctx.emit(br())
+        let end_patch = ctx.code.length()
+        ctx.emit_idx(0) // Placeholder for end_pc
+        // Patch else_pc to here
+        ctx.code[else_patch] = ctx.code.length().reinterpret_as_uint().to_uint64()
+        // Reset slot state for else branch
+        ctx.next_slot = frame.sp_at_entry
+        ctx.slot_stack.clear()
+        // Compile else branch
+        compile_expr(ctx, { instrs: else_body })
+        // Copy results to pre-allocated slots
+        ctx.emit_resolution(frame.result_slots, frame.sp_at_entry)
+        // Patch end_pc
+        ctx.code[end_patch] = ctx.code.length().reinterpret_as_uint().to_uint64()
+      } else {
+        // No else - patch else_pc to end
+        ctx.code[else_patch] = ctx.code.length().reinterpret_as_uint().to_uint64()
+      }
+      ctx.pop_control()
+      // Push result slots back onto logical stack
+      for slot in frame.result_slots {
+        ctx.slot_stack.push(slot)
+      }
+    }
+
+    // Branches - emit resolution inline for br, defer for br_if/br_table
+    Br(label) => {
+      let label_int = label.reinterpret_as_int()
+      let (target_pc, result_slots, target_sp) = ctx.get_branch_target(label_int)
+      let arity = result_slots.length()
+      // Emit resolution code inline
+      ctx.emit_resolution(result_slots, target_sp)
+      // Emit simple jump
+      ctx.emit(br())
+      if ctx.is_loop_target(label_int) {
+        ctx.emit_idx(target_pc)
+      } else {
+        let patch_pos = ctx.code.length()
+        ctx.emit_idx(0) // Placeholder
+        ctx.add_patch(label_int, patch_pos)
+      }
+      // Pop consumed values from logical stack
+      for _ in 0..<arity {
+        ignore(ctx.pop_slot())
+      }
+    }
+    BrIf(label) => {
+      ignore(ctx.pop_slot()) // Consume condition
+      let label_int = label.reinterpret_as_int()
+      let (target_pc, result_slots, target_sp) = ctx.get_branch_target(label_int)
+      let arity = result_slots.length()
+      // Capture current slot positions for results
+      let src_slots = ctx.capture_result_slots(arity)
+      // Emit conditional branch: taken goes to deferred block, not-taken continues
+      ctx.emit(br_if())
+      let taken_patch = ctx.code.length()
+      ctx.emit_idx(0) // Placeholder for taken path (deferred block)
+      let not_taken_pc = ctx.code.length() + 1 // Next instruction after this
+      ctx.emit_idx(not_taken_pc)
+      // Defer the resolution block
+      ctx.defer_resolution(taken_patch, src_slots, result_slots, target_sp, label_int, ctx.is_loop_target(label_int), target_pc)
+    }
+    BrTable(labels, default_label) => {
+      ignore(ctx.pop_slot()) // Consume index
+      // Get arity from default label
+      let default_int = default_label.reinterpret_as_int()
+      let (_, default_result_slots, _) = ctx.get_branch_target(default_int)
+      let arity = default_result_slots.length()
+      // Capture current slot positions for results
+      let src_slots = ctx.capture_result_slots(arity)
+      ctx.emit(br_table())
+      ctx.emit_idx(labels.length())
+      // Emit placeholders for each entry (including default)
+      let patches : Array[Int] = []
+      for _ in labels {
+        let patch_pos = ctx.code.length()
+        ctx.emit_idx(0)
+        patches.push(patch_pos)
+      }
+      let default_patch = ctx.code.length()
+      ctx.emit_idx(0)
+      patches.push(default_patch)
+      // Defer resolution blocks for each entry
+      for i, label in labels {
+        let label_int = label.reinterpret_as_int()
+        let (target_pc, result_slots, target_sp) = ctx.get_branch_target(label_int)
+        ctx.defer_resolution(patches[i], src_slots, result_slots, target_sp, label_int, ctx.is_loop_target(label_int), target_pc)
+      }
+      let (target_pc, result_slots, target_sp) = ctx.get_branch_target(default_int)
+      ctx.defer_resolution(patches[labels.length()], src_slots, result_slots, target_sp, default_int, ctx.is_loop_target(default_int), target_pc)
     }
 
     // Placeholder for unimplemented instructions

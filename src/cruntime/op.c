@@ -22,6 +22,7 @@ typedef struct {
     uint64_t* pc;      // Program counter into code array
     uint64_t* sp;      // Stack pointer (points to next push slot)
     uint64_t* fp;      // Frame pointer (start of locals)
+    uint64_t* code;    // Base of code array (for computing branch targets)
     uint8_t* mem;      // Linear memory
 } CRuntime;
 
@@ -62,6 +63,7 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     crt.pc = code + entry;
     crt.fp = stack;
     crt.sp = stack + num_locals;  // Operand stack starts after locals
+    crt.code = code;              // Base pointer for branch target computation
     crt.mem = NULL;
 
     // Start execution by calling first opcode - returns trap code
@@ -98,6 +100,74 @@ int op_wasm_return(CRuntime* crt) {
     return TRAP_NONE;
 }
 DEFINE_OP(wasm_return)
+
+// Copy between absolute slot positions (wasm3 style)
+// fp[dst_slot] = fp[src_slot]
+int op_copy_slot(CRuntime* crt) {
+    int src_slot = (int)*crt->pc++;
+    int dst_slot = (int)*crt->pc++;
+    crt->fp[dst_slot] = crt->fp[src_slot];
+    NEXT();
+}
+DEFINE_OP(copy_slot)
+
+// Set stack pointer to absolute slot position
+int op_set_sp(CRuntime* crt) {
+    int slot = (int)*crt->pc++;
+    crt->sp = crt->fp + slot;
+    NEXT();
+}
+DEFINE_OP(set_sp)
+
+// Unconditional branch - just jump (stack already adjusted by preceding ops)
+// Immediate: target_idx
+int op_br(CRuntime* crt) {
+    int target_idx = (int)*crt->pc++;
+    crt->pc = crt->code + target_idx;
+    NEXT();
+}
+DEFINE_OP(br)
+
+// Conditional branch
+// For taken branch: jumps to a resolution block that handles stack + final jump
+// Immediates: taken_idx, not_taken_idx
+int op_br_if(CRuntime* crt) {
+    int taken_idx = (int)*crt->pc++;
+    int not_taken_idx = (int)*crt->pc++;
+    int32_t cond = (int32_t)*--crt->sp;
+    crt->pc = crt->code + (cond ? taken_idx : not_taken_idx);
+    NEXT();
+}
+DEFINE_OP(br_if)
+
+// If statement
+// Immediate: else_idx (code index for else branch)
+int op_wasm_if(CRuntime* crt) {
+    int else_idx = (int)*crt->pc++;
+    int32_t cond = (int32_t)*--crt->sp;
+    if (!cond) {
+        crt->pc = crt->code + else_idx;
+    }
+    NEXT();
+}
+DEFINE_OP(wasm_if)
+
+// Branch table - each entry points to a resolution block
+// Immediates: num_labels, then (num_labels + 1) target indices
+int op_br_table(CRuntime* crt) {
+    int num_labels = (int)*crt->pc++;
+    int32_t index = (int32_t)*--crt->sp;
+
+    // Clamp index to default (last entry)
+    if (index < 0 || index >= num_labels) {
+        index = num_labels;
+    }
+
+    int target_idx = (int)crt->pc[index];
+    crt->pc = crt->code + target_idx;
+    NEXT();
+}
+DEFINE_OP(br_table)
 
 // Constants
 

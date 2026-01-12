@@ -25,6 +25,24 @@ extern "C" fn wasm_return() -> UInt64 = "wasm_return"
 ///|
 extern "C" fn end() -> UInt64 = "end"
 
+///|
+extern "C" fn copy_slot() -> UInt64 = "copy_slot"
+
+///|
+extern "C" fn set_sp() -> UInt64 = "set_sp"
+
+///|
+extern "C" fn br() -> UInt64 = "br"
+
+///|
+extern "C" fn br_if() -> UInt64 = "br_if"
+
+///|
+extern "C" fn wasm_if() -> UInt64 = "wasm_if"
+
+///|
+extern "C" fn br_table() -> UInt64 = "br_table"
+
 // Constants
 
 ///|
