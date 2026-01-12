@@ -723,3 +723,103 @@ async test "i32.wast (cruntime)" {
 async test "call.wast (cruntime)" {
   run_test_harness("", "call.wast", runtime_type=CRuntime)
 }
+
+///|
+async test "i64.wast (cruntime)" {
+  run_test_harness("", "i64.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "f32_cmp.wast (cruntime)" {
+  run_test_harness("", "f32_cmp.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "f64_cmp.wast (cruntime)" {
+  run_test_harness("", "f64_cmp.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "f32_bitwise.wast (cruntime)" {
+  run_test_harness("", "f32_bitwise.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "f64_bitwise.wast (cruntime)" {
+  run_test_harness("", "f64_bitwise.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "nop.wast (cruntime)" {
+  run_test_harness("", "nop.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "local_get.wast (cruntime)" {
+  run_test_harness("", "local_get.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "local_set.wast (cruntime)" {
+  run_test_harness("", "local_set.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "local_tee.wast (cruntime)" {
+  run_test_harness("", "local_tee.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "return.wast (cruntime)" {
+  run_test_harness("", "return.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "stack.wast (cruntime)" {
+  run_test_harness("", "stack.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "forward.wast (cruntime)" {
+  run_test_harness("", "forward.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "unreachable.wast (cruntime)" {
+  run_test_harness("", "unreachable.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "type.wast (cruntime)" {
+  run_test_harness("", "type.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "int_exprs.wast (cruntime)" {
+  run_test_harness("", "int_exprs.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "int_literals.wast (cruntime)" {
+  run_test_harness("", "int_literals.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "float_literals.wast (cruntime)" {
+  run_test_harness("", "float_literals.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "float_misc.wast (cruntime)" {
+  run_test_harness("", "float_misc.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "const.wast (cruntime)" {
+  run_test_harness("", "const.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "skip-stack-guard-page.wast (cruntime)" {
+  run_test_harness("", "skip-stack-guard-page.wast", runtime_type=CRuntime)
+}
