@@ -695,3 +695,58 @@ async test "bulk-memory/table_fill.wast" {
 async test "bulk-memory/table_init.wast" {
   run_test_harness("bulk-memory/", "table_init.wast")
 }
+
+// =============================================================================
+// C Runtime Tests
+// =============================================================================
+
+///|
+/// Run test harness with C runtime
+async fn run_test_harness_cruntime(subdir : String, filename : String) -> Unit {
+  let path = "test/reference_tests/\{subdir}"
+  let display_name = if subdir.length() > 0 {
+    "\{subdir}\{filename} (cruntime)"
+  } else {
+    "\{filename} (cruntime)"
+  }
+  let (file_failures, file_skipped) = process_wast_file_cruntime(path, filename)
+  if file_failures.length() > 0 {
+    let grouped = group_failures_by_type(file_failures)
+    println(
+      "\n╔══════════════════════════════════════════════════════════════════╗",
+    )
+    println("║ TEST FAILURES: \{display_name}")
+    println(
+      "╚══════════════════════════════════════════════════════════════════╝",
+    )
+    for test_type, failures in grouped {
+      println(
+        "\n┌─ \{test_type} (\{failures.length()} failures) ─────────────────────",
+      )
+      for failure in failures {
+        println(format_failure_detail(failure))
+      }
+      println(
+        "└────────────────────────────────────────────────────────────────",
+      )
+    }
+    println(
+      "\n╔══════════════════════════════════════════════════════════════════╗",
+    )
+    println(
+      "║ SUMMARY: \{file_failures.length()} failure(s), \{file_skipped} skipped",
+    )
+    println(
+      "╚══════════════════════════════════════════════════════════════════╝\n",
+    )
+    fail("\{file_failures.length()} failure(s) in \{display_name}")
+  }
+  if file_skipped > 0 {
+    println("Skipped \{file_skipped} tests in \{display_name}")
+  }
+}
+
+///|
+async test "i32.wast (cruntime)" {
+  run_test_harness_cruntime("", "i32.wast")
+}

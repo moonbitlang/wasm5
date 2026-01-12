@@ -15,7 +15,7 @@ pub struct CRuntime {
   module_ : @core.Module
   compiled : CompiledModule
 }
-pub fn CRuntime::call(Self, Bytes, Array[Value]) -> Array[Value]
+pub fn CRuntime::call_compiled(Self, Bytes, Array[@core.Value]) -> Array[@core.Value]
 pub fn CRuntime::load(@core.Module) -> Self
 pub fn CRuntime::run_start(Self) -> Unit
 
@@ -26,18 +26,6 @@ pub struct CompiledModule {
   func_max_stack : FixedArray[Int]
   exports : Map[String, Int]
 }
-
-pub(all) enum Value {
-  I32(UInt)
-  I64(UInt64)
-  F32(Float)
-  F64(Double)
-  Ref(Int?)
-  FuncRef(Int?)
-  ExternRef(Int?)
-}
-pub impl Eq for Value
-pub impl Show for Value
 
 // Type aliases
 

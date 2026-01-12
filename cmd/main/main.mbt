@@ -34,7 +34,7 @@ async fn run_wasm_c(wasm_path : String, export_name : String) -> Unit {
   let runtime = @wasm5_cruntime.CRuntime::load(module_)
   runtime.run_start()
   println("Calling '\{export_name}'...")
-  let results = runtime.call(@encoding/utf8.encode(export_name), [])
+  let results = runtime.call_compiled(@encoding/utf8.encode(export_name), [])
   if results.length() > 0 {
     println("Result: \{results}")
   } else {

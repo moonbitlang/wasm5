@@ -6,17 +6,10 @@ pub struct CRuntime {
   // TODO: memory, globals
 }
 
+// Import Value type from core
+
 ///|
-/// Runtime value types.
-pub(all) enum Value {
-  I32(UInt)
-  I64(UInt64)
-  F32(Float)
-  F64(Double)
-  Ref(Int?)
-  FuncRef(Int?)
-  ExternRef(Int?)
-} derive(Eq, Show)
+using @core {type Value}
 
 ///|
 /// Load a module and compile it for C runtime execution.
@@ -45,7 +38,7 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit {
 
 ///|
 /// Call an exported function by name.
-pub fn CRuntime::call(
+pub fn CRuntime::call_compiled(
   self : CRuntime,
   name : Bytes,
   args : Array[Value],
@@ -95,32 +88,32 @@ fn value_to_u64(v : Value) -> UInt64 {
     F64(f) => f.reinterpret_as_uint64()
     Ref(Some(n)) => n.reinterpret_as_uint().to_uint64()
     Ref(None) => 0xFFFFFFFF_FFFFFFFFUL
-    FuncRef(Some(n)) => n.reinterpret_as_uint().to_uint64()
-    FuncRef(None) => 0xFFFFFFFF_FFFFFFFFUL
-    ExternRef(Some(n)) => n.reinterpret_as_uint().to_uint64()
-    ExternRef(None) => 0xFFFFFFFF_FFFFFFFFUL
+    Funcref(Some(n)) => n.reinterpret_as_uint().to_uint64()
+    Funcref(None) => 0xFFFFFFFF_FFFFFFFFUL
+    Externref(Some(n)) => n.reinterpret_as_uint().to_uint64()
+    Externref(None) => 0xFFFFFFFF_FFFFFFFFUL
   }
 }
 
 ///|
 fn u64_to_value(raw : UInt64, ty : @core.ValType) -> Value {
   match ty {
-    I32 => I32(raw.to_uint())
-    I64 => I64(raw)
-    F32 => F32(Float::reinterpret_from_uint(raw.to_uint()))
-    F64 => F64(raw.reinterpret_as_double())
+    I32 => Value::I32(raw.to_uint())
+    I64 => Value::I64(raw)
+    F32 => Value::F32(Float::reinterpret_from_uint(raw.to_uint()))
+    F64 => Value::F64(raw.reinterpret_as_double())
     FuncRef =>
       if raw == 0xFFFFFFFF_FFFFFFFFUL {
-        FuncRef(None)
+        Value::Funcref(None)
       } else {
-        FuncRef(Some(raw.to_uint().reinterpret_as_int()))
+        Value::Funcref(Some(raw.to_uint().reinterpret_as_int()))
       }
     ExternRef =>
       if raw == 0xFFFFFFFF_FFFFFFFFUL {
-        ExternRef(None)
+        Value::Externref(None)
       } else {
-        ExternRef(Some(raw.to_uint().reinterpret_as_int()))
+        Value::Externref(Some(raw.to_uint().reinterpret_as_int()))
       }
-    _ => I64(raw)
+    _ => Value::I64(raw)
   }
 }

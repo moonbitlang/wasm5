@@ -21,6 +21,46 @@ pub impl Show for TestFailure with output(self, logger) {
 }
 
 ///|
+/// Trait for WebAssembly runtime executors.
+/// Both the MoonBit interpreter and C runtime implement this trait.
+trait Executor {
+  run_start(Self) -> Unit raise Error
+  call_compiled(Self, Bytes, Array[@wasm5_runtime.Value]) -> Array[
+    @wasm5_runtime.Value,
+  ] raise Error
+}
+
+///|
+/// Implement Executor for MoonBit Runtime
+impl Executor for @wasm5_runtime.Runtime with run_start(self) -> Unit raise Error {
+  self.run_start()
+}
+
+///|
+impl Executor for @wasm5_runtime.Runtime with call_compiled(
+  self,
+  name : Bytes,
+  args : Array[@wasm5_runtime.Value],
+) -> Array[@wasm5_runtime.Value] raise Error {
+  self.call_compiled(name, args)
+}
+
+///|
+/// Implement Executor for C Runtime
+impl Executor for @wasm5_cruntime.CRuntime with run_start(self) -> Unit raise Error {
+  self.run_start()
+}
+
+///|
+impl Executor for @wasm5_cruntime.CRuntime with call_compiled(
+  self,
+  name : Bytes,
+  args : Array[@wasm5_runtime.Value],
+) -> Array[@wasm5_runtime.Value] raise Error {
+  self.call_compiled(name, args)
+}
+
+///|
 /// Registered module entry for cross-module imports
 priv struct RegisteredModule {
   runtime : @wasm5_runtime.Runtime
@@ -1568,6 +1608,233 @@ pub async fn process_wast_file(
   @fs.rmdir(target_dir, recursive=true)
   (test_result, skipped)
 }
+
+// =============================================================================
+// Generic Executor Test Support (using Executor trait)
+// =============================================================================
+
+///|
+/// Simplified test context using Executor trait object
+priv struct ExecutorTestContext {
+  dir : String
+  source_file : String
+  failures : Array[TestFailure]
+  mut executor : &Executor?
+  mut skipped_count : Int
+}
+
+///|
+fn ExecutorTestContext::fail(
+  self : ExecutorTestContext,
+  line : Int,
+  test_type : String,
+  message : String,
+) -> Unit {
+  // Skip whitelisted tests
+  for entry in cruntime_whitelisted_tests {
+    if entry.0 == self.source_file && entry.1.contains(line) {
+      self.skipped_count += 1
+      return
+    }
+  }
+  self.failures.push({ line, test_type, message, source_file: self.source_file })
+}
+
+///|
+/// Load and compile a module, returning an Executor trait object
+async fn parse_and_compile_executor(
+  dir : String,
+  file_name : String,
+) -> &Executor {
+  let file = @fs.open(dir + file_name, mode=ReadOnly)
+  defer file.close()
+  let content = file.read_all().binary()
+  let module_ = @wasm5_parse.parse(content)
+  // Validate the module first
+  @wasm5_validate.validate_module(module_)
+  let cruntime = @wasm5_cruntime.CRuntime::load(module_)
+  cruntime.run_start()
+  cruntime
+}
+
+///|
+/// Handle module loading using Executor trait
+async fn handle_module_executor(
+  ctx : ExecutorTestContext,
+  filename : String,
+  line : Int,
+) -> Unit {
+  try {
+    let executor = parse_and_compile_executor(ctx.dir, filename)
+    ctx.executor = Some(executor)
+  } catch {
+    e => ctx.fail(line, "module", "Error loading module: \{e}")
+  }
+}
+
+///|
+/// Handle assert_return using Executor trait
+fn handle_assert_return_executor(
+  ctx : ExecutorTestContext,
+  fn_name : String,
+  args : Array[Json],
+  expected : Array[Json],
+  line : Int,
+) -> Unit {
+  try {
+    let runtime_args = parse_args(args)
+    guard ctx.executor is Some(executor) else {
+      ctx.fail(
+        line,
+        "assert_return",
+        "[\{fn_name}] no module loaded (previous module failed to load)",
+      )
+      return
+    }
+    let results = executor.call_compiled(
+      @encoding/utf8.encode(fn_name),
+      runtime_args,
+    )
+    // Check result count
+    if expected.length() != results.length() {
+      ctx.fail(
+        line,
+        "assert_return",
+        "[\{fn_name}] expected \{expected.length()} results, got \{results.length()}",
+      )
+      return
+    }
+    // Validate each result
+    for idx in 0..<expected.length() {
+      let expected_value = parse_expected_value(expected[idx])
+      if not(values_match(results[idx], expected_value)) {
+        ctx.fail(
+          line,
+          "assert_return",
+          "[\{fn_name}] result \{idx}: expected \{format_expected_with_bits(expected_value)}, got \{format_value_with_bits(results[idx])}",
+        )
+      }
+    }
+  } catch {
+    e => ctx.fail(line, "assert_return", "[\{fn_name}] error: \{e}")
+  }
+}
+
+///|
+/// Process a single command using Executor trait (simplified - only module and assert_return)
+async fn process_command_executor(
+  ctx : ExecutorTestContext,
+  cmd : Json,
+) -> Unit {
+  match cmd {
+    // Load module
+    { "type": "module", "filename": String(filename), "line"? : line, .. } => {
+      let line = if line is Some(Number(n, ..)) { n.to_int() } else { -1 }
+      handle_module_executor(ctx, filename, line)
+    }
+    // Assert function returns expected value (invoke action)
+    {
+      "type": "assert_return",
+      "line": Number(line, ..),
+      "action": {
+        "type": "invoke",
+        "field": String(fn_name),
+        "args": Array(args),
+        ..
+      },
+      "expected": Array(expected),
+      ..
+    } =>
+      handle_assert_return_executor(ctx, fn_name, args, expected, line.to_int())
+    // Skip all other command types
+    _ => ()
+  }
+}
+
+///|
+/// Process test metadata using Executor trait
+async fn process_meta_executor(
+  dir : String,
+  json_file : String,
+  failures : Array[TestFailure],
+  source_file : String,
+) -> Int {
+  let file = @fs.open(dir + json_file, mode=ReadOnly)
+  defer file.close()
+  let meta = file.read_all().json()
+  match meta {
+    { "commands": Array(commands), .. } => {
+      let ctx = ExecutorTestContext::{
+        dir,
+        source_file,
+        failures,
+        executor: None,
+        skipped_count: 0,
+      }
+      for cmd in commands {
+        process_command_executor(ctx, cmd)
+      }
+      ctx.skipped_count
+    }
+    _ => {
+      failures.push({
+        line: -1,
+        test_type: "meta",
+        message: "invalid test metadata format",
+        source_file,
+      })
+      0
+    }
+  }
+}
+
+///|
+/// Process a wast file using C runtime (via Executor trait)
+pub async fn process_wast_file_cruntime(
+  wast_dir : String,
+  wast_file : String,
+) -> (Array[TestFailure], Int) {
+  guard wast_file.strip_suffix(".wast") is Some(base_name) else {
+    abort("Invalid wast file name: \{wast_file}")
+  }
+  let json_file = (base_name + ".json").to_string()
+  let target_dir = wast_dir + base_name.to_string() + "/"
+  if not(@fs.exists(target_dir)) {
+    @fs.mkdir(target_dir, permission=0o755)
+  }
+  // execute: wasm-tools wast2json xxx.wast -o xxx/xxx.json --wasm-dir xxx/
+  let test_result : Array[TestFailure] = []
+  let exit_code = @process.run("wasm-tools", [
+    "wast2json",
+    wast_dir + wast_file,
+    "-o",
+    target_dir + json_file,
+    "--wasm-dir",
+    target_dir,
+  ])
+  if exit_code != 0 {
+    // wast2json failed - record as test failure and skip this file
+    test_result.push({
+      line: -1,
+      test_type: "wast2json",
+      message: "Failed to convert to JSON (unsupported wast syntax)",
+      source_file: wast_file,
+    })
+    if @fs.exists(target_dir) {
+      @fs.rmdir(target_dir, recursive=true)
+    }
+    return (test_result, 0)
+  }
+  let skipped = process_meta_executor(
+    target_dir, json_file, test_result, wast_file,
+  )
+  @fs.rmdir(target_dir, recursive=true)
+  (test_result, skipped)
+}
+
+///|
+/// Whitelist for C runtime tests (some tests may have features not yet implemented)
+let cruntime_whitelisted_tests : Array[(String, Set[Int])] = []
 
 ///|
 /// Whitelist of individual tests to skip (file, line)
