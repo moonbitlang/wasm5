@@ -128,7 +128,6 @@ int op_call(CRuntime* crt) {
     // Restore caller state
     crt->fp = caller_fp;
     crt->pc = caller_pc;
-    // sp is already correct - callee left results in the right slots
 
     if (trap != TRAP_NONE) {
         return trap;
@@ -138,11 +137,15 @@ int op_call(CRuntime* crt) {
 }
 DEFINE_OP(call)
 
-// Function entry - zeros non-arg locals
-// Immediate: num_locals_to_zero
+// Function entry - set sp and zero non-arg locals
+// Immediates: num_locals (for sp), first_local_to_zero, num_to_zero
 int op_entry(CRuntime* crt) {
+    int num_locals = (int)*crt->pc++;
     int first_local = (int)*crt->pc++;
     int num_to_zero = (int)*crt->pc++;
+    // Set sp to start after locals
+    crt->sp = crt->fp + num_locals;
+    // Zero non-arg locals
     for (int i = 0; i < num_to_zero; i++) {
         crt->fp[first_local + i] = 0;
     }

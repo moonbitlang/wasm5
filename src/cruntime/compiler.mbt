@@ -55,12 +55,12 @@ pub fn compile(mod_ : @core.Module) -> CompiledModule {
     // Initialize slot tracking for this function
     ctx.init_function(num_locals, num_results)
 
-    // Emit entry instruction to zero non-arg locals (wasm3 style)
-    if num_non_arg_locals > 0 {
-      ctx.emit(entry())
-      ctx.emit_idx(num_params) // first_local: index of first non-arg local
-      ctx.emit_idx(num_non_arg_locals) // num_to_zero
-    }
+    // Always emit entry instruction to set sp and zero non-arg locals
+    // entry(num_locals, first_local_to_zero, num_to_zero)
+    ctx.emit(entry())
+    ctx.emit_idx(num_locals) // sp = fp + num_locals
+    ctx.emit_idx(num_params) // first_local: index of first non-arg local
+    ctx.emit_idx(num_non_arg_locals) // num_to_zero
 
     // Compile function body
     compile_expr(ctx, mod_info, code.body)
@@ -458,32 +458,38 @@ fn compile_instr(
       ctx.emit_idx(ctx.num_results)
     }
 
-    // Constants
+    // Constants - push to slot stack
     I32Const(n) => {
       ctx.emit(i32_const())
       ctx.emit_i32(n)
+      ignore(ctx.push_slot())
     }
     I64Const(n) => {
       ctx.emit(i64_const())
       ctx.emit_i64(n)
+      ignore(ctx.push_slot())
     }
     F32Const(f) => {
       ctx.emit(f32_const())
       ctx.emit_i64(f.reinterpret_as_uint().to_uint64())
+      ignore(ctx.push_slot())
     }
     F64Const(f) => {
       ctx.emit(f64_const())
       ctx.emit_i64(f.reinterpret_as_uint64())
+      ignore(ctx.push_slot())
     }
 
     // Locals
     LocalGet(idx) => {
       ctx.emit(local_get())
       ctx.emit_idx(idx.reinterpret_as_int())
+      ignore(ctx.push_slot())
     }
     LocalSet(idx) => {
       ctx.emit(local_set())
       ctx.emit_idx(idx.reinterpret_as_int())
+      ignore(ctx.pop_slot())
     }
     LocalTee(idx) => {
       ctx.emit(local_tee())
@@ -494,28 +500,75 @@ fn compile_instr(
     GlobalGet(idx) => {
       ctx.emit(global_get())
       ctx.emit_idx(idx.reinterpret_as_int())
+      ignore(ctx.push_slot())
     }
     GlobalSet(idx) => {
       ctx.emit(global_set())
       ctx.emit_idx(idx.reinterpret_as_int())
+      ignore(ctx.pop_slot())
     }
 
-    // i32 arithmetic
-    I32Add => ctx.emit(i32_add())
-    I32Sub => ctx.emit(i32_sub())
-    I32Mul => ctx.emit(i32_mul())
-    I32DivS => ctx.emit(i32_div_s())
-    I32DivU => ctx.emit(i32_div_u())
-    I32RemS => ctx.emit(i32_rem_s())
-    I32RemU => ctx.emit(i32_rem_u())
-    I32And => ctx.emit(i32_and())
-    I32Or => ctx.emit(i32_or())
-    I32Xor => ctx.emit(i32_xor())
-    I32Shl => ctx.emit(i32_shl())
-    I32ShrS => ctx.emit(i32_shr_s())
-    I32ShrU => ctx.emit(i32_shr_u())
-    I32Rotl => ctx.emit(i32_rotl())
-    I32Rotr => ctx.emit(i32_rotr())
+    // i32 arithmetic (binary ops: pop 2, push 1 = net pop 1)
+    I32Add => {
+      ctx.emit(i32_add())
+      ignore(ctx.pop_slot())
+    }
+    I32Sub => {
+      ctx.emit(i32_sub())
+      ignore(ctx.pop_slot())
+    }
+    I32Mul => {
+      ctx.emit(i32_mul())
+      ignore(ctx.pop_slot())
+    }
+    I32DivS => {
+      ctx.emit(i32_div_s())
+      ignore(ctx.pop_slot())
+    }
+    I32DivU => {
+      ctx.emit(i32_div_u())
+      ignore(ctx.pop_slot())
+    }
+    I32RemS => {
+      ctx.emit(i32_rem_s())
+      ignore(ctx.pop_slot())
+    }
+    I32RemU => {
+      ctx.emit(i32_rem_u())
+      ignore(ctx.pop_slot())
+    }
+    I32And => {
+      ctx.emit(i32_and())
+      ignore(ctx.pop_slot())
+    }
+    I32Or => {
+      ctx.emit(i32_or())
+      ignore(ctx.pop_slot())
+    }
+    I32Xor => {
+      ctx.emit(i32_xor())
+      ignore(ctx.pop_slot())
+    }
+    I32Shl => {
+      ctx.emit(i32_shl())
+      ignore(ctx.pop_slot())
+    }
+    I32ShrS => {
+      ctx.emit(i32_shr_s())
+      ignore(ctx.pop_slot())
+    }
+    I32ShrU => {
+      ctx.emit(i32_shr_u())
+      ignore(ctx.pop_slot())
+    }
+    I32Rotl => {
+      ctx.emit(i32_rotl())
+      ignore(ctx.pop_slot())
+    }
+    I32Rotr => {
+      ctx.emit(i32_rotr())
+      ignore(ctx.pop_slot())
+    }
 
     // i32 comparison
     I32Eqz => ctx.emit(i32_eqz())
@@ -890,9 +943,12 @@ fn compile_instr(
           ctx.slot_stack.push(frame_offset + i)
         }
         // Update next_slot to be after results
-        if num_results > 0 {
-          ctx.next_slot = frame_offset + num_results
-        }
+        let new_sp = frame_offset + num_results
+        ctx.next_slot = new_sp
+
+        // Reset sp after call returns (callee left sp in unknown state)
+        ctx.emit(set_sp())
+        ctx.emit_idx(new_sp)
       }
       // TODO: handle imported function calls
     }
