@@ -78,14 +78,14 @@ pub struct Runtime {
   status : RuntimeStatus
   ctx : RuntimeContext
 }
-pub fn Runtime::call_by_index(Self, Int, Array[Value]) -> (Self, Array[Value]) raise RuntimeError
-pub fn Runtime::call_compiled(Self, Bytes, Array[Value]) -> (Self, Array[Value]) raise RuntimeError
+pub fn Runtime::call_by_index(Self, Int, Array[Value]) -> Array[Value] raise RuntimeError
+pub fn Runtime::call_compiled(Self, Bytes, Array[Value]) -> Array[Value] raise RuntimeError
 pub fn Runtime::get_globals(Self) -> Array[Value]
 pub fn Runtime::get_module(Self) -> @core.Module
 pub fn Runtime::get_tables(Self) -> Array[RuntimeTable]
 pub fn Runtime::load(@core.Module) -> Self raise RuntimeError
 pub fn Runtime::load_with_resolver(@core.Module, ImportResolver) -> Self raise RuntimeError
-pub fn Runtime::run_start(Self) -> Self raise RuntimeError
+pub fn Runtime::run_start(Self) -> Unit raise RuntimeError
 
 pub struct RuntimeContext {
   module_ : @core.Module

@@ -58,8 +58,8 @@ fn make_import_call_module() -> @core.Module {
 test "runtime call compiled constant" {
   let module_ = make_const_module(42U, b"answer")
   let runtime = Runtime::load(module_)
-  let runtime = runtime.run_start()
-  let (_, results) = runtime.call_compiled(b"answer", [])
+  runtime.run_start()
+  let results = runtime.call_compiled(b"answer", [])
   assert_eq(results.length(), 1)
   assert_eq(results[0], Value::I32(42U))
 }
@@ -71,8 +71,8 @@ test "runtime call imported function" {
   let imported = ImportedFunc::new(0U, fn(_args) { [Value::I32(7U)] })
   resolver.add_func(b"m", b"f", imported)
   let runtime = Runtime::load_with_resolver(module_, resolver)
-  let runtime = runtime.run_start()
-  let (_, results) = runtime.call_compiled(b"call_imported", [])
+  runtime.run_start()
+  let results = runtime.call_compiled(b"call_imported", [])
   assert_eq(results.length(), 1)
   assert_eq(results[0], Value::I32(7U))
 }

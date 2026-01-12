@@ -36,7 +36,7 @@ test "runtime compile start function" {
   }
   let module_ = module_with([func_type], [0U], [code], [], [], Some(0U))
   let rt = Runtime::load_with_resolver(module_, ImportResolver::new())
-  let rt = rt.run_start()
+  rt.run_start()
   assert_eq(rt.ops.length() > 0, true)
   // Stack is cleared after start function execution (unified stack model)
   assert_eq(rt.sp, 0)
@@ -80,7 +80,7 @@ test "runtime call compiled imported func" {
     ImportedFunc::new(0U, fn(_args) { [Value::I32(7U)] }),
   )
   let rt = Runtime::load_with_resolver(module_, resolver)
-  let (_, results) = rt.call_compiled(b"f", [])
+  let results = rt.call_compiled(b"f", [])
   assert_eq(results, [Value::I32(7U)])
 }
 
@@ -112,7 +112,7 @@ test "runtime call compiled non func export" {
   let _ = rt.call_compiled(b"mem", []) catch {
     _ => {
       saw_error = true
-      (rt, [])
+      []
     }
   }
   assert_eq(saw_error, true)
@@ -142,7 +142,7 @@ test "runtime call compiled local errors" {
   let _ = rt_bad.call_compiled(b"bad", []) catch {
     _ => {
       saw_bad = true
-      (rt_bad, [])
+      []
     }
   }
   assert_eq(saw_bad, true)

@@ -12,8 +12,8 @@ async fn run_wasm(wasm_path : String) -> Unit {
   let wasm_bytes = @fs.read_file(wasm_path).binary()
   let module_ = @wasm5_parse.parse(wasm_bytes)
   let runtime = @wasm5_runtime.Runtime::load(module_)
-  let runtime = runtime.run_start()
-  let (_, results) = runtime.call_compiled("_start", [])
+  runtime.run_start()
+  let results = runtime.call_compiled(b"_start", [])
   if results.length() > 0 {
     println("Result: \{results}")
   }
