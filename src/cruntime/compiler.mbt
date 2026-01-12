@@ -1,39 +1,83 @@
 ///|
+/// Module info needed during compilation
+priv struct ModuleInfo {
+  mod_ : @core.Module
+  func_entries : Array[Int] // Entry points for compiled functions
+  func_num_locals : Array[Int] // Number of locals per function
+  func_num_params : Array[Int] // Number of params per function
+  func_num_results : Array[Int] // Number of results per function
+  num_imported_funcs : Int
+}
+
+///|
 /// Compile a module to threaded code for C runtime.
 pub fn compile(mod_ : @core.Module) -> CompiledModule {
   let ctx = CompileCtx::new()
   let num_imported_funcs = count_imported_funcs(mod_)
 
-  // Compile all functions
+  // Pre-compute function info
   let func_entries : Array[Int] = []
   let func_num_locals : Array[Int] = []
+  let func_num_params : Array[Int] = []
+  let func_num_results : Array[Int] = []
   let func_max_stack : Array[Int] = []
   for i, code in mod_.codes {
-    let entry = ctx.code.length()
-    func_entries.push(entry)
-
-    // Count locals (params + locals)
     let func_idx = num_imported_funcs + i
     let type_idx = mod_.funcs[func_idx].reinterpret_as_int()
     let func_type = get_func_type(mod_, type_idx)
     let num_params = func_type.params.length()
+    let num_results = func_type.results.length()
     let num_locals = num_params + code.locals.length()
+    func_num_params.push(num_params)
+    func_num_results.push(num_results)
     func_num_locals.push(num_locals)
+    func_entries.push(0) // Will be filled during compilation
+    func_max_stack.push(16) // TODO: compute actual max stack
+  }
+  let mod_info : ModuleInfo = {
+    mod_,
+    func_entries,
+    func_num_locals,
+    func_num_params,
+    func_num_results,
+    num_imported_funcs,
+  }
+
+  // Compile all functions
+  for i, code in mod_.codes {
+    let func_entry = ctx.code.length()
+    func_entries[i] = func_entry
+    let num_params = func_num_params[i]
+    let num_locals = func_num_locals[i]
+    let num_results = func_num_results[i]
+    let num_non_arg_locals = num_locals - num_params
 
     // Initialize slot tracking for this function
-    ctx.init_function(num_locals)
+    ctx.init_function(num_locals, num_results)
+
+    // Emit entry instruction to zero non-arg locals (wasm3 style)
+    if num_non_arg_locals > 0 {
+      ctx.emit(entry())
+      ctx.emit_idx(num_params) // first_local: index of first non-arg local
+      ctx.emit_idx(num_non_arg_locals) // num_to_zero
+    }
 
     // Compile function body
-    compile_expr(ctx, code.body)
+    compile_expr(ctx, mod_info, code.body)
 
-    // Emit implicit return/end
+    // Emit implicit return/end (wasm3 style: end acts like return)
     ctx.emit(end())
+    ctx.emit_idx(num_results)
 
     // Emit deferred resolution blocks (for br_if, br_table)
     ctx.emit_deferred_blocks()
+  }
 
-    // Record max stack (placeholder - would need proper analysis)
-    func_max_stack.push(16) // TODO: compute actual max stack
+  // Patch forward call targets
+  for patch in ctx.call_patches {
+    ctx.code[patch.patch_pos] = func_entries[patch.func_idx]
+      .reinterpret_as_uint()
+      .to_uint64()
   }
 
   // Collect function exports
@@ -69,23 +113,30 @@ priv enum ControlKind {
 /// Control frame for tracking nested blocks
 priv struct ControlFrame {
   kind : ControlKind
-  target_pc : Int          // For loops: start PC. For blocks/ifs: patched at end
-  arity : Int              // Number of results (for br target)
-  result_slots : Array[Int]  // Pre-allocated result slot positions
-  sp_at_entry : Int        // Stack pointer (slot) at block entry
-  pending_patches : Array[Int]  // Code positions that need patching
+  target_pc : Int // For loops: start PC. For blocks/ifs: patched at end
+  arity : Int // Number of results (for br target)
+  result_slots : Array[Int] // Pre-allocated result slot positions
+  sp_at_entry : Int // Stack pointer (slot) at block entry
+  pending_patches : Array[Int] // Code positions that need patching
 }
 
 ///|
 /// Deferred resolution block (emitted at end of function)
 priv struct DeferredBlock {
-  patch_pos : Int          // Position in code to patch with block address
-  src_slots : Array[Int]   // Source slot positions (captured at branch time)
-  dst_slots : Array[Int]   // Destination (pre-allocated) result slots
-  target_sp : Int          // Stack pointer after branch
-  target_label : Int       // Label depth for final jump target
-  is_loop : Bool           // Whether target is a loop (known PC) or block (needs patch)
-  loop_pc : Int            // Loop PC if is_loop is true
+  patch_pos : Int // Position in code to patch with block address
+  src_slots : Array[Int] // Source slot positions (captured at branch time)
+  dst_slots : Array[Int] // Destination (pre-allocated) result slots
+  target_sp : Int // Stack pointer after branch
+  target_label : Int // Label depth for final jump target
+  is_loop : Bool // Whether target is a loop (known PC) or block (needs patch)
+  loop_pc : Int // Loop PC if is_loop is true
+}
+
+///|
+/// Pending call patch (for forward calls to functions not yet compiled)
+priv struct CallPatch {
+  patch_pos : Int // Position in code to patch with callee entry
+  func_idx : Int // Local function index (0-based)
 }
 
 ///|
@@ -93,23 +144,39 @@ priv struct DeferredBlock {
 priv struct CompileCtx {
   code : Array[UInt64]
   control_stack : Array[ControlFrame]
-  deferred_blocks : Array[DeferredBlock]  // Resolution blocks to emit at end
-  slot_stack : Array[Int]  // Maps logical stack index to slot number
-  mut next_slot : Int      // Next available slot for allocation
-  mut num_locals : Int     // Number of locals (slots 0..num_locals-1)
+  deferred_blocks : Array[DeferredBlock] // Resolution blocks to emit at end
+  call_patches : Array[CallPatch] // Pending call patches
+  slot_stack : Array[Int] // Maps logical stack index to slot number
+  mut next_slot : Int // Next available slot for allocation
+  mut num_locals : Int // Number of locals (slots 0..num_locals-1)
+  mut num_results : Int // Number of results for current function
 }
 
 ///|
 fn CompileCtx::new() -> CompileCtx {
-  { code: [], control_stack: [], deferred_blocks: [], slot_stack: [], next_slot: 0, num_locals: 0 }
+  {
+    code: [],
+    control_stack: [],
+    deferred_blocks: [],
+    call_patches: [],
+    slot_stack: [],
+    next_slot: 0,
+    num_locals: 0,
+    num_results: 0,
+  }
 }
 
 ///|
-/// Initialize context for a function with given number of locals
-fn CompileCtx::init_function(self : CompileCtx, num_locals : Int) -> Unit {
+/// Initialize context for a function with given number of locals and results
+fn CompileCtx::init_function(
+  self : CompileCtx,
+  num_locals : Int,
+  num_results : Int,
+) -> Unit {
   self.slot_stack.clear()
   self.num_locals = num_locals
-  self.next_slot = num_locals  // Operand slots start after locals
+  self.num_results = num_results
+  self.next_slot = num_locals // Operand slots start after locals
 }
 
 ///|
@@ -201,7 +268,10 @@ fn CompileCtx::pop_control(self : CompileCtx) -> Unit {
 
 ///|
 /// Get branch target info: (target_pc, result_slots, target_sp)
-fn CompileCtx::get_branch_target(self : CompileCtx, label : Int) -> (Int, Array[Int], Int) {
+fn CompileCtx::get_branch_target(
+  self : CompileCtx,
+  label : Int,
+) -> (Int, Array[Int], Int) {
   let idx = self.control_stack.length() - 1 - label
   guard idx >= 0 else { return (0, [], 0) }
   let frame = self.control_stack[idx]
@@ -213,7 +283,11 @@ fn CompileCtx::get_branch_target(self : CompileCtx, label : Int) -> (Int, Array[
 
 ///|
 /// Register a patch location for a forward branch
-fn CompileCtx::add_patch(self : CompileCtx, label : Int, patch_pos : Int) -> Unit {
+fn CompileCtx::add_patch(
+  self : CompileCtx,
+  label : Int,
+  patch_pos : Int,
+) -> Unit {
   let idx = self.control_stack.length() - 1 - label
   guard idx >= 0 else { return }
   self.control_stack[idx].pending_patches.push(patch_pos)
@@ -239,11 +313,15 @@ fn get_block_arity(bt : @core.BlockType) -> Int {
 
 ///|
 /// Emit stack resolution: copy current top values to pre-allocated result slots, set sp
-fn CompileCtx::emit_resolution(self : CompileCtx, result_slots : Array[Int], target_sp : Int) -> Unit {
+fn CompileCtx::emit_resolution(
+  self : CompileCtx,
+  result_slots : Array[Int],
+  target_sp : Int,
+) -> Unit {
   let arity = result_slots.length()
   // Copy each result from current slot to pre-allocated slot
   for i in 0..<arity {
-    let src_slot = self.slot_at(arity - 1 - i)  // Get slot of i-th result (from bottom)
+    let src_slot = self.slot_at(arity - 1 - i) // Get slot of i-th result (from bottom)
     let dst_slot = result_slots[i]
     if src_slot != dst_slot {
       self.emit(copy_slot())
@@ -258,7 +336,10 @@ fn CompileCtx::emit_resolution(self : CompileCtx, result_slots : Array[Int], tar
 
 ///|
 /// Capture current slot positions for results
-fn CompileCtx::capture_result_slots(self : CompileCtx, arity : Int) -> Array[Int] {
+fn CompileCtx::capture_result_slots(
+  self : CompileCtx,
+  arity : Int,
+) -> Array[Int] {
   let slots : Array[Int] = []
   for i in 0..<arity {
     slots.push(self.slot_at(arity - 1 - i))
@@ -278,7 +359,15 @@ fn CompileCtx::defer_resolution(
   is_loop : Bool,
   loop_pc : Int,
 ) -> Unit {
-  self.deferred_blocks.push({ patch_pos, src_slots, dst_slots, target_sp, target_label, is_loop, loop_pc })
+  self.deferred_blocks.push({
+    patch_pos,
+    src_slots,
+    dst_slots,
+    target_sp,
+    target_label,
+    is_loop,
+    loop_pc,
+  })
 }
 
 ///|
@@ -343,20 +432,31 @@ fn CompileCtx::emit_idx(self : CompileCtx, value : Int) -> Unit {
 
 ///|
 /// Compile an expression (list of instructions)
-fn compile_expr(ctx : CompileCtx, expr : @core.Expr) -> Unit {
+fn compile_expr(
+  ctx : CompileCtx,
+  mod_info : ModuleInfo,
+  expr : @core.Expr,
+) -> Unit {
   for instr in expr.instrs {
-    compile_instr(ctx, instr)
+    compile_instr(ctx, mod_info, instr)
   }
 }
 
 ///|
 /// Compile a single instruction
-fn compile_instr(ctx : CompileCtx, instr : @core.Instr) -> Unit {
+fn compile_instr(
+  ctx : CompileCtx,
+  mod_info : ModuleInfo,
+  instr : @core.Instr,
+) -> Unit {
   match instr {
     // Control
     Unreachable => ctx.emit(wasm_unreachable())
     Nop => ctx.emit(nop())
-    Return => ctx.emit(wasm_return())
+    Return => {
+      ctx.emit(wasm_return())
+      ctx.emit_idx(ctx.num_results)
+    }
 
     // Constants
     I32Const(n) => {
@@ -574,7 +674,7 @@ fn compile_instr(ctx : CompileCtx, instr : @core.Instr) -> Unit {
     Block(bt, body) => {
       let arity = get_block_arity(bt)
       ctx.push_control(Block, arity, 0) // target_pc will be patched at end
-      compile_expr(ctx, { instrs: body })
+      compile_expr(ctx, mod_info, { instrs: body })
       // At block end, copy results to pre-allocated slots
       let frame = ctx.control_stack[ctx.control_stack.length() - 1]
       ctx.emit_resolution(frame.result_slots, frame.sp_at_entry)
@@ -588,7 +688,7 @@ fn compile_instr(ctx : CompileCtx, instr : @core.Instr) -> Unit {
       let arity = get_block_arity(bt)
       let loop_start = ctx.code.length()
       ctx.push_control(Loop, arity, loop_start)
-      compile_expr(ctx, { instrs: body })
+      compile_expr(ctx, mod_info, { instrs: body })
       // Loop falls through (no resolution needed at end)
       let frame = ctx.control_stack[ctx.control_stack.length() - 1]
       ctx.pop_control()
@@ -606,7 +706,7 @@ fn compile_instr(ctx : CompileCtx, instr : @core.Instr) -> Unit {
       ctx.push_control(If, arity, 0)
       let frame = ctx.control_stack[ctx.control_stack.length() - 1]
       // Compile then branch
-      compile_expr(ctx, { instrs: then_body })
+      compile_expr(ctx, mod_info, { instrs: then_body })
       // Copy results to pre-allocated slots
       ctx.emit_resolution(frame.result_slots, frame.sp_at_entry)
       if else_body.length() > 0 {
@@ -615,19 +715,28 @@ fn compile_instr(ctx : CompileCtx, instr : @core.Instr) -> Unit {
         let end_patch = ctx.code.length()
         ctx.emit_idx(0) // Placeholder for end_pc
         // Patch else_pc to here
-        ctx.code[else_patch] = ctx.code.length().reinterpret_as_uint().to_uint64()
+        ctx.code[else_patch] = ctx.code
+          .length()
+          .reinterpret_as_uint()
+          .to_uint64()
         // Reset slot state for else branch
         ctx.next_slot = frame.sp_at_entry
         ctx.slot_stack.clear()
         // Compile else branch
-        compile_expr(ctx, { instrs: else_body })
+        compile_expr(ctx, mod_info, { instrs: else_body })
         // Copy results to pre-allocated slots
         ctx.emit_resolution(frame.result_slots, frame.sp_at_entry)
         // Patch end_pc
-        ctx.code[end_patch] = ctx.code.length().reinterpret_as_uint().to_uint64()
+        ctx.code[end_patch] = ctx.code
+          .length()
+          .reinterpret_as_uint()
+          .to_uint64()
       } else {
         // No else - patch else_pc to end
-        ctx.code[else_patch] = ctx.code.length().reinterpret_as_uint().to_uint64()
+        ctx.code[else_patch] = ctx.code
+          .length()
+          .reinterpret_as_uint()
+          .to_uint64()
       }
       ctx.pop_control()
       // Push result slots back onto logical stack
@@ -639,7 +748,9 @@ fn compile_instr(ctx : CompileCtx, instr : @core.Instr) -> Unit {
     // Branches - emit resolution inline for br, defer for br_if/br_table
     Br(label) => {
       let label_int = label.reinterpret_as_int()
-      let (target_pc, result_slots, target_sp) = ctx.get_branch_target(label_int)
+      let (target_pc, result_slots, target_sp) = ctx.get_branch_target(
+        label_int,
+      )
       let arity = result_slots.length()
       // Emit resolution code inline
       ctx.emit_resolution(result_slots, target_sp)
@@ -660,7 +771,9 @@ fn compile_instr(ctx : CompileCtx, instr : @core.Instr) -> Unit {
     BrIf(label) => {
       ignore(ctx.pop_slot()) // Consume condition
       let label_int = label.reinterpret_as_int()
-      let (target_pc, result_slots, target_sp) = ctx.get_branch_target(label_int)
+      let (target_pc, result_slots, target_sp) = ctx.get_branch_target(
+        label_int,
+      )
       let arity = result_slots.length()
       // Capture current slot positions for results
       let src_slots = ctx.capture_result_slots(arity)
@@ -671,7 +784,15 @@ fn compile_instr(ctx : CompileCtx, instr : @core.Instr) -> Unit {
       let not_taken_pc = ctx.code.length() + 1 // Next instruction after this
       ctx.emit_idx(not_taken_pc)
       // Defer the resolution block
-      ctx.defer_resolution(taken_patch, src_slots, result_slots, target_sp, label_int, ctx.is_loop_target(label_int), target_pc)
+      ctx.defer_resolution(
+        taken_patch,
+        src_slots,
+        result_slots,
+        target_sp,
+        label_int,
+        ctx.is_loop_target(label_int),
+        target_pc,
+      )
     }
     BrTable(labels, default_label) => {
       ignore(ctx.pop_slot()) // Consume index
@@ -696,11 +817,84 @@ fn compile_instr(ctx : CompileCtx, instr : @core.Instr) -> Unit {
       // Defer resolution blocks for each entry
       for i, label in labels {
         let label_int = label.reinterpret_as_int()
-        let (target_pc, result_slots, target_sp) = ctx.get_branch_target(label_int)
-        ctx.defer_resolution(patches[i], src_slots, result_slots, target_sp, label_int, ctx.is_loop_target(label_int), target_pc)
+        let (target_pc, result_slots, target_sp) = ctx.get_branch_target(
+          label_int,
+        )
+        ctx.defer_resolution(
+          patches[i],
+          src_slots,
+          result_slots,
+          target_sp,
+          label_int,
+          ctx.is_loop_target(label_int),
+          target_pc,
+        )
       }
-      let (target_pc, result_slots, target_sp) = ctx.get_branch_target(default_int)
-      ctx.defer_resolution(patches[labels.length()], src_slots, result_slots, target_sp, default_int, ctx.is_loop_target(default_int), target_pc)
+      let (target_pc, result_slots, target_sp) = ctx.get_branch_target(
+        default_int,
+      )
+      ctx.defer_resolution(
+        patches[labels.length()],
+        src_slots,
+        result_slots,
+        target_sp,
+        default_int,
+        ctx.is_loop_target(default_int),
+        target_pc,
+      )
+    }
+
+    // Function calls (wasm3 style: compute frame layout at compile time)
+    Call(func_idx_uint) => {
+      let func_idx = func_idx_uint.reinterpret_as_int()
+      // Convert absolute func index to local index (excluding imports)
+      let local_idx = func_idx - mod_info.num_imported_funcs
+      if local_idx >= 0 && local_idx < mod_info.func_entries.length() {
+        // Local function call
+        let num_params = mod_info.func_num_params[local_idx]
+        let num_results = mod_info.func_num_results[local_idx]
+
+        // Callee's frame starts at current next_slot
+        // Layout: [arg0][arg1]...[argN-1] then callee's locals/operands
+        let frame_offset = ctx.current_sp()
+
+        // Copy args from their current slots to callee's arg slots
+        // Args are at slot_stack top, callee expects them at frame_offset..frame_offset+num_params-1
+        for i in 0..<num_params {
+          let src_slot = ctx.slot_at(num_params - 1 - i)
+          let dst_slot = frame_offset + i
+          if src_slot != dst_slot {
+            ctx.emit(copy_slot())
+            ctx.emit_idx(src_slot)
+            ctx.emit_idx(dst_slot)
+          }
+        }
+
+        // Pop arguments from slot stack
+        for _ in 0..<num_params {
+          ignore(ctx.pop_slot())
+        }
+
+        // Emit call instruction with callee_pc and frame_offset
+        ctx.emit(call())
+        let patch_pos = ctx.code.length()
+        ctx.emit_idx(0) // Placeholder for callee_pc (will be patched)
+        ctx.emit_idx(frame_offset)
+
+        // Add patch for the callee_pc
+        ctx.call_patches.push({ patch_pos, func_idx: local_idx })
+
+        // Results will be at frame_offset..frame_offset+num_results-1
+        // Push result slots onto slot stack
+        for i in 0..<num_results {
+          ctx.slot_stack.push(frame_offset + i)
+        }
+        // Update next_slot to be after results
+        if num_results > 0 {
+          ctx.next_slot = frame_offset + num_results
+        }
+      }
+      // TODO: handle imported function calls
     }
 
     // Placeholder for unimplemented instructions

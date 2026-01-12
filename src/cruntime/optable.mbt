@@ -43,6 +43,12 @@ extern "C" fn wasm_if() -> UInt64 = "wasm_if"
 ///|
 extern "C" fn br_table() -> UInt64 = "br_table"
 
+///|
+extern "C" fn call() -> UInt64 = "call"
+
+///|
+extern "C" fn entry() -> UInt64 = "entry"
+
 // Constants
 
 ///|

@@ -41,6 +41,12 @@ typedef int (*OpFn)(CRuntime*);
 // Stack size: 64K slots = 512KB
 #define STACK_SIZE 65536
 
+// Internal execution helper - runs from current pc until return
+// Uses native C stack for function calls (wasm3 style)
+static int run(CRuntime* crt) {
+    return ((OpFn)*crt->pc++)(crt);
+}
+
 // Execute threaded code starting at entry point
 // Returns trap code (0 = success), stores result in *result_out
 int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_args, uint64_t* result_out) {
@@ -63,15 +69,15 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     crt.pc = code + entry;
     crt.fp = stack;
     crt.sp = stack + num_locals;  // Operand stack starts after locals
-    crt.code = code;              // Base pointer for branch target computation
+    crt.code = code;
     crt.mem = NULL;
 
-    // Start execution by calling first opcode - returns trap code
-    int trap = ((OpFn)*crt.pc++)(&crt);
+    // Start execution
+    int trap = run(&crt);
 
-    // Store result (top of stack, or 0 if empty)
+    // Store result (results are placed at fp[0] by end/return)
     if (result_out) {
-        *result_out = (crt.sp > stack + num_locals) ? crt.sp[-1] : 0;
+        *result_out = crt.fp[0];
     }
     free(stack);
     return trap;
@@ -89,14 +95,70 @@ int op_nop(CRuntime* crt) {
 }
 DEFINE_OP(nop)
 
+// End of function - copy results and return (wasm3 style)
+// Immediate: num_results
 int op_end(CRuntime* crt) {
-    // End of function - success
+    int num_results = (int)*crt->pc++;
+    // Copy results from stack top to fp[0..num_results-1]
+    for (int i = 0; i < num_results; i++) {
+        crt->fp[i] = crt->sp[i - num_results];
+    }
     return TRAP_NONE;
 }
 DEFINE_OP(end)
 
+// Call a local function (wasm3 style - uses native C stack)
+// Immediates: callee_pc, frame_offset
+// frame_offset: offset from current fp to new frame (computed at compile time)
+int op_call(CRuntime* crt) {
+    int callee_pc = (int)*crt->pc++;
+    int frame_offset = (int)*crt->pc++;
+
+    // Save caller state on C stack (implicit via recursive call)
+    uint64_t* caller_fp = crt->fp;
+    uint64_t* caller_pc = crt->pc;
+
+    // New frame starts at fp + frame_offset (args already copied there by compiler)
+    crt->fp = crt->fp + frame_offset;
+    crt->pc = crt->code + callee_pc;
+
+    // Execute callee (recursive call using native C stack)
+    int trap = run(crt);
+
+    // Restore caller state
+    crt->fp = caller_fp;
+    crt->pc = caller_pc;
+    // sp is already correct - callee left results in the right slots
+
+    if (trap != TRAP_NONE) {
+        return trap;
+    }
+
+    NEXT();
+}
+DEFINE_OP(call)
+
+// Function entry - zeros non-arg locals
+// Immediate: num_locals_to_zero
+int op_entry(CRuntime* crt) {
+    int first_local = (int)*crt->pc++;
+    int num_to_zero = (int)*crt->pc++;
+    for (int i = 0; i < num_to_zero; i++) {
+        crt->fp[first_local + i] = 0;
+    }
+    NEXT();
+}
+DEFINE_OP(entry)
+
+// Return from function
+// Immediate: num_results
+// Copies results from stack top to fp[0..num_results-1]
 int op_wasm_return(CRuntime* crt) {
-    // Return - success (simplified for now)
+    int num_results = (int)*crt->pc++;
+    // Copy results from stack top to fp[0..num_results-1]
+    for (int i = 0; i < num_results; i++) {
+        crt->fp[i] = crt->sp[i - num_results];
+    }
     return TRAP_NONE;
 }
 DEFINE_OP(wasm_return)
