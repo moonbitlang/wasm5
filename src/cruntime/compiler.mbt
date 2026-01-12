@@ -329,9 +329,9 @@ fn CompileCtx::emit_resolution(
       self.emit_idx(dst_slot)
     }
   }
-  // Set sp to target position
+  // Set sp to position after results
   self.emit(set_sp())
-  self.emit_idx(target_sp)
+  self.emit_idx(target_sp + arity)
 }
 
 ///|
@@ -388,9 +388,10 @@ fn CompileCtx::emit_deferred_blocks(self : CompileCtx) -> Unit {
         self.emit_idx(dst_slot)
       }
     }
-    // Set sp to target position
+    // Set sp to position after results
+    let arity = block.src_slots.length()
     self.emit(set_sp())
-    self.emit_idx(block.target_sp)
+    self.emit_idx(block.target_sp + arity)
 
     // Emit final jump
     self.emit(br())
@@ -570,75 +571,219 @@ fn compile_instr(
       ignore(ctx.pop_slot())
     }
 
-    // i32 comparison
-    I32Eqz => ctx.emit(i32_eqz())
-    I32Eq => ctx.emit(i32_eq())
-    I32Ne => ctx.emit(i32_ne())
-    I32LtS => ctx.emit(i32_lt_s())
-    I32LtU => ctx.emit(i32_lt_u())
-    I32GtS => ctx.emit(i32_gt_s())
-    I32GtU => ctx.emit(i32_gt_u())
-    I32LeS => ctx.emit(i32_le_s())
-    I32LeU => ctx.emit(i32_le_u())
-    I32GeS => ctx.emit(i32_ge_s())
-    I32GeU => ctx.emit(i32_ge_u())
+    // i32 comparison (binary ops: pop 2, push 1 = net pop 1)
+    I32Eqz => ctx.emit(i32_eqz()) // unary: no net change
+    I32Eq => {
+      ctx.emit(i32_eq())
+      ignore(ctx.pop_slot())
+    }
+    I32Ne => {
+      ctx.emit(i32_ne())
+      ignore(ctx.pop_slot())
+    }
+    I32LtS => {
+      ctx.emit(i32_lt_s())
+      ignore(ctx.pop_slot())
+    }
+    I32LtU => {
+      ctx.emit(i32_lt_u())
+      ignore(ctx.pop_slot())
+    }
+    I32GtS => {
+      ctx.emit(i32_gt_s())
+      ignore(ctx.pop_slot())
+    }
+    I32GtU => {
+      ctx.emit(i32_gt_u())
+      ignore(ctx.pop_slot())
+    }
+    I32LeS => {
+      ctx.emit(i32_le_s())
+      ignore(ctx.pop_slot())
+    }
+    I32LeU => {
+      ctx.emit(i32_le_u())
+      ignore(ctx.pop_slot())
+    }
+    I32GeS => {
+      ctx.emit(i32_ge_s())
+      ignore(ctx.pop_slot())
+    }
+    I32GeU => {
+      ctx.emit(i32_ge_u())
+      ignore(ctx.pop_slot())
+    }
 
     // i32 unary
     I32Clz => ctx.emit(i32_clz())
     I32Ctz => ctx.emit(i32_ctz())
     I32Popcnt => ctx.emit(i32_popcnt())
 
-    // i64 arithmetic
-    I64Add => ctx.emit(i64_add())
-    I64Sub => ctx.emit(i64_sub())
-    I64Mul => ctx.emit(i64_mul())
-    I64DivS => ctx.emit(i64_div_s())
-    I64DivU => ctx.emit(i64_div_u())
-    I64RemS => ctx.emit(i64_rem_s())
-    I64RemU => ctx.emit(i64_rem_u())
-    I64And => ctx.emit(i64_and())
-    I64Or => ctx.emit(i64_or())
-    I64Xor => ctx.emit(i64_xor())
-    I64Shl => ctx.emit(i64_shl())
-    I64ShrS => ctx.emit(i64_shr_s())
-    I64ShrU => ctx.emit(i64_shr_u())
-    I64Rotl => ctx.emit(i64_rotl())
-    I64Rotr => ctx.emit(i64_rotr())
+    // i64 arithmetic (binary ops: pop 2, push 1 = net pop 1)
+    I64Add => {
+      ctx.emit(i64_add())
+      ignore(ctx.pop_slot())
+    }
+    I64Sub => {
+      ctx.emit(i64_sub())
+      ignore(ctx.pop_slot())
+    }
+    I64Mul => {
+      ctx.emit(i64_mul())
+      ignore(ctx.pop_slot())
+    }
+    I64DivS => {
+      ctx.emit(i64_div_s())
+      ignore(ctx.pop_slot())
+    }
+    I64DivU => {
+      ctx.emit(i64_div_u())
+      ignore(ctx.pop_slot())
+    }
+    I64RemS => {
+      ctx.emit(i64_rem_s())
+      ignore(ctx.pop_slot())
+    }
+    I64RemU => {
+      ctx.emit(i64_rem_u())
+      ignore(ctx.pop_slot())
+    }
+    I64And => {
+      ctx.emit(i64_and())
+      ignore(ctx.pop_slot())
+    }
+    I64Or => {
+      ctx.emit(i64_or())
+      ignore(ctx.pop_slot())
+    }
+    I64Xor => {
+      ctx.emit(i64_xor())
+      ignore(ctx.pop_slot())
+    }
+    I64Shl => {
+      ctx.emit(i64_shl())
+      ignore(ctx.pop_slot())
+    }
+    I64ShrS => {
+      ctx.emit(i64_shr_s())
+      ignore(ctx.pop_slot())
+    }
+    I64ShrU => {
+      ctx.emit(i64_shr_u())
+      ignore(ctx.pop_slot())
+    }
+    I64Rotl => {
+      ctx.emit(i64_rotl())
+      ignore(ctx.pop_slot())
+    }
+    I64Rotr => {
+      ctx.emit(i64_rotr())
+      ignore(ctx.pop_slot())
+    }
 
-    // i64 comparison
-    I64Eqz => ctx.emit(i64_eqz())
-    I64Eq => ctx.emit(i64_eq())
-    I64Ne => ctx.emit(i64_ne())
-    I64LtS => ctx.emit(i64_lt_s())
-    I64LtU => ctx.emit(i64_lt_u())
-    I64GtS => ctx.emit(i64_gt_s())
-    I64GtU => ctx.emit(i64_gt_u())
-    I64LeS => ctx.emit(i64_le_s())
-    I64LeU => ctx.emit(i64_le_u())
-    I64GeS => ctx.emit(i64_ge_s())
-    I64GeU => ctx.emit(i64_ge_u())
+    // i64 comparison (binary ops: pop 2, push 1 = net pop 1)
+    I64Eqz => ctx.emit(i64_eqz()) // unary: no net change
+    I64Eq => {
+      ctx.emit(i64_eq())
+      ignore(ctx.pop_slot())
+    }
+    I64Ne => {
+      ctx.emit(i64_ne())
+      ignore(ctx.pop_slot())
+    }
+    I64LtS => {
+      ctx.emit(i64_lt_s())
+      ignore(ctx.pop_slot())
+    }
+    I64LtU => {
+      ctx.emit(i64_lt_u())
+      ignore(ctx.pop_slot())
+    }
+    I64GtS => {
+      ctx.emit(i64_gt_s())
+      ignore(ctx.pop_slot())
+    }
+    I64GtU => {
+      ctx.emit(i64_gt_u())
+      ignore(ctx.pop_slot())
+    }
+    I64LeS => {
+      ctx.emit(i64_le_s())
+      ignore(ctx.pop_slot())
+    }
+    I64LeU => {
+      ctx.emit(i64_le_u())
+      ignore(ctx.pop_slot())
+    }
+    I64GeS => {
+      ctx.emit(i64_ge_s())
+      ignore(ctx.pop_slot())
+    }
+    I64GeU => {
+      ctx.emit(i64_ge_u())
+      ignore(ctx.pop_slot())
+    }
 
     // i64 unary
     I64Clz => ctx.emit(i64_clz())
     I64Ctz => ctx.emit(i64_ctz())
     I64Popcnt => ctx.emit(i64_popcnt())
 
-    // f32 arithmetic
-    F32Add => ctx.emit(f32_add())
-    F32Sub => ctx.emit(f32_sub())
-    F32Mul => ctx.emit(f32_mul())
-    F32Div => ctx.emit(f32_div())
-    F32Min => ctx.emit(f32_min())
-    F32Max => ctx.emit(f32_max())
-    F32Copysign => ctx.emit(f32_copysign())
+    // f32 arithmetic (binary ops: pop 2, push 1 = net pop 1)
+    F32Add => {
+      ctx.emit(f32_add())
+      ignore(ctx.pop_slot())
+    }
+    F32Sub => {
+      ctx.emit(f32_sub())
+      ignore(ctx.pop_slot())
+    }
+    F32Mul => {
+      ctx.emit(f32_mul())
+      ignore(ctx.pop_slot())
+    }
+    F32Div => {
+      ctx.emit(f32_div())
+      ignore(ctx.pop_slot())
+    }
+    F32Min => {
+      ctx.emit(f32_min())
+      ignore(ctx.pop_slot())
+    }
+    F32Max => {
+      ctx.emit(f32_max())
+      ignore(ctx.pop_slot())
+    }
+    F32Copysign => {
+      ctx.emit(f32_copysign())
+      ignore(ctx.pop_slot())
+    }
 
-    // f32 comparison
-    F32Eq => ctx.emit(f32_eq())
-    F32Ne => ctx.emit(f32_ne())
-    F32Lt => ctx.emit(f32_lt())
-    F32Gt => ctx.emit(f32_gt())
-    F32Le => ctx.emit(f32_le())
-    F32Ge => ctx.emit(f32_ge())
+    // f32 comparison (binary ops: pop 2, push 1 = net pop 1)
+    F32Eq => {
+      ctx.emit(f32_eq())
+      ignore(ctx.pop_slot())
+    }
+    F32Ne => {
+      ctx.emit(f32_ne())
+      ignore(ctx.pop_slot())
+    }
+    F32Lt => {
+      ctx.emit(f32_lt())
+      ignore(ctx.pop_slot())
+    }
+    F32Gt => {
+      ctx.emit(f32_gt())
+      ignore(ctx.pop_slot())
+    }
+    F32Le => {
+      ctx.emit(f32_le())
+      ignore(ctx.pop_slot())
+    }
+    F32Ge => {
+      ctx.emit(f32_ge())
+      ignore(ctx.pop_slot())
+    }
 
     // f32 unary
     F32Abs => ctx.emit(f32_abs())
@@ -649,22 +794,61 @@ fn compile_instr(
     F32Nearest => ctx.emit(f32_nearest())
     F32Sqrt => ctx.emit(f32_sqrt())
 
-    // f64 arithmetic
-    F64Add => ctx.emit(f64_add())
-    F64Sub => ctx.emit(f64_sub())
-    F64Mul => ctx.emit(f64_mul())
-    F64Div => ctx.emit(f64_div())
-    F64Min => ctx.emit(f64_min())
-    F64Max => ctx.emit(f64_max())
-    F64Copysign => ctx.emit(f64_copysign())
+    // f64 arithmetic (binary ops: pop 2, push 1 = net pop 1)
+    F64Add => {
+      ctx.emit(f64_add())
+      ignore(ctx.pop_slot())
+    }
+    F64Sub => {
+      ctx.emit(f64_sub())
+      ignore(ctx.pop_slot())
+    }
+    F64Mul => {
+      ctx.emit(f64_mul())
+      ignore(ctx.pop_slot())
+    }
+    F64Div => {
+      ctx.emit(f64_div())
+      ignore(ctx.pop_slot())
+    }
+    F64Min => {
+      ctx.emit(f64_min())
+      ignore(ctx.pop_slot())
+    }
+    F64Max => {
+      ctx.emit(f64_max())
+      ignore(ctx.pop_slot())
+    }
+    F64Copysign => {
+      ctx.emit(f64_copysign())
+      ignore(ctx.pop_slot())
+    }
 
-    // f64 comparison
-    F64Eq => ctx.emit(f64_eq())
-    F64Ne => ctx.emit(f64_ne())
-    F64Lt => ctx.emit(f64_lt())
-    F64Gt => ctx.emit(f64_gt())
-    F64Le => ctx.emit(f64_le())
-    F64Ge => ctx.emit(f64_ge())
+    // f64 comparison (binary ops: pop 2, push 1 = net pop 1)
+    F64Eq => {
+      ctx.emit(f64_eq())
+      ignore(ctx.pop_slot())
+    }
+    F64Ne => {
+      ctx.emit(f64_ne())
+      ignore(ctx.pop_slot())
+    }
+    F64Lt => {
+      ctx.emit(f64_lt())
+      ignore(ctx.pop_slot())
+    }
+    F64Gt => {
+      ctx.emit(f64_gt())
+      ignore(ctx.pop_slot())
+    }
+    F64Le => {
+      ctx.emit(f64_le())
+      ignore(ctx.pop_slot())
+    }
+    F64Ge => {
+      ctx.emit(f64_ge())
+      ignore(ctx.pop_slot())
+    }
 
     // f64 unary
     F64Abs => ctx.emit(f64_abs())
@@ -907,26 +1091,23 @@ fn compile_instr(
         let num_params = mod_info.func_num_params[local_idx]
         let num_results = mod_info.func_num_results[local_idx]
 
-        // Callee's frame starts at current next_slot
-        // Layout: [arg0][arg1]...[argN-1] then callee's locals/operands
-        let frame_offset = ctx.current_sp()
-
-        // Copy args from their current slots to callee's arg slots
-        // Args are at slot_stack top, callee expects them at frame_offset..frame_offset+num_params-1
-        for i in 0..<num_params {
-          let src_slot = ctx.slot_at(num_params - 1 - i)
-          let dst_slot = frame_offset + i
-          if src_slot != dst_slot {
-            ctx.emit(copy_slot())
-            ctx.emit_idx(src_slot)
-            ctx.emit_idx(dst_slot)
-          }
+        // Remember where first arg is - this will be frame_offset
+        // Args are contiguous at slots: slot_at(num_params-1), slot_at(num_params-2), ..., slot_at(0)
+        // where slot_at(num_params-1) is the first arg (pushed first, deepest)
+        let frame_offset = if num_params > 0 {
+          ctx.slot_at(num_params - 1)
+        } else {
+          ctx.current_sp()
         }
 
-        // Pop arguments from slot stack
+        // Pop arguments from slot stack first
         for _ in 0..<num_params {
           ignore(ctx.pop_slot())
         }
+
+        // Now frame_offset points to where first arg was, which is contiguous
+        // with remaining stack. Args are already at frame_offset..frame_offset+num_params-1
+        // No copy needed before call!
 
         // Emit call instruction with callee_pc and frame_offset
         ctx.emit(call())
@@ -937,18 +1118,17 @@ fn compile_instr(
         // Add patch for the callee_pc
         ctx.call_patches.push({ patch_pos, func_idx: local_idx })
 
-        // Results will be at frame_offset..frame_offset+num_results-1
-        // Push result slots onto slot stack
+        // Results are returned at frame_offset..frame_offset+num_results-1
+        // which is naturally contiguous with remaining stack
+        // Push result slots directly
         for i in 0..<num_results {
           ctx.slot_stack.push(frame_offset + i)
         }
-        // Update next_slot to be after results
-        let new_sp = frame_offset + num_results
-        ctx.next_slot = new_sp
+        ctx.next_slot = frame_offset + num_results
 
-        // Reset sp after call returns (callee left sp in unknown state)
+        // Set sp to after the result slots (for sp-relative operations)
         ctx.emit(set_sp())
-        ctx.emit_idx(new_sp)
+        ctx.emit_idx(ctx.current_sp())
       }
       // TODO: handle imported function calls
     }

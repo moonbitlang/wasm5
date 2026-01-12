@@ -716,3 +716,10 @@ async test "bulk-memory/table_init.wast" {
 async test "i32.wast (cruntime)" {
   run_test_harness("", "i32.wast", runtime_type=CRuntime)
 }
+
+// Temporarily disabled - debugging crash
+
+///|
+async test "call.wast (cruntime)" {
+  run_test_harness("", "call.wast", runtime_type=CRuntime)
+}
