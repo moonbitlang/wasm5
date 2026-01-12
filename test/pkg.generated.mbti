@@ -1,11 +1,6 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "moonbitlang/wasm5/test"
 
-import(
-  "moonbitlang/wasm5/src/core"
-  "moonbitlang/wasm5/src/runtime"
-)
-
 // Values
 pub async fn process_wast_file(String, String, runtime_type? : RuntimeType) -> (Array[TestFailure], Int)
 
@@ -33,5 +28,4 @@ pub impl Show for TestFailure
 // Type aliases
 
 // Traits
-trait Executor
 

@@ -30,7 +30,7 @@ pub(all) enum RuntimeType {
 ///|
 /// Trait for WebAssembly runtime executors.
 /// Both the MoonBit interpreter and C runtime implement this trait.
-trait Executor {
+priv trait Executor {
   run_start(Self) -> Unit raise Error
   call_compiled(Self, Bytes, Array[@wasm5_runtime.Value]) -> Array[
     @wasm5_runtime.Value,
@@ -89,13 +89,13 @@ impl Executor for @wasm5_cruntime.CRuntime with call_compiled(
 }
 
 ///|
-impl Executor for @wasm5_cruntime.CRuntime with get_module(self) -> @wasm5_core.Module? {
+impl Executor for @wasm5_cruntime.CRuntime with get_module(_self) -> @wasm5_core.Module? {
   // CRuntime doesn't expose module yet
   None
 }
 
 ///|
-impl Executor for @wasm5_cruntime.CRuntime with get_globals(self) -> Array[
+impl Executor for @wasm5_cruntime.CRuntime with get_globals(_self) -> Array[
   @wasm5_runtime.Value,
 ]? {
   // CRuntime doesn't support globals yet
@@ -103,7 +103,7 @@ impl Executor for @wasm5_cruntime.CRuntime with get_globals(self) -> Array[
 }
 
 ///|
-impl Executor for @wasm5_cruntime.CRuntime with as_runtime(self) -> @wasm5_runtime.Runtime? {
+impl Executor for @wasm5_cruntime.CRuntime with as_runtime(_self) -> @wasm5_runtime.Runtime? {
   // CRuntime is not a MoonBit Runtime
   None
 }

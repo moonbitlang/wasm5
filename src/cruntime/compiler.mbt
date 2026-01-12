@@ -3,7 +3,6 @@
 priv struct ModuleInfo {
   mod_ : @core.Module
   func_entries : Array[Int] // Entry points for compiled functions
-  func_num_locals : Array[Int] // Number of locals per function
   func_num_params : Array[Int] // Number of params per function
   func_num_results : Array[Int] // Number of results per function
   num_imported_funcs : Int
@@ -37,7 +36,6 @@ pub fn compile(mod_ : @core.Module) -> CompiledModule {
   let mod_info : ModuleInfo = {
     mod_,
     func_entries,
-    func_num_locals,
     func_num_params,
     func_num_results,
     num_imported_funcs,
@@ -114,7 +112,6 @@ priv enum ControlKind {
 priv struct ControlFrame {
   kind : ControlKind
   target_pc : Int // For loops: start PC. For blocks/ifs: patched at end
-  arity : Int // Number of results (for br target)
   result_slots : Array[Int] // Pre-allocated result slot positions
   sp_at_entry : Int // Stack pointer (slot) at block entry
   pending_patches : Array[Int] // Code positions that need patching
@@ -149,7 +146,6 @@ priv struct CompileCtx {
   call_patches : Array[CallPatch] // Pending call patches
   slot_stack : Array[Int] // Maps logical stack index to slot number
   mut next_slot : Int // Next available slot for allocation
-  mut num_locals : Int // Number of locals (slots 0..num_locals-1)
   mut num_results : Int // Number of results for current function
 }
 
@@ -162,7 +158,6 @@ fn CompileCtx::new() -> CompileCtx {
     call_patches: [],
     slot_stack: [],
     next_slot: 0,
-    num_locals: 0,
     num_results: 0,
   }
 }
@@ -175,15 +170,8 @@ fn CompileCtx::init_function(
   num_results : Int,
 ) -> Unit {
   self.slot_stack.clear()
-  self.num_locals = num_locals
   self.num_results = num_results
   self.next_slot = num_locals // Operand slots start after locals
-}
-
-///|
-/// Current stack height (number of values on operand stack)
-fn CompileCtx::stack_height(self : CompileCtx) -> Int {
-  self.slot_stack.length()
 }
 
 ///|
@@ -214,13 +202,6 @@ fn CompileCtx::pop_slot(self : CompileCtx) -> Int {
 }
 
 ///|
-/// Peek at top slot without popping
-fn CompileCtx::top_slot(self : CompileCtx) -> Int {
-  guard self.slot_stack.length() > 0 else { return 0 }
-  self.slot_stack[self.slot_stack.length() - 1]
-}
-
-///|
 /// Get slot at stack depth (0 = top)
 fn CompileCtx::slot_at(self : CompileCtx, depth : Int) -> Int {
   let idx = self.slot_stack.length() - 1 - depth
@@ -248,7 +229,6 @@ fn CompileCtx::push_control(
   self.control_stack.push({
     kind,
     target_pc,
-    arity,
     result_slots,
     sp_at_entry: self.current_sp(),
     pending_patches: [],
