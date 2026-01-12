@@ -442,7 +442,7 @@ fn compile_instr(
   match instr {
     // Control
     Unreachable => ctx.emit(wasm_unreachable())
-    Nop => ctx.emit(nop())
+    Nop => () // No-op: skip at compile time
     Return => {
       ctx.emit(wasm_return())
       ctx.emit_idx(ctx.num_results)
