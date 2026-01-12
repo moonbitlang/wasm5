@@ -24,6 +24,7 @@ typedef struct {
     uint64_t* fp;      // Frame pointer (start of locals)
     uint64_t* code;    // Base of code array (for computing branch targets)
     uint8_t* mem;      // Linear memory
+    uint64_t* globals; // Global variables array
 } CRuntime;
 
 typedef int (*OpFn)(CRuntime*);
@@ -49,7 +50,7 @@ static int run(CRuntime* crt) {
 
 // Execute threaded code starting at entry point
 // Returns trap code (0 = success), stores results in result_out[0..num_results-1]
-int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_args, uint64_t* result_out, int num_results) {
+int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_args, uint64_t* result_out, int num_results, uint64_t* globals) {
     // Allocate stack on heap to avoid C stack limits
     uint64_t* stack = (uint64_t*)malloc(STACK_SIZE * sizeof(uint64_t));
     if (!stack) {
@@ -71,6 +72,7 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     crt.sp = stack + num_locals;  // Operand stack starts after locals
     crt.code = code;
     crt.mem = NULL;
+    crt.globals = globals;
 
     // Start execution
     int trap = run(&crt);
@@ -286,17 +288,15 @@ int op_local_tee(CRuntime* crt) {
 DEFINE_OP(local_tee)
 
 int op_global_get(CRuntime* crt) {
-    // TODO: implement with globals array
-    crt->pc++;  // Skip index for now
-    *crt->sp++ = 0;
+    int idx = (int)*crt->pc++;
+    *crt->sp++ = crt->globals[idx];
     NEXT();
 }
 DEFINE_OP(global_get)
 
 int op_global_set(CRuntime* crt) {
-    // TODO: implement with globals array
-    crt->pc++;  // Skip index
-    crt->sp--;  // Pop value
+    int idx = (int)*crt->pc++;
+    crt->globals[idx] = *--crt->sp;
     NEXT();
 }
 DEFINE_OP(global_set)

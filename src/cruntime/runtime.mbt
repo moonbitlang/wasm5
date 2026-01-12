@@ -3,7 +3,8 @@
 pub struct CRuntime {
   module_ : @core.Module
   compiled : CompiledModule
-  // TODO: memory, globals
+  globals : FixedArray[UInt64] // Global variables
+  // TODO: memory, tables
 }
 
 // Import Value type from core
@@ -33,7 +34,47 @@ fn trap_to_error(trap : TrapCode) -> @runtime.RuntimeError {
 /// Load a module and compile it for C runtime execution.
 pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
   let compiled = compile(module_)
-  { module_, compiled }
+  // Initialize globals from module
+  let globals = init_globals(module_)
+  { module_, compiled, globals }
+}
+
+///|
+/// Initialize globals from module's global section
+fn init_globals(module_ : @core.Module) -> FixedArray[UInt64] {
+  let num_globals = module_.globals.length()
+  let globals = FixedArray::make(
+    if num_globals > 0 {
+      num_globals
+    } else {
+      1
+    },
+    0UL,
+  )
+  for i, g in module_.globals {
+    // Evaluate init expression (assuming simple constant for now)
+    let value = eval_const_expr(g.init)
+    globals[i] = value
+  }
+  globals
+}
+
+///|
+/// Evaluate a constant expression to get initial value
+fn eval_const_expr(expr : @core.Expr) -> UInt64 {
+  for instr in expr.instrs {
+    match instr {
+      I32Const(n) => return n.to_uint64()
+      I64Const(n) => return n
+      F32Const(f) => return f.reinterpret_as_uint().to_uint64()
+      F64Const(f) => return f.reinterpret_as_uint64()
+      GlobalGet(_) => return 0UL // TODO: handle global references
+      RefNull(_) => return 0xFFFFFFFF_FFFFFFFFUL
+      RefFunc(_) => return 0UL // TODO: handle func refs
+      _ => continue
+    }
+  }
+  0UL
 }
 
 ///|
@@ -55,6 +96,7 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
           0,
           result_out,
           0, // start function has no results
+          self.globals,
         )
         let trap = trap_code_from_int(trap_code)
         if trap != TrapCode::None {
@@ -108,6 +150,7 @@ pub fn CRuntime::call_compiled(
         args_u64.length(),
         result_out,
         num_results,
+        self.globals,
       )
 
       // Check for trap
