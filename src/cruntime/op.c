@@ -48,8 +48,8 @@ static int run(CRuntime* crt) {
 }
 
 // Execute threaded code starting at entry point
-// Returns trap code (0 = success), stores result in *result_out
-int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_args, uint64_t* result_out) {
+// Returns trap code (0 = success), stores results in result_out[0..num_results-1]
+int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_args, uint64_t* result_out, int num_results) {
     // Allocate stack on heap to avoid C stack limits
     uint64_t* stack = (uint64_t*)malloc(STACK_SIZE * sizeof(uint64_t));
     if (!stack) {
@@ -75,9 +75,11 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     // Start execution
     int trap = run(&crt);
 
-    // Store result (results are placed at fp[0] by end/return)
+    // Store results (results are placed at fp[0..num_results-1] by end/return)
     if (result_out) {
-        *result_out = crt.fp[0];
+        for (int i = 0; i < num_results; i++) {
+            result_out[i] = crt.fp[i];
+        }
     }
     free(stack);
     return trap;

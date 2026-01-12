@@ -127,9 +127,10 @@ priv struct DeferredBlock {
   src_slots : Array[Int] // Source slot positions (captured at branch time)
   dst_slots : Array[Int] // Destination (pre-allocated) result slots
   target_sp : Int // Stack pointer after branch
-  target_label : Int // Label depth for final jump target
+  target_label : Int // Label depth for final jump target (at creation time)
   is_loop : Bool // Whether target is a loop (known PC) or block (needs patch)
   loop_pc : Int // Loop PC if is_loop is true
+  mut end_pc : Int // Actual end PC (filled in by pop_control for non-loops)
 }
 
 ///|
@@ -258,11 +259,18 @@ fn CompileCtx::push_control(
 /// Pop a control frame and patch pending branches
 fn CompileCtx::pop_control(self : CompileCtx) -> Unit {
   guard self.control_stack.length() > 0 else { return }
+  let abs_idx = self.control_stack.length() - 1 // Index of frame being popped
   let frame = self.control_stack.pop().unwrap()
   let end_pc = self.code.length()
   // Patch all pending forward branches to point here
   for patch_pos in frame.pending_patches {
     self.code[patch_pos] = end_pc.reinterpret_as_uint().to_uint64()
+  }
+  // Update end_pc for all deferred blocks targeting this frame
+  for block in self.deferred_blocks {
+    if not(block.is_loop) && block.target_label == abs_idx {
+      block.end_pc = end_pc
+    }
   }
 }
 
@@ -359,14 +367,17 @@ fn CompileCtx::defer_resolution(
   is_loop : Bool,
   loop_pc : Int,
 ) -> Unit {
+  // Convert relative label to absolute control stack index
+  let abs_label_idx = self.control_stack.length() - 1 - target_label
   self.deferred_blocks.push({
     patch_pos,
     src_slots,
     dst_slots,
     target_sp,
-    target_label,
+    target_label: abs_label_idx, // Store absolute index
     is_loop,
     loop_pc,
+    end_pc: 0, // Will be filled in by pop_control
   })
 }
 
@@ -398,10 +409,8 @@ fn CompileCtx::emit_deferred_blocks(self : CompileCtx) -> Unit {
     if block.is_loop {
       self.emit_idx(block.loop_pc)
     } else {
-      // Need to patch this to block end - add to pending patches
-      let patch_pos = self.code.length()
-      self.emit_idx(0)
-      self.add_patch(block.target_label, patch_pos)
+      // Use the end_pc that was recorded when pop_control ran
+      self.emit_idx(block.end_pc)
     }
   }
   self.deferred_blocks.clear()

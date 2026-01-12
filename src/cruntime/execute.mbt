@@ -1,6 +1,6 @@
 ///|
 /// Execute threaded code (FFI binding)
-/// Returns trap code (0 = success), stores result in result_out[0]
+/// Returns trap code (0 = success), stores results in result_out[0..num_results-1]
 #borrow(code, args, result_out)
 extern "C" fn c_execute_ffi(
   code : FixedArray[UInt64],
@@ -9,6 +9,7 @@ extern "C" fn c_execute_ffi(
   args : FixedArray[UInt64],
   num_args : Int,
   result_out : FixedArray[UInt64],
+  num_results : Int,
 ) -> Int = "execute"
 
 ///|

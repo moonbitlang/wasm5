@@ -54,6 +54,7 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
           [],
           0,
           result_out,
+          0, // start function has no results
         )
         let trap = trap_code_from_int(trap_code)
         if trap != TrapCode::None {
@@ -80,6 +81,7 @@ pub fn CRuntime::call_compiled(
       let abs_idx = num_imported + func_idx
       let type_idx = self.module_.funcs[abs_idx].reinterpret_as_int()
       let func_type = get_func_type(self.module_, type_idx)
+      let num_results = func_type.results.length()
 
       // Convert args to UInt64
       let args_u64 : Array[UInt64] = []
@@ -89,7 +91,15 @@ pub fn CRuntime::call_compiled(
       let entry = self.compiled.func_entries[func_idx]
       let num_locals = self.compiled.func_num_locals[func_idx]
       let args_fixed = FixedArray::from_array(args_u64)
-      let result_out : FixedArray[UInt64] = [0]
+      // Allocate result array with correct size (at least 1 to avoid empty array issues)
+      let result_out : FixedArray[UInt64] = FixedArray::make(
+        if num_results > 0 {
+          num_results
+        } else {
+          1
+        },
+        0UL,
+      )
       let trap_code = c_execute_ffi(
         self.compiled.code,
         entry,
@@ -97,6 +107,7 @@ pub fn CRuntime::call_compiled(
         args_fixed,
         args_u64.length(),
         result_out,
+        num_results,
       )
 
       // Check for trap
@@ -105,10 +116,10 @@ pub fn CRuntime::call_compiled(
         raise trap_to_error(trap)
       }
 
-      // Convert result based on function type
+      // Convert all results based on function type
       let results : Array[Value] = []
-      if func_type.results.length() > 0 {
-        results.push(u64_to_value(result_out[0], func_type.results[0]))
+      for i in 0..<num_results {
+        results.push(u64_to_value(result_out[i], func_type.results[i]))
       }
       results
     }
