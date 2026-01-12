@@ -3,6 +3,7 @@ package "moonbitlang/wasm5/src/cruntime"
 
 import(
   "moonbitlang/wasm5/src/core"
+  "moonbitlang/wasm5/src/runtime"
 )
 
 // Values
@@ -15,9 +16,9 @@ pub struct CRuntime {
   module_ : @core.Module
   compiled : CompiledModule
 }
-pub fn CRuntime::call_compiled(Self, Bytes, Array[@core.Value]) -> Array[@core.Value]
+pub fn CRuntime::call_compiled(Self, Bytes, Array[@core.Value]) -> Array[@core.Value] raise @runtime.RuntimeError
 pub fn CRuntime::load(@core.Module) -> Self
-pub fn CRuntime::run_start(Self) -> Unit
+pub fn CRuntime::run_start(Self) -> Unit raise @runtime.RuntimeError
 
 pub struct CompiledModule {
   code : FixedArray[UInt64]
@@ -26,6 +27,21 @@ pub struct CompiledModule {
   func_max_stack : FixedArray[Int]
   exports : Map[String, Int]
 }
+
+pub enum TrapCode {
+  None
+  Unreachable
+  DivisionByZero
+  IntegerOverflow
+  InvalidConversionToInteger
+  OutOfBoundsMemoryAccess
+  OutOfBoundsTableAccess
+  IndirectCallTypeMismatch
+  NullFunctionReference
+  StackOverflow
+}
+pub impl Eq for TrapCode
+pub impl Show for TrapCode
 
 // Type aliases
 

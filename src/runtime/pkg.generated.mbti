@@ -21,6 +21,7 @@ pub suberror RuntimeError {
   UnsupportedInitExpression(String)
   StackOverflow
 }
+pub fn RuntimeError::from_detail(String) -> Self
 pub impl Show for RuntimeError
 
 // Types and methods

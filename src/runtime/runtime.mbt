@@ -19,9 +19,10 @@ pub suberror RuntimeError {
 } derive(Show)
 
 ///|
-/// Create a RuntimeError from error_detail string
-/// The detail string should start with an error type prefix
-fn RuntimeError::from_detail(detail : String) -> RuntimeError {
+/// Create a RuntimeError from error_detail string.
+/// The detail string should start with an error type prefix.
+/// This function is public to allow other runtimes (e.g., CRuntime) to create errors.
+pub fn RuntimeError::from_detail(detail : String) -> RuntimeError {
   if detail.has_prefix("division by zero") {
     RuntimeError::DivisionByZero
   } else if detail.has_prefix("integer overflow") {

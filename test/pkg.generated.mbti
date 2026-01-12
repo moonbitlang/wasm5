@@ -3,6 +3,7 @@ package "moonbitlang/wasm5/test"
 
 import(
   "moonbitlang/wasm5/src/core"
+  "moonbitlang/wasm5/src/runtime"
 )
 
 // Values

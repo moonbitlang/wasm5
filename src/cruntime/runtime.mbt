@@ -12,6 +12,24 @@ pub struct CRuntime {
 using @core {type Value}
 
 ///|
+/// Convert TrapCode to RuntimeError using the error detail string approach
+fn trap_to_error(trap : TrapCode) -> @runtime.RuntimeError {
+  let detail = match trap {
+    None => "unreachable" // Should not happen
+    Unreachable => "unreachable"
+    DivisionByZero => "division by zero"
+    IntegerOverflow => "integer overflow"
+    InvalidConversionToInteger => "integer overflow"
+    OutOfBoundsMemoryAccess => "out of bounds memory access"
+    OutOfBoundsTableAccess => "out of bounds table access"
+    IndirectCallTypeMismatch => "indirect call type mismatch"
+    NullFunctionReference => "null function reference"
+    StackOverflow => "stack overflow"
+  }
+  @runtime.RuntimeError::from_detail(detail)
+}
+
+///|
 /// Load a module and compile it for C runtime execution.
 pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
   let compiled = compile(module_)
@@ -20,7 +38,7 @@ pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
 
 ///|
 /// Run the start function if present.
-pub fn CRuntime::run_start(self : CRuntime) -> Unit {
+pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError {
   match self.module_.start {
     Some(start_idx) => {
       let num_imported = count_imported_funcs(self.module_)
@@ -28,8 +46,19 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit {
       if local_idx >= 0 && local_idx < self.compiled.func_entries.length() {
         let entry = self.compiled.func_entries[local_idx]
         let num_locals = self.compiled.func_num_locals[local_idx]
-        let _ = c_execute_ffi(self.compiled.code, entry, num_locals, [], 0)
-
+        let result_out : FixedArray[UInt64] = [0]
+        let trap_code = c_execute_ffi(
+          self.compiled.code,
+          entry,
+          num_locals,
+          [],
+          0,
+          result_out,
+        )
+        let trap = trap_code_from_int(trap_code)
+        if trap != TrapCode::None {
+          raise trap_to_error(trap)
+        }
       }
     }
     None => ()
@@ -42,7 +71,7 @@ pub fn CRuntime::call_compiled(
   self : CRuntime,
   name : Bytes,
   args : Array[Value],
-) -> Array[Value] {
+) -> Array[Value] raise @runtime.RuntimeError {
   let name_str = @encoding/utf8.decode(name) catch { _ => return [] }
   match self.compiled.exports.get(name_str) {
     Some(func_idx) => {
@@ -60,18 +89,26 @@ pub fn CRuntime::call_compiled(
       let entry = self.compiled.func_entries[func_idx]
       let num_locals = self.compiled.func_num_locals[func_idx]
       let args_fixed = FixedArray::from_array(args_u64)
-      let result = c_execute_ffi(
+      let result_out : FixedArray[UInt64] = [0]
+      let trap_code = c_execute_ffi(
         self.compiled.code,
         entry,
         num_locals,
         args_fixed,
         args_u64.length(),
+        result_out,
       )
+
+      // Check for trap
+      let trap = trap_code_from_int(trap_code)
+      if trap != TrapCode::None {
+        raise trap_to_error(trap)
+      }
 
       // Convert result based on function type
       let results : Array[Value] = []
       if func_type.results.length() > 0 {
-        results.push(u64_to_value(result, func_type.results[0]))
+        results.push(u64_to_value(result_out[0], func_type.results[0]))
       }
       results
     }

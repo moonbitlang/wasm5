@@ -1,6 +1,7 @@
 {
   "import": [
-    "moonbitlang/wasm5/src/core"
+    "moonbitlang/wasm5/src/core",
+    "moonbitlang/wasm5/src/runtime"
   ],
   "native-stub": ["op.c"]
 }
