@@ -499,3 +499,20 @@ extern "C" fn drop() -> UInt64 = "wasm_drop"
 
 ///|
 extern "C" fn select() -> UInt64 = "wasm_select"
+
+// Memory operations
+
+///|
+extern "C" fn memory_grow() -> UInt64 = "memory_grow"
+
+///|
+extern "C" fn memory_size() -> UInt64 = "memory_size"
+
+///|
+extern "C" fn i32_load() -> UInt64 = "i32_load"
+
+///|
+extern "C" fn i32_store() -> UInt64 = "i32_store"
+
+///|
+extern "C" fn call_indirect() -> UInt64 = "call_indirect"

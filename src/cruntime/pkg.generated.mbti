@@ -15,6 +15,10 @@ pub fn compile(@core.Module) -> CompiledModule
 pub struct CRuntime {
   module_ : @core.Module
   compiled : CompiledModule
+  globals : FixedArray[UInt64]
+  memory : FixedArray[Byte]
+  memory_pages : FixedArray[Int]
+  tables : FixedArray[FixedArray[Int]]
 }
 pub fn CRuntime::call_compiled(Self, Bytes, Array[@core.Value]) -> Array[@core.Value] raise @runtime.RuntimeError
 pub fn CRuntime::load(@core.Module) -> Self

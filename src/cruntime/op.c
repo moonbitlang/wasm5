@@ -48,9 +48,21 @@ static int run(CRuntime* crt) {
     return ((OpFn)*crt->pc++)(crt);
 }
 
+// Memory pages info (shared across calls within same instance)
+static int* g_memory_pages = NULL;
+static int g_memory_size = 0;
+
+// Table and function metadata (for call_indirect)
+static int* g_table = NULL;
+static int g_table_size = 0;
+static int* g_func_entries = NULL;
+static int* g_func_num_locals = NULL;
+static int g_num_funcs = 0;
+static int g_num_imported_funcs = 0;
+
 // Execute threaded code starting at entry point
 // Returns trap code (0 = success), stores results in result_out[0..num_results-1]
-int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_args, uint64_t* result_out, int num_results, uint64_t* globals) {
+int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_args, uint64_t* result_out, int num_results, uint64_t* globals, uint8_t* mem, int mem_size, int* memory_pages, int* table, int table_size, int* func_entries, int* func_num_locals, int num_funcs, int num_imported_funcs) {
     // Allocate stack on heap to avoid C stack limits
     uint64_t* stack = (uint64_t*)malloc(STACK_SIZE * sizeof(uint64_t));
     if (!stack) {
@@ -66,12 +78,24 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
         stack[i] = 0;
     }
 
+    // Store memory info for ops
+    g_memory_pages = memory_pages;
+    g_memory_size = mem_size;
+
+    // Store table and function metadata for call_indirect
+    g_table = table;
+    g_table_size = table_size;
+    g_func_entries = func_entries;
+    g_func_num_locals = func_num_locals;
+    g_num_funcs = num_funcs;
+    g_num_imported_funcs = num_imported_funcs;
+
     CRuntime crt;
     crt.pc = code + entry;
     crt.fp = stack;
     crt.sp = stack + num_locals;  // Operand stack starts after locals
     crt.code = code;
-    crt.mem = NULL;
+    crt.mem = mem;
     crt.globals = globals;
 
     // Start execution
@@ -1424,3 +1448,112 @@ int op_wasm_select(CRuntime* crt) {
     NEXT();
 }
 DEFINE_OP(wasm_select)
+
+// Memory operations
+
+int op_memory_grow(CRuntime* crt) {
+    crt->pc++;  // Skip mem_idx (assume 0)
+    uint32_t delta = (uint32_t)crt->sp[-1];
+    // Return current page count and update
+    int32_t old_pages = g_memory_pages ? *g_memory_pages : 0;
+    // For now, accept any growth (simplified - doesn't actually allocate)
+    if (g_memory_pages) {
+        *g_memory_pages = old_pages + delta;
+    }
+    crt->sp[-1] = (uint64_t)(uint32_t)old_pages;
+    NEXT();
+}
+DEFINE_OP(memory_grow)
+
+int op_memory_size(CRuntime* crt) {
+    crt->pc++;  // Skip mem_idx (assume 0)
+    int32_t pages = g_memory_pages ? *g_memory_pages : 0;
+    *crt->sp++ = (uint64_t)(uint32_t)pages;
+    NEXT();
+}
+DEFINE_OP(memory_size)
+
+int op_i32_load(CRuntime* crt) {
+    crt->pc++;  // Skip align
+    uint32_t offset = (uint32_t)*crt->pc++;
+    crt->pc++;  // Skip mem_idx
+    uint32_t addr = (uint32_t)crt->sp[-1] + offset;
+    if (addr + 4 > g_memory_size) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+    uint32_t value = *(uint32_t*)(crt->mem + addr);
+    crt->sp[-1] = (uint64_t)value;
+    NEXT();
+}
+DEFINE_OP(i32_load)
+
+int op_i32_store(CRuntime* crt) {
+    crt->pc++;  // Skip align
+    uint32_t offset = (uint32_t)*crt->pc++;
+    crt->pc++;  // Skip mem_idx
+    uint32_t value = (uint32_t)crt->sp[-1];
+    uint32_t addr = (uint32_t)crt->sp[-2] + offset;
+    crt->sp -= 2;
+    if (addr + 4 > g_memory_size) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+    *(uint32_t*)(crt->mem + addr) = value;
+    NEXT();
+}
+DEFINE_OP(i32_store)
+
+// call_indirect - call function via table
+// Immediates: type_idx, table_idx, frame_offset
+// Stack: [..., args..., elem_idx] -> [..., results...]
+int op_call_indirect(CRuntime* crt) {
+    crt->pc++;  // Skip type_idx (not needed for simplified impl)
+    crt->pc++;  // Skip table_idx (assume 0)
+    int frame_offset = (int)*crt->pc++;
+
+    // Pop element index from stack
+    int32_t elem_idx = (int32_t)*--crt->sp;
+
+    // Check table bounds
+    if (elem_idx < 0 || elem_idx >= g_table_size) {
+        TRAP(TRAP_OUT_OF_BOUNDS_TABLE);
+    }
+
+    // Get function index from table
+    int func_idx = g_table[elem_idx];
+
+    // Check for null/undefined element (-1 means null)
+    if (func_idx < 0) {
+        TRAP(TRAP_OUT_OF_BOUNDS_TABLE);
+    }
+
+    // Convert to local function index
+    int local_idx = func_idx - g_num_imported_funcs;
+    if (local_idx < 0 || local_idx >= g_num_funcs) {
+        TRAP(TRAP_OUT_OF_BOUNDS_TABLE);
+    }
+
+    // Get callee entry point
+    int callee_pc = g_func_entries[local_idx];
+
+    // Save caller state on C stack (implicit via recursive call)
+    uint64_t* caller_fp = crt->fp;
+    uint64_t* caller_pc = crt->pc;
+
+    // New frame starts at fp + frame_offset (args already in place)
+    crt->fp = crt->fp + frame_offset;
+    crt->pc = crt->code + callee_pc;
+
+    // Execute callee (recursive call using native C stack)
+    int trap = run(crt);
+
+    // Restore caller state
+    crt->fp = caller_fp;
+    crt->pc = caller_pc;
+
+    if (trap != TRAP_NONE) {
+        return trap;
+    }
+
+    NEXT();
+}
+DEFINE_OP(call_indirect)

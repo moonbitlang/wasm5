@@ -916,6 +916,33 @@ fn compile_instr(
       ignore(ctx.push_slot())
     }
 
+    // Memory operations
+    MemoryGrow(mem_idx) => {
+      ctx.emit(memory_grow())
+      ctx.emit_idx(mem_idx.reinterpret_as_int())
+      // Consumes delta, produces old size - no net change
+    }
+    MemorySize(mem_idx) => {
+      ctx.emit(memory_size())
+      ctx.emit_idx(mem_idx.reinterpret_as_int())
+      ignore(ctx.push_slot())
+    }
+    I32Load(align, offset, mem_idx) => {
+      ctx.emit(i32_load())
+      ctx.emit_idx(align.reinterpret_as_int())
+      ctx.emit_idx(offset.reinterpret_as_int())
+      ctx.emit_idx(mem_idx.reinterpret_as_int())
+      // Consumes address, produces value - no net change
+    }
+    I32Store(align, offset, mem_idx) => {
+      ctx.emit(i32_store())
+      ctx.emit_idx(align.reinterpret_as_int())
+      ctx.emit_idx(offset.reinterpret_as_int())
+      ctx.emit_idx(mem_idx.reinterpret_as_int())
+      ignore(ctx.pop_slot()) // value
+      ignore(ctx.pop_slot()) // address
+    }
+
     // Block structures
     Block(bt, body) => {
       let arity = get_block_arity(bt)
@@ -1140,6 +1167,47 @@ fn compile_instr(
         ctx.emit_idx(ctx.current_sp())
       }
       // TODO: handle imported function calls
+    }
+
+    // Indirect function call via table
+    CallIndirect(type_idx, table_idx) => {
+      // Get function type from type index
+      let type_int = type_idx.reinterpret_as_int()
+      let func_type = get_func_type(mod_info.mod_, type_int)
+      let num_params = func_type.params.length()
+      let num_results = func_type.results.length()
+
+      // Stack has: [..., args..., elem_idx]
+      // Pop the elem_idx from slot stack (handled by C at runtime)
+      ignore(ctx.pop_slot())
+
+      // Compute frame_offset from the args (same as Call)
+      let frame_offset = if num_params > 0 {
+        ctx.slot_at(num_params - 1)
+      } else {
+        ctx.current_sp()
+      }
+
+      // Pop args from slot stack
+      for _ in 0..<num_params {
+        ignore(ctx.pop_slot())
+      }
+
+      // Emit call_indirect: type_idx, table_idx, frame_offset
+      ctx.emit(call_indirect())
+      ctx.emit_idx(type_int)
+      ctx.emit_idx(table_idx.reinterpret_as_int())
+      ctx.emit_idx(frame_offset)
+
+      // Push result slots
+      for i in 0..<num_results {
+        ctx.slot_stack.push(frame_offset + i)
+      }
+      ctx.next_slot = frame_offset + num_results
+
+      // Set sp to after result slots
+      ctx.emit(set_sp())
+      ctx.emit_idx(ctx.current_sp())
     }
 
     // Placeholder for unimplemented instructions
