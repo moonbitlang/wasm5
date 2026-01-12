@@ -823,3 +823,8 @@ async test "const.wast (cruntime)" {
 async test "skip-stack-guard-page.wast (cruntime)" {
   run_test_harness("", "skip-stack-guard-page.wast", runtime_type=CRuntime)
 }
+
+///|
+async test "loop.wast (cruntime)" {
+  run_test_harness("", "loop.wast", runtime_type=CRuntime)
+}

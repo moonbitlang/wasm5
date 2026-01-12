@@ -36,7 +36,10 @@ typedef int (*OpFn)(CRuntime*);
 #define MUSTTAIL
 #endif
 
-#define NEXT() MUSTTAIL return ((OpFn)*crt->pc++)(crt)
+#define NEXT() do { \
+    MUSTTAIL return ((OpFn)*crt->pc++)(crt); \
+} while(0)
+
 #define TRAP(code) return (code)
 
 // Stack size: 64K slots = 512KB

@@ -300,11 +300,29 @@ fn get_block_arity(bt : @core.BlockType) -> Int {
 }
 
 ///|
+/// Get param and result arity from block type, using module types for TypeIndex
+fn get_block_arities(mod_ : @core.Module, bt : @core.BlockType) -> (Int, Int) {
+  match bt {
+    Empty => (0, 0)
+    Value(_) => (0, 1)
+    TypeIndex(idx) =>
+      // Look up the function type from the types section
+      match mod_.types[idx] {
+        Func(ft) => (ft.params.length(), ft.results.length())
+        _ => (0, 1) // Fallback
+      }
+  }
+}
+
+///|
 /// Emit stack resolution: copy current top values to pre-allocated result slots, set sp
+/// For blocks: results are AT target_sp, so sp = target_sp + arity
+/// For loops: params are BEFORE target_sp, so sp = target_sp
 fn CompileCtx::emit_resolution(
   self : CompileCtx,
   result_slots : Array[Int],
   target_sp : Int,
+  is_loop : Bool,
 ) -> Unit {
   let arity = result_slots.length()
   // Copy each result from current slot to pre-allocated slot
@@ -317,9 +335,13 @@ fn CompileCtx::emit_resolution(
       self.emit_idx(dst_slot)
     }
   }
-  // Set sp to position after results
+  // Set sp to correct position
   self.emit(set_sp())
-  self.emit_idx(target_sp + arity)
+  if is_loop {
+    self.emit_idx(target_sp) // For loops: params are BEFORE target_sp
+  } else {
+    self.emit_idx(target_sp + arity) // For blocks: results are AT target_sp
+  }
 }
 
 ///|
@@ -379,10 +401,16 @@ fn CompileCtx::emit_deferred_blocks(self : CompileCtx) -> Unit {
         self.emit_idx(dst_slot)
       }
     }
-    // Set sp to position after results
+    // Set sp to correct position
     let arity = block.src_slots.length()
     self.emit(set_sp())
-    self.emit_idx(block.target_sp + arity)
+    // For loops: params are BEFORE target_sp, so sp = target_sp
+    // For blocks: results go AT target_sp, so sp = target_sp + arity
+    if block.is_loop {
+      self.emit_idx(block.target_sp)
+    } else {
+      self.emit_idx(block.target_sp + arity)
+    }
 
     // Emit final jump
     self.emit(br())
@@ -930,7 +958,7 @@ fn compile_instr(
       compile_expr(ctx, mod_info, { instrs: body })
       // At block end, copy results to pre-allocated slots
       let frame = ctx.control_stack[ctx.control_stack.length() - 1]
-      ctx.emit_resolution(frame.result_slots, frame.sp_at_entry)
+      ctx.emit_resolution(frame.result_slots, frame.sp_at_entry, false)
       ctx.pop_control()
       // Push result slots back onto logical stack
       for slot in frame.result_slots {
@@ -938,17 +966,29 @@ fn compile_instr(
       }
     }
     Loop(bt, body) => {
-      let arity = get_block_arity(bt)
+      // For loops: branch arity = param arity, result arity = result arity
+      let (param_arity, _result_arity) = get_block_arities(mod_info.mod_, bt)
       let loop_start = ctx.code.length()
-      ctx.push_control(Loop, arity, loop_start)
-      compile_expr(ctx, mod_info, { instrs: body })
-      // Loop falls through (no resolution needed at end)
-      let frame = ctx.control_stack[ctx.control_stack.length() - 1]
-      ctx.pop_control()
-      // Push result slots back onto logical stack
-      for slot in frame.result_slots {
-        ctx.slot_stack.push(slot)
+      // For loops, the param slots are already on the stack from values pushed before the loop
+      // Capture them as the branch target slots (NOT pre-allocated)
+      let param_slots : Array[Int] = []
+      for i in 0..<param_arity {
+        // Get slot at depth (param_arity - 1 - i) to get them in order
+        param_slots.push(ctx.slot_at(param_arity - 1 - i))
       }
+      // Push control frame with captured param slots as result_slots
+      ctx.control_stack.push({
+        kind: Loop,
+        target_pc: loop_start,
+        result_slots: param_slots, // For loops, these are the param slots for branching
+        sp_at_entry: ctx.current_sp(),
+        pending_patches: [],
+      })
+      compile_expr(ctx, mod_info, { instrs: body })
+      // Loop falls through - pop the control frame
+      ctx.pop_control()
+      // The loop body has already set up the correct slot_stack state
+      // with result_arity values on top. No additional adjustment needed.
     }
     If(bt, then_body, else_body) => {
       ignore(ctx.pop_slot()) // Consume condition
@@ -961,7 +1001,7 @@ fn compile_instr(
       // Compile then branch
       compile_expr(ctx, mod_info, { instrs: then_body })
       // Copy results to pre-allocated slots
-      ctx.emit_resolution(frame.result_slots, frame.sp_at_entry)
+      ctx.emit_resolution(frame.result_slots, frame.sp_at_entry, false)
       if else_body.length() > 0 {
         // Emit branch to skip else
         ctx.emit(br())
@@ -978,7 +1018,7 @@ fn compile_instr(
         // Compile else branch
         compile_expr(ctx, mod_info, { instrs: else_body })
         // Copy results to pre-allocated slots
-        ctx.emit_resolution(frame.result_slots, frame.sp_at_entry)
+        ctx.emit_resolution(frame.result_slots, frame.sp_at_entry, false)
         // Patch end_pc
         ctx.code[end_patch] = ctx.code
           .length()
@@ -1001,12 +1041,13 @@ fn compile_instr(
     // Branches - emit resolution inline for br, defer for br_if/br_table
     Br(label) => {
       let label_int = label.reinterpret_as_int()
+      let is_loop = ctx.is_loop_target(label_int)
       let (target_pc, result_slots, target_sp) = ctx.get_branch_target(
         label_int,
       )
       let arity = result_slots.length()
       // Emit resolution code inline
-      ctx.emit_resolution(result_slots, target_sp)
+      ctx.emit_resolution(result_slots, target_sp, is_loop)
       // Emit simple jump
       ctx.emit(br())
       if ctx.is_loop_target(label_int) {
