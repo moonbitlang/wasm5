@@ -37,11 +37,17 @@ typedef int (*OpFn)(CRuntime*);
 #define NEXT() MUSTTAIL return ((OpFn)*crt->pc++)(crt)
 #define TRAP(code) return (code)
 
+// Stack size: 64K slots = 512KB
+#define STACK_SIZE 65536
+
 // Execute threaded code starting at entry point
 // Returns trap code (0 = success), stores result in *result_out
 int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_args, uint64_t* result_out) {
-    // Allocate stack: locals + operand space
-    uint64_t stack[256];  // Fixed size for now
+    // Allocate stack on heap to avoid C stack limits
+    uint64_t* stack = (uint64_t*)malloc(STACK_SIZE * sizeof(uint64_t));
+    if (!stack) {
+        return TRAP_STACK_OVERFLOW;
+    }
 
     // Initialize locals from args
     for (int i = 0; i < num_args; i++) {
@@ -65,6 +71,7 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     if (result_out) {
         *result_out = (crt.sp > stack + num_locals) ? crt.sp[-1] : 0;
     }
+    free(stack);
     return trap;
 }
 
