@@ -130,6 +130,19 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
         }
     }
     free(stack);
+
+    // Reset global pointers to prevent dangling references to MoonBit-managed memory
+    // (GC could free these arrays after execution, causing SIGSEGV on next access)
+    g_memory_pages = NULL;
+    g_memory_size = 0;
+    g_table = NULL;
+    g_table_size = 0;
+    g_func_entries = NULL;
+    g_func_num_locals = NULL;
+    g_num_funcs = 0;
+    g_num_imported_funcs = 0;
+    g_stack_base = NULL;
+
     return trap;
 }
 

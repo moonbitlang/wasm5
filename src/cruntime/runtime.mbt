@@ -257,7 +257,6 @@ pub fn CRuntime::call_compiled(
         self.compiled.func_entries.length(),
         num_imported,
       )
-
       // Check for trap
       let trap = trap_code_from_int(trap_code)
       if trap != TrapCode::None {
