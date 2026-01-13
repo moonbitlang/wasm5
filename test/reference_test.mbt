@@ -853,3 +853,13 @@ async test "br_if.wast (cruntime)" {
 async test "if.wast (cruntime)" {
   run_test_harness("", "if.wast", runtime_type=CRuntime)
 }
+
+///|
+async test "br_table.wast (cruntime)" {
+  run_test_harness("", "br_table.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "fac.wast (cruntime)" {
+  run_test_harness("", "fac.wast", runtime_type=CRuntime)
+}
