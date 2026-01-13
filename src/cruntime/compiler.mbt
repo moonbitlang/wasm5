@@ -114,6 +114,7 @@ priv struct ControlFrame {
   target_pc : Int // For loops: start PC. For blocks/ifs: patched at end
   result_slots : Array[Int] // Pre-allocated result slot positions
   sp_at_entry : Int // Stack pointer (slot) at block entry
+  slot_stack_len_at_entry : Int // slot_stack.length() at block entry
   pending_patches : Array[Int] // Code positions that need patching
 }
 
@@ -147,6 +148,7 @@ priv struct CompileCtx {
   slot_stack : Array[Int] // Maps logical stack index to slot number
   mut next_slot : Int // Next available slot for allocation
   mut num_results : Int // Number of results for current function
+  mut is_unreachable : Bool // True after unconditional branch until block end
 }
 
 ///|
@@ -159,6 +161,7 @@ fn CompileCtx::new() -> CompileCtx {
     slot_stack: [],
     next_slot: 0,
     num_results: 0,
+    is_unreachable: false,
   }
 }
 
@@ -172,6 +175,7 @@ fn CompileCtx::init_function(
   self.slot_stack.clear()
   self.num_results = num_results
   self.next_slot = num_locals // Operand slots start after locals
+  self.is_unreachable = false
 }
 
 ///|
@@ -217,6 +221,8 @@ fn CompileCtx::push_control(
   arity : Int,
   target_pc : Int,
 ) -> Unit {
+  // Save slot_stack length before allocating result slots
+  let slot_stack_len = self.slot_stack.length()
   // Pre-allocate result slots (wasm3 style)
   let result_slots : Array[Int] = []
   for _ in 0..<arity {
@@ -231,6 +237,7 @@ fn CompileCtx::push_control(
     target_pc,
     result_slots,
     sp_at_entry: self.current_sp(),
+    slot_stack_len_at_entry: slot_stack_len,
     pending_patches: [],
   })
 }
@@ -291,11 +298,15 @@ fn CompileCtx::is_loop_target(self : CompileCtx, label : Int) -> Bool {
 
 ///|
 /// Get block result arity from block type
-fn get_block_arity(bt : @core.BlockType) -> Int {
+fn get_block_arity(mod_ : @core.Module, bt : @core.BlockType) -> Int {
   match bt {
     Empty => 0
     Value(_) => 1
-    TypeIndex(_) => 1 // Simplified - would need type lookup for multi-value
+    TypeIndex(idx) =>
+      match mod_.types[idx] {
+        Func(ft) => ft.results.length()
+        _ => 1
+      }
   }
 }
 
@@ -469,11 +480,15 @@ fn compile_instr(
 ) -> Unit {
   match instr {
     // Control
-    Unreachable => ctx.emit(wasm_unreachable())
+    Unreachable => {
+      ctx.emit(wasm_unreachable())
+      ctx.is_unreachable = true
+    }
     Nop => () // No-op: skip at compile time
     Return => {
       ctx.emit(wasm_return())
       ctx.emit_idx(ctx.num_results)
+      ctx.is_unreachable = true
     }
 
     // Constants - push to slot stack
@@ -953,22 +968,39 @@ fn compile_instr(
 
     // Block structures
     Block(bt, body) => {
-      let arity = get_block_arity(bt)
+      let arity = get_block_arity(mod_info.mod_, bt)
       ctx.push_control(Block, arity, 0) // target_pc will be patched at end
       compile_expr(ctx, mod_info, { instrs: body })
-      // At block end, copy results to pre-allocated slots
+      // At block end, copy results to pre-allocated slots (only if reachable)
       let frame = ctx.control_stack[ctx.control_stack.length() - 1]
-      ctx.emit_resolution(frame.result_slots, frame.sp_at_entry, false)
+      let fallthrough_reachable = not(ctx.is_unreachable)
+      if fallthrough_reachable {
+        ctx.emit_resolution(frame.result_slots, frame.sp_at_entry, false)
+      }
+      // Block end is reachable if fallthrough is reachable OR any br targeted this block
+      let block_end_reachable = fallthrough_reachable ||
+        frame.pending_patches.length() > 0
       ctx.pop_control()
-      // Push result slots back onto logical stack
+      // Restore slot_stack to entry state, then push result slots
+      while ctx.slot_stack.length() > frame.slot_stack_len_at_entry {
+        ignore(ctx.slot_stack.pop())
+      }
       for slot in frame.result_slots {
         ctx.slot_stack.push(slot)
+      }
+      // Reset next_slot to after result slots
+      ctx.next_slot = frame.sp_at_entry + arity
+      // Only reset unreachable if block end is reachable
+      if block_end_reachable {
+        ctx.is_unreachable = false
       }
     }
     Loop(bt, body) => {
       // For loops: branch arity = param arity, result arity = result arity
       let (param_arity, _result_arity) = get_block_arities(mod_info.mod_, bt)
       let loop_start = ctx.code.length()
+      // Save slot_stack length at loop entry
+      let slot_stack_len = ctx.slot_stack.length()
       // For loops, the param slots are already on the stack from values pushed before the loop
       // Capture them as the branch target slots (NOT pre-allocated)
       let param_slots : Array[Int] = []
@@ -982,6 +1014,7 @@ fn compile_instr(
         target_pc: loop_start,
         result_slots: param_slots, // For loops, these are the param slots for branching
         sp_at_entry: ctx.current_sp(),
+        slot_stack_len_at_entry: slot_stack_len,
         pending_patches: [],
       })
       compile_expr(ctx, mod_info, { instrs: body })
@@ -989,10 +1022,13 @@ fn compile_instr(
       ctx.pop_control()
       // The loop body has already set up the correct slot_stack state
       // with result_arity values on top. No additional adjustment needed.
+      // NOTE: We do NOT reset is_unreachable here because:
+      // - br to a loop jumps back to loop start (continues loop)
+      // - If body ends unreachable (br to outer block), loop end is also unreachable
     }
     If(bt, then_body, else_body) => {
       ignore(ctx.pop_slot()) // Consume condition
-      let arity = get_block_arity(bt)
+      let arity = get_block_arity(mod_info.mod_, bt)
       ctx.emit(wasm_if())
       let else_patch = ctx.code.length()
       ctx.emit_idx(0) // Placeholder for else_pc
@@ -1000,42 +1036,64 @@ fn compile_instr(
       let frame = ctx.control_stack[ctx.control_stack.length() - 1]
       // Compile then branch
       compile_expr(ctx, mod_info, { instrs: then_body })
-      // Copy results to pre-allocated slots
-      ctx.emit_resolution(frame.result_slots, frame.sp_at_entry, false)
+      // Copy results to pre-allocated slots (only if reachable)
+      let then_unreachable = ctx.is_unreachable
+      if not(then_unreachable) {
+        ctx.emit_resolution(frame.result_slots, frame.sp_at_entry, false)
+      }
       if else_body.length() > 0 {
-        // Emit branch to skip else
-        ctx.emit(br())
-        let end_patch = ctx.code.length()
-        ctx.emit_idx(0) // Placeholder for end_pc
+        // Emit branch to skip else (only if then is reachable)
+        let mut end_patch = 0
+        if not(then_unreachable) {
+          ctx.emit(br())
+          end_patch = ctx.code.length()
+          ctx.emit_idx(0) // Placeholder for end_pc
+        }
         // Patch else_pc to here
         ctx.code[else_patch] = ctx.code
           .length()
           .reinterpret_as_uint()
           .to_uint64()
-        // Reset slot state for else branch
+        // Restore slot state for else branch using saved entry state
+        while ctx.slot_stack.length() > frame.slot_stack_len_at_entry {
+          ignore(ctx.slot_stack.pop())
+        }
         ctx.next_slot = frame.sp_at_entry
-        ctx.slot_stack.clear()
+        ctx.is_unreachable = false
         // Compile else branch
         compile_expr(ctx, mod_info, { instrs: else_body })
-        // Copy results to pre-allocated slots
-        ctx.emit_resolution(frame.result_slots, frame.sp_at_entry, false)
-        // Patch end_pc
-        ctx.code[end_patch] = ctx.code
-          .length()
-          .reinterpret_as_uint()
-          .to_uint64()
+        // Copy results to pre-allocated slots (only if reachable)
+        let else_unreachable = ctx.is_unreachable
+        if not(else_unreachable) {
+          ctx.emit_resolution(frame.result_slots, frame.sp_at_entry, false)
+        }
+        // Patch end_pc (only if then was reachable)
+        if not(then_unreachable) {
+          ctx.code[end_patch] = ctx.code
+            .length()
+            .reinterpret_as_uint()
+            .to_uint64()
+        }
+        // If end is reachable if either branch is reachable
+        ctx.is_unreachable = then_unreachable && else_unreachable
       } else {
         // No else - patch else_pc to end
         ctx.code[else_patch] = ctx.code
           .length()
           .reinterpret_as_uint()
           .to_uint64()
+        // With no else, end is always reachable (else branch does nothing)
+        ctx.is_unreachable = false
       }
       ctx.pop_control()
-      // Push result slots back onto logical stack
+      // Restore slot_stack to entry state, then push result slots
+      while ctx.slot_stack.length() > frame.slot_stack_len_at_entry {
+        ignore(ctx.slot_stack.pop())
+      }
       for slot in frame.result_slots {
         ctx.slot_stack.push(slot)
       }
+      ctx.next_slot = frame.sp_at_entry + arity
     }
 
     // Branches - emit resolution inline for br, defer for br_if/br_table
@@ -1061,6 +1119,8 @@ fn compile_instr(
       for _ in 0..<arity {
         ignore(ctx.pop_slot())
       }
+      // Code after unconditional branch is unreachable
+      ctx.is_unreachable = true
     }
     BrIf(label) => {
       ignore(ctx.pop_slot()) // Consume condition
@@ -1136,6 +1196,8 @@ fn compile_instr(
         ctx.is_loop_target(default_int),
         target_pc,
       )
+      // Code after br_table is unreachable
+      ctx.is_unreachable = true
     }
 
     // Function calls (wasm3 style: compute frame layout at compile time)

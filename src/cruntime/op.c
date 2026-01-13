@@ -2,6 +2,15 @@
 #include <stdlib.h>
 #include <math.h>
 #include <limits.h>
+#include <stdio.h>
+
+// Debug flag - set to 1 to enable tracing
+#define DEBUG_TRACE 0
+#if DEBUG_TRACE
+#define TRACE(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define TRACE(...)
+#endif
 
 // Trap codes - must match MoonBit TrapCode enum values
 #define TRAP_NONE                       0
@@ -192,6 +201,7 @@ int op_wasm_return(CRuntime* crt) {
     // Copy results from stack top to fp[0..num_results-1]
     for (int i = 0; i < num_results; i++) {
         crt->fp[i] = crt->sp[i - num_results];
+        TRACE("return: result[%d] = %lld\n", i, (long long)crt->fp[i]);
     }
     return TRAP_NONE;
 }
@@ -202,7 +212,9 @@ DEFINE_OP(wasm_return)
 int op_copy_slot(CRuntime* crt) {
     int src_slot = (int)*crt->pc++;
     int dst_slot = (int)*crt->pc++;
-    crt->fp[dst_slot] = crt->fp[src_slot];
+    uint64_t val = crt->fp[src_slot];
+    crt->fp[dst_slot] = val;
+    TRACE("copy_slot: slot[%d] -> slot[%d], val=%lld\n", src_slot, dst_slot, (long long)val);
     NEXT();
 }
 DEFINE_OP(copy_slot)
@@ -210,6 +222,7 @@ DEFINE_OP(copy_slot)
 // Set stack pointer to absolute slot position
 int op_set_sp(CRuntime* crt) {
     int slot = (int)*crt->pc++;
+    TRACE("set_sp: sp = fp + %d (top value at slot %d = %lld)\n", slot, slot-1, (long long)(slot > 0 ? crt->fp[slot-1] : 0));
     crt->sp = crt->fp + slot;
     NEXT();
 }
@@ -219,6 +232,7 @@ DEFINE_OP(set_sp)
 // Immediate: target_idx
 int op_br(CRuntime* crt) {
     int target_idx = (int)*crt->pc++;
+    TRACE("br: jumping to pc=%d\n", target_idx);
     crt->pc = crt->code + target_idx;
     NEXT();
 }
@@ -268,7 +282,9 @@ DEFINE_OP(br_table)
 // Constants
 
 int op_i32_const(CRuntime* crt) {
-    *crt->sp++ = *crt->pc++;  // Push immediate
+    uint64_t val = *crt->pc++;
+    *crt->sp++ = val;
+    TRACE("i32_const: pushed %lld at slot %lld\n", (long long)val, (long long)(crt->sp - crt->fp - 1));
     NEXT();
 }
 DEFINE_OP(i32_const)
@@ -295,14 +311,18 @@ DEFINE_OP(f64_const)
 
 int op_local_get(CRuntime* crt) {
     int64_t idx = (int64_t)*crt->pc++;
-    *crt->sp++ = crt->fp[idx];
+    uint64_t val = crt->fp[idx];
+    *crt->sp++ = val;
+    TRACE("local_get: local[%lld] = %lld, pushed to slot %lld\n", (long long)idx, (long long)val, (long long)(crt->sp - crt->fp - 1));
     NEXT();
 }
 DEFINE_OP(local_get)
 
 int op_local_set(CRuntime* crt) {
     int64_t idx = (int64_t)*crt->pc++;
-    crt->fp[idx] = *--crt->sp;
+    uint64_t val = *--crt->sp;
+    crt->fp[idx] = val;
+    TRACE("local_set: local[%lld] = %lld\n", (long long)idx, (long long)val);
     NEXT();
 }
 DEFINE_OP(local_set)
@@ -334,7 +354,9 @@ int op_i32_add(CRuntime* crt) {
     uint32_t b = (uint32_t)crt->sp[-1];
     uint32_t a = (uint32_t)crt->sp[-2];
     crt->sp--;
-    crt->sp[-1] = (uint64_t)(a + b);
+    uint32_t result = a + b;
+    crt->sp[-1] = (uint64_t)result;
+    TRACE("i32_add: %u + %u = %u\n", a, b, result);
     NEXT();
 }
 DEFINE_OP(i32_add)
