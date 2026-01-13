@@ -1122,9 +1122,11 @@ async test "utf8-invalid-encoding.wast (cruntime)" {
 // }
 
 // --- Other ---
-// async test "global.wast (cruntime)" {
-//   run_test_harness("", "global.wast", runtime_type=CRuntime)
-// }
+
+///|
+async test "global.wast (cruntime)" {
+  run_test_harness("", "global.wast", runtime_type=CRuntime)
+}
 // async test "local_init.wast (cruntime)" {
 //   run_test_harness("", "local_init.wast", runtime_type=CRuntime)
 // }

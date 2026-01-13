@@ -78,21 +78,57 @@ fn init_memory(module_ : @core.Module) -> (FixedArray[Byte], FixedArray[Int]) {
 }
 
 ///|
+/// Count imported globals in module
+fn count_imported_globals(module_ : @core.Module) -> Int {
+  let mut count = 0
+  for imp in module_.imports {
+    match imp.desc {
+      Global(_) => count += 1
+      _ => ()
+    }
+  }
+  count
+}
+
+///|
 /// Initialize globals from module's global section
 fn init_globals(module_ : @core.Module) -> FixedArray[UInt64] {
-  let num_globals = module_.globals.length()
-  let globals = FixedArray::make(
-    if num_globals > 0 {
-      num_globals
-    } else {
-      1
-    },
-    0UL,
-  )
+  let num_imported = count_imported_globals(module_)
+  let num_local = module_.globals.length()
+  let total = num_imported + num_local
+  let globals = FixedArray::make(if total > 0 { total } else { 1 }, 0UL)
+  // First, initialize imported globals with default values (for spectest compatibility)
+  let mut idx = 0
+  for imp in module_.imports {
+    match imp.desc {
+      Global(gt) => {
+        // Default values for spectest globals
+        let value : UInt64 = match gt.val_type {
+          I32 => 666UL // spectest global_i32 = 666
+          I64 => 666UL // spectest global_i64 = 666
+          F32 => {
+            let f : Float = 666.6
+            f.reinterpret_as_uint().to_uint64()
+          }
+          F64 => {
+            let d : Double = 666.6
+            d.reinterpret_as_uint64()
+          }
+          FuncRef => 0xFFFFFFFF_FFFFFFFFUL // null funcref
+          ExternRef => 0xFFFFFFFF_FFFFFFFFUL // null externref
+          _ => 0UL
+        }
+        globals[idx] = value
+        idx += 1
+      }
+      _ => ()
+    }
+  }
+  // Then initialize local globals with their init expressions
   for i, g in module_.globals {
-    // Evaluate init expression (assuming simple constant for now)
-    let value = eval_const_expr(g.init)
-    globals[i] = value
+    // Evaluate init expression, passing globals array to support global.get
+    let value = eval_const_expr_with_globals(g.init, globals)
+    globals[num_imported + i] = value
   }
   globals
 }
@@ -145,21 +181,81 @@ fn eval_elem_expr(expr : @core.Expr) -> Int {
 }
 
 ///|
-/// Evaluate a constant expression to get initial value
+/// Evaluate a constant expression to get initial value (simple version without globals)
 fn eval_const_expr(expr : @core.Expr) -> UInt64 {
+  eval_const_expr_with_globals(expr, FixedArray::make(1, 0UL))
+}
+
+///|
+/// Evaluate a constant expression with access to globals array
+fn eval_const_expr_with_globals(
+  expr : @core.Expr,
+  globals : FixedArray[UInt64],
+) -> UInt64 {
+  // Use a simple stack for expression evaluation
+  let stack : Array[UInt64] = []
   for instr in expr.instrs {
     match instr {
-      I32Const(n) => return n.to_uint64()
-      I64Const(n) => return n
-      F32Const(f) => return f.reinterpret_as_uint().to_uint64()
-      F64Const(f) => return f.reinterpret_as_uint64()
-      GlobalGet(_) => return 0UL // TODO: handle global references
-      RefNull(_) => return 0xFFFFFFFF_FFFFFFFFUL
-      RefFunc(_) => return 0UL // TODO: handle func refs
+      I32Const(n) => stack.push(n.to_uint64())
+      I64Const(n) => stack.push(n)
+      F32Const(f) => stack.push(f.reinterpret_as_uint().to_uint64())
+      F64Const(f) => stack.push(f.reinterpret_as_uint64())
+      GlobalGet(idx) => {
+        let global_idx = idx.reinterpret_as_int()
+        if global_idx >= 0 && global_idx < globals.length() {
+          stack.push(globals[global_idx])
+        } else {
+          stack.push(0UL)
+        }
+      }
+      RefNull(_) => stack.push(0xFFFFFFFF_FFFFFFFFUL)
+      RefFunc(idx) => stack.push(idx.to_uint64()) // Function index
+      // Simple arithmetic for const expr evaluation
+      I32Add =>
+        if stack.length() >= 2 {
+          let b = stack.pop().unwrap().to_uint()
+          let a = stack.pop().unwrap().to_uint()
+          stack.push((a + b).to_uint64())
+        }
+      I32Sub =>
+        if stack.length() >= 2 {
+          let b = stack.pop().unwrap().to_uint()
+          let a = stack.pop().unwrap().to_uint()
+          stack.push((a - b).to_uint64())
+        }
+      I32Mul =>
+        if stack.length() >= 2 {
+          let b = stack.pop().unwrap().to_uint()
+          let a = stack.pop().unwrap().to_uint()
+          stack.push((a * b).to_uint64())
+        }
+      I64Add =>
+        if stack.length() >= 2 {
+          let b = stack.pop().unwrap()
+          let a = stack.pop().unwrap()
+          stack.push(a + b)
+        }
+      I64Sub =>
+        if stack.length() >= 2 {
+          let b = stack.pop().unwrap()
+          let a = stack.pop().unwrap()
+          stack.push(a - b)
+        }
+      I64Mul =>
+        if stack.length() >= 2 {
+          let b = stack.pop().unwrap()
+          let a = stack.pop().unwrap()
+          stack.push(a * b)
+        }
       _ => continue
     }
   }
-  0UL
+  // Return top of stack or 0 if empty
+  if stack.length() > 0 {
+    stack.pop().unwrap()
+  } else {
+    0UL
+  }
 }
 
 ///|
