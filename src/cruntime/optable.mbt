@@ -515,4 +515,22 @@ extern "C" fn i32_load() -> UInt64 = "i32_load"
 extern "C" fn i32_store() -> UInt64 = "i32_store"
 
 ///|
+extern "C" fn i32_load8_s() -> UInt64 = "i32_load8_s"
+
+///|
+extern "C" fn i32_load8_u() -> UInt64 = "i32_load8_u"
+
+///|
+extern "C" fn i32_load16_s() -> UInt64 = "i32_load16_s"
+
+///|
+extern "C" fn i32_load16_u() -> UInt64 = "i32_load16_u"
+
+///|
+extern "C" fn i32_store8() -> UInt64 = "i32_store8"
+
+///|
+extern "C" fn i32_store16() -> UInt64 = "i32_store16"
+
+///|
 extern "C" fn call_indirect() -> UInt64 = "call_indirect"

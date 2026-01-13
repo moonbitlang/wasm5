@@ -965,6 +965,50 @@ fn compile_instr(
       ignore(ctx.pop_slot()) // value
       ignore(ctx.pop_slot()) // address
     }
+    I32Load8S(align, offset, mem_idx) => {
+      ctx.emit(i32_load8_s())
+      ctx.emit_idx(align.reinterpret_as_int())
+      ctx.emit_idx(offset.reinterpret_as_int())
+      ctx.emit_idx(mem_idx.reinterpret_as_int())
+      // Consumes address, produces value - no net change
+    }
+    I32Load8U(align, offset, mem_idx) => {
+      ctx.emit(i32_load8_u())
+      ctx.emit_idx(align.reinterpret_as_int())
+      ctx.emit_idx(offset.reinterpret_as_int())
+      ctx.emit_idx(mem_idx.reinterpret_as_int())
+      // Consumes address, produces value - no net change
+    }
+    I32Load16S(align, offset, mem_idx) => {
+      ctx.emit(i32_load16_s())
+      ctx.emit_idx(align.reinterpret_as_int())
+      ctx.emit_idx(offset.reinterpret_as_int())
+      ctx.emit_idx(mem_idx.reinterpret_as_int())
+      // Consumes address, produces value - no net change
+    }
+    I32Load16U(align, offset, mem_idx) => {
+      ctx.emit(i32_load16_u())
+      ctx.emit_idx(align.reinterpret_as_int())
+      ctx.emit_idx(offset.reinterpret_as_int())
+      ctx.emit_idx(mem_idx.reinterpret_as_int())
+      // Consumes address, produces value - no net change
+    }
+    I32Store8(align, offset, mem_idx) => {
+      ctx.emit(i32_store8())
+      ctx.emit_idx(align.reinterpret_as_int())
+      ctx.emit_idx(offset.reinterpret_as_int())
+      ctx.emit_idx(mem_idx.reinterpret_as_int())
+      ignore(ctx.pop_slot()) // value
+      ignore(ctx.pop_slot()) // address
+    }
+    I32Store16(align, offset, mem_idx) => {
+      ctx.emit(i32_store16())
+      ctx.emit_idx(align.reinterpret_as_int())
+      ctx.emit_idx(offset.reinterpret_as_int())
+      ctx.emit_idx(mem_idx.reinterpret_as_int())
+      ignore(ctx.pop_slot()) // value
+      ignore(ctx.pop_slot()) // address
+    }
 
     // Block structures
     Block(bt, body) => {
