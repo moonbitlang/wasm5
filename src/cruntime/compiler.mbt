@@ -1099,8 +1099,15 @@ fn compile_instr(
           .reinterpret_as_uint()
           .to_uint64()
         // Restore slot state for else branch using saved entry state
+        // Must rebuild slot_stack to have exactly the slots that existed at entry
         while ctx.slot_stack.length() > frame.slot_stack_len_at_entry {
           ignore(ctx.slot_stack.pop())
+        }
+        // If slot_stack is shorter (then branch consumed params), restore missing slots
+        // Slots at entry were: [sp_at_entry - len_at_entry, ..., sp_at_entry - 1]
+        let base_slot = frame.sp_at_entry - frame.slot_stack_len_at_entry
+        while ctx.slot_stack.length() < frame.slot_stack_len_at_entry {
+          ctx.slot_stack.push(base_slot + ctx.slot_stack.length())
         }
         ctx.next_slot = frame.sp_at_entry
         ctx.is_unreachable = false
