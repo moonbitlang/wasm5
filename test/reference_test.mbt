@@ -893,3 +893,73 @@ async test "load.wast (cruntime)" {
 async test "store.wast (cruntime)" {
   run_test_harness("", "store.wast", runtime_type=CRuntime)
 }
+
+///|
+async test "left-to-right.wast (cruntime)" {
+  run_test_harness("", "left-to-right.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "token.wast (cruntime)" {
+  run_test_harness("", "token.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "binary.wast (cruntime)" {
+  run_test_harness("", "binary.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "custom.wast (cruntime)" {
+  run_test_harness("", "custom.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "binary-leb128.wast (cruntime)" {
+  run_test_harness("", "binary-leb128.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "id.wast (cruntime)" {
+  run_test_harness("", "id.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "obsolete-keywords.wast (cruntime)" {
+  run_test_harness("", "obsolete-keywords.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "inline-module.wast (cruntime)" {
+  run_test_harness("", "inline-module.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "unreached-valid.wast (cruntime)" {
+  run_test_harness("", "unreached-valid.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "unreached-invalid.wast (cruntime)" {
+  run_test_harness("", "unreached-invalid.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "utf8-custom-section-id.wast (cruntime)" {
+  run_test_harness("", "utf8-custom-section-id.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "utf8-import-field.wast (cruntime)" {
+  run_test_harness("", "utf8-import-field.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "utf8-import-module.wast (cruntime)" {
+  run_test_harness("", "utf8-import-module.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "utf8-invalid-encoding.wast (cruntime)" {
+  run_test_harness("", "utf8-invalid-encoding.wast", runtime_type=CRuntime)
+}
