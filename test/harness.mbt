@@ -1714,7 +1714,10 @@ pub async fn process_wast_file_cruntime(
 
 ///|
 /// Whitelist for C runtime tests (some tests may have features not yet implemented)
-let cruntime_whitelisted_tests : Array[(String, Set[Int])] = []
+/// select.wast: ref.func and ref.null instructions not implemented
+let cruntime_whitelisted_tests : Array[(String, Set[Int])] = [
+  ("select.wast", Set::of([251, 252, 258, 259, 279, 280])),
+]
 
 ///|
 /// Whitelist of individual tests to skip (file, line)

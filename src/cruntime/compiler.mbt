@@ -930,7 +930,7 @@ fn compile_instr(
       ctx.emit(drop())
       ignore(ctx.pop_slot())
     }
-    Select(_) => {
+    Select(_) | SelectTyped(_) => {
       ctx.emit(select())
       ignore(ctx.pop_slot()) // condition
       ignore(ctx.pop_slot()) // val2

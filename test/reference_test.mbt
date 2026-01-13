@@ -828,3 +828,8 @@ async test "skip-stack-guard-page.wast (cruntime)" {
 async test "loop.wast (cruntime)" {
   run_test_harness("", "loop.wast", runtime_type=CRuntime)
 }
+
+///|
+async test "select.wast (cruntime)" {
+  run_test_harness("", "select.wast", runtime_type=CRuntime)
+}
