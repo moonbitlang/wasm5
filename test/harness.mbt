@@ -1715,23 +1715,19 @@ pub async fn process_wast_file_cruntime(
 ///|
 /// Whitelist for C runtime tests (some tests may have features not yet implemented)
 /// select.wast, br_table.wast: ref.func and ref.null instructions not implemented
-/// labels.wast: complex br_if interaction needs investigation
 /// traps.wast: missing trap checks and i64/f32/f64 load ops
 let cruntime_whitelisted_tests : Array[(String, Set[Int])] = [
   ("select.wast", Set::of([251, 252, 258, 259, 279, 280])),
   (
     "br_table.wast",
     Set::of([
-      1249, 1250, 1251, 1253, 1254, 1255, 1256, 1257, 1258, 1259, 1260, 1261,
-      1262, 1263, 1264,
+      1249, 1250, 1251, 1253, 1254, 1255, 1256, 1257, 1258, 1259, 1260, 1261, 1262,
+      1263, 1264,
     ]),
   ),
-  ("labels.wast", Set::of([309])),
   (
     "traps.wast",
-    Set::of([
-      50, 51, 52, 53, 54, 55, 56, 57, 83, 84, 85, 86, 87, 88, 89, 90, 91,
-    ]),
+    Set::of([50, 51, 52, 53, 54, 55, 56, 57, 83, 84, 85, 86, 87, 88, 89, 90, 91]),
   ),
 ]
 

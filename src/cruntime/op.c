@@ -245,6 +245,7 @@ int op_br_if(CRuntime* crt) {
     int taken_idx = (int)*crt->pc++;
     int not_taken_idx = (int)*crt->pc++;
     int32_t cond = (int32_t)*--crt->sp;
+    TRACE("br_if: cond=%d, taken=%d, not_taken=%d, going to %d\n", cond, taken_idx, not_taken_idx, cond ? taken_idx : not_taken_idx);
     crt->pc = crt->code + (cond ? taken_idx : not_taken_idx);
     NEXT();
 }

@@ -87,8 +87,11 @@ pub fn compile(mod_ : @core.Module) -> CompiledModule {
     }
     // Update end_pc for deferred blocks (br_if, br_table) targeting function frame
     for block in ctx.deferred_blocks {
-      if not(block.is_loop) && block.target_label == func_frame_idx {
+      if not(block.is_loop) &&
+        not(block.resolved) &&
+        block.target_label == func_frame_idx {
         block.end_pc = end_pc
+        block.resolved = true
       }
     }
 
@@ -154,10 +157,11 @@ priv struct DeferredBlock {
   src_slots : Array[Int] // Source slot positions (captured at branch time)
   dst_slots : Array[Int] // Destination (pre-allocated) result slots
   target_sp : Int // Stack pointer after branch
-  target_label : Int // Label depth for final jump target (at creation time)
+  target_label : Int // Absolute control stack index at creation time
   is_loop : Bool // Whether target is a loop (known PC) or block (needs patch)
   loop_pc : Int // Loop PC if is_loop is true
   mut end_pc : Int // Actual end PC (filled in by pop_control for non-loops)
+  mut resolved : Bool // Whether end_pc has been set (prevents overwriting)
 }
 
 ///|
@@ -282,10 +286,15 @@ fn CompileCtx::pop_control(self : CompileCtx) -> Unit {
   for patch_pos in frame.pending_patches {
     self.code[patch_pos] = end_pc.reinterpret_as_uint().to_uint64()
   }
-  // Update end_pc for all deferred blocks targeting this frame
+  // Update end_pc for all unresolved deferred blocks targeting this frame
+  // Note: We check `resolved` to prevent later blocks with the same abs_idx
+  // (due to control stack reuse) from overwriting the end_pc
   for block in self.deferred_blocks {
-    if not(block.is_loop) && block.target_label == abs_idx {
+    if not(block.is_loop) &&
+      not(block.resolved) &&
+      block.target_label == abs_idx {
       block.end_pc = end_pc
+      block.resolved = true
     }
   }
 }
@@ -420,6 +429,7 @@ fn CompileCtx::defer_resolution(
     is_loop,
     loop_pc,
     end_pc: 0, // Will be filled in by pop_control
+    resolved: false,
   })
 }
 
