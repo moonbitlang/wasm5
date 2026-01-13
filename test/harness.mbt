@@ -573,6 +573,8 @@ enum ExpectedValue {
   Exact(@wasm5_runtime.Value)
   AnyF32Nan // nan:arithmetic for f32 - any NaN value is acceptable
   AnyF64Nan // nan:arithmetic for f64 - any NaN value is acceptable
+  CanonicalF32Nan // nan:canonical for f32 - either +nan or -nan with canonical payload
+  CanonicalF64Nan // nan:canonical for f64 - either +nan or -nan with canonical payload
   AnyFuncRef // any funcref value (including null)
   AnyExternRef // any externref value (including null)
   AnyI31Ref // any i31ref value (including null)
@@ -723,12 +725,16 @@ fn parse_expected_value(expected : Json) -> ExpectedValue raise {
     { "type": "f32", "value": String(v), .. } =>
       if v.has_prefix("nan:arithmetic") {
         AnyF32Nan
+      } else if v == "nan:canonical" {
+        CanonicalF32Nan
       } else {
         Exact(@wasm5_runtime.Value::F32(parse_f32_value(v)))
       }
     { "type": "f64", "value": String(v), .. } =>
       if v.has_prefix("nan:arithmetic") {
         AnyF64Nan
+      } else if v == "nan:canonical" {
+        CanonicalF64Nan
       } else {
         Exact(@wasm5_runtime.Value::F64(parse_f64_value(v)))
       }
@@ -825,6 +831,8 @@ fn format_expected_with_bits(e : ExpectedValue) -> String {
     Exact(v) => format_value_with_bits(v)
     AnyF32Nan => "AnyF32Nan"
     AnyF64Nan => "AnyF64Nan"
+    CanonicalF32Nan => "CanonicalF32Nan"
+    CanonicalF64Nan => "CanonicalF64Nan"
     AnyFuncRef => "AnyFuncRef"
     AnyExternRef => "AnyExternRef"
     AnyI31Ref => "AnyI31Ref"
@@ -861,6 +869,26 @@ fn values_match(
     AnyF64Nan =>
       match actual {
         @wasm5_runtime.Value::F64(v) => v.is_nan()
+        _ => false
+      }
+    CanonicalF32Nan =>
+      // Canonical NaN for f32: either +nan or -nan with canonical payload (0x7FC00000 or 0xFFC00000)
+      match actual {
+        @wasm5_runtime.Value::F32(v) => {
+          let bits = v.reinterpret_as_uint()
+          // Clear sign bit and check for canonical NaN pattern
+          (bits & 0x7FFF_FFFFU) == 0x7FC0_0000U
+        }
+        _ => false
+      }
+    CanonicalF64Nan =>
+      // Canonical NaN for f64: either +nan or -nan with canonical payload
+      match actual {
+        @wasm5_runtime.Value::F64(v) => {
+          let bits = v.reinterpret_as_uint64()
+          // Clear sign bit and check for canonical NaN pattern
+          (bits & 0x7FFF_FFFF_FFFF_FFFFUL) == 0x7FF8_0000_0000_0000UL
+        }
         _ => false
       }
     AnyFuncRef =>

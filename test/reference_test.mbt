@@ -750,6 +750,16 @@ async test "f64_bitwise.wast (cruntime)" {
 }
 
 ///|
+async test "f32.wast (cruntime)" {
+  run_test_harness("", "f32.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "f64.wast (cruntime)" {
+  run_test_harness("", "f64.wast", runtime_type=CRuntime)
+}
+
+///|
 async test "nop.wast (cruntime)" {
   run_test_harness("", "nop.wast", runtime_type=CRuntime)
 }

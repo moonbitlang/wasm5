@@ -984,6 +984,12 @@ static inline uint64_t from_f64(double f) {
     return u.i;
 }
 
+// Canonical NaN values (per WebAssembly spec)
+#define CANONICAL_NAN_F32 0x7FC00000U
+#define CANONICAL_NAN_F64 0x7FF8000000000000ULL
+#define F32_SIGN_MASK 0x80000000U
+#define F64_SIGN_MASK 0x8000000000000000ULL
+
 // f32 arithmetic
 
 int op_f32_add(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
@@ -1031,7 +1037,24 @@ int op_f32_min(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     float b = as_f32(sp[-1]);
     float a = as_f32(sp[-2]);
     --sp;
-    sp[-1] = from_f32(fminf(a, b));
+    // WebAssembly spec: if either operand is NaN, return canonical NaN
+    if (isnan(a) || isnan(b)) {
+        sp[-1] = CANONICAL_NAN_F32;
+    } else if (a < b) {
+        sp[-1] = from_f32(a);
+    } else if (b < a) {
+        sp[-1] = from_f32(b);
+    } else {
+        // a == b: handle signed zeros (-0.0 < +0.0 for min)
+        uint32_t a_bits = (uint32_t)from_f32(a);
+        uint32_t b_bits = (uint32_t)from_f32(b);
+        if ((a_bits & F32_SIGN_MASK) || (b_bits & F32_SIGN_MASK)) {
+            // Return negative zero if either is negative
+            sp[-1] = (a_bits & F32_SIGN_MASK) ? from_f32(a) : from_f32(b);
+        } else {
+            sp[-1] = from_f32(a);
+        }
+    }
     NEXT();
 }
 DEFINE_OP(f32_min)
@@ -1041,7 +1064,24 @@ int op_f32_max(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     float b = as_f32(sp[-1]);
     float a = as_f32(sp[-2]);
     --sp;
-    sp[-1] = from_f32(fmaxf(a, b));
+    // WebAssembly spec: if either operand is NaN, return canonical NaN
+    if (isnan(a) || isnan(b)) {
+        sp[-1] = CANONICAL_NAN_F32;
+    } else if (a > b) {
+        sp[-1] = from_f32(a);
+    } else if (b > a) {
+        sp[-1] = from_f32(b);
+    } else {
+        // a == b: handle signed zeros (+0.0 > -0.0 for max)
+        uint32_t a_bits = (uint32_t)from_f32(a);
+        uint32_t b_bits = (uint32_t)from_f32(b);
+        if (!(a_bits & F32_SIGN_MASK) || !(b_bits & F32_SIGN_MASK)) {
+            // Return positive zero if either is positive
+            sp[-1] = !(a_bits & F32_SIGN_MASK) ? from_f32(a) : from_f32(b);
+        } else {
+            sp[-1] = from_f32(a);
+        }
+    }
     NEXT();
 }
 DEFINE_OP(f32_max)
@@ -1223,7 +1263,24 @@ int op_f64_min(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     double b = as_f64(sp[-1]);
     double a = as_f64(sp[-2]);
     --sp;
-    sp[-1] = from_f64(fmin(a, b));
+    // WebAssembly spec: if either operand is NaN, return canonical NaN
+    if (isnan(a) || isnan(b)) {
+        sp[-1] = CANONICAL_NAN_F64;
+    } else if (a < b) {
+        sp[-1] = from_f64(a);
+    } else if (b < a) {
+        sp[-1] = from_f64(b);
+    } else {
+        // a == b: handle signed zeros (-0.0 < +0.0 for min)
+        uint64_t a_bits = from_f64(a);
+        uint64_t b_bits = from_f64(b);
+        if ((a_bits & F64_SIGN_MASK) || (b_bits & F64_SIGN_MASK)) {
+            // Return negative zero if either is negative
+            sp[-1] = (a_bits & F64_SIGN_MASK) ? from_f64(a) : from_f64(b);
+        } else {
+            sp[-1] = from_f64(a);
+        }
+    }
     NEXT();
 }
 DEFINE_OP(f64_min)
@@ -1233,7 +1290,24 @@ int op_f64_max(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     double b = as_f64(sp[-1]);
     double a = as_f64(sp[-2]);
     --sp;
-    sp[-1] = from_f64(fmax(a, b));
+    // WebAssembly spec: if either operand is NaN, return canonical NaN
+    if (isnan(a) || isnan(b)) {
+        sp[-1] = CANONICAL_NAN_F64;
+    } else if (a > b) {
+        sp[-1] = from_f64(a);
+    } else if (b > a) {
+        sp[-1] = from_f64(b);
+    } else {
+        // a == b: handle signed zeros (+0.0 > -0.0 for max)
+        uint64_t a_bits = from_f64(a);
+        uint64_t b_bits = from_f64(b);
+        if (!(a_bits & F64_SIGN_MASK) || !(b_bits & F64_SIGN_MASK)) {
+            // Return positive zero if either is positive
+            sp[-1] = !(a_bits & F64_SIGN_MASK) ? from_f64(a) : from_f64(b);
+        } else {
+            sp[-1] = from_f64(a);
+        }
+    }
     NEXT();
 }
 DEFINE_OP(f64_max)
