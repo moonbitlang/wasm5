@@ -873,3 +873,13 @@ async test "switch.wast (cruntime)" {
 async test "unwind.wast (cruntime)" {
   run_test_harness("", "unwind.wast", runtime_type=CRuntime)
 }
+
+///|
+async test "labels.wast (cruntime)" {
+  run_test_harness("", "labels.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "traps.wast (cruntime)" {
+  run_test_harness("", "traps.wast", runtime_type=CRuntime)
+}
