@@ -3,12 +3,13 @@ async fn main {
   let args = @env.args()
   match args {
     [_, "run", wasm_path] => run_wasm(wasm_path)
+    [_, "crun", wasm_path] => run_wasm_c(wasm_path, "_start")
     [_, "crun", wasm_path, export_name] => run_wasm_c(wasm_path, export_name)
     _ => {
       println("Usage: wasm5 <command> <wasm-file> [export-name]")
       println("Commands:")
-      println("  run   - Run with MoonBit runtime")
-      println("  crun  - Run with C runtime (requires export name)")
+      println("  run   - Run with MoonBit runtime (calls _start)")
+      println("  crun  - Run with C runtime (calls _start or specified export)")
     }
   }
 }
