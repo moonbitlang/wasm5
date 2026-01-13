@@ -833,3 +833,8 @@ async test "loop.wast (cruntime)" {
 async test "select.wast (cruntime)" {
   run_test_harness("", "select.wast", runtime_type=CRuntime)
 }
+
+///|
+async test "block.wast (cruntime)" {
+  run_test_harness("", "block.wast", runtime_type=CRuntime)
+}
