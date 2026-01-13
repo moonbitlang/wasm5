@@ -60,8 +60,37 @@ pub fn compile(mod_ : @core.Module) -> CompiledModule {
     ctx.emit_idx(num_params) // first_local: index of first non-arg local
     ctx.emit_idx(num_non_arg_locals) // num_to_zero
 
+    // Push implicit function block for br 0 to target
+    // Result slots are at fp[0..num_results-1] per wasm3 convention
+    let func_result_slots : Array[Int] = []
+    for j in 0..<num_results {
+      func_result_slots.push(j)
+    }
+    ctx.control_stack.push({
+      kind: Block,
+      target_pc: 0, // Will be patched to end
+      result_slots: func_result_slots,
+      sp_at_entry: num_locals,
+      slot_stack_len_at_entry: 0,
+      pending_patches: [],
+    })
+
     // Compile function body
     compile_expr(ctx, mod_info, code.body)
+
+    // Pop implicit function block and patch any br 0 targets
+    let func_frame_idx = ctx.control_stack.length() - 1
+    let func_frame = ctx.control_stack.pop().unwrap()
+    let end_pc = ctx.code.length()
+    for patch_pos in func_frame.pending_patches {
+      ctx.code[patch_pos] = end_pc.reinterpret_as_uint().to_uint64()
+    }
+    // Update end_pc for deferred blocks (br_if, br_table) targeting function frame
+    for block in ctx.deferred_blocks {
+      if not(block.is_loop) && block.target_label == func_frame_idx {
+        block.end_pc = end_pc
+      }
+    }
 
     // Emit implicit return/end (wasm3 style: end acts like return)
     ctx.emit(end())
