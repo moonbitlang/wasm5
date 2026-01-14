@@ -411,11 +411,17 @@ fn validate_module_global_initializers(
   let all_funcs = all_function_indices(m, import_counts)
 
   // Validate global initializers
-  for global in m.globals {
+  for i, global in m.globals {
     // Validate that only constant expression instructions are used
     validate_const_expr_instructions(global.init)
-    // Validate that global.get only references immutable globals
-    validate_const_expr_globals(m, global.init, import_counts)
+    // Validate that global.get only references immutable globals that are defined before this one
+    // The max global index for the i-th local global is import_counts.globals + i
+    validate_const_expr_globals(
+      m,
+      global.init,
+      import_counts,
+      max_global_idx=Some(import_counts.globals + i),
+    )
 
     // Create a validation context for the init expression
     let init_ctx = ValidationCtx::new()

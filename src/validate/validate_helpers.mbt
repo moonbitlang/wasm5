@@ -426,17 +426,29 @@ fn validate_table_init_expr(
 }
 
 ///|
-/// Validate that a constant expression only uses immutable globals
-/// WebAssembly constant expressions can only use global.get on immutable globals
+/// Validate that a constant expression only uses immutable globals that are already defined.
+/// WebAssembly constant expressions can only use global.get on immutable globals.
+/// For global initializers, max_global_idx limits which globals can be referenced (no forward refs).
+/// For data/elem segments, max_global_idx should be None (all globals are available).
 fn validate_const_expr_globals(
   m : @core.Module,
   expr : @core.Expr,
   import_counts : ImportCounts,
+  max_global_idx? : Int? = None,
 ) -> Unit raise ValidationError {
+  let total_globals = import_counts.globals + m.globals.length()
   for instr in expr.instrs {
     match instr {
       GlobalGet(idx) => {
         let global_idx = idx.reinterpret_as_int()
+        // Check if the global index is valid
+        let max_allowed = match max_global_idx {
+          Some(max) => max
+          None => total_globals
+        }
+        if global_idx < 0 || global_idx >= max_allowed {
+          raise ValidationError::UnknownGlobal(global_idx)
+        }
         // Check if global is mutable
         let is_mutable = if global_idx < import_counts.globals {
           // Imported global
