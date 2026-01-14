@@ -19,10 +19,11 @@
 #define TRAP_INTEGER_OVERFLOW           3
 #define TRAP_INVALID_CONVERSION         4
 #define TRAP_OUT_OF_BOUNDS_MEMORY       5
-#define TRAP_OUT_OF_BOUNDS_TABLE        6
+#define TRAP_OUT_OF_BOUNDS_TABLE        6  // "undefined element" - index out of bounds
 #define TRAP_INDIRECT_CALL_TYPE_MISMATCH 7
 #define TRAP_NULL_FUNCTION_REFERENCE    8
 #define TRAP_STACK_OVERFLOW             9
+#define TRAP_UNINITIALIZED_ELEMENT      10 // "uninitialized element" - null entry in table
 
 // Macro to define getter function that returns op handler pointer
 #define DEFINE_OP(name) uint64_t name(void) { return (uint64_t)op_##name; }
@@ -185,13 +186,23 @@ typedef int (*OpFn)(CRuntime*, uint64_t*, uint64_t*, uint64_t*);
 static int* g_memory_pages = NULL;
 static int g_memory_size = 0;
 
-// Table and function metadata (for call_indirect)
-static int* g_table = NULL;
-static int g_table_size = 0;
+// Multiple tables support (for call_indirect)
+static int* g_tables_flat = NULL;      // All tables concatenated
+static int* g_table_offsets = NULL;    // Offset of each table in g_tables_flat
+static int* g_table_sizes = NULL;      // Size of each table
+static int g_num_tables = 0;
+
+// Function metadata (for call_indirect)
 static int* g_func_entries = NULL;
 static int* g_func_num_locals = NULL;
 static int g_num_funcs = 0;
 static int g_num_imported_funcs = 0;
+
+// Type information (for call_indirect type checking)
+static int* g_func_type_idxs = NULL;       // Type index for each function
+static int* g_type_param_counts = NULL;    // Param count for each type
+static int* g_type_result_counts = NULL;   // Result count for each type
+static int g_num_types = 0;
 
 // Stack base for result extraction after execution
 static uint64_t* g_stack_base = NULL;
@@ -204,7 +215,11 @@ static int run(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
 
 // Execute threaded code starting at entry point
 // Returns trap code (0 = success), stores results in result_out[0..num_results-1]
-int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_args, uint64_t* result_out, int num_results, uint64_t* globals, uint8_t* mem, int mem_size, int* memory_pages, int* table, int table_size, int* func_entries, int* func_num_locals, int num_funcs, int num_imported_funcs) {
+int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_args,
+            uint64_t* result_out, int num_results, uint64_t* globals, uint8_t* mem, int mem_size,
+            int* memory_pages, int* tables_flat, int* table_offsets, int* table_sizes, int num_tables,
+            int* func_entries, int* func_num_locals, int num_funcs, int num_imported_funcs,
+            int* func_type_idxs, int* type_param_counts, int* type_result_counts, int num_types) {
     // Allocate stack on heap to avoid C stack limits
     uint64_t* stack = (uint64_t*)malloc(STACK_SIZE * sizeof(uint64_t));
     if (!stack) {
@@ -224,13 +239,23 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     g_memory_pages = memory_pages;
     g_memory_size = mem_size;
 
-    // Store table and function metadata for call_indirect
-    g_table = table;
-    g_table_size = table_size;
+    // Store table data for call_indirect
+    g_tables_flat = tables_flat;
+    g_table_offsets = table_offsets;
+    g_table_sizes = table_sizes;
+    g_num_tables = num_tables;
+
+    // Store function metadata for call_indirect
     g_func_entries = func_entries;
     g_func_num_locals = func_num_locals;
     g_num_funcs = num_funcs;
     g_num_imported_funcs = num_imported_funcs;
+
+    // Store type info for call_indirect type checking
+    g_func_type_idxs = func_type_idxs;
+    g_type_param_counts = type_param_counts;
+    g_type_result_counts = type_result_counts;
+    g_num_types = num_types;
 
     // Store stack base for result extraction
     g_stack_base = stack;
@@ -261,12 +286,18 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     // (GC could free these arrays after execution, causing SIGSEGV on next access)
     g_memory_pages = NULL;
     g_memory_size = 0;
-    g_table = NULL;
-    g_table_size = 0;
+    g_tables_flat = NULL;
+    g_table_offsets = NULL;
+    g_table_sizes = NULL;
+    g_num_tables = 0;
     g_func_entries = NULL;
     g_func_num_locals = NULL;
     g_num_funcs = 0;
     g_num_imported_funcs = 0;
+    g_func_type_idxs = NULL;
+    g_type_param_counts = NULL;
+    g_type_result_counts = NULL;
+    g_num_types = 0;
     g_stack_base = NULL;
 
     return trap;
@@ -1888,25 +1919,49 @@ DEFINE_OP(f64_store)
 // Immediates: type_idx, table_idx, frame_offset
 // Stack: [..., args..., elem_idx] -> [..., results...]
 int op_call_indirect(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    ++pc;  // Skip type_idx (not needed for simplified impl)
-    ++pc;  // Skip table_idx (assume 0)
+    int expected_type_idx = (int)*pc++;
+    int table_idx = (int)*pc++;
     int frame_offset = (int)*pc++;
 
     // Pop element index from stack
     --sp;
     int32_t elem_idx = (int32_t)*sp;
 
-    // Check table bounds
-    if (elem_idx < 0 || elem_idx >= g_table_size) {
+    // Validate table index
+    if (table_idx < 0 || table_idx >= g_num_tables) {
         TRAP(TRAP_OUT_OF_BOUNDS_TABLE);
     }
 
-    // Get function index from table
-    int func_idx = g_table[elem_idx];
+    // Get table bounds
+    int table_offset = g_table_offsets[table_idx];
+    int table_size = g_table_sizes[table_idx];
 
-    // Check for null/undefined element (-1 means null)
+    // Check element index bounds
+    if (elem_idx < 0 || elem_idx >= table_size) {
+        TRAP(TRAP_OUT_OF_BOUNDS_TABLE);  // "undefined element"
+    }
+
+    // Get function index from table
+    int func_idx = g_tables_flat[table_offset + elem_idx];
+
+    // Check for null/uninitialized element (-1 means null)
     if (func_idx < 0) {
-        TRAP(TRAP_OUT_OF_BOUNDS_TABLE);
+        TRAP(TRAP_UNINITIALIZED_ELEMENT);  // "uninitialized element"
+    }
+
+    // Type check: compare expected type with actual function type
+    if (func_idx < g_num_imported_funcs + g_num_funcs) {
+        int actual_type_idx = g_func_type_idxs[func_idx];
+        if (expected_type_idx >= 0 && expected_type_idx < g_num_types &&
+            actual_type_idx >= 0 && actual_type_idx < g_num_types) {
+            int expected_params = g_type_param_counts[expected_type_idx];
+            int expected_results = g_type_result_counts[expected_type_idx];
+            int actual_params = g_type_param_counts[actual_type_idx];
+            int actual_results = g_type_result_counts[actual_type_idx];
+            if (expected_params != actual_params || expected_results != actual_results) {
+                TRAP(TRAP_INDIRECT_CALL_TYPE_MISMATCH);
+            }
+        }
     }
 
     // Convert to local function index

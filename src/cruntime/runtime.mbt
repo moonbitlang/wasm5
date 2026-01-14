@@ -7,6 +7,14 @@ pub struct CRuntime {
   memory : FixedArray[Byte] // Linear memory
   memory_pages : FixedArray[Int] // Current size in pages (single element array for FFI mutability)
   tables : FixedArray[FixedArray[Int]] // Tables of function indices
+  // Flattened table data for C FFI
+  tables_flat : FixedArray[Int] // All tables concatenated
+  table_offsets : FixedArray[Int] // Offset of each table in tables_flat
+  table_sizes : FixedArray[Int] // Size of each table
+  // Type information for call_indirect type checking
+  func_type_idxs : FixedArray[Int] // Type index for each function (imported + local)
+  type_param_counts : FixedArray[Int] // Number of params for each type
+  type_result_counts : FixedArray[Int] // Number of results for each type
 }
 
 // Import Value type from core
@@ -28,6 +36,7 @@ fn trap_to_error(trap : TrapCode) -> @runtime.RuntimeError {
     IndirectCallTypeMismatch => "indirect call type mismatch"
     NullFunctionReference => "null function reference"
     StackOverflow => "stack overflow"
+    UninitializedElement => "uninitialized element"
   }
   @runtime.RuntimeError::from_detail(detail)
 }
@@ -42,7 +51,119 @@ pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
   let (memory, memory_pages) = init_memory(module_)
   // Initialize tables from module
   let tables = init_tables(module_)
-  { module_, compiled, globals, memory, memory_pages, tables }
+  // Flatten tables for C FFI
+  let (tables_flat, table_offsets, table_sizes) = flatten_tables(tables)
+  // Build type info for call_indirect type checking
+  let (func_type_idxs, type_param_counts, type_result_counts) = build_type_info(
+    module_,
+  )
+  {
+    module_,
+    compiled,
+    globals,
+    memory,
+    memory_pages,
+    tables,
+    tables_flat,
+    table_offsets,
+    table_sizes,
+    func_type_idxs,
+    type_param_counts,
+    type_result_counts,
+  }
+}
+
+///|
+/// Flatten tables into a single array for C FFI
+fn flatten_tables(
+  tables : FixedArray[FixedArray[Int]],
+) -> (FixedArray[Int], FixedArray[Int], FixedArray[Int]) {
+  let num_tables = tables.length()
+  // Calculate total size and offsets
+  let table_sizes : Array[Int] = []
+  let table_offsets : Array[Int] = []
+  let mut total_size = 0
+  for i in 0..<num_tables {
+    table_offsets.push(total_size)
+    let size = tables[i].length()
+    table_sizes.push(size)
+    total_size += size
+  }
+  // Flatten into single array
+  let tables_flat : FixedArray[Int] = FixedArray::make(
+    if total_size > 0 {
+      total_size
+    } else {
+      1
+    },
+    -1,
+  )
+  for i in 0..<num_tables {
+    let offset = table_offsets[i]
+    let table = tables[i]
+    for j in 0..<table.length() {
+      tables_flat[offset + j] = table[j]
+    }
+  }
+  (
+    tables_flat,
+    FixedArray::from_array(table_offsets),
+    FixedArray::from_array(table_sizes),
+  )
+}
+
+///|
+/// Build type information for call_indirect type checking
+fn build_type_info(
+  module_ : @core.Module,
+) -> (FixedArray[Int], FixedArray[Int], FixedArray[Int]) {
+  // Count imported functions
+  let num_imported = count_imported_funcs(module_)
+  let num_local = module_.codes.length()
+  let total_funcs = num_imported + num_local
+  // Build func_type_idxs: type index for each function
+  let func_type_idxs : Array[Int] = []
+  // First, imported function types
+  for imp in module_.imports {
+    match imp.desc {
+      Func(type_idx) => func_type_idxs.push(type_idx.reinterpret_as_int())
+      _ => ()
+    }
+  }
+  // Then, local function types (from module.funcs, skipping imports)
+  for i = num_imported; i < module_.funcs.length(); i = i + 1 {
+    func_type_idxs.push(module_.funcs[i].reinterpret_as_int())
+  }
+  // Build type param/result counts
+  let num_types = module_.types.length()
+  let type_param_counts : Array[Int] = []
+  let type_result_counts : Array[Int] = []
+  for type_def in module_.types {
+    match type_def {
+      Func(ft) => {
+        type_param_counts.push(ft.params.length())
+        type_result_counts.push(ft.results.length())
+      }
+      _ => {
+        // For non-function types (struct, array), use 0/0
+        type_param_counts.push(0)
+        type_result_counts.push(0)
+      }
+    }
+  }
+  // Ensure at least 1 element to avoid empty array issues
+  if func_type_idxs.length() == 0 {
+    func_type_idxs.push(-1)
+  }
+  if type_param_counts.length() == 0 {
+    type_param_counts.push(0)
+    type_result_counts.push(0)
+  }
+  (
+    FixedArray::from_array(func_type_idxs),
+    FixedArray::from_array(type_param_counts),
+    FixedArray::from_array(type_result_counts),
+  )
 }
 
 ///|
@@ -269,7 +390,6 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
         let entry = self.compiled.func_entries[local_idx]
         let num_locals = self.compiled.func_num_locals[local_idx]
         let result_out : FixedArray[UInt64] = [0]
-        let table = self.tables[0]
         let trap_code = c_execute_ffi(
           self.compiled.code,
           entry,
@@ -282,12 +402,18 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
           self.memory,
           self.memory.length(),
           self.memory_pages,
-          table,
-          table.length(),
+          self.tables_flat,
+          self.table_offsets,
+          self.table_sizes,
+          self.tables.length(),
           self.compiled.func_entries,
           self.compiled.func_num_locals,
           self.compiled.func_entries.length(),
           num_imported,
+          self.func_type_idxs,
+          self.type_param_counts,
+          self.type_result_counts,
+          self.module_.types.length(),
         )
         let trap = trap_code_from_int(trap_code)
         if trap != TrapCode::None {
@@ -333,7 +459,6 @@ pub fn CRuntime::call_compiled(
         },
         0UL,
       )
-      let table = self.tables[0]
       let trap_code = c_execute_ffi(
         self.compiled.code,
         entry,
@@ -346,12 +471,18 @@ pub fn CRuntime::call_compiled(
         self.memory,
         self.memory.length(),
         self.memory_pages,
-        table,
-        table.length(),
+        self.tables_flat,
+        self.table_offsets,
+        self.table_sizes,
+        self.tables.length(),
         self.compiled.func_entries,
         self.compiled.func_num_locals,
         self.compiled.func_entries.length(),
         num_imported,
+        self.func_type_idxs,
+        self.type_param_counts,
+        self.type_result_counts,
+        self.module_.types.length(),
       )
       // Check for trap
       let trap = trap_code_from_int(trap_code)

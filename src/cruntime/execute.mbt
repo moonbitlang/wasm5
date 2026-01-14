@@ -1,7 +1,7 @@
 ///|
 /// Execute threaded code (FFI binding)
 /// Returns trap code (0 = success), stores results in result_out[0..num_results-1]
-#borrow(code, args, result_out, globals, memory, memory_pages, table, func_entries, func_num_locals)
+#borrow(code, args, result_out, globals, memory, memory_pages, tables_flat, table_offsets, table_sizes, func_entries, func_num_locals, func_type_idxs, type_param_counts, type_result_counts)
 extern "C" fn c_execute_ffi(
   code : FixedArray[UInt64],
   entry : Int,
@@ -14,12 +14,18 @@ extern "C" fn c_execute_ffi(
   memory : FixedArray[Byte],
   mem_size : Int,
   memory_pages : FixedArray[Int],
-  table : FixedArray[Int], // First table (function indices)
-  table_size : Int,
+  tables_flat : FixedArray[Int], // All tables flattened into one array
+  table_offsets : FixedArray[Int], // Offset of each table in tables_flat
+  table_sizes : FixedArray[Int], // Size of each table
+  num_tables : Int,
   func_entries : FixedArray[Int], // Entry points for local functions
   func_num_locals : FixedArray[Int], // Number of locals per local function
   num_funcs : Int, // Number of local functions
   num_imported_funcs : Int, // Number of imported functions (for index offset)
+  func_type_idxs : FixedArray[Int], // Type index for each function (imported + local)
+  type_param_counts : FixedArray[Int], // Number of params for each type
+  type_result_counts : FixedArray[Int], // Number of results for each type
+  num_types : Int,
 ) -> Int = "execute"
 
 ///|
@@ -36,6 +42,7 @@ fn trap_code_from_int(code : Int) -> TrapCode {
     7 => TrapCode::IndirectCallTypeMismatch
     8 => TrapCode::NullFunctionReference
     9 => TrapCode::StackOverflow
+    10 => TrapCode::UninitializedElement
     _ => TrapCode::Unreachable // Unknown trap code
   }
 }

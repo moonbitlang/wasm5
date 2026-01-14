@@ -8,10 +8,11 @@ pub enum TrapCode {
   IntegerOverflow = 3
   InvalidConversionToInteger = 4
   OutOfBoundsMemoryAccess = 5
-  OutOfBoundsTableAccess = 6
+  OutOfBoundsTableAccess = 6 // "undefined element" - index out of bounds
   IndirectCallTypeMismatch = 7
   NullFunctionReference = 8
   StackOverflow = 9
+  UninitializedElement = 10 // "uninitialized element" - null entry in table
 } derive(Eq, Show)
 
 ///|
