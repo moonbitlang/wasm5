@@ -1459,32 +1459,57 @@ int op_i32_wrap_i64(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
 DEFINE_OP(i32_wrap_i64)
 
 int op_i32_trunc_f32_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
+    (void)fp;
     float a = as_f32(sp[-1]);
+    if (isnan(a)) {
+        TRAP(TRAP_INVALID_CONVERSION);
+    }
+    if (a >= 2147483648.0f || a < -2147483648.0f) {
+        TRAP(TRAP_INTEGER_OVERFLOW);
+    }
     sp[-1] = (uint64_t)(uint32_t)(int32_t)a;
     NEXT();
 }
 DEFINE_OP(i32_trunc_f32_s)
 
 int op_i32_trunc_f32_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
+    (void)fp;
     float a = as_f32(sp[-1]);
+    if (isnan(a)) {
+        TRAP(TRAP_INVALID_CONVERSION);
+    }
+    if (a >= 4294967296.0f || a <= -1.0f) {
+        TRAP(TRAP_INTEGER_OVERFLOW);
+    }
     sp[-1] = (uint64_t)(uint32_t)a;
     NEXT();
 }
 DEFINE_OP(i32_trunc_f32_u)
 
 int op_i32_trunc_f64_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
+    (void)fp;
     double a = as_f64(sp[-1]);
+    if (isnan(a)) {
+        TRAP(TRAP_INVALID_CONVERSION);
+    }
+    // Truncates toward zero, so -2147483648.9 → -2147483648 is valid
+    if (a >= 2147483648.0 || a <= -2147483649.0) {
+        TRAP(TRAP_INTEGER_OVERFLOW);
+    }
     sp[-1] = (uint64_t)(uint32_t)(int32_t)a;
     NEXT();
 }
 DEFINE_OP(i32_trunc_f64_s)
 
 int op_i32_trunc_f64_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
+    (void)fp;
     double a = as_f64(sp[-1]);
+    if (isnan(a)) {
+        TRAP(TRAP_INVALID_CONVERSION);
+    }
+    if (a >= 4294967296.0 || a <= -1.0) {
+        TRAP(TRAP_INTEGER_OVERFLOW);
+    }
     sp[-1] = (uint64_t)(uint32_t)a;
     NEXT();
 }
@@ -1507,36 +1532,206 @@ int op_i64_extend_i32_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp)
 DEFINE_OP(i64_extend_i32_u)
 
 int op_i64_trunc_f32_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
+    (void)fp;
     float a = as_f32(sp[-1]);
+    if (isnan(a)) {
+        TRAP(TRAP_INVALID_CONVERSION);
+    }
+    if (a >= 9223372036854775808.0f || a < -9223372036854775808.0f) {
+        TRAP(TRAP_INTEGER_OVERFLOW);
+    }
     sp[-1] = (uint64_t)(int64_t)a;
     NEXT();
 }
 DEFINE_OP(i64_trunc_f32_s)
 
 int op_i64_trunc_f32_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
+    (void)fp;
     float a = as_f32(sp[-1]);
+    if (isnan(a)) {
+        TRAP(TRAP_INVALID_CONVERSION);
+    }
+    if (a >= 18446744073709551616.0f || a <= -1.0f) {
+        TRAP(TRAP_INTEGER_OVERFLOW);
+    }
     sp[-1] = (uint64_t)a;
     NEXT();
 }
 DEFINE_OP(i64_trunc_f32_u)
 
 int op_i64_trunc_f64_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
+    (void)fp;
     double a = as_f64(sp[-1]);
+    if (isnan(a)) {
+        TRAP(TRAP_INVALID_CONVERSION);
+    }
+    if (a >= 9223372036854775808.0 || a < -9223372036854775808.0) {
+        TRAP(TRAP_INTEGER_OVERFLOW);
+    }
     sp[-1] = (uint64_t)(int64_t)a;
     NEXT();
 }
 DEFINE_OP(i64_trunc_f64_s)
 
 int op_i64_trunc_f64_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
+    (void)fp;
     double a = as_f64(sp[-1]);
+    if (isnan(a)) {
+        TRAP(TRAP_INVALID_CONVERSION);
+    }
+    if (a >= 18446744073709551616.0 || a <= -1.0) {
+        TRAP(TRAP_INTEGER_OVERFLOW);
+    }
     sp[-1] = (uint64_t)a;
     NEXT();
 }
 DEFINE_OP(i64_trunc_f64_u)
+
+// Saturating truncation operations (clamp instead of trap)
+
+int op_i32_trunc_sat_f32_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    float a = as_f32(sp[-1]);
+    int32_t result;
+    if (isnan(a)) {
+        result = 0;
+    } else if (a >= 2147483648.0f) {
+        result = 0x7FFFFFFF;  // INT32_MAX
+    } else if (a < -2147483648.0f) {
+        result = 0x80000000;  // INT32_MIN
+    } else {
+        result = (int32_t)a;
+    }
+    sp[-1] = (uint64_t)(uint32_t)result;
+    NEXT();
+}
+DEFINE_OP(i32_trunc_sat_f32_s)
+
+int op_i32_trunc_sat_f32_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    float a = as_f32(sp[-1]);
+    uint32_t result;
+    if (isnan(a)) {
+        result = 0;
+    } else if (a >= 4294967296.0f) {
+        result = 0xFFFFFFFF;  // UINT32_MAX
+    } else if (a <= -1.0f) {
+        result = 0;
+    } else {
+        result = (uint32_t)a;
+    }
+    sp[-1] = (uint64_t)result;
+    NEXT();
+}
+DEFINE_OP(i32_trunc_sat_f32_u)
+
+int op_i32_trunc_sat_f64_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    double a = as_f64(sp[-1]);
+    int32_t result;
+    if (isnan(a)) {
+        result = 0;
+    } else if (a >= 2147483648.0) {
+        result = 0x7FFFFFFF;  // INT32_MAX
+    } else if (a < -2147483648.0) {
+        result = 0x80000000;  // INT32_MIN
+    } else {
+        result = (int32_t)a;
+    }
+    sp[-1] = (uint64_t)(uint32_t)result;
+    NEXT();
+}
+DEFINE_OP(i32_trunc_sat_f64_s)
+
+int op_i32_trunc_sat_f64_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    double a = as_f64(sp[-1]);
+    uint32_t result;
+    if (isnan(a)) {
+        result = 0;
+    } else if (a >= 4294967296.0) {
+        result = 0xFFFFFFFF;  // UINT32_MAX
+    } else if (a <= -1.0) {
+        result = 0;
+    } else {
+        result = (uint32_t)a;
+    }
+    sp[-1] = (uint64_t)result;
+    NEXT();
+}
+DEFINE_OP(i32_trunc_sat_f64_u)
+
+int op_i64_trunc_sat_f32_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    float a = as_f32(sp[-1]);
+    int64_t result;
+    if (isnan(a)) {
+        result = 0;
+    } else if (a >= 9223372036854775808.0f) {
+        result = 0x7FFFFFFFFFFFFFFF;  // INT64_MAX
+    } else if (a < -9223372036854775808.0f) {
+        result = 0x8000000000000000;  // INT64_MIN
+    } else {
+        result = (int64_t)a;
+    }
+    sp[-1] = (uint64_t)result;
+    NEXT();
+}
+DEFINE_OP(i64_trunc_sat_f32_s)
+
+int op_i64_trunc_sat_f32_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    float a = as_f32(sp[-1]);
+    uint64_t result;
+    if (isnan(a)) {
+        result = 0;
+    } else if (a >= 18446744073709551616.0f) {
+        result = 0xFFFFFFFFFFFFFFFF;  // UINT64_MAX
+    } else if (a <= -1.0f) {
+        result = 0;
+    } else {
+        result = (uint64_t)a;
+    }
+    sp[-1] = result;
+    NEXT();
+}
+DEFINE_OP(i64_trunc_sat_f32_u)
+
+int op_i64_trunc_sat_f64_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    double a = as_f64(sp[-1]);
+    int64_t result;
+    if (isnan(a)) {
+        result = 0;
+    } else if (a >= 9223372036854775808.0) {
+        result = 0x7FFFFFFFFFFFFFFF;  // INT64_MAX
+    } else if (a < -9223372036854775808.0) {
+        result = 0x8000000000000000;  // INT64_MIN
+    } else {
+        result = (int64_t)a;
+    }
+    sp[-1] = (uint64_t)result;
+    NEXT();
+}
+DEFINE_OP(i64_trunc_sat_f64_s)
+
+int op_i64_trunc_sat_f64_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    double a = as_f64(sp[-1]);
+    uint64_t result;
+    if (isnan(a)) {
+        result = 0;
+    } else if (a >= 18446744073709551616.0) {
+        result = 0xFFFFFFFFFFFFFFFF;  // UINT64_MAX
+    } else if (a <= -1.0) {
+        result = 0;
+    } else {
+        result = (uint64_t)a;
+    }
+    sp[-1] = result;
+    NEXT();
+}
+DEFINE_OP(i64_trunc_sat_f64_u)
 
 int op_f32_convert_i32_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)crt; (void)fp;

@@ -436,6 +436,32 @@ extern "C" fn i64_trunc_f64_s() -> UInt64 = "i64_trunc_f64_s"
 ///|
 extern "C" fn i64_trunc_f64_u() -> UInt64 = "i64_trunc_f64_u"
 
+// Saturating truncation operations
+
+///|
+extern "C" fn i32_trunc_sat_f32_s() -> UInt64 = "i32_trunc_sat_f32_s"
+
+///|
+extern "C" fn i32_trunc_sat_f32_u() -> UInt64 = "i32_trunc_sat_f32_u"
+
+///|
+extern "C" fn i32_trunc_sat_f64_s() -> UInt64 = "i32_trunc_sat_f64_s"
+
+///|
+extern "C" fn i32_trunc_sat_f64_u() -> UInt64 = "i32_trunc_sat_f64_u"
+
+///|
+extern "C" fn i64_trunc_sat_f32_s() -> UInt64 = "i64_trunc_sat_f32_s"
+
+///|
+extern "C" fn i64_trunc_sat_f32_u() -> UInt64 = "i64_trunc_sat_f32_u"
+
+///|
+extern "C" fn i64_trunc_sat_f64_s() -> UInt64 = "i64_trunc_sat_f64_s"
+
+///|
+extern "C" fn i64_trunc_sat_f64_u() -> UInt64 = "i64_trunc_sat_f64_u"
+
 ///|
 extern "C" fn f32_convert_i32_s() -> UInt64 = "f32_convert_i32_s"
 

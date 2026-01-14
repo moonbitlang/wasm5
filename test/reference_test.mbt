@@ -1010,6 +1010,7 @@ async test "float_memory.wast (cruntime)" {
 async test "memory.wast (cruntime)" {
   run_test_harness("", "memory.wast", runtime_type=CRuntime)
 }
+// TODO: memory_grow.wast has 24 failures - memory_grow doesn't actually allocate new memory
 // async test "memory_grow.wast (cruntime)" {
 //   run_test_harness("", "memory_grow.wast", runtime_type=CRuntime)
 // }
@@ -1106,6 +1107,7 @@ async test "exports.wast (cruntime)" {
 // async test "linking.wast (cruntime)" {
 //   run_test_harness("", "linking.wast", runtime_type=CRuntime)
 // }
+// TODO: start.wast causes SIGABRT - needs investigation
 // async test "start.wast (cruntime)" {
 //   run_test_harness("", "start.wast", runtime_type=CRuntime)
 // }
@@ -1137,10 +1139,11 @@ async test "data.wast (cruntime)" {
 // }
 
 // --- Conversions/expressions ---
-// TODO: conversions.wast has 227 failures - needs trunc/convert trap handling
-// async test "conversions.wast (cruntime)" {
-//   run_test_harness("", "conversions.wast", runtime_type=CRuntime)
-// }
+
+///|
+async test "conversions.wast (cruntime)" {
+  run_test_harness("", "conversions.wast", runtime_type=CRuntime)
+}
 
 ///|
 async test "float_exprs.wast (cruntime)" {
