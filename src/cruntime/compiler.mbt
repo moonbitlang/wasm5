@@ -503,6 +503,51 @@ fn CompileCtx::emit_idx(self : CompileCtx, value : Int) -> Unit {
 }
 
 ///|
+/// Emit a binary operation (pops 2, pushes 1 = net pop 1)
+fn CompileCtx::emit_binary_op(self : CompileCtx, op : UInt64) -> Unit {
+  self.emit(op)
+  ignore(self.pop_slot())
+}
+
+///|
+/// Emit a unary operation (pops 1, pushes 1 = no net change)
+fn CompileCtx::emit_unary_op(self : CompileCtx, op : UInt64) -> Unit {
+  self.emit(op)
+}
+
+///|
+/// Emit a load operation (consumes address, produces value = no net change)
+fn CompileCtx::emit_load(
+  self : CompileCtx,
+  op : UInt64,
+  align : UInt,
+  offset : UInt,
+  mem_idx : UInt,
+) -> Unit {
+  self.emit(op)
+  self.emit_idx(align.reinterpret_as_int())
+  self.emit_idx(offset.reinterpret_as_int())
+  self.emit_idx(mem_idx.reinterpret_as_int())
+}
+
+///|
+/// Emit a store operation (consumes address and value = net pop 2)
+fn CompileCtx::emit_store(
+  self : CompileCtx,
+  op : UInt64,
+  align : UInt,
+  offset : UInt,
+  mem_idx : UInt,
+) -> Unit {
+  self.emit(op)
+  self.emit_idx(align.reinterpret_as_int())
+  self.emit_idx(offset.reinterpret_as_int())
+  self.emit_idx(mem_idx.reinterpret_as_int())
+  ignore(self.pop_slot()) // value
+  ignore(self.pop_slot()) // address
+}
+
+///|
 /// Compile an expression (list of instructions)
 fn compile_expr(
   ctx : CompileCtx,
@@ -584,398 +629,169 @@ fn compile_instr(
       ignore(ctx.pop_slot())
     }
 
-    // i32 arithmetic (binary ops: pop 2, push 1 = net pop 1)
-    I32Add => {
-      ctx.emit(i32_add())
-      ignore(ctx.pop_slot())
-    }
-    I32Sub => {
-      ctx.emit(i32_sub())
-      ignore(ctx.pop_slot())
-    }
-    I32Mul => {
-      ctx.emit(i32_mul())
-      ignore(ctx.pop_slot())
-    }
-    I32DivS => {
-      ctx.emit(i32_div_s())
-      ignore(ctx.pop_slot())
-    }
-    I32DivU => {
-      ctx.emit(i32_div_u())
-      ignore(ctx.pop_slot())
-    }
-    I32RemS => {
-      ctx.emit(i32_rem_s())
-      ignore(ctx.pop_slot())
-    }
-    I32RemU => {
-      ctx.emit(i32_rem_u())
-      ignore(ctx.pop_slot())
-    }
-    I32And => {
-      ctx.emit(i32_and())
-      ignore(ctx.pop_slot())
-    }
-    I32Or => {
-      ctx.emit(i32_or())
-      ignore(ctx.pop_slot())
-    }
-    I32Xor => {
-      ctx.emit(i32_xor())
-      ignore(ctx.pop_slot())
-    }
-    I32Shl => {
-      ctx.emit(i32_shl())
-      ignore(ctx.pop_slot())
-    }
-    I32ShrS => {
-      ctx.emit(i32_shr_s())
-      ignore(ctx.pop_slot())
-    }
-    I32ShrU => {
-      ctx.emit(i32_shr_u())
-      ignore(ctx.pop_slot())
-    }
-    I32Rotl => {
-      ctx.emit(i32_rotl())
-      ignore(ctx.pop_slot())
-    }
-    I32Rotr => {
-      ctx.emit(i32_rotr())
-      ignore(ctx.pop_slot())
-    }
+    // i32 arithmetic
+    I32Add => ctx.emit_binary_op(i32_add())
+    I32Sub => ctx.emit_binary_op(i32_sub())
+    I32Mul => ctx.emit_binary_op(i32_mul())
+    I32DivS => ctx.emit_binary_op(i32_div_s())
+    I32DivU => ctx.emit_binary_op(i32_div_u())
+    I32RemS => ctx.emit_binary_op(i32_rem_s())
+    I32RemU => ctx.emit_binary_op(i32_rem_u())
+    I32And => ctx.emit_binary_op(i32_and())
+    I32Or => ctx.emit_binary_op(i32_or())
+    I32Xor => ctx.emit_binary_op(i32_xor())
+    I32Shl => ctx.emit_binary_op(i32_shl())
+    I32ShrS => ctx.emit_binary_op(i32_shr_s())
+    I32ShrU => ctx.emit_binary_op(i32_shr_u())
+    I32Rotl => ctx.emit_binary_op(i32_rotl())
+    I32Rotr => ctx.emit_binary_op(i32_rotr())
 
-    // i32 comparison (binary ops: pop 2, push 1 = net pop 1)
-    I32Eqz => ctx.emit(i32_eqz()) // unary: no net change
-    I32Eq => {
-      ctx.emit(i32_eq())
-      ignore(ctx.pop_slot())
-    }
-    I32Ne => {
-      ctx.emit(i32_ne())
-      ignore(ctx.pop_slot())
-    }
-    I32LtS => {
-      ctx.emit(i32_lt_s())
-      ignore(ctx.pop_slot())
-    }
-    I32LtU => {
-      ctx.emit(i32_lt_u())
-      ignore(ctx.pop_slot())
-    }
-    I32GtS => {
-      ctx.emit(i32_gt_s())
-      ignore(ctx.pop_slot())
-    }
-    I32GtU => {
-      ctx.emit(i32_gt_u())
-      ignore(ctx.pop_slot())
-    }
-    I32LeS => {
-      ctx.emit(i32_le_s())
-      ignore(ctx.pop_slot())
-    }
-    I32LeU => {
-      ctx.emit(i32_le_u())
-      ignore(ctx.pop_slot())
-    }
-    I32GeS => {
-      ctx.emit(i32_ge_s())
-      ignore(ctx.pop_slot())
-    }
-    I32GeU => {
-      ctx.emit(i32_ge_u())
-      ignore(ctx.pop_slot())
-    }
+    // i32 comparison
+    I32Eqz => ctx.emit_unary_op(i32_eqz())
+    I32Eq => ctx.emit_binary_op(i32_eq())
+    I32Ne => ctx.emit_binary_op(i32_ne())
+    I32LtS => ctx.emit_binary_op(i32_lt_s())
+    I32LtU => ctx.emit_binary_op(i32_lt_u())
+    I32GtS => ctx.emit_binary_op(i32_gt_s())
+    I32GtU => ctx.emit_binary_op(i32_gt_u())
+    I32LeS => ctx.emit_binary_op(i32_le_s())
+    I32LeU => ctx.emit_binary_op(i32_le_u())
+    I32GeS => ctx.emit_binary_op(i32_ge_s())
+    I32GeU => ctx.emit_binary_op(i32_ge_u())
 
     // i32 unary
-    I32Clz => ctx.emit(i32_clz())
-    I32Ctz => ctx.emit(i32_ctz())
-    I32Popcnt => ctx.emit(i32_popcnt())
+    I32Clz => ctx.emit_unary_op(i32_clz())
+    I32Ctz => ctx.emit_unary_op(i32_ctz())
+    I32Popcnt => ctx.emit_unary_op(i32_popcnt())
 
-    // i64 arithmetic (binary ops: pop 2, push 1 = net pop 1)
-    I64Add => {
-      ctx.emit(i64_add())
-      ignore(ctx.pop_slot())
-    }
-    I64Sub => {
-      ctx.emit(i64_sub())
-      ignore(ctx.pop_slot())
-    }
-    I64Mul => {
-      ctx.emit(i64_mul())
-      ignore(ctx.pop_slot())
-    }
-    I64DivS => {
-      ctx.emit(i64_div_s())
-      ignore(ctx.pop_slot())
-    }
-    I64DivU => {
-      ctx.emit(i64_div_u())
-      ignore(ctx.pop_slot())
-    }
-    I64RemS => {
-      ctx.emit(i64_rem_s())
-      ignore(ctx.pop_slot())
-    }
-    I64RemU => {
-      ctx.emit(i64_rem_u())
-      ignore(ctx.pop_slot())
-    }
-    I64And => {
-      ctx.emit(i64_and())
-      ignore(ctx.pop_slot())
-    }
-    I64Or => {
-      ctx.emit(i64_or())
-      ignore(ctx.pop_slot())
-    }
-    I64Xor => {
-      ctx.emit(i64_xor())
-      ignore(ctx.pop_slot())
-    }
-    I64Shl => {
-      ctx.emit(i64_shl())
-      ignore(ctx.pop_slot())
-    }
-    I64ShrS => {
-      ctx.emit(i64_shr_s())
-      ignore(ctx.pop_slot())
-    }
-    I64ShrU => {
-      ctx.emit(i64_shr_u())
-      ignore(ctx.pop_slot())
-    }
-    I64Rotl => {
-      ctx.emit(i64_rotl())
-      ignore(ctx.pop_slot())
-    }
-    I64Rotr => {
-      ctx.emit(i64_rotr())
-      ignore(ctx.pop_slot())
-    }
+    // i64 arithmetic
+    I64Add => ctx.emit_binary_op(i64_add())
+    I64Sub => ctx.emit_binary_op(i64_sub())
+    I64Mul => ctx.emit_binary_op(i64_mul())
+    I64DivS => ctx.emit_binary_op(i64_div_s())
+    I64DivU => ctx.emit_binary_op(i64_div_u())
+    I64RemS => ctx.emit_binary_op(i64_rem_s())
+    I64RemU => ctx.emit_binary_op(i64_rem_u())
+    I64And => ctx.emit_binary_op(i64_and())
+    I64Or => ctx.emit_binary_op(i64_or())
+    I64Xor => ctx.emit_binary_op(i64_xor())
+    I64Shl => ctx.emit_binary_op(i64_shl())
+    I64ShrS => ctx.emit_binary_op(i64_shr_s())
+    I64ShrU => ctx.emit_binary_op(i64_shr_u())
+    I64Rotl => ctx.emit_binary_op(i64_rotl())
+    I64Rotr => ctx.emit_binary_op(i64_rotr())
 
-    // i64 comparison (binary ops: pop 2, push 1 = net pop 1)
-    I64Eqz => ctx.emit(i64_eqz()) // unary: no net change
-    I64Eq => {
-      ctx.emit(i64_eq())
-      ignore(ctx.pop_slot())
-    }
-    I64Ne => {
-      ctx.emit(i64_ne())
-      ignore(ctx.pop_slot())
-    }
-    I64LtS => {
-      ctx.emit(i64_lt_s())
-      ignore(ctx.pop_slot())
-    }
-    I64LtU => {
-      ctx.emit(i64_lt_u())
-      ignore(ctx.pop_slot())
-    }
-    I64GtS => {
-      ctx.emit(i64_gt_s())
-      ignore(ctx.pop_slot())
-    }
-    I64GtU => {
-      ctx.emit(i64_gt_u())
-      ignore(ctx.pop_slot())
-    }
-    I64LeS => {
-      ctx.emit(i64_le_s())
-      ignore(ctx.pop_slot())
-    }
-    I64LeU => {
-      ctx.emit(i64_le_u())
-      ignore(ctx.pop_slot())
-    }
-    I64GeS => {
-      ctx.emit(i64_ge_s())
-      ignore(ctx.pop_slot())
-    }
-    I64GeU => {
-      ctx.emit(i64_ge_u())
-      ignore(ctx.pop_slot())
-    }
+    // i64 comparison
+    I64Eqz => ctx.emit_unary_op(i64_eqz())
+    I64Eq => ctx.emit_binary_op(i64_eq())
+    I64Ne => ctx.emit_binary_op(i64_ne())
+    I64LtS => ctx.emit_binary_op(i64_lt_s())
+    I64LtU => ctx.emit_binary_op(i64_lt_u())
+    I64GtS => ctx.emit_binary_op(i64_gt_s())
+    I64GtU => ctx.emit_binary_op(i64_gt_u())
+    I64LeS => ctx.emit_binary_op(i64_le_s())
+    I64LeU => ctx.emit_binary_op(i64_le_u())
+    I64GeS => ctx.emit_binary_op(i64_ge_s())
+    I64GeU => ctx.emit_binary_op(i64_ge_u())
 
     // i64 unary
-    I64Clz => ctx.emit(i64_clz())
-    I64Ctz => ctx.emit(i64_ctz())
-    I64Popcnt => ctx.emit(i64_popcnt())
+    I64Clz => ctx.emit_unary_op(i64_clz())
+    I64Ctz => ctx.emit_unary_op(i64_ctz())
+    I64Popcnt => ctx.emit_unary_op(i64_popcnt())
 
-    // f32 arithmetic (binary ops: pop 2, push 1 = net pop 1)
-    F32Add => {
-      ctx.emit(f32_add())
-      ignore(ctx.pop_slot())
-    }
-    F32Sub => {
-      ctx.emit(f32_sub())
-      ignore(ctx.pop_slot())
-    }
-    F32Mul => {
-      ctx.emit(f32_mul())
-      ignore(ctx.pop_slot())
-    }
-    F32Div => {
-      ctx.emit(f32_div())
-      ignore(ctx.pop_slot())
-    }
-    F32Min => {
-      ctx.emit(f32_min())
-      ignore(ctx.pop_slot())
-    }
-    F32Max => {
-      ctx.emit(f32_max())
-      ignore(ctx.pop_slot())
-    }
-    F32Copysign => {
-      ctx.emit(f32_copysign())
-      ignore(ctx.pop_slot())
-    }
+    // f32 arithmetic
+    F32Add => ctx.emit_binary_op(f32_add())
+    F32Sub => ctx.emit_binary_op(f32_sub())
+    F32Mul => ctx.emit_binary_op(f32_mul())
+    F32Div => ctx.emit_binary_op(f32_div())
+    F32Min => ctx.emit_binary_op(f32_min())
+    F32Max => ctx.emit_binary_op(f32_max())
+    F32Copysign => ctx.emit_binary_op(f32_copysign())
 
-    // f32 comparison (binary ops: pop 2, push 1 = net pop 1)
-    F32Eq => {
-      ctx.emit(f32_eq())
-      ignore(ctx.pop_slot())
-    }
-    F32Ne => {
-      ctx.emit(f32_ne())
-      ignore(ctx.pop_slot())
-    }
-    F32Lt => {
-      ctx.emit(f32_lt())
-      ignore(ctx.pop_slot())
-    }
-    F32Gt => {
-      ctx.emit(f32_gt())
-      ignore(ctx.pop_slot())
-    }
-    F32Le => {
-      ctx.emit(f32_le())
-      ignore(ctx.pop_slot())
-    }
-    F32Ge => {
-      ctx.emit(f32_ge())
-      ignore(ctx.pop_slot())
-    }
+    // f32 comparison
+    F32Eq => ctx.emit_binary_op(f32_eq())
+    F32Ne => ctx.emit_binary_op(f32_ne())
+    F32Lt => ctx.emit_binary_op(f32_lt())
+    F32Gt => ctx.emit_binary_op(f32_gt())
+    F32Le => ctx.emit_binary_op(f32_le())
+    F32Ge => ctx.emit_binary_op(f32_ge())
 
     // f32 unary
-    F32Abs => ctx.emit(f32_abs())
-    F32Neg => ctx.emit(f32_neg())
-    F32Ceil => ctx.emit(f32_ceil())
-    F32Floor => ctx.emit(f32_floor())
-    F32Trunc => ctx.emit(f32_trunc())
-    F32Nearest => ctx.emit(f32_nearest())
-    F32Sqrt => ctx.emit(f32_sqrt())
+    F32Abs => ctx.emit_unary_op(f32_abs())
+    F32Neg => ctx.emit_unary_op(f32_neg())
+    F32Ceil => ctx.emit_unary_op(f32_ceil())
+    F32Floor => ctx.emit_unary_op(f32_floor())
+    F32Trunc => ctx.emit_unary_op(f32_trunc())
+    F32Nearest => ctx.emit_unary_op(f32_nearest())
+    F32Sqrt => ctx.emit_unary_op(f32_sqrt())
 
-    // f64 arithmetic (binary ops: pop 2, push 1 = net pop 1)
-    F64Add => {
-      ctx.emit(f64_add())
-      ignore(ctx.pop_slot())
-    }
-    F64Sub => {
-      ctx.emit(f64_sub())
-      ignore(ctx.pop_slot())
-    }
-    F64Mul => {
-      ctx.emit(f64_mul())
-      ignore(ctx.pop_slot())
-    }
-    F64Div => {
-      ctx.emit(f64_div())
-      ignore(ctx.pop_slot())
-    }
-    F64Min => {
-      ctx.emit(f64_min())
-      ignore(ctx.pop_slot())
-    }
-    F64Max => {
-      ctx.emit(f64_max())
-      ignore(ctx.pop_slot())
-    }
-    F64Copysign => {
-      ctx.emit(f64_copysign())
-      ignore(ctx.pop_slot())
-    }
+    // f64 arithmetic
+    F64Add => ctx.emit_binary_op(f64_add())
+    F64Sub => ctx.emit_binary_op(f64_sub())
+    F64Mul => ctx.emit_binary_op(f64_mul())
+    F64Div => ctx.emit_binary_op(f64_div())
+    F64Min => ctx.emit_binary_op(f64_min())
+    F64Max => ctx.emit_binary_op(f64_max())
+    F64Copysign => ctx.emit_binary_op(f64_copysign())
 
-    // f64 comparison (binary ops: pop 2, push 1 = net pop 1)
-    F64Eq => {
-      ctx.emit(f64_eq())
-      ignore(ctx.pop_slot())
-    }
-    F64Ne => {
-      ctx.emit(f64_ne())
-      ignore(ctx.pop_slot())
-    }
-    F64Lt => {
-      ctx.emit(f64_lt())
-      ignore(ctx.pop_slot())
-    }
-    F64Gt => {
-      ctx.emit(f64_gt())
-      ignore(ctx.pop_slot())
-    }
-    F64Le => {
-      ctx.emit(f64_le())
-      ignore(ctx.pop_slot())
-    }
-    F64Ge => {
-      ctx.emit(f64_ge())
-      ignore(ctx.pop_slot())
-    }
+    // f64 comparison
+    F64Eq => ctx.emit_binary_op(f64_eq())
+    F64Ne => ctx.emit_binary_op(f64_ne())
+    F64Lt => ctx.emit_binary_op(f64_lt())
+    F64Gt => ctx.emit_binary_op(f64_gt())
+    F64Le => ctx.emit_binary_op(f64_le())
+    F64Ge => ctx.emit_binary_op(f64_ge())
 
     // f64 unary
-    F64Abs => ctx.emit(f64_abs())
-    F64Neg => ctx.emit(f64_neg())
-    F64Ceil => ctx.emit(f64_ceil())
-    F64Floor => ctx.emit(f64_floor())
-    F64Trunc => ctx.emit(f64_trunc())
-    F64Nearest => ctx.emit(f64_nearest())
-    F64Sqrt => ctx.emit(f64_sqrt())
+    F64Abs => ctx.emit_unary_op(f64_abs())
+    F64Neg => ctx.emit_unary_op(f64_neg())
+    F64Ceil => ctx.emit_unary_op(f64_ceil())
+    F64Floor => ctx.emit_unary_op(f64_floor())
+    F64Trunc => ctx.emit_unary_op(f64_trunc())
+    F64Nearest => ctx.emit_unary_op(f64_nearest())
+    F64Sqrt => ctx.emit_unary_op(f64_sqrt())
 
     // Conversions
-    I32WrapI64 => ctx.emit(i32_wrap_i64())
-    I32TruncF32S => ctx.emit(i32_trunc_f32_s())
-    I32TruncF32U => ctx.emit(i32_trunc_f32_u())
-    I32TruncF64S => ctx.emit(i32_trunc_f64_s())
-    I32TruncF64U => ctx.emit(i32_trunc_f64_u())
-    I64ExtendI32S => ctx.emit(i64_extend_i32_s())
-    I64ExtendI32U => ctx.emit(i64_extend_i32_u())
-    I64TruncF32S => ctx.emit(i64_trunc_f32_s())
-    I64TruncF32U => ctx.emit(i64_trunc_f32_u())
-    I64TruncF64S => ctx.emit(i64_trunc_f64_s())
-    I64TruncF64U => ctx.emit(i64_trunc_f64_u())
-    // Saturating truncation operations
-    I32TruncSatF32S => ctx.emit(i32_trunc_sat_f32_s())
-    I32TruncSatF32U => ctx.emit(i32_trunc_sat_f32_u())
-    I32TruncSatF64S => ctx.emit(i32_trunc_sat_f64_s())
-    I32TruncSatF64U => ctx.emit(i32_trunc_sat_f64_u())
-    I64TruncSatF32S => ctx.emit(i64_trunc_sat_f32_s())
-    I64TruncSatF32U => ctx.emit(i64_trunc_sat_f32_u())
-    I64TruncSatF64S => ctx.emit(i64_trunc_sat_f64_s())
-    I64TruncSatF64U => ctx.emit(i64_trunc_sat_f64_u())
-    F32ConvertI32S => ctx.emit(f32_convert_i32_s())
-    F32ConvertI32U => ctx.emit(f32_convert_i32_u())
-    F32ConvertI64S => ctx.emit(f32_convert_i64_s())
-    F32ConvertI64U => ctx.emit(f32_convert_i64_u())
-    F32DemoteF64 => ctx.emit(f32_demote_f64())
-    F64ConvertI32S => ctx.emit(f64_convert_i32_s())
-    F64ConvertI32U => ctx.emit(f64_convert_i32_u())
-    F64ConvertI64S => ctx.emit(f64_convert_i64_s())
-    F64ConvertI64U => ctx.emit(f64_convert_i64_u())
-    F64PromoteF32 => ctx.emit(f64_promote_f32())
-    I32ReinterpretF32 => ctx.emit(i32_reinterpret_f32())
-    I64ReinterpretF64 => ctx.emit(i64_reinterpret_f64())
-    F32ReinterpretI32 => ctx.emit(f32_reinterpret_i32())
-    F64ReinterpretI64 => ctx.emit(f64_reinterpret_i64())
+    I32WrapI64 => ctx.emit_unary_op(i32_wrap_i64())
+    I32TruncF32S => ctx.emit_unary_op(i32_trunc_f32_s())
+    I32TruncF32U => ctx.emit_unary_op(i32_trunc_f32_u())
+    I32TruncF64S => ctx.emit_unary_op(i32_trunc_f64_s())
+    I32TruncF64U => ctx.emit_unary_op(i32_trunc_f64_u())
+    I64ExtendI32S => ctx.emit_unary_op(i64_extend_i32_s())
+    I64ExtendI32U => ctx.emit_unary_op(i64_extend_i32_u())
+    I64TruncF32S => ctx.emit_unary_op(i64_trunc_f32_s())
+    I64TruncF32U => ctx.emit_unary_op(i64_trunc_f32_u())
+    I64TruncF64S => ctx.emit_unary_op(i64_trunc_f64_s())
+    I64TruncF64U => ctx.emit_unary_op(i64_trunc_f64_u())
+    I32TruncSatF32S => ctx.emit_unary_op(i32_trunc_sat_f32_s())
+    I32TruncSatF32U => ctx.emit_unary_op(i32_trunc_sat_f32_u())
+    I32TruncSatF64S => ctx.emit_unary_op(i32_trunc_sat_f64_s())
+    I32TruncSatF64U => ctx.emit_unary_op(i32_trunc_sat_f64_u())
+    I64TruncSatF32S => ctx.emit_unary_op(i64_trunc_sat_f32_s())
+    I64TruncSatF32U => ctx.emit_unary_op(i64_trunc_sat_f32_u())
+    I64TruncSatF64S => ctx.emit_unary_op(i64_trunc_sat_f64_s())
+    I64TruncSatF64U => ctx.emit_unary_op(i64_trunc_sat_f64_u())
+    F32ConvertI32S => ctx.emit_unary_op(f32_convert_i32_s())
+    F32ConvertI32U => ctx.emit_unary_op(f32_convert_i32_u())
+    F32ConvertI64S => ctx.emit_unary_op(f32_convert_i64_s())
+    F32ConvertI64U => ctx.emit_unary_op(f32_convert_i64_u())
+    F32DemoteF64 => ctx.emit_unary_op(f32_demote_f64())
+    F64ConvertI32S => ctx.emit_unary_op(f64_convert_i32_s())
+    F64ConvertI32U => ctx.emit_unary_op(f64_convert_i32_u())
+    F64ConvertI64S => ctx.emit_unary_op(f64_convert_i64_s())
+    F64ConvertI64U => ctx.emit_unary_op(f64_convert_i64_u())
+    F64PromoteF32 => ctx.emit_unary_op(f64_promote_f32())
+    I32ReinterpretF32 => ctx.emit_unary_op(i32_reinterpret_f32())
+    I64ReinterpretF64 => ctx.emit_unary_op(i64_reinterpret_f64())
+    F32ReinterpretI32 => ctx.emit_unary_op(f32_reinterpret_i32())
+    F64ReinterpretI64 => ctx.emit_unary_op(f64_reinterpret_i64())
 
     // Sign extension
-    I32Extend8S => ctx.emit(i32_extend8_s())
-    I32Extend16S => ctx.emit(i32_extend16_s())
-    I64Extend8S => ctx.emit(i64_extend8_s())
-    I64Extend16S => ctx.emit(i64_extend16_s())
-    I64Extend32S => ctx.emit(i64_extend32_s())
+    I32Extend8S => ctx.emit_unary_op(i32_extend8_s())
+    I32Extend16S => ctx.emit_unary_op(i32_extend16_s())
+    I64Extend8S => ctx.emit_unary_op(i64_extend8_s())
+    I64Extend16S => ctx.emit_unary_op(i64_extend16_s())
+    I64Extend32S => ctx.emit_unary_op(i64_extend32_s())
 
     // Stack operations
     Drop => {
@@ -1002,175 +818,59 @@ fn compile_instr(
       ctx.emit_idx(mem_idx.reinterpret_as_int())
       ignore(ctx.push_slot())
     }
-    I32Load(align, offset, mem_idx) => {
-      ctx.emit(i32_load())
-      ctx.emit_idx(align.reinterpret_as_int())
-      ctx.emit_idx(offset.reinterpret_as_int())
-      ctx.emit_idx(mem_idx.reinterpret_as_int())
-      // Consumes address, produces value - no net change
-    }
-    I32Store(align, offset, mem_idx) => {
-      ctx.emit(i32_store())
-      ctx.emit_idx(align.reinterpret_as_int())
-      ctx.emit_idx(offset.reinterpret_as_int())
-      ctx.emit_idx(mem_idx.reinterpret_as_int())
-      ignore(ctx.pop_slot()) // value
-      ignore(ctx.pop_slot()) // address
-    }
-    I32Load8S(align, offset, mem_idx) => {
-      ctx.emit(i32_load8_s())
-      ctx.emit_idx(align.reinterpret_as_int())
-      ctx.emit_idx(offset.reinterpret_as_int())
-      ctx.emit_idx(mem_idx.reinterpret_as_int())
-      // Consumes address, produces value - no net change
-    }
-    I32Load8U(align, offset, mem_idx) => {
-      ctx.emit(i32_load8_u())
-      ctx.emit_idx(align.reinterpret_as_int())
-      ctx.emit_idx(offset.reinterpret_as_int())
-      ctx.emit_idx(mem_idx.reinterpret_as_int())
-      // Consumes address, produces value - no net change
-    }
-    I32Load16S(align, offset, mem_idx) => {
-      ctx.emit(i32_load16_s())
-      ctx.emit_idx(align.reinterpret_as_int())
-      ctx.emit_idx(offset.reinterpret_as_int())
-      ctx.emit_idx(mem_idx.reinterpret_as_int())
-      // Consumes address, produces value - no net change
-    }
-    I32Load16U(align, offset, mem_idx) => {
-      ctx.emit(i32_load16_u())
-      ctx.emit_idx(align.reinterpret_as_int())
-      ctx.emit_idx(offset.reinterpret_as_int())
-      ctx.emit_idx(mem_idx.reinterpret_as_int())
-      // Consumes address, produces value - no net change
-    }
-    I32Store8(align, offset, mem_idx) => {
-      ctx.emit(i32_store8())
-      ctx.emit_idx(align.reinterpret_as_int())
-      ctx.emit_idx(offset.reinterpret_as_int())
-      ctx.emit_idx(mem_idx.reinterpret_as_int())
-      ignore(ctx.pop_slot()) // value
-      ignore(ctx.pop_slot()) // address
-    }
-    I32Store16(align, offset, mem_idx) => {
-      ctx.emit(i32_store16())
-      ctx.emit_idx(align.reinterpret_as_int())
-      ctx.emit_idx(offset.reinterpret_as_int())
-      ctx.emit_idx(mem_idx.reinterpret_as_int())
-      ignore(ctx.pop_slot()) // value
-      ignore(ctx.pop_slot()) // address
-    }
+    // i32 load/store
+    I32Load(align, offset, mem_idx) =>
+      ctx.emit_load(i32_load(), align, offset, mem_idx)
+    I32Store(align, offset, mem_idx) =>
+      ctx.emit_store(i32_store(), align, offset, mem_idx)
+    I32Load8S(align, offset, mem_idx) =>
+      ctx.emit_load(i32_load8_s(), align, offset, mem_idx)
+    I32Load8U(align, offset, mem_idx) =>
+      ctx.emit_load(i32_load8_u(), align, offset, mem_idx)
+    I32Load16S(align, offset, mem_idx) =>
+      ctx.emit_load(i32_load16_s(), align, offset, mem_idx)
+    I32Load16U(align, offset, mem_idx) =>
+      ctx.emit_load(i32_load16_u(), align, offset, mem_idx)
+    I32Store8(align, offset, mem_idx) =>
+      ctx.emit_store(i32_store8(), align, offset, mem_idx)
+    I32Store16(align, offset, mem_idx) =>
+      ctx.emit_store(i32_store16(), align, offset, mem_idx)
 
-    // i64 load operations
-    I64Load(align, offset, mem_idx) => {
-      ctx.emit(i64_load())
-      ctx.emit_idx(align.reinterpret_as_int())
-      ctx.emit_idx(offset.reinterpret_as_int())
-      ctx.emit_idx(mem_idx.reinterpret_as_int())
-    }
-    I64Load8S(align, offset, mem_idx) => {
-      ctx.emit(i64_load8_s())
-      ctx.emit_idx(align.reinterpret_as_int())
-      ctx.emit_idx(offset.reinterpret_as_int())
-      ctx.emit_idx(mem_idx.reinterpret_as_int())
-    }
-    I64Load8U(align, offset, mem_idx) => {
-      ctx.emit(i64_load8_u())
-      ctx.emit_idx(align.reinterpret_as_int())
-      ctx.emit_idx(offset.reinterpret_as_int())
-      ctx.emit_idx(mem_idx.reinterpret_as_int())
-    }
-    I64Load16S(align, offset, mem_idx) => {
-      ctx.emit(i64_load16_s())
-      ctx.emit_idx(align.reinterpret_as_int())
-      ctx.emit_idx(offset.reinterpret_as_int())
-      ctx.emit_idx(mem_idx.reinterpret_as_int())
-    }
-    I64Load16U(align, offset, mem_idx) => {
-      ctx.emit(i64_load16_u())
-      ctx.emit_idx(align.reinterpret_as_int())
-      ctx.emit_idx(offset.reinterpret_as_int())
-      ctx.emit_idx(mem_idx.reinterpret_as_int())
-    }
-    I64Load32S(align, offset, mem_idx) => {
-      ctx.emit(i64_load32_s())
-      ctx.emit_idx(align.reinterpret_as_int())
-      ctx.emit_idx(offset.reinterpret_as_int())
-      ctx.emit_idx(mem_idx.reinterpret_as_int())
-    }
-    I64Load32U(align, offset, mem_idx) => {
-      ctx.emit(i64_load32_u())
-      ctx.emit_idx(align.reinterpret_as_int())
-      ctx.emit_idx(offset.reinterpret_as_int())
-      ctx.emit_idx(mem_idx.reinterpret_as_int())
-    }
-
-    // i64 store operations
-    I64Store(align, offset, mem_idx) => {
-      ctx.emit(i64_store())
-      ctx.emit_idx(align.reinterpret_as_int())
-      ctx.emit_idx(offset.reinterpret_as_int())
-      ctx.emit_idx(mem_idx.reinterpret_as_int())
-      ignore(ctx.pop_slot()) // value
-      ignore(ctx.pop_slot()) // address
-    }
-    I64Store8(align, offset, mem_idx) => {
-      ctx.emit(i64_store8())
-      ctx.emit_idx(align.reinterpret_as_int())
-      ctx.emit_idx(offset.reinterpret_as_int())
-      ctx.emit_idx(mem_idx.reinterpret_as_int())
-      ignore(ctx.pop_slot()) // value
-      ignore(ctx.pop_slot()) // address
-    }
-    I64Store16(align, offset, mem_idx) => {
-      ctx.emit(i64_store16())
-      ctx.emit_idx(align.reinterpret_as_int())
-      ctx.emit_idx(offset.reinterpret_as_int())
-      ctx.emit_idx(mem_idx.reinterpret_as_int())
-      ignore(ctx.pop_slot()) // value
-      ignore(ctx.pop_slot()) // address
-    }
-    I64Store32(align, offset, mem_idx) => {
-      ctx.emit(i64_store32())
-      ctx.emit_idx(align.reinterpret_as_int())
-      ctx.emit_idx(offset.reinterpret_as_int())
-      ctx.emit_idx(mem_idx.reinterpret_as_int())
-      ignore(ctx.pop_slot()) // value
-      ignore(ctx.pop_slot()) // address
-    }
+    // i64 load/store
+    I64Load(align, offset, mem_idx) =>
+      ctx.emit_load(i64_load(), align, offset, mem_idx)
+    I64Load8S(align, offset, mem_idx) =>
+      ctx.emit_load(i64_load8_s(), align, offset, mem_idx)
+    I64Load8U(align, offset, mem_idx) =>
+      ctx.emit_load(i64_load8_u(), align, offset, mem_idx)
+    I64Load16S(align, offset, mem_idx) =>
+      ctx.emit_load(i64_load16_s(), align, offset, mem_idx)
+    I64Load16U(align, offset, mem_idx) =>
+      ctx.emit_load(i64_load16_u(), align, offset, mem_idx)
+    I64Load32S(align, offset, mem_idx) =>
+      ctx.emit_load(i64_load32_s(), align, offset, mem_idx)
+    I64Load32U(align, offset, mem_idx) =>
+      ctx.emit_load(i64_load32_u(), align, offset, mem_idx)
+    I64Store(align, offset, mem_idx) =>
+      ctx.emit_store(i64_store(), align, offset, mem_idx)
+    I64Store8(align, offset, mem_idx) =>
+      ctx.emit_store(i64_store8(), align, offset, mem_idx)
+    I64Store16(align, offset, mem_idx) =>
+      ctx.emit_store(i64_store16(), align, offset, mem_idx)
+    I64Store32(align, offset, mem_idx) =>
+      ctx.emit_store(i64_store32(), align, offset, mem_idx)
 
     // f32 load/store
-    F32Load(align, offset, mem_idx) => {
-      ctx.emit(f32_load())
-      ctx.emit_idx(align.reinterpret_as_int())
-      ctx.emit_idx(offset.reinterpret_as_int())
-      ctx.emit_idx(mem_idx.reinterpret_as_int())
-    }
-    F32Store(align, offset, mem_idx) => {
-      ctx.emit(f32_store())
-      ctx.emit_idx(align.reinterpret_as_int())
-      ctx.emit_idx(offset.reinterpret_as_int())
-      ctx.emit_idx(mem_idx.reinterpret_as_int())
-      ignore(ctx.pop_slot()) // value
-      ignore(ctx.pop_slot()) // address
-    }
+    F32Load(align, offset, mem_idx) =>
+      ctx.emit_load(f32_load(), align, offset, mem_idx)
+    F32Store(align, offset, mem_idx) =>
+      ctx.emit_store(f32_store(), align, offset, mem_idx)
 
     // f64 load/store
-    F64Load(align, offset, mem_idx) => {
-      ctx.emit(f64_load())
-      ctx.emit_idx(align.reinterpret_as_int())
-      ctx.emit_idx(offset.reinterpret_as_int())
-      ctx.emit_idx(mem_idx.reinterpret_as_int())
-    }
-    F64Store(align, offset, mem_idx) => {
-      ctx.emit(f64_store())
-      ctx.emit_idx(align.reinterpret_as_int())
-      ctx.emit_idx(offset.reinterpret_as_int())
-      ctx.emit_idx(mem_idx.reinterpret_as_int())
-      ignore(ctx.pop_slot()) // value
-      ignore(ctx.pop_slot()) // address
-    }
+    F64Load(align, offset, mem_idx) =>
+      ctx.emit_load(f64_load(), align, offset, mem_idx)
+    F64Store(align, offset, mem_idx) =>
+      ctx.emit_store(f64_store(), align, offset, mem_idx)
 
     // Block structures
     Block(bt, body) => {
