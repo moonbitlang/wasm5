@@ -200,8 +200,8 @@ static int g_num_imported_funcs = 0;
 
 // Type information (for call_indirect type checking)
 static int* g_func_type_idxs = NULL;       // Type index for each function
-static int* g_type_param_counts = NULL;    // Param count for each type
-static int* g_type_result_counts = NULL;   // Result count for each type
+static int* g_type_sig_hash1 = NULL;       // Primary signature hash for each type
+static int* g_type_sig_hash2 = NULL;       // Secondary signature hash for each type
 static int g_num_types = 0;
 
 // Stack base for result extraction after execution
@@ -219,7 +219,7 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
             uint64_t* result_out, int num_results, uint64_t* globals, uint8_t* mem, int mem_size,
             int* memory_pages, int* tables_flat, int* table_offsets, int* table_sizes, int num_tables,
             int* func_entries, int* func_num_locals, int num_funcs, int num_imported_funcs,
-            int* func_type_idxs, int* type_param_counts, int* type_result_counts, int num_types) {
+            int* func_type_idxs, int* type_sig_hash1, int* type_sig_hash2, int num_types) {
     // Allocate stack on heap to avoid C stack limits
     uint64_t* stack = (uint64_t*)malloc(STACK_SIZE * sizeof(uint64_t));
     if (!stack) {
@@ -253,8 +253,8 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
 
     // Store type info for call_indirect type checking
     g_func_type_idxs = func_type_idxs;
-    g_type_param_counts = type_param_counts;
-    g_type_result_counts = type_result_counts;
+    g_type_sig_hash1 = type_sig_hash1;
+    g_type_sig_hash2 = type_sig_hash2;
     g_num_types = num_types;
 
     // Store stack base for result extraction
@@ -295,8 +295,8 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     g_num_funcs = 0;
     g_num_imported_funcs = 0;
     g_func_type_idxs = NULL;
-    g_type_param_counts = NULL;
-    g_type_result_counts = NULL;
+    g_type_sig_hash1 = NULL;
+    g_type_sig_hash2 = NULL;
     g_num_types = 0;
     g_stack_base = NULL;
 
@@ -1949,16 +1949,17 @@ int op_call_indirect(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
         TRAP(TRAP_UNINITIALIZED_ELEMENT);  // "uninitialized element"
     }
 
-    // Type check: compare expected type with actual function type
+    // Type check: compare expected type with actual function type using signature hashes
     if (func_idx < g_num_imported_funcs + g_num_funcs) {
         int actual_type_idx = g_func_type_idxs[func_idx];
         if (expected_type_idx >= 0 && expected_type_idx < g_num_types &&
             actual_type_idx >= 0 && actual_type_idx < g_num_types) {
-            int expected_params = g_type_param_counts[expected_type_idx];
-            int expected_results = g_type_result_counts[expected_type_idx];
-            int actual_params = g_type_param_counts[actual_type_idx];
-            int actual_results = g_type_result_counts[actual_type_idx];
-            if (expected_params != actual_params || expected_results != actual_results) {
+            // Compare both signature hashes - they encode actual types, not just counts
+            int expected_hash1 = g_type_sig_hash1[expected_type_idx];
+            int expected_hash2 = g_type_sig_hash2[expected_type_idx];
+            int actual_hash1 = g_type_sig_hash1[actual_type_idx];
+            int actual_hash2 = g_type_sig_hash2[actual_type_idx];
+            if (expected_hash1 != actual_hash1 || expected_hash2 != actual_hash2) {
                 TRAP(TRAP_INDIRECT_CALL_TYPE_MISMATCH);
             }
         }

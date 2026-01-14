@@ -974,12 +974,10 @@ async test "utf8-invalid-encoding.wast (cruntime)" {
   run_test_harness("", "utf8-invalid-encoding.wast", runtime_type=CRuntime)
 }
 
-// ///|
-// TODO: call_indirect with CRuntime causes SIGSEGV - needs further investigation
-// The crash occurs after C execution completes, suggesting memory corruption.
-// async test "call_indirect.wast (cruntime)" {
-//   run_test_harness("", "call_indirect.wast", runtime_type=CRuntime)
-// }
+///|
+async test "call_indirect.wast (cruntime)" {
+  run_test_harness("", "call_indirect.wast", runtime_type=CRuntime)
+}
 
 // =============================================================================
 // Uncovered CRuntime tests - TODO: enable as support is added

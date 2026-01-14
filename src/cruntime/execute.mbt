@@ -1,7 +1,7 @@
 ///|
 /// Execute threaded code (FFI binding)
 /// Returns trap code (0 = success), stores results in result_out[0..num_results-1]
-#borrow(code, args, result_out, globals, memory, memory_pages, tables_flat, table_offsets, table_sizes, func_entries, func_num_locals, func_type_idxs, type_param_counts, type_result_counts)
+#borrow(code, args, result_out, globals, memory, memory_pages, tables_flat, table_offsets, table_sizes, func_entries, func_num_locals, func_type_idxs, type_sig_hash1, type_sig_hash2)
 extern "C" fn c_execute_ffi(
   code : FixedArray[UInt64],
   entry : Int,
@@ -23,8 +23,8 @@ extern "C" fn c_execute_ffi(
   num_funcs : Int, // Number of local functions
   num_imported_funcs : Int, // Number of imported functions (for index offset)
   func_type_idxs : FixedArray[Int], // Type index for each function (imported + local)
-  type_param_counts : FixedArray[Int], // Number of params for each type
-  type_result_counts : FixedArray[Int], // Number of results for each type
+  type_sig_hash1 : FixedArray[Int], // Primary signature hash for each type
+  type_sig_hash2 : FixedArray[Int], // Secondary signature hash for each type
   num_types : Int,
 ) -> Int = "execute"
 

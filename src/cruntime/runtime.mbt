@@ -113,14 +113,50 @@ fn flatten_tables(
 }
 
 ///|
+/// Compute a hash for a value type (for type signature comparison)
+fn valtype_code(vt : @core.ValType) -> Int {
+  match vt {
+    I32 => 1
+    I64 => 2
+    F32 => 3
+    F64 => 4
+    V128 => 5
+    FuncRef => 6
+    ExternRef => 7
+    _ => 0 // Other reference types
+  }
+}
+
+///|
+/// Compute a signature hash for a function type
+/// This hash uniquely identifies the function signature for type checking
+fn compute_type_signature_hash(ft : @core.FuncType) -> Int {
+  // Use a simple polynomial hash that includes both types and positions
+  let mut hash = 0
+  let mut multiplier = 1
+  // Hash params
+  for param in ft.params {
+    hash = hash + valtype_code(param) * multiplier
+    multiplier = multiplier * 17
+  }
+  // Add separator
+  hash = hash + 100 * multiplier
+  multiplier = multiplier * 17
+  // Hash results
+  for result in ft.results {
+    hash = hash + valtype_code(result) * multiplier
+    multiplier = multiplier * 17
+  }
+  hash
+}
+
+///|
 /// Build type information for call_indirect type checking
 fn build_type_info(
   module_ : @core.Module,
 ) -> (FixedArray[Int], FixedArray[Int], FixedArray[Int]) {
   // Count imported functions
   let num_imported = count_imported_funcs(module_)
-  let num_local = module_.codes.length()
-  let total_funcs = num_imported + num_local
   // Build func_type_idxs: type index for each function
   let func_type_idxs : Array[Int] = []
   // First, imported function types
@@ -134,20 +170,20 @@ fn build_type_info(
   for i = num_imported; i < module_.funcs.length(); i = i + 1 {
     func_type_idxs.push(module_.funcs[i].reinterpret_as_int())
   }
-  // Build type param/result counts
-  let num_types = module_.types.length()
-  let type_param_counts : Array[Int] = []
-  let type_result_counts : Array[Int] = []
+  // Build type signature hashes for each type
+  // We use two arrays to store high and low bits of the hash for better discrimination
+  let type_sig_hash1 : Array[Int] = [] // Primary hash
+  let type_sig_hash2 : Array[Int] = [] // Secondary hash (param count << 16 | result count)
   for type_def in module_.types {
     match type_def {
       Func(ft) => {
-        type_param_counts.push(ft.params.length())
-        type_result_counts.push(ft.results.length())
+        type_sig_hash1.push(compute_type_signature_hash(ft))
+        type_sig_hash2.push(ft.params.length().lsl(16) | ft.results.length())
       }
       _ => {
-        // For non-function types (struct, array), use 0/0
-        type_param_counts.push(0)
-        type_result_counts.push(0)
+        // For non-function types (struct, array), use sentinel values
+        type_sig_hash1.push(-1)
+        type_sig_hash2.push(-1)
       }
     }
   }
@@ -155,14 +191,14 @@ fn build_type_info(
   if func_type_idxs.length() == 0 {
     func_type_idxs.push(-1)
   }
-  if type_param_counts.length() == 0 {
-    type_param_counts.push(0)
-    type_result_counts.push(0)
+  if type_sig_hash1.length() == 0 {
+    type_sig_hash1.push(-1)
+    type_sig_hash2.push(-1)
   }
   (
     FixedArray::from_array(func_type_idxs),
-    FixedArray::from_array(type_param_counts),
-    FixedArray::from_array(type_result_counts),
+    FixedArray::from_array(type_sig_hash1),
+    FixedArray::from_array(type_sig_hash2),
   )
 }
 

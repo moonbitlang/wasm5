@@ -19,6 +19,12 @@ pub struct CRuntime {
   memory : FixedArray[Byte]
   memory_pages : FixedArray[Int]
   tables : FixedArray[FixedArray[Int]]
+  tables_flat : FixedArray[Int]
+  table_offsets : FixedArray[Int]
+  table_sizes : FixedArray[Int]
+  func_type_idxs : FixedArray[Int]
+  type_param_counts : FixedArray[Int]
+  type_result_counts : FixedArray[Int]
 }
 pub fn CRuntime::call_compiled(Self, Bytes, Array[@core.Value]) -> Array[@core.Value] raise @runtime.RuntimeError
 pub fn CRuntime::load(@core.Module) -> Self
@@ -43,6 +49,7 @@ pub enum TrapCode {
   IndirectCallTypeMismatch
   NullFunctionReference
   StackOverflow
+  UninitializedElement
 }
 pub impl Eq for TrapCode
 pub impl Show for TrapCode
