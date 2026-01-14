@@ -1117,6 +1117,7 @@ async test "exports.wast (cruntime)" {
 // }
 
 // --- Conversions/expressions ---
+// TODO: conversions.wast has 227 failures - needs trunc/convert trap handling
 // async test "conversions.wast (cruntime)" {
 //   run_test_harness("", "conversions.wast", runtime_type=CRuntime)
 // }
@@ -1130,9 +1131,10 @@ async test "exports.wast (cruntime)" {
 async test "global.wast (cruntime)" {
   run_test_harness("", "global.wast", runtime_type=CRuntime)
 }
-// async test "local_init.wast (cruntime)" {
-//   run_test_harness("", "local_init.wast", runtime_type=CRuntime)
-// }
+///|
+async test "local_init.wast (cruntime)" {
+  run_test_harness("", "local_init.wast", runtime_type=CRuntime)
+}
 // async test "annotations.wast (cruntime)" {
 //   run_test_harness("", "annotations.wast", runtime_type=CRuntime)
 // }
