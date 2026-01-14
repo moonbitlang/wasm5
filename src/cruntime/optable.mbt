@@ -50,6 +50,9 @@ extern "C" fn br_table() -> UInt64 = "br_table"
 extern "C" fn call() -> UInt64 = "call"
 
 ///|
+extern "C" fn call_import() -> UInt64 = "call_import"
+
+///|
 extern "C" fn entry() -> UInt64 = "entry"
 
 // Constants

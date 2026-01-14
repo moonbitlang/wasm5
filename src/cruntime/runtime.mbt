@@ -13,8 +13,11 @@ pub struct CRuntime {
   table_sizes : FixedArray[Int] // Size of each table
   // Type information for call_indirect type checking
   func_type_idxs : FixedArray[Int] // Type index for each function (imported + local)
-  type_param_counts : FixedArray[Int] // Number of params for each type
-  type_result_counts : FixedArray[Int] // Number of results for each type
+  type_param_counts : FixedArray[Int] // Primary signature hash for each type
+  type_result_counts : FixedArray[Int] // Secondary signature hash for each type
+  // Import function metadata for op_call_import
+  import_num_params : FixedArray[Int] // Number of params for each imported function
+  import_num_results : FixedArray[Int] // Number of results for each imported function
 }
 
 // Import Value type from core
@@ -57,6 +60,8 @@ pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
   let (func_type_idxs, type_param_counts, type_result_counts) = build_type_info(
     module_,
   )
+  // Build import function metadata for op_call_import
+  let (import_num_params, import_num_results) = build_import_info(module_)
   {
     module_,
     compiled,
@@ -70,6 +75,8 @@ pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
     func_type_idxs,
     type_param_counts,
     type_result_counts,
+    import_num_params,
+    import_num_results,
   }
 }
 
@@ -199,6 +206,50 @@ fn build_type_info(
     FixedArray::from_array(func_type_idxs),
     FixedArray::from_array(type_sig_hash1),
     FixedArray::from_array(type_sig_hash2),
+  )
+}
+
+///|
+/// Build import function metadata for op_call_import
+/// Returns (import_num_params, import_num_results) arrays
+fn build_import_info(
+  module_ : @core.Module,
+) -> (FixedArray[Int], FixedArray[Int]) {
+  let import_num_params : Array[Int] = []
+  let import_num_results : Array[Int] = []
+  for imp in module_.imports {
+    match imp.desc {
+      Func(type_idx) => {
+        // Get function type from type index
+        let type_int = type_idx.reinterpret_as_int()
+        if type_int >= 0 && type_int < module_.types.length() {
+          match module_.types[type_int] {
+            Func(ft) => {
+              import_num_params.push(ft.params.length())
+              import_num_results.push(ft.results.length())
+            }
+            _ => {
+              // Non-function type (shouldn't happen for function imports)
+              import_num_params.push(0)
+              import_num_results.push(0)
+            }
+          }
+        } else {
+          import_num_params.push(0)
+          import_num_results.push(0)
+        }
+      }
+      _ => () // Skip non-function imports
+    }
+  }
+  // Ensure at least 1 element to avoid empty array issues
+  if import_num_params.length() == 0 {
+    import_num_params.push(0)
+    import_num_results.push(0)
+  }
+  (
+    FixedArray::from_array(import_num_params),
+    FixedArray::from_array(import_num_results),
   )
 }
 
@@ -450,6 +501,8 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
           self.type_param_counts,
           self.type_result_counts,
           self.module_.types.length(),
+          self.import_num_params,
+          self.import_num_results,
         )
         let trap = trap_code_from_int(trap_code)
         if trap != TrapCode::None {
@@ -472,9 +525,9 @@ pub fn CRuntime::call_compiled(
   match self.compiled.exports.get(name_str) {
     Some(func_idx) => {
       // Get function type for result conversion
+      // Note: func_idx is the local function index, funcs array only has local functions
       let num_imported = count_imported_funcs(self.module_)
-      let abs_idx = num_imported + func_idx
-      let type_idx = self.module_.funcs[abs_idx].reinterpret_as_int()
+      let type_idx = self.module_.funcs[func_idx].reinterpret_as_int()
       let func_type = get_func_type(self.module_, type_idx)
       let num_results = func_type.results.length()
 
@@ -519,6 +572,8 @@ pub fn CRuntime::call_compiled(
         self.type_param_counts,
         self.type_result_counts,
         self.module_.types.length(),
+        self.import_num_params,
+        self.import_num_results,
       )
       // Check for trap
       let trap = trap_code_from_int(trap_code)

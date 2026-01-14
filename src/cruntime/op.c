@@ -204,6 +204,10 @@ static int* g_type_sig_hash1 = NULL;       // Primary signature hash for each ty
 static int* g_type_sig_hash2 = NULL;       // Secondary signature hash for each type
 static int g_num_types = 0;
 
+// Import function metadata (for op_call_import)
+static int* g_import_num_params = NULL;    // Number of params for each imported function
+static int* g_import_num_results = NULL;   // Number of results for each imported function
+
 // Stack base for result extraction after execution
 static uint64_t* g_stack_base = NULL;
 
@@ -219,7 +223,8 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
             uint64_t* result_out, int num_results, uint64_t* globals, uint8_t* mem, int mem_size,
             int* memory_pages, int* tables_flat, int* table_offsets, int* table_sizes, int num_tables,
             int* func_entries, int* func_num_locals, int num_funcs, int num_imported_funcs,
-            int* func_type_idxs, int* type_sig_hash1, int* type_sig_hash2, int num_types) {
+            int* func_type_idxs, int* type_sig_hash1, int* type_sig_hash2, int num_types,
+            int* import_num_params, int* import_num_results) {
     // Allocate stack on heap to avoid C stack limits
     uint64_t* stack = (uint64_t*)malloc(STACK_SIZE * sizeof(uint64_t));
     if (!stack) {
@@ -256,6 +261,10 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     g_type_sig_hash1 = type_sig_hash1;
     g_type_sig_hash2 = type_sig_hash2;
     g_num_types = num_types;
+
+    // Store import function metadata for op_call_import
+    g_import_num_params = import_num_params;
+    g_import_num_results = import_num_results;
 
     // Store stack base for result extraction
     g_stack_base = stack;
@@ -298,6 +307,8 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     g_type_sig_hash1 = NULL;
     g_type_sig_hash2 = NULL;
     g_num_types = 0;
+    g_import_num_params = NULL;
+    g_import_num_results = NULL;
     g_stack_base = NULL;
 
     return trap;
@@ -362,6 +373,37 @@ int op_call(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     NEXT();
 }
 DEFINE_OP(call)
+
+// Call an imported function (spectest handlers)
+// Immediates: import_idx, frame_offset
+// The import_idx identifies which imported function to call
+// For spectest: print functions are no-ops, they just consume args and return nothing
+int op_call_import(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt;
+    int import_idx = (int)*pc++;
+    int frame_offset = (int)*pc++;
+    (void)frame_offset;  // Not used for imports since they don't have local frames
+
+    // Get import function signature
+    int num_params = 0;
+    int num_results = 0;
+    if (g_import_num_params && import_idx >= 0 && import_idx < g_num_imported_funcs) {
+        num_params = g_import_num_params[import_idx];
+        num_results = g_import_num_results[import_idx];
+    }
+
+    // Pop arguments (spectest functions don't actually use them, just consume)
+    sp -= num_params;
+
+    // For spectest print functions: they return void (num_results = 0)
+    // For other potential imports: push dummy results if needed
+    for (int i = 0; i < num_results; i++) {
+        *sp++ = 0;  // Push zero as dummy result
+    }
+
+    NEXT();
+}
+DEFINE_OP(call_import)
 
 // Function entry - set sp and zero non-arg locals
 // Immediates: num_locals (for sp), first_local_to_zero, num_to_zero

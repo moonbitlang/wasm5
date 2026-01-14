@@ -21,8 +21,8 @@ pub fn compile(mod_ : @core.Module) -> CompiledModule {
   let func_num_results : Array[Int] = []
   let func_max_stack : Array[Int] = []
   for i, code in mod_.codes {
-    let func_idx = num_imported_funcs + i
-    let type_idx = mod_.funcs[func_idx].reinterpret_as_int()
+    // funcs array only contains local function type indices (index i, not absolute func_idx)
+    let type_idx = mod_.funcs[i].reinterpret_as_int()
     let func_type = get_func_type(mod_, type_idx)
     let num_params = func_type.params.length()
     let num_results = func_type.results.length()
@@ -1161,8 +1161,43 @@ fn compile_instr(
         // Set sp to after the result slots (for sp-relative operations)
         ctx.emit(set_sp())
         ctx.emit_idx(ctx.current_sp())
+      } else if func_idx >= 0 && func_idx < mod_info.num_imported_funcs {
+        // Imported function call
+        // Get function type from the import (need to look in imports, not funcs)
+        let type_idx = get_imported_func_type_idx(mod_info.mod_, func_idx)
+        let func_type = get_func_type(mod_info.mod_, type_idx)
+        let num_params = func_type.params.length()
+        let num_results = func_type.results.length()
+
+        // Compute frame_offset (same as local calls)
+        let frame_offset = if num_params > 0 {
+          ctx.slot_at(num_params - 1)
+        } else {
+          ctx.current_sp()
+        }
+
+        // Pop arguments from slot stack
+        for _ in 0..<num_params {
+          ignore(ctx.pop_slot())
+        }
+
+        // Emit call_import instruction
+        ctx.emit(call_import())
+        ctx.emit_idx(func_idx) // Import index (0..num_imported_funcs-1)
+        ctx.emit_idx(frame_offset)
+
+        // Push result slots
+        for i in 0..<num_results {
+          ctx.slot_stack.push(frame_offset + i)
+        }
+        ctx.next_slot = frame_offset + num_results
+
+        // Set sp to after the result slots
+        if num_results > 0 {
+          ctx.emit(set_sp())
+          ctx.emit_idx(ctx.current_sp())
+        }
       }
-      // TODO: handle imported function calls
     }
 
     // Indirect function call via table
@@ -1228,6 +1263,29 @@ fn count_imported_funcs(mod_ : @core.Module) -> Int {
 
 ///|
 /// Get function type by index
+
+///|
+/// Get the type index for an imported function by its import index
+fn get_imported_func_type_idx(
+  mod_ : @core.Module,
+  import_func_idx : Int,
+) -> Int {
+  let mut func_import_count = 0
+  for imp in mod_.imports {
+    match imp.desc {
+      Func(type_idx) => {
+        if func_import_count == import_func_idx {
+          return type_idx.reinterpret_as_int()
+        }
+        func_import_count += 1
+      }
+      _ => ()
+    }
+  }
+  0 // Should not happen for valid modules
+}
+
+///|
 fn get_func_type(mod_ : @core.Module, type_idx : Int) -> @core.FuncType {
   match mod_.types[type_idx] {
     Func(ft) => ft

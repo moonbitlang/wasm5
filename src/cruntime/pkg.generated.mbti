@@ -25,6 +25,8 @@ pub struct CRuntime {
   func_type_idxs : FixedArray[Int]
   type_param_counts : FixedArray[Int]
   type_result_counts : FixedArray[Int]
+  import_num_params : FixedArray[Int]
+  import_num_results : FixedArray[Int]
 }
 pub fn CRuntime::call_compiled(Self, Bytes, Array[@core.Value]) -> Array[@core.Value] raise @runtime.RuntimeError
 pub fn CRuntime::load(@core.Module) -> Self
