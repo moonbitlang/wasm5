@@ -771,8 +771,13 @@ fn validate_module_element_segments(
         )
       }
 
-      // Validate offset expression uses only immutable globals
-      validate_const_expr_globals(m, elem.offset, import_counts)
+      // Validate offset expression and check it produces i32
+      let offset_type = validate_const_expr_type(m, elem.offset, import_counts)
+      if offset_type != I32 {
+        raise ValidationError::TypeMismatch(
+          "element segment offset must be i32",
+        )
+      }
     }
 
     // Validate element init expressions are constant references
@@ -810,8 +815,11 @@ fn validate_module_data_segments(
       if mem_idx < 0 || mem_idx >= total_mems {
         raise ValidationError::UnknownMemory(mem_idx)
       }
-      // Validate offset expression uses only immutable globals
-      validate_const_expr_globals(m, data.offset, import_counts)
+      // Validate offset expression and check it produces i32
+      let offset_type = validate_const_expr_type(m, data.offset, import_counts)
+      if offset_type != I32 {
+        raise ValidationError::TypeMismatch("data segment offset must be i32")
+      }
     }
   }
 }

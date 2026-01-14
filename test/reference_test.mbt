@@ -1115,8 +1115,6 @@ async test "exports.wast (cruntime)" {
 // }
 
 // --- Data/Element segments ---
-// Note: data.wast has 12 validation failures (assert_invalid) - validator doesn't
-// catch all invalid offset expressions. Execution tests pass correctly.
 
 ///|
 async test "data.wast (cruntime)" {

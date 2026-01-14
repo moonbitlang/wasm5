@@ -476,6 +476,119 @@ fn validate_const_expr_globals(
 }
 
 ///|
+/// Validate a constant expression and return its resulting type.
+/// WebAssembly constant expressions may only use: i32.const, i64.const, f32.const,
+/// f64.const, ref.null, ref.func, global.get (immutable), and v128.const.
+/// Extended const also allows i32.add, i32.sub, i32.mul, i64.add, i64.sub, i64.mul.
+fn validate_const_expr_type(
+  m : @core.Module,
+  expr : @core.Expr,
+  import_counts : ImportCounts,
+) -> @core.ValType raise ValidationError {
+  let stack : Array[@core.ValType] = []
+  for instr in expr.instrs {
+    match instr {
+      I32Const(_) => stack.push(I32)
+      I64Const(_) => stack.push(I64)
+      F32Const(_) => stack.push(F32)
+      F64Const(_) => stack.push(F64)
+      RefNull(rt) => stack.push(@core.ValType::Ref(rt, true))
+      RefFunc(idx) => {
+        // Validate function index exists
+        let func_idx = idx.reinterpret_as_int()
+        let total_funcs = import_counts.funcs + m.codes.length()
+        if func_idx < 0 || func_idx >= total_funcs {
+          raise ValidationError::InvalidFunctionIndex(func_idx)
+        }
+        stack.push(FuncRef)
+      }
+      GlobalGet(idx) => {
+        let global_idx = idx.reinterpret_as_int()
+        let total_globals = import_counts.globals + m.globals.length()
+        if global_idx < 0 || global_idx >= total_globals {
+          raise ValidationError::UnknownGlobal(global_idx)
+        }
+        // Check if global is mutable (not allowed in const expr)
+        let global_type = if global_idx < import_counts.globals {
+          // Imported global
+          let mut import_global_idx = 0
+          let mut found_type : @core.GlobalType? = None
+          for imp in m.imports {
+            match imp.desc {
+              Global(gt) => {
+                if import_global_idx == global_idx {
+                  found_type = Some(gt)
+                  break
+                }
+                import_global_idx += 1
+              }
+              _ => ()
+            }
+          }
+          match found_type {
+            Some(gt) => gt
+            None => raise ValidationError::UnknownGlobal(global_idx)
+          }
+        } else {
+          // Local global
+          let local_idx = global_idx - import_counts.globals
+          m.globals[local_idx].type_
+        }
+        if global_type.mutable {
+          raise ValidationError::ConstantExpressionRequired(
+            "global.get in constant expression must reference immutable global",
+          )
+        }
+        stack.push(global_type.val_type)
+      }
+      // Extended const: arithmetic operations
+      I32Add | I32Sub | I32Mul => {
+        if stack.length() < 2 {
+          raise ValidationError::TypeMismatch(
+            "i32 binary op requires 2 operands",
+          )
+        }
+        let b = stack.pop().unwrap()
+        let a = stack.pop().unwrap()
+        if a != I32 || b != I32 {
+          raise ValidationError::TypeMismatch(
+            "i32 binary op requires i32 operands",
+          )
+        }
+        stack.push(I32)
+      }
+      I64Add | I64Sub | I64Mul => {
+        if stack.length() < 2 {
+          raise ValidationError::TypeMismatch(
+            "i64 binary op requires 2 operands",
+          )
+        }
+        let b = stack.pop().unwrap()
+        let a = stack.pop().unwrap()
+        if a != I64 || b != I64 {
+          raise ValidationError::TypeMismatch(
+            "i64 binary op requires i64 operands",
+          )
+        }
+        stack.push(I64)
+      }
+      _ =>
+        // Any other instruction is not allowed in constant expressions
+        raise ValidationError::ConstantExpressionRequired(
+          "instruction not allowed in constant expression",
+        )
+    }
+  }
+  // The result should be exactly one value on the stack
+  if stack.length() != 1 {
+    raise ValidationError::TypeMismatch(
+      "constant expression must produce exactly one value",
+    )
+  }
+  stack[0]
+}
+
+///|
 /// Check if a type index refers to a function type in the module
 fn is_func_type_index(module_ : @core.Module, type_idx : Int) -> Bool {
   if type_idx < 0 || type_idx >= module_.types.length() {
