@@ -1077,9 +1077,10 @@ async test "func.wast (cruntime)" {
 // }
 
 // --- Module structure ---
-// async test "exports.wast (cruntime)" {
-//   run_test_harness("", "exports.wast", runtime_type=CRuntime)
-// }
+///|
+async test "exports.wast (cruntime)" {
+  run_test_harness("", "exports.wast", runtime_type=CRuntime)
+}
 // async test "imports.wast (cruntime)" {
 //   run_test_harness("", "imports.wast", runtime_type=CRuntime)
 // }
