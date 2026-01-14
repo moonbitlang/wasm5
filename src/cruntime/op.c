@@ -27,6 +27,132 @@
 // Macro to define getter function that returns op handler pointer
 #define DEFINE_OP(name) uint64_t name(void) { return (uint64_t)op_##name; }
 
+// ============================================================================
+// Binary operation macros - reduce repetitive code for arithmetic/logical ops
+// ============================================================================
+
+// i32 binary op with unsigned operands (add, sub, mul, and, or, xor)
+#define I32_BINARY_OP(name, expr) \
+int op_i32_##name(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) { \
+    (void)crt; (void)fp; \
+    uint32_t b = (uint32_t)sp[-1]; \
+    uint32_t a = (uint32_t)sp[-2]; \
+    --sp; \
+    sp[-1] = (uint64_t)(expr); \
+    NEXT(); \
+} \
+DEFINE_OP(i32_##name)
+
+// i32 comparison with unsigned operands
+#define I32_CMP_OP(name, op) \
+int op_i32_##name(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) { \
+    (void)crt; (void)fp; \
+    uint32_t b = (uint32_t)sp[-1]; \
+    uint32_t a = (uint32_t)sp[-2]; \
+    --sp; \
+    sp[-1] = (a op b ? 1 : 0); \
+    NEXT(); \
+} \
+DEFINE_OP(i32_##name)
+
+// i32 comparison with signed operands
+#define I32_CMP_OP_S(name, op) \
+int op_i32_##name(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) { \
+    (void)crt; (void)fp; \
+    int32_t b = (int32_t)sp[-1]; \
+    int32_t a = (int32_t)sp[-2]; \
+    --sp; \
+    sp[-1] = (a op b ? 1 : 0); \
+    NEXT(); \
+} \
+DEFINE_OP(i32_##name)
+
+// i64 binary op with simple expression
+#define I64_BINARY_OP(name, expr) \
+int op_i64_##name(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) { \
+    (void)crt; (void)fp; \
+    uint64_t b = sp[-1]; \
+    uint64_t a = sp[-2]; \
+    --sp; \
+    sp[-1] = (expr); \
+    NEXT(); \
+} \
+DEFINE_OP(i64_##name)
+
+// i64 comparison with unsigned operands
+#define I64_CMP_OP(name, op) \
+int op_i64_##name(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) { \
+    (void)crt; (void)fp; \
+    uint64_t b = sp[-1]; \
+    uint64_t a = sp[-2]; \
+    --sp; \
+    sp[-1] = (a op b ? 1 : 0); \
+    NEXT(); \
+} \
+DEFINE_OP(i64_##name)
+
+// i64 comparison with signed operands
+#define I64_CMP_OP_S(name, op) \
+int op_i64_##name(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) { \
+    (void)crt; (void)fp; \
+    int64_t b = (int64_t)sp[-1]; \
+    int64_t a = (int64_t)sp[-2]; \
+    --sp; \
+    sp[-1] = (a op b ? 1 : 0); \
+    NEXT(); \
+} \
+DEFINE_OP(i64_##name)
+
+// f32 binary op
+#define F32_BINARY_OP(name, op) \
+int op_f32_##name(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) { \
+    (void)crt; (void)fp; \
+    float b = as_f32(sp[-1]); \
+    float a = as_f32(sp[-2]); \
+    --sp; \
+    sp[-1] = from_f32(a op b); \
+    NEXT(); \
+} \
+DEFINE_OP(f32_##name)
+
+// f32 comparison
+#define F32_CMP_OP(name, op) \
+int op_f32_##name(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) { \
+    (void)crt; (void)fp; \
+    float b = as_f32(sp[-1]); \
+    float a = as_f32(sp[-2]); \
+    --sp; \
+    sp[-1] = (a op b ? 1 : 0); \
+    NEXT(); \
+} \
+DEFINE_OP(f32_##name)
+
+// f64 binary op
+#define F64_BINARY_OP(name, op) \
+int op_f64_##name(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) { \
+    (void)crt; (void)fp; \
+    double b = as_f64(sp[-1]); \
+    double a = as_f64(sp[-2]); \
+    --sp; \
+    sp[-1] = from_f64(a op b); \
+    NEXT(); \
+} \
+DEFINE_OP(f64_##name)
+
+// f64 comparison
+#define F64_CMP_OP(name, op) \
+int op_f64_##name(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) { \
+    (void)crt; (void)fp; \
+    double b = as_f64(sp[-1]); \
+    double a = as_f64(sp[-2]); \
+    --sp; \
+    sp[-1] = (a op b ? 1 : 0); \
+    NEXT(); \
+} \
+DEFINE_OP(f64_##name)
+
+// ============================================================================
+
 // CRuntime holds only cold fields - pc/sp/fp are passed as parameters for performance
 typedef struct {
     uint64_t* code;    // Base of code array (for computing branch targets)
@@ -379,39 +505,10 @@ int op_global_set(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
 }
 DEFINE_OP(global_set)
 
-// i32 arithmetic
-
-int op_i32_add(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint32_t b = (uint32_t)sp[-1];
-    uint32_t a = (uint32_t)sp[-2];
-    --sp;
-    uint32_t result = a + b;
-    sp[-1] = (uint64_t)result;
-    TRACE("i32_add: %u + %u = %u\n", a, b, result);
-    NEXT();
-}
-DEFINE_OP(i32_add)
-
-int op_i32_sub(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint32_t b = (uint32_t)sp[-1];
-    uint32_t a = (uint32_t)sp[-2];
-    --sp;
-    sp[-1] = (uint64_t)(a - b);
-    NEXT();
-}
-DEFINE_OP(i32_sub)
-
-int op_i32_mul(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint32_t b = (uint32_t)sp[-1];
-    uint32_t a = (uint32_t)sp[-2];
-    --sp;
-    sp[-1] = (uint64_t)(a * b);
-    NEXT();
-}
-DEFINE_OP(i32_mul)
+// i32 arithmetic - simple binary ops use macros
+I32_BINARY_OP(add, a + b)
+I32_BINARY_OP(sub, a - b)
+I32_BINARY_OP(mul, a * b)
 
 int op_i32_div_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)crt; (void)fp;
@@ -459,46 +556,13 @@ int op_i32_rem_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
 }
 DEFINE_OP(i32_rem_u)
 
-int op_i32_and(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint32_t b = (uint32_t)sp[-1];
-    uint32_t a = (uint32_t)sp[-2];
-    --sp;
-    sp[-1] = (uint64_t)(a & b);
-    NEXT();
-}
-DEFINE_OP(i32_and)
+I32_BINARY_OP(and, a & b)
+I32_BINARY_OP(or, a | b)
+I32_BINARY_OP(xor, a ^ b)
+I32_BINARY_OP(shl, a << (b & 31))
+I32_BINARY_OP(shr_u, a >> (b & 31))
 
-int op_i32_or(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint32_t b = (uint32_t)sp[-1];
-    uint32_t a = (uint32_t)sp[-2];
-    --sp;
-    sp[-1] = (uint64_t)(a | b);
-    NEXT();
-}
-DEFINE_OP(i32_or)
-
-int op_i32_xor(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint32_t b = (uint32_t)sp[-1];
-    uint32_t a = (uint32_t)sp[-2];
-    --sp;
-    sp[-1] = (uint64_t)(a ^ b);
-    NEXT();
-}
-DEFINE_OP(i32_xor)
-
-int op_i32_shl(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint32_t b = (uint32_t)sp[-1];
-    uint32_t a = (uint32_t)sp[-2];
-    --sp;
-    sp[-1] = (uint64_t)(a << (b & 31));
-    NEXT();
-}
-DEFINE_OP(i32_shl)
-
+// shr_s needs signed 'a' for arithmetic shift
 int op_i32_shr_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)crt; (void)fp;
     uint32_t b = (uint32_t)sp[-1];
@@ -509,145 +573,30 @@ int op_i32_shr_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
 }
 DEFINE_OP(i32_shr_s)
 
-int op_i32_shr_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint32_t b = (uint32_t)sp[-1];
-    uint32_t a = (uint32_t)sp[-2];
-    --sp;
-    sp[-1] = (uint64_t)(a >> (b & 31));
-    NEXT();
-}
-DEFINE_OP(i32_shr_u)
+// Rotations need special masking of b before use
+I32_BINARY_OP(rotl, (a << (b & 31)) | (a >> (32 - (b & 31))))
+I32_BINARY_OP(rotr, (a >> (b & 31)) | (a << (32 - (b & 31))))
 
-int op_i32_rotl(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint32_t b = (uint32_t)sp[-1] & 31;
-    uint32_t a = (uint32_t)sp[-2];
-    --sp;
-    sp[-1] = (uint64_t)((a << b) | (a >> (32 - b)));
-    NEXT();
-}
-DEFINE_OP(i32_rotl)
-
-int op_i32_rotr(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint32_t b = (uint32_t)sp[-1] & 31;
-    uint32_t a = (uint32_t)sp[-2];
-    --sp;
-    sp[-1] = (uint64_t)((a >> b) | (a << (32 - b)));
-    NEXT();
-}
-DEFINE_OP(i32_rotr)
-
-// i32 comparison
-
+// i32 comparison - eqz is unary, keep manual
 int op_i32_eqz(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)crt; (void)fp;
     uint32_t a = (uint32_t)sp[-1];
-    sp[-1] = (uint64_t)(a == 0 ? 1 : 0);
+    sp[-1] = (a == 0 ? 1 : 0);
     NEXT();
 }
 DEFINE_OP(i32_eqz)
 
-int op_i32_eq(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint32_t b = (uint32_t)sp[-1];
-    uint32_t a = (uint32_t)sp[-2];
-    --sp;
-    sp[-1] = (uint64_t)(a == b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(i32_eq)
-
-int op_i32_ne(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint32_t b = (uint32_t)sp[-1];
-    uint32_t a = (uint32_t)sp[-2];
-    --sp;
-    sp[-1] = (uint64_t)(a != b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(i32_ne)
-
-int op_i32_lt_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    int32_t b = (int32_t)sp[-1];
-    int32_t a = (int32_t)sp[-2];
-    --sp;
-    sp[-1] = (uint64_t)(a < b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(i32_lt_s)
-
-int op_i32_lt_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint32_t b = (uint32_t)sp[-1];
-    uint32_t a = (uint32_t)sp[-2];
-    --sp;
-    sp[-1] = (uint64_t)(a < b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(i32_lt_u)
-
-int op_i32_gt_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    int32_t b = (int32_t)sp[-1];
-    int32_t a = (int32_t)sp[-2];
-    --sp;
-    sp[-1] = (uint64_t)(a > b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(i32_gt_s)
-
-int op_i32_gt_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint32_t b = (uint32_t)sp[-1];
-    uint32_t a = (uint32_t)sp[-2];
-    --sp;
-    sp[-1] = (uint64_t)(a > b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(i32_gt_u)
-
-int op_i32_le_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    int32_t b = (int32_t)sp[-1];
-    int32_t a = (int32_t)sp[-2];
-    --sp;
-    sp[-1] = (uint64_t)(a <= b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(i32_le_s)
-
-int op_i32_le_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint32_t b = (uint32_t)sp[-1];
-    uint32_t a = (uint32_t)sp[-2];
-    --sp;
-    sp[-1] = (uint64_t)(a <= b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(i32_le_u)
-
-int op_i32_ge_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    int32_t b = (int32_t)sp[-1];
-    int32_t a = (int32_t)sp[-2];
-    --sp;
-    sp[-1] = (uint64_t)(a >= b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(i32_ge_s)
-
-int op_i32_ge_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint32_t b = (uint32_t)sp[-1];
-    uint32_t a = (uint32_t)sp[-2];
-    --sp;
-    sp[-1] = (uint64_t)(a >= b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(i32_ge_u)
+// Binary comparisons use macros
+I32_CMP_OP(eq, ==)
+I32_CMP_OP(ne, !=)
+I32_CMP_OP_S(lt_s, <)
+I32_CMP_OP(lt_u, <)
+I32_CMP_OP_S(gt_s, >)
+I32_CMP_OP(gt_u, >)
+I32_CMP_OP_S(le_s, <=)
+I32_CMP_OP(le_u, <=)
+I32_CMP_OP_S(ge_s, >=)
+I32_CMP_OP(ge_u, >=)
 
 // i32 unary
 
@@ -675,37 +624,10 @@ int op_i32_popcnt(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
 }
 DEFINE_OP(i32_popcnt)
 
-// i64 arithmetic
-
-int op_i64_add(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint64_t b = sp[-1];
-    uint64_t a = sp[-2];
-    --sp;
-    sp[-1] = a + b;
-    NEXT();
-}
-DEFINE_OP(i64_add)
-
-int op_i64_sub(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint64_t b = sp[-1];
-    uint64_t a = sp[-2];
-    --sp;
-    sp[-1] = a - b;
-    NEXT();
-}
-DEFINE_OP(i64_sub)
-
-int op_i64_mul(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint64_t b = sp[-1];
-    uint64_t a = sp[-2];
-    --sp;
-    sp[-1] = a * b;
-    NEXT();
-}
-DEFINE_OP(i64_mul)
+// i64 arithmetic - simple binary ops use macros
+I64_BINARY_OP(add, a + b)
+I64_BINARY_OP(sub, a - b)
+I64_BINARY_OP(mul, a * b)
 
 int op_i64_div_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)crt; (void)fp;
@@ -753,46 +675,13 @@ int op_i64_rem_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
 }
 DEFINE_OP(i64_rem_u)
 
-int op_i64_and(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint64_t b = sp[-1];
-    uint64_t a = sp[-2];
-    --sp;
-    sp[-1] = a & b;
-    NEXT();
-}
-DEFINE_OP(i64_and)
+I64_BINARY_OP(and, a & b)
+I64_BINARY_OP(or, a | b)
+I64_BINARY_OP(xor, a ^ b)
+I64_BINARY_OP(shl, a << (b & 63))
+I64_BINARY_OP(shr_u, a >> (b & 63))
 
-int op_i64_or(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint64_t b = sp[-1];
-    uint64_t a = sp[-2];
-    --sp;
-    sp[-1] = a | b;
-    NEXT();
-}
-DEFINE_OP(i64_or)
-
-int op_i64_xor(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint64_t b = sp[-1];
-    uint64_t a = sp[-2];
-    --sp;
-    sp[-1] = a ^ b;
-    NEXT();
-}
-DEFINE_OP(i64_xor)
-
-int op_i64_shl(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint64_t b = sp[-1];
-    uint64_t a = sp[-2];
-    --sp;
-    sp[-1] = a << (b & 63);
-    NEXT();
-}
-DEFINE_OP(i64_shl)
-
+// shr_s needs signed 'a' for arithmetic shift
 int op_i64_shr_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)crt; (void)fp;
     uint64_t b = sp[-1];
@@ -803,38 +692,11 @@ int op_i64_shr_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
 }
 DEFINE_OP(i64_shr_s)
 
-int op_i64_shr_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint64_t b = sp[-1];
-    uint64_t a = sp[-2];
-    --sp;
-    sp[-1] = a >> (b & 63);
-    NEXT();
-}
-DEFINE_OP(i64_shr_u)
+// Rotations need special masking
+I64_BINARY_OP(rotl, (a << (b & 63)) | (a >> (64 - (b & 63))))
+I64_BINARY_OP(rotr, (a >> (b & 63)) | (a << (64 - (b & 63))))
 
-int op_i64_rotl(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint64_t b = sp[-1] & 63;
-    uint64_t a = sp[-2];
-    --sp;
-    sp[-1] = (a << b) | (a >> (64 - b));
-    NEXT();
-}
-DEFINE_OP(i64_rotl)
-
-int op_i64_rotr(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint64_t b = sp[-1] & 63;
-    uint64_t a = sp[-2];
-    --sp;
-    sp[-1] = (a >> b) | (a << (64 - b));
-    NEXT();
-}
-DEFINE_OP(i64_rotr)
-
-// i64 comparison
-
+// i64 comparison - eqz is unary, keep manual
 int op_i64_eqz(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)crt; (void)fp;
     uint64_t a = sp[-1];
@@ -843,105 +705,17 @@ int op_i64_eqz(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
 }
 DEFINE_OP(i64_eqz)
 
-int op_i64_eq(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint64_t b = sp[-1];
-    uint64_t a = sp[-2];
-    --sp;
-    sp[-1] = (a == b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(i64_eq)
-
-int op_i64_ne(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint64_t b = sp[-1];
-    uint64_t a = sp[-2];
-    --sp;
-    sp[-1] = (a != b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(i64_ne)
-
-int op_i64_lt_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    int64_t b = (int64_t)sp[-1];
-    int64_t a = (int64_t)sp[-2];
-    --sp;
-    sp[-1] = (a < b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(i64_lt_s)
-
-int op_i64_lt_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint64_t b = sp[-1];
-    uint64_t a = sp[-2];
-    --sp;
-    sp[-1] = (a < b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(i64_lt_u)
-
-int op_i64_gt_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    int64_t b = (int64_t)sp[-1];
-    int64_t a = (int64_t)sp[-2];
-    --sp;
-    sp[-1] = (a > b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(i64_gt_s)
-
-int op_i64_gt_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint64_t b = sp[-1];
-    uint64_t a = sp[-2];
-    --sp;
-    sp[-1] = (a > b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(i64_gt_u)
-
-int op_i64_le_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    int64_t b = (int64_t)sp[-1];
-    int64_t a = (int64_t)sp[-2];
-    --sp;
-    sp[-1] = (a <= b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(i64_le_s)
-
-int op_i64_le_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint64_t b = sp[-1];
-    uint64_t a = sp[-2];
-    --sp;
-    sp[-1] = (a <= b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(i64_le_u)
-
-int op_i64_ge_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    int64_t b = (int64_t)sp[-1];
-    int64_t a = (int64_t)sp[-2];
-    --sp;
-    sp[-1] = (a >= b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(i64_ge_s)
-
-int op_i64_ge_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    uint64_t b = sp[-1];
-    uint64_t a = sp[-2];
-    --sp;
-    sp[-1] = (a >= b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(i64_ge_u)
+// Binary comparisons use macros
+I64_CMP_OP(eq, ==)
+I64_CMP_OP(ne, !=)
+I64_CMP_OP_S(lt_s, <)
+I64_CMP_OP(lt_u, <)
+I64_CMP_OP_S(gt_s, >)
+I64_CMP_OP(gt_u, >)
+I64_CMP_OP_S(le_s, <=)
+I64_CMP_OP(le_u, <=)
+I64_CMP_OP_S(ge_s, >=)
+I64_CMP_OP(ge_u, >=)
 
 // i64 unary
 
@@ -997,47 +771,11 @@ static inline uint64_t from_f64(double f) {
 #define F32_SIGN_MASK 0x80000000U
 #define F64_SIGN_MASK 0x8000000000000000ULL
 
-// f32 arithmetic
-
-int op_f32_add(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    float b = as_f32(sp[-1]);
-    float a = as_f32(sp[-2]);
-    --sp;
-    sp[-1] = from_f32(a + b);
-    NEXT();
-}
-DEFINE_OP(f32_add)
-
-int op_f32_sub(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    float b = as_f32(sp[-1]);
-    float a = as_f32(sp[-2]);
-    --sp;
-    sp[-1] = from_f32(a - b);
-    NEXT();
-}
-DEFINE_OP(f32_sub)
-
-int op_f32_mul(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    float b = as_f32(sp[-1]);
-    float a = as_f32(sp[-2]);
-    --sp;
-    sp[-1] = from_f32(a * b);
-    NEXT();
-}
-DEFINE_OP(f32_mul)
-
-int op_f32_div(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    float b = as_f32(sp[-1]);
-    float a = as_f32(sp[-2]);
-    --sp;
-    sp[-1] = from_f32(a / b);
-    NEXT();
-}
-DEFINE_OP(f32_div)
+// f32 arithmetic - simple binary ops use macros
+F32_BINARY_OP(add, +)
+F32_BINARY_OP(sub, -)
+F32_BINARY_OP(mul, *)
+F32_BINARY_OP(div, /)
 
 int op_f32_min(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)crt; (void)fp;
@@ -1103,67 +841,13 @@ int op_f32_copysign(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
 }
 DEFINE_OP(f32_copysign)
 
-// f32 comparison
-
-int op_f32_eq(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    float b = as_f32(sp[-1]);
-    float a = as_f32(sp[-2]);
-    --sp;
-    sp[-1] = (a == b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(f32_eq)
-
-int op_f32_ne(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    float b = as_f32(sp[-1]);
-    float a = as_f32(sp[-2]);
-    --sp;
-    sp[-1] = (a != b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(f32_ne)
-
-int op_f32_lt(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    float b = as_f32(sp[-1]);
-    float a = as_f32(sp[-2]);
-    --sp;
-    sp[-1] = (a < b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(f32_lt)
-
-int op_f32_gt(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    float b = as_f32(sp[-1]);
-    float a = as_f32(sp[-2]);
-    --sp;
-    sp[-1] = (a > b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(f32_gt)
-
-int op_f32_le(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    float b = as_f32(sp[-1]);
-    float a = as_f32(sp[-2]);
-    --sp;
-    sp[-1] = (a <= b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(f32_le)
-
-int op_f32_ge(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    float b = as_f32(sp[-1]);
-    float a = as_f32(sp[-2]);
-    --sp;
-    sp[-1] = (a >= b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(f32_ge)
+// f32 comparison - use macros
+F32_CMP_OP(eq, ==)
+F32_CMP_OP(ne, !=)
+F32_CMP_OP(lt, <)
+F32_CMP_OP(gt, >)
+F32_CMP_OP(le, <=)
+F32_CMP_OP(ge, >=)
 
 // f32 unary
 
@@ -1223,47 +907,11 @@ int op_f32_sqrt(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
 }
 DEFINE_OP(f32_sqrt)
 
-// f64 arithmetic
-
-int op_f64_add(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    double b = as_f64(sp[-1]);
-    double a = as_f64(sp[-2]);
-    --sp;
-    sp[-1] = from_f64(a + b);
-    NEXT();
-}
-DEFINE_OP(f64_add)
-
-int op_f64_sub(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    double b = as_f64(sp[-1]);
-    double a = as_f64(sp[-2]);
-    --sp;
-    sp[-1] = from_f64(a - b);
-    NEXT();
-}
-DEFINE_OP(f64_sub)
-
-int op_f64_mul(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    double b = as_f64(sp[-1]);
-    double a = as_f64(sp[-2]);
-    --sp;
-    sp[-1] = from_f64(a * b);
-    NEXT();
-}
-DEFINE_OP(f64_mul)
-
-int op_f64_div(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    double b = as_f64(sp[-1]);
-    double a = as_f64(sp[-2]);
-    --sp;
-    sp[-1] = from_f64(a / b);
-    NEXT();
-}
-DEFINE_OP(f64_div)
+// f64 arithmetic - simple binary ops use macros
+F64_BINARY_OP(add, +)
+F64_BINARY_OP(sub, -)
+F64_BINARY_OP(mul, *)
+F64_BINARY_OP(div, /)
 
 int op_f64_min(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)crt; (void)fp;
@@ -1329,67 +977,13 @@ int op_f64_copysign(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
 }
 DEFINE_OP(f64_copysign)
 
-// f64 comparison
-
-int op_f64_eq(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    double b = as_f64(sp[-1]);
-    double a = as_f64(sp[-2]);
-    --sp;
-    sp[-1] = (a == b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(f64_eq)
-
-int op_f64_ne(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    double b = as_f64(sp[-1]);
-    double a = as_f64(sp[-2]);
-    --sp;
-    sp[-1] = (a != b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(f64_ne)
-
-int op_f64_lt(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    double b = as_f64(sp[-1]);
-    double a = as_f64(sp[-2]);
-    --sp;
-    sp[-1] = (a < b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(f64_lt)
-
-int op_f64_gt(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    double b = as_f64(sp[-1]);
-    double a = as_f64(sp[-2]);
-    --sp;
-    sp[-1] = (a > b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(f64_gt)
-
-int op_f64_le(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    double b = as_f64(sp[-1]);
-    double a = as_f64(sp[-2]);
-    --sp;
-    sp[-1] = (a <= b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(f64_le)
-
-int op_f64_ge(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
-    double b = as_f64(sp[-1]);
-    double a = as_f64(sp[-2]);
-    --sp;
-    sp[-1] = (a >= b ? 1 : 0);
-    NEXT();
-}
-DEFINE_OP(f64_ge)
+// f64 comparison - use macros
+F64_CMP_OP(eq, ==)
+F64_CMP_OP(ne, !=)
+F64_CMP_OP(lt, <)
+F64_CMP_OP(gt, >)
+F64_CMP_OP(le, <=)
+F64_CMP_OP(ge, >=)
 
 // f64 unary
 
