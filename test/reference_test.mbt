@@ -1077,6 +1077,7 @@ async test "memory_redundancy.wast (cruntime)" {
 async test "func.wast (cruntime)" {
   run_test_harness("", "func.wast", runtime_type=CRuntime)
 }
+// TODO: func_ptrs.wast causes SIGABRT - needs investigation
 // async test "func_ptrs.wast (cruntime)" {
 //   run_test_harness("", "func_ptrs.wast", runtime_type=CRuntime)
 // }
@@ -1108,14 +1109,20 @@ async test "exports.wast (cruntime)" {
 // async test "start.wast (cruntime)" {
 //   run_test_harness("", "start.wast", runtime_type=CRuntime)
 // }
+// TODO: names.wast causes SIGABRT - needs investigation
 // async test "names.wast (cruntime)" {
 //   run_test_harness("", "names.wast", runtime_type=CRuntime)
 // }
 
 // --- Data/Element segments ---
-// async test "data.wast (cruntime)" {
-//   run_test_harness("", "data.wast", runtime_type=CRuntime)
-// }
+// Note: data.wast has 12 validation failures (assert_invalid) - validator doesn't
+// catch all invalid offset expressions. Execution tests pass correctly.
+
+///|
+async test "data.wast (cruntime)" {
+  run_test_harness("", "data.wast", runtime_type=CRuntime)
+}
+// TODO: elem.wast causes SIGABRT - needs investigation
 // async test "elem.wast (cruntime)" {
 //   run_test_harness("", "elem.wast", runtime_type=CRuntime)
 // }
