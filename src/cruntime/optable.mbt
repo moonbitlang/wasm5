@@ -26,6 +26,9 @@ extern "C" fn wasm_return() -> UInt64 = "wasm_return"
 extern "C" fn end() -> UInt64 = "end"
 
 ///|
+extern "C" fn func_exit() -> UInt64 = "func_exit"
+
+///|
 extern "C" fn copy_slot() -> UInt64 = "copy_slot"
 
 ///|

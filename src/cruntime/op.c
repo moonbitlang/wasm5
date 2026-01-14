@@ -172,6 +172,13 @@ int op_end(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
 }
 DEFINE_OP(end)
 
+// Function exit without copying - used by deferred blocks that already placed results at fp[0..n-1]
+int op_func_exit(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)pc; (void)sp; (void)fp;
+    return TRAP_NONE;
+}
+DEFINE_OP(func_exit)
+
 // Call a local function (wasm3 style - uses native C stack)
 // Immediates: callee_pc, frame_offset
 // frame_offset: offset from current fp to new frame (computed at compile time)

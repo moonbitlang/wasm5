@@ -463,11 +463,15 @@ fn CompileCtx::emit_deferred_blocks(self : CompileCtx) -> Unit {
     }
 
     // Emit final jump
-    self.emit(br())
     if block.is_loop {
+      self.emit(br())
       self.emit_idx(block.loop_pc)
+    } else if block.target_label == 0 {
+      // Function-level branch: results already at fp[0..n-1], just exit
+      self.emit(func_exit())
     } else {
-      // Use the end_pc that was recorded when pop_control ran
+      // Block-level branch: jump to end of block
+      self.emit(br())
       self.emit_idx(block.end_pc)
     }
   }
