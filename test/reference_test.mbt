@@ -986,30 +986,44 @@ async test "utf8-invalid-encoding.wast (cruntime)" {
 // =============================================================================
 
 // --- Memory operations ---
+// TODO: address.wast causes SIGSEGV - needs investigation
 // async test "address.wast (cruntime)" {
 //   run_test_harness("", "address.wast", runtime_type=CRuntime)
 // }
-// async test "align.wast (cruntime)" {
-//   run_test_harness("", "align.wast", runtime_type=CRuntime)
-// }
-// async test "endianness.wast (cruntime)" {
-//   run_test_harness("", "endianness.wast", runtime_type=CRuntime)
-// }
-// async test "float_memory.wast (cruntime)" {
-//   run_test_harness("", "float_memory.wast", runtime_type=CRuntime)
-// }
-// async test "memory.wast (cruntime)" {
-//   run_test_harness("", "memory.wast", runtime_type=CRuntime)
-// }
+
+///|
+async test "align.wast (cruntime)" {
+  run_test_harness("", "align.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "endianness.wast (cruntime)" {
+  run_test_harness("", "endianness.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "float_memory.wast (cruntime)" {
+  run_test_harness("", "float_memory.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "memory.wast (cruntime)" {
+  run_test_harness("", "memory.wast", runtime_type=CRuntime)
+}
 // async test "memory_grow.wast (cruntime)" {
 //   run_test_harness("", "memory_grow.wast", runtime_type=CRuntime)
 // }
-// async test "memory_redundancy.wast (cruntime)" {
-//   run_test_harness("", "memory_redundancy.wast", runtime_type=CRuntime)
-// }
+
+///|
+async test "memory_redundancy.wast (cruntime)" {
+  run_test_harness("", "memory_redundancy.wast", runtime_type=CRuntime)
+}
+// TODO: memory_size.wast has 7 failures - memory_grow state not properly isolated per module
 // async test "memory_size.wast (cruntime)" {
 //   run_test_harness("", "memory_size.wast", runtime_type=CRuntime)
 // }
+
+// TODO: memory_trap.wast causes SIGSEGV - trap handling in memory ops causes crash
 // async test "memory_trap.wast (cruntime)" {
 //   run_test_harness("", "memory_trap.wast", runtime_type=CRuntime)
 // }
@@ -1077,6 +1091,7 @@ async test "func.wast (cruntime)" {
 // }
 
 // --- Module structure ---
+
 ///|
 async test "exports.wast (cruntime)" {
   run_test_harness("", "exports.wast", runtime_type=CRuntime)
@@ -1121,9 +1136,11 @@ async test "exports.wast (cruntime)" {
 // async test "conversions.wast (cruntime)" {
 //   run_test_harness("", "conversions.wast", runtime_type=CRuntime)
 // }
-// async test "float_exprs.wast (cruntime)" {
-//   run_test_harness("", "float_exprs.wast", runtime_type=CRuntime)
-// }
+
+///|
+async test "float_exprs.wast (cruntime)" {
+  run_test_harness("", "float_exprs.wast", runtime_type=CRuntime)
+}
 
 // --- Other ---
 
@@ -1131,6 +1148,7 @@ async test "exports.wast (cruntime)" {
 async test "global.wast (cruntime)" {
   run_test_harness("", "global.wast", runtime_type=CRuntime)
 }
+
 ///|
 async test "local_init.wast (cruntime)" {
   run_test_harness("", "local_init.wast", runtime_type=CRuntime)

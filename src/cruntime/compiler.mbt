@@ -1053,6 +1053,116 @@ fn compile_instr(
       ignore(ctx.pop_slot()) // address
     }
 
+    // i64 load operations
+    I64Load(align, offset, mem_idx) => {
+      ctx.emit(i64_load())
+      ctx.emit_idx(align.reinterpret_as_int())
+      ctx.emit_idx(offset.reinterpret_as_int())
+      ctx.emit_idx(mem_idx.reinterpret_as_int())
+    }
+    I64Load8S(align, offset, mem_idx) => {
+      ctx.emit(i64_load8_s())
+      ctx.emit_idx(align.reinterpret_as_int())
+      ctx.emit_idx(offset.reinterpret_as_int())
+      ctx.emit_idx(mem_idx.reinterpret_as_int())
+    }
+    I64Load8U(align, offset, mem_idx) => {
+      ctx.emit(i64_load8_u())
+      ctx.emit_idx(align.reinterpret_as_int())
+      ctx.emit_idx(offset.reinterpret_as_int())
+      ctx.emit_idx(mem_idx.reinterpret_as_int())
+    }
+    I64Load16S(align, offset, mem_idx) => {
+      ctx.emit(i64_load16_s())
+      ctx.emit_idx(align.reinterpret_as_int())
+      ctx.emit_idx(offset.reinterpret_as_int())
+      ctx.emit_idx(mem_idx.reinterpret_as_int())
+    }
+    I64Load16U(align, offset, mem_idx) => {
+      ctx.emit(i64_load16_u())
+      ctx.emit_idx(align.reinterpret_as_int())
+      ctx.emit_idx(offset.reinterpret_as_int())
+      ctx.emit_idx(mem_idx.reinterpret_as_int())
+    }
+    I64Load32S(align, offset, mem_idx) => {
+      ctx.emit(i64_load32_s())
+      ctx.emit_idx(align.reinterpret_as_int())
+      ctx.emit_idx(offset.reinterpret_as_int())
+      ctx.emit_idx(mem_idx.reinterpret_as_int())
+    }
+    I64Load32U(align, offset, mem_idx) => {
+      ctx.emit(i64_load32_u())
+      ctx.emit_idx(align.reinterpret_as_int())
+      ctx.emit_idx(offset.reinterpret_as_int())
+      ctx.emit_idx(mem_idx.reinterpret_as_int())
+    }
+
+    // i64 store operations
+    I64Store(align, offset, mem_idx) => {
+      ctx.emit(i64_store())
+      ctx.emit_idx(align.reinterpret_as_int())
+      ctx.emit_idx(offset.reinterpret_as_int())
+      ctx.emit_idx(mem_idx.reinterpret_as_int())
+      ignore(ctx.pop_slot()) // value
+      ignore(ctx.pop_slot()) // address
+    }
+    I64Store8(align, offset, mem_idx) => {
+      ctx.emit(i64_store8())
+      ctx.emit_idx(align.reinterpret_as_int())
+      ctx.emit_idx(offset.reinterpret_as_int())
+      ctx.emit_idx(mem_idx.reinterpret_as_int())
+      ignore(ctx.pop_slot()) // value
+      ignore(ctx.pop_slot()) // address
+    }
+    I64Store16(align, offset, mem_idx) => {
+      ctx.emit(i64_store16())
+      ctx.emit_idx(align.reinterpret_as_int())
+      ctx.emit_idx(offset.reinterpret_as_int())
+      ctx.emit_idx(mem_idx.reinterpret_as_int())
+      ignore(ctx.pop_slot()) // value
+      ignore(ctx.pop_slot()) // address
+    }
+    I64Store32(align, offset, mem_idx) => {
+      ctx.emit(i64_store32())
+      ctx.emit_idx(align.reinterpret_as_int())
+      ctx.emit_idx(offset.reinterpret_as_int())
+      ctx.emit_idx(mem_idx.reinterpret_as_int())
+      ignore(ctx.pop_slot()) // value
+      ignore(ctx.pop_slot()) // address
+    }
+
+    // f32 load/store
+    F32Load(align, offset, mem_idx) => {
+      ctx.emit(f32_load())
+      ctx.emit_idx(align.reinterpret_as_int())
+      ctx.emit_idx(offset.reinterpret_as_int())
+      ctx.emit_idx(mem_idx.reinterpret_as_int())
+    }
+    F32Store(align, offset, mem_idx) => {
+      ctx.emit(f32_store())
+      ctx.emit_idx(align.reinterpret_as_int())
+      ctx.emit_idx(offset.reinterpret_as_int())
+      ctx.emit_idx(mem_idx.reinterpret_as_int())
+      ignore(ctx.pop_slot()) // value
+      ignore(ctx.pop_slot()) // address
+    }
+
+    // f64 load/store
+    F64Load(align, offset, mem_idx) => {
+      ctx.emit(f64_load())
+      ctx.emit_idx(align.reinterpret_as_int())
+      ctx.emit_idx(offset.reinterpret_as_int())
+      ctx.emit_idx(mem_idx.reinterpret_as_int())
+    }
+    F64Store(align, offset, mem_idx) => {
+      ctx.emit(f64_store())
+      ctx.emit_idx(align.reinterpret_as_int())
+      ctx.emit_idx(offset.reinterpret_as_int())
+      ctx.emit_idx(mem_idx.reinterpret_as_int())
+      ignore(ctx.pop_slot()) // value
+      ignore(ctx.pop_slot()) // address
+    }
+
     // Block structures
     Block(bt, body) => {
       let arity = get_block_arity(mod_info.mod_, bt)

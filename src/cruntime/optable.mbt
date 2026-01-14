@@ -535,5 +535,58 @@ extern "C" fn i32_store8() -> UInt64 = "i32_store8"
 ///|
 extern "C" fn i32_store16() -> UInt64 = "i32_store16"
 
+// i64 loads
+
+///|
+extern "C" fn i64_load() -> UInt64 = "i64_load"
+
+///|
+extern "C" fn i64_load8_s() -> UInt64 = "i64_load8_s"
+
+///|
+extern "C" fn i64_load8_u() -> UInt64 = "i64_load8_u"
+
+///|
+extern "C" fn i64_load16_s() -> UInt64 = "i64_load16_s"
+
+///|
+extern "C" fn i64_load16_u() -> UInt64 = "i64_load16_u"
+
+///|
+extern "C" fn i64_load32_s() -> UInt64 = "i64_load32_s"
+
+///|
+extern "C" fn i64_load32_u() -> UInt64 = "i64_load32_u"
+
+// i64 stores
+
+///|
+extern "C" fn i64_store() -> UInt64 = "i64_store"
+
+///|
+extern "C" fn i64_store8() -> UInt64 = "i64_store8"
+
+///|
+extern "C" fn i64_store16() -> UInt64 = "i64_store16"
+
+///|
+extern "C" fn i64_store32() -> UInt64 = "i64_store32"
+
+// f32 load/store
+
+///|
+extern "C" fn f32_load() -> UInt64 = "f32_load"
+
+///|
+extern "C" fn f32_store() -> UInt64 = "f32_store"
+
+// f64 load/store
+
+///|
+extern "C" fn f64_load() -> UInt64 = "f64_load"
+
+///|
+extern "C" fn f64_store() -> UInt64 = "f64_store"
+
 ///|
 extern "C" fn call_indirect() -> UInt64 = "call_indirect"
