@@ -165,10 +165,15 @@ typedef struct {
 typedef int (*OpFn)(CRuntime*, uint64_t*, uint64_t*, uint64_t*);
 
 // Force tail call optimization for threaded code dispatch
-#if defined(__clang__) || (defined(__GNUC__) && __GNUC__ >= 13)
-#define MUSTTAIL __attribute__((musttail))
+// Use __has_attribute to check if musttail is supported (works on Clang and GCC 13+)
+#ifdef __has_attribute
+#  if __has_attribute(musttail)
+#    define MUSTTAIL __attribute__((musttail))
+#  else
+#    define MUSTTAIL
+#  endif
 #else
-#define MUSTTAIL
+#  define MUSTTAIL
 #endif
 
 // NEXT: fetch next opcode and tail-call with updated pc
