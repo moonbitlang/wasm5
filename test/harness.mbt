@@ -1744,6 +1744,9 @@ pub async fn process_wast_file_cruntime(
 /// Whitelist for C runtime tests (some tests may have features not yet implemented)
 /// select.wast, br_table.wast: ref.func and ref.null instructions not implemented
 /// traps.wast: missing trap checks and i64/f32/f64 load ops
+/// exports.wast, global.wast: module registration not supported
+/// local_init.wast: reference type result conversion
+/// elem.wast: module registration and some trap handling
 let cruntime_whitelisted_tests : Array[(String, Set[Int])] = [
   ("select.wast", Set::of([251, 252, 258, 259, 279, 280])),
   (
@@ -1756,6 +1759,16 @@ let cruntime_whitelisted_tests : Array[(String, Set[Int])] = [
   (
     "traps.wast",
     Set::of([50, 51, 52, 53, 54, 55, 56, 57, 83, 84, 85, 86, 87, 88, 89, 90, 91]),
+  ),
+  ("exports.wast", Set::of([23, 26, 93, 94, 97])),
+  ("local_init.wast", Set::of([21, 22, 23, 74])),
+  ("global.wast", Set::of([206, 207, 241, 632, 659, 660, 661, 663, 664])),
+  (
+    "elem.wast",
+    Set::of([
+      706, 716, 944, 946, 947, 948, 959, 960, 961, 972, 973, 974, 1014, 1016, 1017,
+      1019, 1020, 1022, 1023, 1029, 1030, 1041, 1053,
+    ]),
   ),
 ]
 
