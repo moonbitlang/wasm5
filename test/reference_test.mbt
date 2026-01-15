@@ -1121,10 +1121,11 @@ async test "exports.wast (cruntime)" {
 async test "data.wast (cruntime)" {
   run_test_harness("", "data.wast", runtime_type=CRuntime)
 }
-// TODO: elem.wast causes SIGABRT - needs investigation
-// async test "elem.wast (cruntime)" {
-//   run_test_harness("", "elem.wast", runtime_type=CRuntime)
-// }
+
+///|
+async test "elem.wast (cruntime)" {
+  run_test_harness("", "elem.wast", runtime_type=CRuntime)
+}
 
 // --- Type system ---
 // async test "type-canon.wast (cruntime)" {

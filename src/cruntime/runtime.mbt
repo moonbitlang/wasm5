@@ -52,8 +52,8 @@ pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
   let globals = init_globals(module_)
   // Initialize memory from module
   let (memory, memory_pages) = init_memory(module_)
-  // Initialize tables from module
-  let tables = init_tables(module_)
+  // Initialize tables from module (needs globals for element offset evaluation)
+  let tables = init_tables(module_, globals)
   // Flatten tables for C FFI
   let (tables_flat, table_offsets, table_sizes) = flatten_tables(tables)
   // Build type info for call_indirect type checking
@@ -342,25 +342,71 @@ fn init_globals(module_ : @core.Module) -> FixedArray[UInt64] {
 }
 
 ///|
+/// Count the number of imported tables in the module
+fn count_imported_tables(module_ : @core.Module) -> Int {
+  let mut count = 0
+  for imp in module_.imports {
+    match imp.desc {
+      Table(_) => count += 1
+      _ => ()
+    }
+  }
+  count
+}
+
+///|
 /// Initialize tables from module's table and elem sections
-fn init_tables(module_ : @core.Module) -> FixedArray[FixedArray[Int]] {
-  let num_tables = module_.tables.length()
+fn init_tables(
+  module_ : @core.Module,
+  globals : FixedArray[UInt64],
+) -> FixedArray[FixedArray[Int]] {
+  let num_imported_tables = count_imported_tables(module_)
+  let num_local_tables = module_.tables.length()
+  let num_tables = num_imported_tables + num_local_tables
   if num_tables == 0 {
     return [[-1]] // Return a dummy table to avoid empty array issues
   }
   // Allocate tables
   let tables : FixedArray[FixedArray[Int]] = FixedArray::make(num_tables, [-1])
+  // Initialize imported tables (from import descriptors)
+  let mut import_table_idx = 0
+  for imp in module_.imports {
+    match imp.desc {
+      Table(table_type) => {
+        let size = table_type.limits.min.to_int()
+        // Initialize imported table with -1 (null/undefined)
+        tables[import_table_idx] = FixedArray::make(
+          if size > 0 {
+            size
+          } else {
+            1
+          },
+          -1,
+        )
+        import_table_idx += 1
+      }
+      _ => ()
+    }
+  }
+  // Initialize local tables
   for i, table_type in module_.tables {
     let size = table_type.limits.min.to_int()
     // Initialize table with -1 (null/undefined)
-    tables[i] = FixedArray::make(if size > 0 { size } else { 1 }, -1)
+    tables[num_imported_tables + i] = FixedArray::make(
+      if size > 0 {
+        size
+      } else {
+        1
+      },
+      -1,
+    )
   }
   // Initialize from element segments
   for elem in module_.elems {
     if elem.is_active {
       let table_idx = elem.table_idx.reinterpret_as_int()
       if table_idx >= 0 && table_idx < tables.length() {
-        let offset = eval_const_expr(elem.offset).to_int()
+        let offset = eval_const_expr_with_globals(elem.offset, globals).to_int()
         let table = tables[table_idx]
         for i, init_expr in elem.init {
           if offset + i < table.length() {
