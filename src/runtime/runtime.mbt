@@ -1,3 +1,8 @@
+// Re-export Value from core for backwards compatibility
+
+///|
+pub type Value = @core.Value
+
 ///|
 /// Runtime error types
 pub suberror RuntimeError {
@@ -14,9 +19,10 @@ pub suberror RuntimeError {
 } derive(Show)
 
 ///|
-/// Create a RuntimeError from error_detail string
-/// The detail string should start with an error type prefix
-fn RuntimeError::from_detail(detail : String) -> RuntimeError {
+/// Create a RuntimeError from error_detail string.
+/// The detail string should start with an error type prefix.
+/// This function is public to allow other runtimes (e.g., CRuntime) to create errors.
+pub fn RuntimeError::from_detail(detail : String) -> RuntimeError {
   if detail.has_prefix("division by zero") {
     RuntimeError::DivisionByZero
   } else if detail.has_prefix("integer overflow") {
@@ -33,18 +39,6 @@ fn RuntimeError::from_detail(detail : String) -> RuntimeError {
     RuntimeError::InvalidType(detail)
   }
 }
-
-///|
-/// Runtime value type
-pub(all) enum Value {
-  I32(UInt)
-  I64(UInt64)
-  F32(Float)
-  F64(Double)
-  Ref(Int?) // For GC refs (struct, array, i31)
-  Funcref(Int?) // For function references
-  Externref(Int?) // For external references
-} derive(Eq, Show)
 
 ///|
 /// Table with its limits

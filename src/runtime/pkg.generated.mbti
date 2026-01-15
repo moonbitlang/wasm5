@@ -21,6 +21,7 @@ pub suberror RuntimeError {
   UnsupportedInitExpression(String)
   StackOverflow
 }
+pub fn RuntimeError::from_detail(String) -> Self
 pub impl Show for RuntimeError
 
 // Types and methods
@@ -45,12 +46,12 @@ pub struct ImportResolver {
 }
 pub fn ImportResolver::add_func(Self, Bytes, Bytes, ImportedFunc) -> Unit
 pub fn ImportResolver::add_funcref_wrapper(Self, Bytes, Bytes, ImportedFunc) -> Unit
-pub fn ImportResolver::add_global(Self, Bytes, Bytes, Value) -> Unit
+pub fn ImportResolver::add_global(Self, Bytes, Bytes, @core.Value) -> Unit
 pub fn ImportResolver::add_memory(Self, Bytes, Bytes, ImportedMemory) -> Unit
 pub fn ImportResolver::add_table(Self, Bytes, Bytes, RuntimeTable) -> Unit
 pub fn ImportResolver::get_func(Self, Bytes, Bytes) -> ImportedFunc?
 pub fn ImportResolver::get_funcref_wrapper(Self, Bytes, Bytes) -> ImportedFunc?
-pub fn ImportResolver::get_global(Self, Bytes, Bytes) -> Value?
+pub fn ImportResolver::get_global(Self, Bytes, Bytes) -> @core.Value?
 pub fn ImportResolver::get_memory(Self, Bytes, Bytes) -> ImportedMemory?
 pub fn ImportResolver::get_table(Self, Bytes, Bytes) -> RuntimeTable?
 pub fn ImportResolver::new() -> Self
@@ -59,9 +60,9 @@ type ImportResolverEntry
 
 pub struct ImportedFunc {
   arity : UInt
-  func : (Array[Value]) -> Array[Value]
+  func : (Array[@core.Value]) -> Array[@core.Value]
 }
-pub fn ImportedFunc::new(UInt, (Array[Value]) -> Array[Value]) -> Self
+pub fn ImportedFunc::new(UInt, (Array[@core.Value]) -> Array[@core.Value]) -> Self
 
 pub struct ImportedMemory {
   data : Array[Byte]
@@ -78,9 +79,9 @@ pub struct Runtime {
   status : RuntimeStatus
   ctx : RuntimeContext
 }
-pub fn Runtime::call_by_index(Self, Int, Array[Value]) -> Array[Value] raise RuntimeError
-pub fn Runtime::call_compiled(Self, Bytes, Array[Value]) -> Array[Value] raise RuntimeError
-pub fn Runtime::get_globals(Self) -> Array[Value]
+pub fn Runtime::call_by_index(Self, Int, Array[@core.Value]) -> Array[@core.Value] raise RuntimeError
+pub fn Runtime::call_compiled(Self, Bytes, Array[@core.Value]) -> Array[@core.Value] raise RuntimeError
+pub fn Runtime::get_globals(Self) -> Array[@core.Value]
 pub fn Runtime::get_module(Self) -> @core.Module
 pub fn Runtime::get_tables(Self) -> Array[RuntimeTable]
 pub fn Runtime::load(@core.Module) -> Self raise RuntimeError
@@ -91,7 +92,7 @@ pub struct RuntimeContext {
   module_ : @core.Module
   memory : Array[Byte]
   memory_max : UInt64?
-  globals : Array[Value]
+  globals : Array[@core.Value]
   tables : Array[RuntimeTable]
   imported_funcs : Array[ImportedFunc]
   data_segments : Array[Array[Byte]]
@@ -118,19 +119,8 @@ pub fn RuntimeTable::external_funcrefs_length(Self) -> Int
 pub fn RuntimeTable::get_data(Self, Int) -> UInt64
 pub fn RuntimeTable::set_data(Self, Int, UInt64) -> Unit
 
-pub(all) enum Value {
-  I32(UInt)
-  I64(UInt64)
-  F32(Float)
-  F64(Double)
-  Ref(Int?)
-  Funcref(Int?)
-  Externref(Int?)
-}
-pub impl Eq for Value
-pub impl Show for Value
-
 // Type aliases
+pub using @core {type Value}
 
 // Traits
 

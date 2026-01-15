@@ -8,5 +8,5 @@ fn fib(i : Int) -> Int {
 
 ///|
 fn main {
-  ignore(fib(34))
+  ignore(fib(40))
 }

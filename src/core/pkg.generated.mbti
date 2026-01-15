@@ -608,6 +608,18 @@ pub fn ValType::to_non_nullable(Self) -> Self
 pub impl Eq for ValType
 pub impl Show for ValType
 
+pub(all) enum Value {
+  I32(UInt)
+  I64(UInt64)
+  F32(Float)
+  F64(Double)
+  Ref(Int?)
+  Funcref(Int?)
+  Externref(Int?)
+}
+pub impl Eq for Value
+pub impl Show for Value
+
 // Type aliases
 
 // Traits

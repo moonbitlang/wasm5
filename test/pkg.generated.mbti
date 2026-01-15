@@ -2,13 +2,20 @@
 package "moonbitlang/wasm5/test"
 
 // Values
-pub async fn process_wast_file(String, String) -> (Array[TestFailure], Int)
+pub async fn process_wast_file(String, String, runtime_type? : RuntimeType) -> (Array[TestFailure], Int)
+
+pub async fn process_wast_file_cruntime(String, String) -> (Array[TestFailure], Int)
 
 // Errors
 
 // Types and methods
 type ExpectedValue
 pub impl Show for ExpectedValue
+
+pub(all) enum RuntimeType {
+  MoonBit
+  CRuntime
+}
 
 pub struct TestFailure {
   line : Int

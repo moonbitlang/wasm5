@@ -1,0 +1,62 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/wasm5/src/cruntime"
+
+import(
+  "moonbitlang/wasm5/src/core"
+  "moonbitlang/wasm5/src/runtime"
+)
+
+// Values
+pub fn compile(@core.Module) -> CompiledModule
+
+// Errors
+
+// Types and methods
+pub struct CRuntime {
+  module_ : @core.Module
+  compiled : CompiledModule
+  globals : FixedArray[UInt64]
+  memory : FixedArray[Byte]
+  memory_pages : FixedArray[Int]
+  tables : FixedArray[FixedArray[Int]]
+  tables_flat : FixedArray[Int]
+  table_offsets : FixedArray[Int]
+  table_sizes : FixedArray[Int]
+  func_type_idxs : FixedArray[Int]
+  type_param_counts : FixedArray[Int]
+  type_result_counts : FixedArray[Int]
+  import_num_params : FixedArray[Int]
+  import_num_results : FixedArray[Int]
+}
+pub fn CRuntime::call_compiled(Self, Bytes, Array[@core.Value]) -> Array[@core.Value] raise @runtime.RuntimeError
+pub fn CRuntime::load(@core.Module) -> Self
+pub fn CRuntime::run_start(Self) -> Unit raise @runtime.RuntimeError
+
+pub struct CompiledModule {
+  code : FixedArray[UInt64]
+  func_entries : FixedArray[Int]
+  func_num_locals : FixedArray[Int]
+  func_max_stack : FixedArray[Int]
+  exports : Map[String, Int]
+}
+
+pub enum TrapCode {
+  None
+  Unreachable
+  DivisionByZero
+  IntegerOverflow
+  InvalidConversionToInteger
+  OutOfBoundsMemoryAccess
+  OutOfBoundsTableAccess
+  IndirectCallTypeMismatch
+  NullFunctionReference
+  StackOverflow
+  UninitializedElement
+}
+pub impl Eq for TrapCode
+pub impl Show for TrapCode
+
+// Type aliases
+
+// Traits
+

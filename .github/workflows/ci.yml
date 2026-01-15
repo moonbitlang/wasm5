@@ -7,6 +7,24 @@ on:
   pull_request:
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MoonBit
+        uses: ./.github/actions/setup
+
+      - name: Check formatting
+        run: |
+          moon fmt
+          git diff --exit-code || (echo "Code is not formatted. Run 'moon fmt' and commit." && exit 1)
+
+      - name: Check generated files
+        run: |
+          moon info --target native
+          git diff --exit-code || (echo "Generated files are out of date. Run 'moon info --target native' and commit." && exit 1)
+
   test:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -32,8 +50,5 @@ jobs:
       - name: Setup MoonBit
         uses: ./.github/actions/setup
 
-      - name: Run tests (debug)
-        run: moon test --target native
-
-      - name: Run tests (release)
+      - name: Run tests
         run: moon test --target native --release

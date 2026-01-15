@@ -21,6 +21,94 @@ pub impl Show for TestFailure with output(self, logger) {
 }
 
 ///|
+/// Runtime type selector for test harness
+pub(all) enum RuntimeType {
+  MoonBit // Default MoonBit interpreter (full features)
+  CRuntime // C-based threaded code executor (basic features)
+}
+
+///|
+/// Trait for WebAssembly runtime executors.
+/// Both the MoonBit interpreter and C runtime implement this trait.
+priv trait Executor {
+  run_start(Self) -> Unit raise Error
+  call_compiled(Self, Bytes, Array[@wasm5_runtime.Value]) -> Array[
+    @wasm5_runtime.Value,
+  ] raise Error
+  get_module(Self) -> @wasm5_core.Module?
+  get_globals(Self) -> Array[@wasm5_runtime.Value]?
+  // Returns the underlying MoonBit Runtime if available (for cross-module imports)
+  as_runtime(Self) -> @wasm5_runtime.Runtime?
+}
+
+///|
+/// Implement Executor for MoonBit Runtime
+impl Executor for @wasm5_runtime.Runtime with run_start(self) -> Unit raise Error {
+  self.run_start()
+}
+
+///|
+impl Executor for @wasm5_runtime.Runtime with call_compiled(
+  self,
+  name : Bytes,
+  args : Array[@wasm5_runtime.Value],
+) -> Array[@wasm5_runtime.Value] raise Error {
+  self.call_compiled(name, args)
+}
+
+///|
+impl Executor for @wasm5_runtime.Runtime with get_module(self) -> @wasm5_core.Module? {
+  Some(self.get_module())
+}
+
+///|
+impl Executor for @wasm5_runtime.Runtime with get_globals(self) -> Array[
+  @wasm5_runtime.Value,
+]? {
+  Some(self.get_globals())
+}
+
+///|
+impl Executor for @wasm5_runtime.Runtime with as_runtime(self) -> @wasm5_runtime.Runtime? {
+  Some(self)
+}
+
+///|
+/// Implement Executor for C Runtime
+impl Executor for @wasm5_cruntime.CRuntime with run_start(self) -> Unit raise Error {
+  self.run_start()
+}
+
+///|
+impl Executor for @wasm5_cruntime.CRuntime with call_compiled(
+  self,
+  name : Bytes,
+  args : Array[@wasm5_runtime.Value],
+) -> Array[@wasm5_runtime.Value] raise Error {
+  self.call_compiled(name, args)
+}
+
+///|
+impl Executor for @wasm5_cruntime.CRuntime with get_module(_self) -> @wasm5_core.Module? {
+  // CRuntime doesn't expose module yet
+  None
+}
+
+///|
+impl Executor for @wasm5_cruntime.CRuntime with get_globals(_self) -> Array[
+  @wasm5_runtime.Value,
+]? {
+  // CRuntime doesn't support globals yet
+  None
+}
+
+///|
+impl Executor for @wasm5_cruntime.CRuntime with as_runtime(_self) -> @wasm5_runtime.Runtime? {
+  // CRuntime is not a MoonBit Runtime
+  None
+}
+
+///|
 /// Registered module entry for cross-module imports
 priv struct RegisteredModule {
   runtime : @wasm5_runtime.Runtime
@@ -41,7 +129,8 @@ priv struct TestContext {
   dir : String
   source_file : String
   failures : Array[TestFailure]
-  mut runtime : @wasm5_runtime.Runtime?
+  runtime_type : RuntimeType
+  mut executor : &Executor?
   registry : ModuleRegistry
   resolver : @wasm5_runtime.ImportResolver
   mut skipped_count : Int
@@ -54,8 +143,12 @@ fn TestContext::fail(
   test_type : String,
   message : String,
 ) -> Unit {
-  // Skip whitelisted tests
-  for entry in whitelisted_tests {
+  // Skip whitelisted tests based on runtime type
+  let whitelist = match self.runtime_type {
+    MoonBit => whitelisted_tests
+    CRuntime => cruntime_whitelisted_tests
+  }
+  for entry in whitelist {
     if entry.0 == self.source_file && entry.1.contains(line) {
       self.skipped_count += 1
       return
@@ -65,18 +158,28 @@ fn TestContext::fail(
 }
 
 ///|
-async fn parse_and_compile(
-  dir : String,
-  file_name : String,
-  resolver : @wasm5_runtime.ImportResolver,
-) -> @wasm5_runtime.Runtime {
-  let file = @fs.open(dir + file_name, mode=ReadOnly)
+/// Parse and compile a module, returning an Executor trait object
+async fn parse_and_compile(ctx : TestContext, file_name : String) -> &Executor {
+  let file = @fs.open(ctx.dir + file_name, mode=ReadOnly)
   defer file.close()
   let content = file.read_all().binary()
   let module_ = @wasm5_parse.parse(content)
-  let runtime = @wasm5_runtime.Runtime::load_with_resolver(module_, resolver)
-  runtime.run_start()
-  runtime
+  match ctx.runtime_type {
+    MoonBit => {
+      let runtime = @wasm5_runtime.Runtime::load_with_resolver(
+        module_,
+        ctx.resolver,
+      )
+      runtime.run_start()
+      (runtime : &Executor)
+    }
+    CRuntime => {
+      @wasm5_validate.validate_module(module_)
+      let cruntime = @wasm5_cruntime.CRuntime::load(module_)
+      cruntime.run_start()
+      (cruntime : &Executor)
+    }
+  }
 }
 
 ///|
@@ -470,6 +573,8 @@ enum ExpectedValue {
   Exact(@wasm5_runtime.Value)
   AnyF32Nan // nan:arithmetic for f32 - any NaN value is acceptable
   AnyF64Nan // nan:arithmetic for f64 - any NaN value is acceptable
+  CanonicalF32Nan // nan:canonical for f32 - either +nan or -nan with canonical payload
+  CanonicalF64Nan // nan:canonical for f64 - either +nan or -nan with canonical payload
   AnyFuncRef // any funcref value (including null)
   AnyExternRef // any externref value (including null)
   AnyI31Ref // any i31ref value (including null)
@@ -620,12 +725,16 @@ fn parse_expected_value(expected : Json) -> ExpectedValue raise {
     { "type": "f32", "value": String(v), .. } =>
       if v.has_prefix("nan:arithmetic") {
         AnyF32Nan
+      } else if v == "nan:canonical" {
+        CanonicalF32Nan
       } else {
         Exact(@wasm5_runtime.Value::F32(parse_f32_value(v)))
       }
     { "type": "f64", "value": String(v), .. } =>
       if v.has_prefix("nan:arithmetic") {
         AnyF64Nan
+      } else if v == "nan:canonical" {
+        CanonicalF64Nan
       } else {
         Exact(@wasm5_runtime.Value::F64(parse_f64_value(v)))
       }
@@ -722,6 +831,8 @@ fn format_expected_with_bits(e : ExpectedValue) -> String {
     Exact(v) => format_value_with_bits(v)
     AnyF32Nan => "AnyF32Nan"
     AnyF64Nan => "AnyF64Nan"
+    CanonicalF32Nan => "CanonicalF32Nan"
+    CanonicalF64Nan => "CanonicalF64Nan"
     AnyFuncRef => "AnyFuncRef"
     AnyExternRef => "AnyExternRef"
     AnyI31Ref => "AnyI31Ref"
@@ -758,6 +869,26 @@ fn values_match(
     AnyF64Nan =>
       match actual {
         @wasm5_runtime.Value::F64(v) => v.is_nan()
+        _ => false
+      }
+    CanonicalF32Nan =>
+      // Canonical NaN for f32: either +nan or -nan with canonical payload (0x7FC00000 or 0xFFC00000)
+      match actual {
+        @wasm5_runtime.Value::F32(v) => {
+          let bits = v.reinterpret_as_uint()
+          // Clear sign bit and check for canonical NaN pattern
+          (bits & 0x7FFF_FFFFU) == 0x7FC0_0000U
+        }
+        _ => false
+      }
+    CanonicalF64Nan =>
+      // Canonical NaN for f64: either +nan or -nan with canonical payload
+      match actual {
+        @wasm5_runtime.Value::F64(v) => {
+          let bits = v.reinterpret_as_uint64()
+          // Clear sign bit and check for canonical NaN pattern
+          (bits & 0x7FFF_FFFF_FFFF_FFFFUL) == 0x7FF8_0000_0000_0000UL
+        }
         _ => false
       }
     AnyFuncRef =>
@@ -814,12 +945,12 @@ async fn handle_module(
   name? : String? = None,
 ) -> Unit {
   try {
-    let runtime = parse_and_compile(ctx.dir, filename, ctx.resolver)
-    ctx.runtime = Some(runtime)
-    // If a name is provided, automatically register the module
-    match name {
-      Some(n) => register_module(ctx, n, runtime, runtime.get_module())
-      None => ()
+    let executor = parse_and_compile(ctx, filename)
+    ctx.executor = Some(executor)
+    // If a name is provided and we have MoonBit runtime, register the module
+    match (name, executor.as_runtime()) {
+      (Some(n), Some(rt)) => register_module(ctx, n, rt, rt.get_module())
+      _ => ()
     }
   } catch {
     e => ctx.fail(line, "module", "Error loading module: \{e}")
@@ -829,8 +960,14 @@ async fn handle_module(
 ///|
 /// Handle "register" command - register the current module with a name
 fn handle_register(ctx : TestContext, name : String, line : Int) -> Unit {
-  guard ctx.runtime is Some(rt) else {
+  guard ctx.executor is Some(executor) else {
     ctx.fail(line, "register", "no module loaded to register")
+    return
+  }
+  guard executor.as_runtime() is Some(rt) else {
+    ctx.fail(
+      line, "register", "register requires MoonBit runtime (CRuntime not supported)",
+    )
     return
   }
   // Register the module with its exports
@@ -838,19 +975,19 @@ fn handle_register(ctx : TestContext, name : String, line : Int) -> Unit {
 }
 
 ///|
-/// Get runtime for a specific module name, or the current runtime if no module specified
-fn get_runtime_for_module(
+/// Get executor for a specific module name, or the current executor if no module specified
+fn get_executor_for_module(
   ctx : TestContext,
   module_name : String?,
-) -> @wasm5_runtime.Runtime? {
+) -> &Executor? {
   match module_name {
     Some(name) =>
-      // Look up the registered module
+      // Look up the registered module (only works with MoonBit runtime)
       match ctx.registry.0.get(name) {
         Some(registered) => Some(registered.runtime)
         None => None
       }
-    None => ctx.runtime
+    None => ctx.executor
   }
 }
 
@@ -866,7 +1003,7 @@ fn handle_assert_return(
 ) -> Unit {
   try {
     let runtime_args = parse_args(args)
-    guard get_runtime_for_module(ctx, module_name) is Some(rt) else {
+    guard get_executor_for_module(ctx, module_name) is Some(executor) else {
       let msg = match module_name {
         Some(name) => "[\{fn_name}] module '\{name}' not registered"
         None => "[\{fn_name}] no module loaded (previous module failed to load)"
@@ -874,7 +1011,10 @@ fn handle_assert_return(
       ctx.fail(line, "assert_return", msg)
       return
     }
-    let results = rt.call_compiled(@encoding/utf8.encode(fn_name), runtime_args)
+    let results = executor.call_compiled(
+      @encoding/utf8.encode(fn_name),
+      runtime_args,
+    )
     // Check result count
     if expected.length() != results.length() {
       ctx.fail(
@@ -916,7 +1056,7 @@ fn handle_assert_trap(
       return
     }
   }
-  guard get_runtime_for_module(ctx, module_name) is Some(rt) else {
+  guard get_executor_for_module(ctx, module_name) is Some(executor) else {
     let msg = match module_name {
       Some(name) => "[\{fn_name}] module '\{name}' not registered"
       None => "[\{fn_name}] no module loaded (previous module failed to load)"
@@ -925,7 +1065,7 @@ fn handle_assert_trap(
     return
   }
   try {
-    let _ = rt.call_compiled(@encoding/utf8.encode(fn_name), runtime_args)
+    let _ = executor.call_compiled(@encoding/utf8.encode(fn_name), runtime_args)
     ctx.fail(
       line,
       "assert_trap",
@@ -1091,7 +1231,7 @@ async fn handle_assert_invalid(
   line : Int,
 ) -> Unit {
   try {
-    let _ = parse_and_compile(ctx.dir, filename, ctx.resolver)
+    let _ = parse_and_compile(ctx, filename)
     ctx.fail(
       line,
       "assert_invalid",
@@ -1260,13 +1400,13 @@ fn handle_action(
 ) -> Unit {
   try {
     let runtime_args = parse_args(args)
-    guard ctx.runtime is Some(rt) else {
+    guard ctx.executor is Some(executor) else {
       ctx.fail(
         line, "action", "no module loaded (previous module failed to load)",
       )
       return
     }
-    let _ = rt.call_compiled(@encoding/utf8.encode(fn_name), runtime_args)
+    let _ = executor.call_compiled(@encoding/utf8.encode(fn_name), runtime_args)
 
   } catch {
     e => ctx.fail(line, "action", "Action failed with error: \{e}")
@@ -1275,6 +1415,7 @@ fn handle_action(
 
 ///|
 /// Handle "assert_return" with "get" action - read a global value
+/// Note: This requires MoonBit runtime as CRuntime doesn't support globals yet
 fn handle_assert_return_get(
   ctx : TestContext,
   field : String,
@@ -1283,11 +1424,23 @@ fn handle_assert_return_get(
   module_name? : String? = None,
 ) -> Unit {
   try {
-    guard get_runtime_for_module(ctx, module_name) is Some(rt) else {
+    // Get global requires MoonBit runtime (CRuntime doesn't support globals)
+    let rt : @wasm5_runtime.Runtime? = match module_name {
+      Some(name) =>
+        match ctx.registry.0.get(name) {
+          Some(registered) => Some(registered.runtime)
+          None => None
+        }
+      None =>
+        match ctx.executor {
+          Some(executor) => executor.as_runtime()
+          None => None
+        }
+    }
+    guard rt is Some(rt) else {
       let msg = match module_name {
         Some(name) => "[get \{field}] module '\{name}' not registered"
-        None =>
-          "[get \{field}] no module loaded (previous module failed to load)"
+        None => "[get \{field}] no module loaded (requires MoonBit runtime)"
       }
       ctx.fail(line, "assert_return", msg)
       return
@@ -1490,6 +1643,7 @@ async fn process_meta(
   json_file : String,
   failures : Array[TestFailure],
   source_file : String,
+  runtime_type? : RuntimeType = MoonBit,
 ) -> Int {
   let file = @fs.open(dir + json_file, mode=ReadOnly)
   defer file.close()
@@ -1502,7 +1656,8 @@ async fn process_meta(
         dir,
         source_file,
         failures,
-        runtime: None,
+        runtime_type,
+        executor: None,
         registry,
         resolver,
         skipped_count: 0,
@@ -1532,6 +1687,7 @@ async fn process_meta(
 pub async fn process_wast_file(
   wast_dir : String,
   wast_file : String,
+  runtime_type? : RuntimeType = MoonBit,
 ) -> (Array[TestFailure], Int) {
   guard wast_file.strip_suffix(".wast") is Some(base_name) else {
     abort("Invalid wast file name: \{wast_file}")
@@ -1564,10 +1720,57 @@ pub async fn process_wast_file(
     }
     return (test_result, 0)
   }
-  let skipped = process_meta(target_dir, json_file, test_result, wast_file)
+  let skipped = process_meta(
+    target_dir,
+    json_file,
+    test_result,
+    wast_file,
+    runtime_type~,
+  )
   @fs.rmdir(target_dir, recursive=true)
   (test_result, skipped)
 }
+
+///|
+/// Process a wast file using C runtime (convenience wrapper)
+pub async fn process_wast_file_cruntime(
+  wast_dir : String,
+  wast_file : String,
+) -> (Array[TestFailure], Int) {
+  process_wast_file(wast_dir, wast_file, runtime_type=CRuntime)
+}
+
+///|
+/// Whitelist for C runtime tests (some tests may have features not yet implemented)
+/// select.wast, br_table.wast: ref.func and ref.null instructions not implemented
+/// traps.wast: missing trap checks and i64/f32/f64 load ops
+/// exports.wast, global.wast: module registration not supported
+/// local_init.wast: reference type result conversion
+/// elem.wast: module registration and some trap handling
+let cruntime_whitelisted_tests : Array[(String, Set[Int])] = [
+  ("select.wast", Set::of([251, 252, 258, 259, 279, 280])),
+  (
+    "br_table.wast",
+    Set::of([
+      1249, 1250, 1251, 1253, 1254, 1255, 1256, 1257, 1258, 1259, 1260, 1261, 1262,
+      1263, 1264,
+    ]),
+  ),
+  (
+    "traps.wast",
+    Set::of([50, 51, 52, 53, 54, 55, 56, 57, 83, 84, 85, 86, 87, 88, 89, 90, 91]),
+  ),
+  ("exports.wast", Set::of([23, 26, 93, 94, 97])),
+  ("local_init.wast", Set::of([21, 22, 23, 74])),
+  ("global.wast", Set::of([206, 207, 241, 632, 659, 660, 661, 663, 664])),
+  (
+    "elem.wast",
+    Set::of([
+      706, 716, 944, 946, 947, 948, 959, 960, 961, 972, 973, 974, 1014, 1016, 1017,
+      1019, 1020, 1022, 1023, 1029, 1030, 1041, 1053,
+    ]),
+  ),
+]
 
 ///|
 /// Whitelist of individual tests to skip (file, line)
