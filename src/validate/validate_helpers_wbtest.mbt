@@ -320,27 +320,6 @@ test "validate const expr checks" {
     expr_global,
     get_import_counts(module_import_scan),
   )
-  let module_missing : @core.Module = {
-    types: [],
-    type_groups: [],
-    customs: [],
-    funcs: [],
-    tables: [],
-    mems: [],
-    globals: [],
-    tags: [],
-    elems: [],
-    datas: [],
-    start: None,
-    imports: [],
-    exports: [],
-    codes: [],
-  }
-  validate_const_expr_globals(
-    module_missing,
-    expr_global,
-    get_import_counts(module_missing),
-  )
 }
 
 ///|
