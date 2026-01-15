@@ -32,8 +32,5 @@ jobs:
       - name: Setup MoonBit
         uses: ./.github/actions/setup
 
-      - name: Run tests (debug)
-        run: moon test --target native
-
-      - name: Run tests (release)
+      - name: Run tests
         run: moon test --target native --release
