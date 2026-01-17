@@ -872,6 +872,37 @@ fn compile_instr(
     F64Store(align, offset, mem_idx) =>
       ctx.emit_store(f64_store(), align, offset, mem_idx)
 
+    // Bulk memory operations
+    MemoryCopy(_, _) => {
+      // Stack: [dest, src, n] -> []
+      ctx.emit(memory_copy())
+      ignore(ctx.pop_slot()) // n
+      ignore(ctx.pop_slot()) // src
+      ignore(ctx.pop_slot()) // dest
+    }
+    MemoryFill(_) => {
+      // Stack: [dest, val, n] -> []
+      ctx.emit(memory_fill())
+      ignore(ctx.pop_slot()) // n
+      ignore(ctx.pop_slot()) // val
+      ignore(ctx.pop_slot()) // dest
+    }
+    MemoryInit(data_idx, _) => {
+      // Immediate: data_idx
+      // Stack: [dest, src, n] -> []
+      ctx.emit(memory_init())
+      ctx.emit_idx(data_idx.reinterpret_as_int())
+      ignore(ctx.pop_slot()) // n
+      ignore(ctx.pop_slot()) // src
+      ignore(ctx.pop_slot()) // dest
+    }
+    DataDrop(data_idx) => {
+      // Immediate: data_idx
+      // Stack: [] -> []
+      ctx.emit(data_drop())
+      ctx.emit_idx(data_idx.reinterpret_as_int())
+    }
+
     // Block structures
     Block(bt, body) => {
       let arity = get_block_arity(mod_info.mod_, bt)

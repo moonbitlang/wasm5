@@ -1,7 +1,7 @@
 ///|
 /// Execute threaded code (FFI binding)
 /// Returns trap code (0 = success), stores results in result_out[0..num_results-1]
-#borrow(code, args, result_out, globals, memory, memory_pages, tables_flat, table_offsets, table_sizes, func_entries, func_num_locals, func_type_idxs, type_sig_hash1, type_sig_hash2, import_num_params, import_num_results)
+#borrow(code, args, result_out, globals, memory, memory_pages, tables_flat, table_offsets, table_sizes, func_entries, func_num_locals, func_type_idxs, type_sig_hash1, type_sig_hash2, import_num_params, import_num_results, data_segments_flat, data_segment_offsets, data_segment_sizes)
 extern "C" fn c_execute_ffi(
   code : FixedArray[UInt64],
   entry : Int,
@@ -28,6 +28,10 @@ extern "C" fn c_execute_ffi(
   num_types : Int,
   import_num_params : FixedArray[Int], // Number of params for each imported function
   import_num_results : FixedArray[Int], // Number of results for each imported function
+  data_segments_flat : FixedArray[Byte], // All data segments flattened
+  data_segment_offsets : FixedArray[Int], // Offset of each segment in data_segments_flat
+  data_segment_sizes : FixedArray[Int], // Size of each segment (mutable for data.drop)
+  num_data_segments : Int, // Number of data segments
 ) -> Int = "execute"
 
 ///|

@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
 #include <limits.h>
 #include <stdio.h>
@@ -213,6 +214,12 @@ static int g_num_types = 0;
 static int* g_import_num_params = NULL;    // Number of params for each imported function
 static int* g_import_num_results = NULL;   // Number of results for each imported function
 
+// Data segments for bulk memory operations (memory.init, data.drop)
+static uint8_t* g_data_segments_flat = NULL;   // All data segments concatenated
+static int* g_data_segment_offsets = NULL;     // Offset of each segment in data_segments_flat
+static int* g_data_segment_sizes = NULL;       // Size of each segment (mutable for data.drop)
+static int g_num_data_segments = 0;
+
 // Stack base for result extraction after execution
 static uint64_t* g_stack_base = NULL;
 
@@ -229,7 +236,8 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
             int* memory_pages, int* tables_flat, int* table_offsets, int* table_sizes, int num_tables,
             int* func_entries, int* func_num_locals, int num_funcs, int num_imported_funcs,
             int* func_type_idxs, int* type_sig_hash1, int* type_sig_hash2, int num_types,
-            int* import_num_params, int* import_num_results) {
+            int* import_num_params, int* import_num_results,
+            uint8_t* data_segments_flat, int* data_segment_offsets, int* data_segment_sizes, int num_data_segments) {
     // Allocate stack on heap to avoid C stack limits
     uint64_t* stack = (uint64_t*)malloc(STACK_SIZE * sizeof(uint64_t));
     if (!stack) {
@@ -270,6 +278,12 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     // Store import function metadata for op_call_import
     g_import_num_params = import_num_params;
     g_import_num_results = import_num_results;
+
+    // Store data segment info for bulk memory operations
+    g_data_segments_flat = data_segments_flat;
+    g_data_segment_offsets = data_segment_offsets;
+    g_data_segment_sizes = data_segment_sizes;
+    g_num_data_segments = num_data_segments;
 
     // Store stack base for result extraction
     g_stack_base = stack;
@@ -314,6 +328,10 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     g_num_types = 0;
     g_import_num_params = NULL;
     g_import_num_results = NULL;
+    g_data_segments_flat = NULL;
+    g_data_segment_offsets = NULL;
+    g_data_segment_sizes = NULL;
+    g_num_data_segments = 0;
     g_stack_base = NULL;
 
     return trap;
@@ -2040,3 +2058,110 @@ int op_call_indirect(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     NEXT();
 }
 DEFINE_OP(call_indirect)
+
+// =============================================================================
+// Bulk memory operations
+// =============================================================================
+
+// memory.copy - copy memory region (handles overlapping regions)
+// Stack: [dest, src, n] -> []
+int op_memory_copy(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)fp;
+    uint32_t n = (uint32_t)sp[-1];
+    uint32_t src = (uint32_t)sp[-2];
+    uint32_t dest = (uint32_t)sp[-3];
+    sp -= 3;
+
+    // Check bounds for both source and destination
+    if ((uint64_t)src + n > (uint64_t)g_memory_size) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+    if ((uint64_t)dest + n > (uint64_t)g_memory_size) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+
+    // Use memmove to handle overlapping regions correctly
+    if (n > 0) {
+        memmove(crt->mem + dest, crt->mem + src, n);
+    }
+    NEXT();
+}
+DEFINE_OP(memory_copy)
+
+// memory.fill - fill memory region with a byte value
+// Stack: [dest, val, n] -> []
+int op_memory_fill(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)fp;
+    uint32_t n = (uint32_t)sp[-1];
+    uint8_t val = (uint8_t)sp[-2];  // Truncate to byte
+    uint32_t dest = (uint32_t)sp[-3];
+    sp -= 3;
+
+    // Check bounds
+    if ((uint64_t)dest + n > (uint64_t)g_memory_size) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+
+    // Fill memory
+    if (n > 0) {
+        memset(crt->mem + dest, val, n);
+    }
+    NEXT();
+}
+DEFINE_OP(memory_fill)
+
+// memory.init - initialize memory from data segment
+// Immediate: data_idx
+// Stack: [dest, src, n] -> []
+int op_memory_init(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)fp;
+    int data_idx = (int)*pc++;
+    uint32_t n = (uint32_t)sp[-1];
+    uint32_t src = (uint32_t)sp[-2];
+    uint32_t dest = (uint32_t)sp[-3];
+    sp -= 3;
+
+    // Check data segment index
+    if (data_idx < 0 || data_idx >= g_num_data_segments) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);  // "unknown data segment"
+    }
+
+    // Get data segment info
+    int seg_offset = g_data_segment_offsets[data_idx];
+    int seg_size = g_data_segment_sizes[data_idx];
+
+    // Check bounds for data segment read
+    if ((uint64_t)src + n > (uint64_t)seg_size) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+
+    // Check bounds for memory write
+    if ((uint64_t)dest + n > (uint64_t)g_memory_size) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+
+    // Copy from data segment to memory
+    if (n > 0) {
+        memcpy(crt->mem + dest, g_data_segments_flat + seg_offset + src, n);
+    }
+    NEXT();
+}
+DEFINE_OP(memory_init)
+
+// data.drop - drop a data segment (make it unusable for memory.init)
+// Immediate: data_idx
+// Stack: [] -> []
+int op_data_drop(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)sp; (void)fp;
+    int data_idx = (int)*pc++;
+
+    // Check data segment index
+    if (data_idx < 0 || data_idx >= g_num_data_segments) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);  // "unknown data segment"
+    }
+
+    // Drop the segment by setting its size to 0
+    g_data_segment_sizes[data_idx] = 0;
+    NEXT();
+}
+DEFINE_OP(data_drop)

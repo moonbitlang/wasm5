@@ -617,5 +617,19 @@ extern "C" fn f64_load() -> UInt64 = "f64_load"
 ///|
 extern "C" fn f64_store() -> UInt64 = "f64_store"
 
+// Bulk memory operations
+
+///|
+extern "C" fn memory_copy() -> UInt64 = "memory_copy"
+
+///|
+extern "C" fn memory_fill() -> UInt64 = "memory_fill"
+
+///|
+extern "C" fn memory_init() -> UInt64 = "memory_init"
+
+///|
+extern "C" fn data_drop() -> UInt64 = "data_drop"
+
 ///|
 extern "C" fn call_indirect() -> UInt64 = "call_indirect"

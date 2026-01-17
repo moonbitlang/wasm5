@@ -1170,3 +1170,28 @@ async test "local_init.wast (cruntime)" {
 // async test "try_table.wast (cruntime)" {
 //   run_test_harness("", "try_table.wast", runtime_type=CRuntime)
 // }
+
+// =============================================================================
+// Bulk Memory CRuntime Tests
+// =============================================================================
+
+// bulk.wast includes table operations (table.init, table.copy, elem.drop)
+// which are not yet implemented in CRuntime
+// async test "bulk-memory/bulk.wast (cruntime)" {
+//   run_test_harness("bulk-memory/", "bulk.wast", runtime_type=CRuntime)
+// }
+
+///|
+async test "bulk-memory/memory_copy.wast (cruntime)" {
+  run_test_harness("bulk-memory/", "memory_copy.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "bulk-memory/memory_fill.wast (cruntime)" {
+  run_test_harness("bulk-memory/", "memory_fill.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "bulk-memory/memory_init.wast (cruntime)" {
+  run_test_harness("bulk-memory/", "memory_init.wast", runtime_type=CRuntime)
+}
