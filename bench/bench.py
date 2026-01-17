@@ -149,6 +149,36 @@ def print_summary(results: list):
             print(f"{name:<20} {wasmi_time:<15.2f} {wasm5_time:<15.2f} {ratio:<10.2f}x")
 
 
+def clean():
+    """Remove generated .wasm files and results."""
+    removed = 0
+
+    # Remove .wasm files
+    if WASM_DIR.exists():
+        for wasm_file in WASM_DIR.glob("*.wasm"):
+            wasm_file.unlink()
+            print(f"Removed {wasm_file.name}")
+            removed += 1
+        # Remove benches directory if empty
+        try:
+            WASM_DIR.rmdir()
+            print(f"Removed {WASM_DIR.name}/")
+        except OSError:
+            pass  # Directory not empty or doesn't exist
+
+    # Remove results.json
+    results_file = BENCH_DIR / "results.json"
+    if results_file.exists():
+        results_file.unlink()
+        print("Removed results.json")
+        removed += 1
+
+    if removed == 0:
+        print("Nothing to clean.")
+    else:
+        print(f"\nCleaned {removed} file(s).")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Benchmark wasmi vs wasm5 performance",
@@ -158,6 +188,9 @@ def main():
 
     # Convert subcommand
     subparsers.add_parser("convert", help="Convert .wat files to .wasm")
+
+    # Clean subcommand
+    subparsers.add_parser("clean", help="Remove generated .wasm files and results")
 
     # Run subcommand
     run_parser = subparsers.add_parser("run", help="Run benchmarks")
@@ -193,6 +226,8 @@ def main():
 
     if args.command == "convert":
         convert_wat_files()
+    elif args.command == "clean":
+        clean()
     elif args.command == "run":
         run_benchmarks(args.wasmi, args.wasm5, args.output, args.warmup, args.runs)
     else:

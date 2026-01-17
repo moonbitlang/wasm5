@@ -49,6 +49,14 @@ Options:
 cat results.json
 ```
 
+### 4. Clean up generated files
+
+```bash
+python bench.py clean
+```
+
+This removes all generated `.wasm` files and `results.json`.
+
 ## Benchmarks
 
 | Benchmark | Input | Description |
