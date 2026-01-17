@@ -22,7 +22,18 @@ cargo install hyperfine wasm-tools wasmi_cli
 
 ## Usage
 
-### 1. Convert .wat files to .wasm
+### Quick start (recommended)
+
+```bash
+python bench.py
+```
+
+This runs the full workflow: convert `.wat` files, run benchmarks, and clean up.
+Assumes `wasmi_cli` and `wasm5` are in PATH.
+
+### Individual commands
+
+#### 1. Convert .wat files to .wasm
 
 ```bash
 python bench.py convert
@@ -30,26 +41,27 @@ python bench.py convert
 
 This converts all `.wat` files in `wat/` to `.wasm` binary format in `benches/`.
 
-### 2. Run benchmarks
+#### 2. Run benchmarks
 
 ```bash
+python bench.py run
 python bench.py run --wasmi wasmi_cli --wasm5 /path/to/wasm5
 ```
 
 Options:
-- `--wasmi`: Path to wasmi binary (or `wasmi_cli` if in PATH)
-- `--wasm5`: Path to wasm5 binary
+- `--wasmi`: Path to wasmi binary (default: `wasmi_cli`)
+- `--wasm5`: Path to wasm5 binary (default: `wasm5`)
 - `--output`: Output file for results (default: `results.json`)
 - `--warmup`: Number of warmup runs (default: 3)
 - `--runs`: Minimum number of benchmark runs (default: 10)
 
-### 3. View results
+#### 3. View results
 
 ```bash
 cat results.json
 ```
 
-### 4. Clean up generated files
+#### 4. Clean up generated files
 
 ```bash
 python bench.py clean

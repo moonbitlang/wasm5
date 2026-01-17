@@ -149,6 +149,18 @@ def print_summary(results: list):
             print(f"{name:<20} {wasmi_time:<15.2f} {wasm5_time:<15.2f} {ratio:<10.2f}x")
 
 
+def run_all(wasmi_bin: str = "wasmi_cli", wasm5_bin: str = "wasm5"):
+    """Run full benchmark workflow: convert, run, clean."""
+    print("=== Converting .wat files to .wasm ===\n")
+    convert_wat_files()
+
+    print("\n=== Running benchmarks ===")
+    run_benchmarks(wasmi_bin, wasm5_bin, "results.json", warmup=3, runs=10)
+
+    print("\n=== Cleaning up ===\n")
+    clean()
+
+
 def clean():
     """Remove generated .wasm files and results."""
     removed = 0
@@ -196,13 +208,13 @@ def main():
     run_parser = subparsers.add_parser("run", help="Run benchmarks")
     run_parser.add_argument(
         "--wasmi",
-        required=True,
-        help="Path to wasmi binary (or 'wasmi_cli' if in PATH)",
+        default="wasmi_cli",
+        help="Path to wasmi binary (default: wasmi_cli)",
     )
     run_parser.add_argument(
         "--wasm5",
-        required=True,
-        help="Path to wasm5 binary",
+        default="wasm5",
+        help="Path to wasm5 binary (default: wasm5)",
     )
     run_parser.add_argument(
         "--output",
@@ -230,6 +242,9 @@ def main():
         clean()
     elif args.command == "run":
         run_benchmarks(args.wasmi, args.wasm5, args.output, args.warmup, args.runs)
+    elif args.command is None:
+        # Default: run full workflow (convert -> run -> clean)
+        run_all()
     else:
         parser.print_help()
 
