@@ -631,5 +631,19 @@ extern "C" fn memory_init() -> UInt64 = "memory_init"
 ///|
 extern "C" fn data_drop() -> UInt64 = "data_drop"
 
+// Bulk table operations
+
+///|
+extern "C" fn table_copy() -> UInt64 = "table_copy"
+
+///|
+extern "C" fn table_fill() -> UInt64 = "table_fill"
+
+///|
+extern "C" fn table_init() -> UInt64 = "table_init"
+
+///|
+extern "C" fn elem_drop() -> UInt64 = "elem_drop"
+
 ///|
 extern "C" fn call_indirect() -> UInt64 = "call_indirect"

@@ -903,6 +903,43 @@ fn compile_instr(
       ctx.emit_idx(data_idx.reinterpret_as_int())
     }
 
+    // Bulk table operations
+    TableCopy(dst_table_idx, src_table_idx) => {
+      // Immediates: dst_table_idx, src_table_idx
+      // Stack: [dest, src, n] -> []
+      ctx.emit(table_copy())
+      ctx.emit_idx(dst_table_idx.reinterpret_as_int())
+      ctx.emit_idx(src_table_idx.reinterpret_as_int())
+      ignore(ctx.pop_slot()) // n
+      ignore(ctx.pop_slot()) // src
+      ignore(ctx.pop_slot()) // dest
+    }
+    TableFill(table_idx) => {
+      // Immediate: table_idx
+      // Stack: [dest, val, n] -> []
+      ctx.emit(table_fill())
+      ctx.emit_idx(table_idx.reinterpret_as_int())
+      ignore(ctx.pop_slot()) // n
+      ignore(ctx.pop_slot()) // val
+      ignore(ctx.pop_slot()) // dest
+    }
+    TableInit(elem_idx, table_idx) => {
+      // Immediates: elem_idx, table_idx
+      // Stack: [dest, src, n] -> []
+      ctx.emit(table_init())
+      ctx.emit_idx(elem_idx.reinterpret_as_int())
+      ctx.emit_idx(table_idx.reinterpret_as_int())
+      ignore(ctx.pop_slot()) // n
+      ignore(ctx.pop_slot()) // src
+      ignore(ctx.pop_slot()) // dest
+    }
+    ElemDrop(elem_idx) => {
+      // Immediate: elem_idx
+      // Stack: [] -> []
+      ctx.emit(elem_drop())
+      ctx.emit_idx(elem_idx.reinterpret_as_int())
+    }
+
     // Block structures
     Block(bt, body) => {
       let arity = get_block_arity(mod_info.mod_, bt)
