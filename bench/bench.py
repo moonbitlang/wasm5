@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+"""
+Benchmark script comparing wasmi and wasm5 execution performance.
+Uses hyperfine for accurate measurements.
+"""
+import argparse
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+# Benchmark configurations: (name, input)
+BENCHMARKS = [
+    ("counter", 1_000_000),
+    ("fib.recursive", 30),
+    ("fib.iterative", 2_000_000),
+    ("primes", 1_000),
+    ("matmul", 200),
+    ("bulk-ops", 5_000),
+]
+
+BENCH_DIR = Path(__file__).parent
+WAT_DIR = BENCH_DIR / "wat"
+WASM_DIR = BENCH_DIR / "benches"
+
+
+def convert_wat_files():
+    """Convert all .wat files to .wasm using wasm-tools."""
+    WASM_DIR.mkdir(exist_ok=True)
+
+    wat_files = list(WAT_DIR.glob("*.wat"))
+    if not wat_files:
+        print(f"No .wat files found in {WAT_DIR}")
+        sys.exit(1)
+
+    for wat_file in wat_files:
+        wasm_file = WASM_DIR / wat_file.with_suffix(".wasm").name
+        try:
+            subprocess.run(
+                ["wasm-tools", "parse", str(wat_file), "-o", str(wasm_file)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            print(f"Converted {wat_file.name} -> {wasm_file.name}")
+        except subprocess.CalledProcessError as e:
+            print(f"Error converting {wat_file.name}: {e.stderr}")
+            sys.exit(1)
+        except FileNotFoundError:
+            print("Error: wasm-tools not found. Install it:")
+            print("  cargo install wasm-tools")
+            sys.exit(1)
+
+    print(f"\nConverted {len(wat_files)} files to {WASM_DIR}")
+
+
+def check_wasm_files():
+    """Check that all required .wasm files exist."""
+    missing = []
+    for name, _ in BENCHMARKS:
+        wasm_file = WASM_DIR / f"{name}.wasm"
+        if not wasm_file.exists():
+            missing.append(wasm_file.name)
+    if missing:
+        print(f"Error: Missing .wasm files: {', '.join(missing)}")
+        print("Run 'python bench.py convert' first to generate them.")
+        sys.exit(1)
+
+
+def run_benchmarks(wasmi_bin: str, wasm5_bin: str, output: str, warmup: int, runs: int):
+    """Run all benchmarks using hyperfine."""
+    check_wasm_files()
+
+    results = []
+
+    for name, input_val in BENCHMARKS:
+        wasm_file = WASM_DIR / f"{name}.wasm"
+        tmp_json = f"/tmp/bench_{name}.json"
+
+        wasmi_cmd = f"{wasmi_bin} {wasm_file} --invoke run {input_val}"
+        wasm5_cmd = f"{wasm5_bin} {wasm_file} --invoke run {input_val}"
+
+        print(f"\n{'='*60}")
+        print(f"Benchmarking: {name} (input={input_val})")
+        print(f"{'='*60}")
+
+        try:
+            subprocess.run(
+                [
+                    "hyperfine",
+                    "--warmup", str(warmup),
+                    "--min-runs", str(runs),
+                    "--export-json", tmp_json,
+                    "-n", "wasmi", wasmi_cmd,
+                    "-n", "wasm5", wasm5_cmd,
+                ],
+                check=True,
+            )
+        except FileNotFoundError:
+            print("Error: hyperfine not found. Install it:")
+            print("  brew install hyperfine  # macOS")
+            print("  cargo install hyperfine # via Cargo")
+            sys.exit(1)
+        except subprocess.CalledProcessError as e:
+            print(f"Error running benchmark {name}: {e}")
+            continue
+
+        # Collect results
+        try:
+            with open(tmp_json) as f:
+                data = json.load(f)
+                results.append({
+                    "benchmark": name,
+                    "input": input_val,
+                    "results": data,
+                })
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            print(f"Warning: Could not read results for {name}: {e}")
+
+    # Save combined results
+    output_path = BENCH_DIR / output
+    with open(output_path, "w") as f:
+        json.dump(results, f, indent=2)
+
+    print(f"\n{'='*60}")
+    print(f"Results saved to {output_path}")
+    print(f"{'='*60}")
+
+    # Print summary
+    print_summary(results)
+
+
+def print_summary(results: list):
+    """Print a summary table of benchmark results."""
+    if not results:
+        return
+
+    print("\nSummary:")
+    print(f"{'Benchmark':<20} {'wasmi (ms)':<15} {'wasm5 (ms)':<15} {'Ratio':<10}")
+    print("-" * 60)
+
+    for r in results:
+        name = r["benchmark"]
+        data = r.get("results", {}).get("results", [])
+        if len(data) >= 2:
+            wasmi_time = data[0].get("mean", 0) * 1000  # Convert to ms
+            wasm5_time = data[1].get("mean", 0) * 1000
+            ratio = wasm5_time / wasmi_time if wasmi_time > 0 else float("inf")
+            print(f"{name:<20} {wasmi_time:<15.2f} {wasm5_time:<15.2f} {ratio:<10.2f}x")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Benchmark wasmi vs wasm5 performance",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
+    # Convert subcommand
+    subparsers.add_parser("convert", help="Convert .wat files to .wasm")
+
+    # Run subcommand
+    run_parser = subparsers.add_parser("run", help="Run benchmarks")
+    run_parser.add_argument(
+        "--wasmi",
+        required=True,
+        help="Path to wasmi binary (or 'wasmi_cli' if in PATH)",
+    )
+    run_parser.add_argument(
+        "--wasm5",
+        required=True,
+        help="Path to wasm5 binary",
+    )
+    run_parser.add_argument(
+        "--output",
+        default="results.json",
+        help="Output file for benchmark results (default: results.json)",
+    )
+    run_parser.add_argument(
+        "--warmup",
+        type=int,
+        default=3,
+        help="Number of warmup runs (default: 3)",
+    )
+    run_parser.add_argument(
+        "--runs",
+        type=int,
+        default=10,
+        help="Minimum number of benchmark runs (default: 10)",
+    )
+
+    args = parser.parse_args()
+
+    if args.command == "convert":
+        convert_wat_files()
+    elif args.command == "run":
+        run_benchmarks(args.wasmi, args.wasm5, args.output, args.warmup, args.runs)
+    else:
+        parser.print_help()
+
+
+if __name__ == "__main__":
+    main()
