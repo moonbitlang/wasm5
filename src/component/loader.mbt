@@ -123,12 +123,9 @@ pub fn WasmExecutable::call(
         }
       }
 
-      // Compile and call
-      let rt = rt.compile() catch {
-        e => raise WasmError::RuntimeError("compile error: \{e}")
-      }
+      // Call
       let name_bytes = string_to_bytes(name)
-      let (_, results) = rt.call_compiled(name_bytes, core_args) catch {
+      let results = rt.call_compiled(name_bytes, core_args) catch {
         e => raise WasmError::RuntimeError("call error: \{e}")
       }
 
@@ -327,11 +324,7 @@ pub fn UnifiedImportResolver::to_module_resolver(
               let rt_ref = source_rt
               let func_name_bytes = exp.name
               let imported = @runtime.ImportedFunc::new(0U, fn(args) {
-                try {
-                  let _ = rt_ref.compile()
-                  let (_, results) = rt_ref.call_compiled(func_name_bytes, args)
-                  results
-                } catch {
+                rt_ref.call_compiled(func_name_bytes, args) catch {
                   _ => []
                 }
               })
@@ -473,13 +466,9 @@ pub fn UnifiedImportResolver::to_component_resolver(
                       _ => ()
                     }
                   }
-                  let core_results = try {
-                    let _ = rt_ref.compile()
-                    let (_, results) = rt_ref.call_compiled(
-                      func_name_bytes, core_args,
-                    )
-                    results
-                  } catch {
+                  let core_results = rt_ref.call_compiled(
+                    func_name_bytes, core_args,
+                  ) catch {
                     _ => []
                   }
                   // Convert back to component values

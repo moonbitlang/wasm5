@@ -251,7 +251,10 @@ fn parse_core_alias(parser : Parser) -> @core.CoreAlias raise ParseError {
     0x04 => @core.AliasKind::CoreTag
     0x10 => @core.AliasKind::CoreType
     0x11 => @core.AliasKind::CoreModule
-    _ => raise ParseError::InvalidFormat("invalid core alias sort: 0x\{sort.to_string()}")
+    _ =>
+      raise ParseError::InvalidFormat(
+        "invalid core alias sort: 0x\{sort.to_string()}",
+      )
   }
   let target = match target_kind {
     0x00 => {

@@ -80,14 +80,10 @@ fn ComponentRuntime::call_destructor(
           match self.core_instances[inst_idx] {
             CoreInstanceEntry::Real(runtime) => {
               // Call the destructor function
-              let _ = try {
-                let _ = runtime.compile()
-                let _ = runtime.call_compiled(func_name, [
-                  @runtime.Value::I32(rep),
-                ])
-
-              } catch {
-                _ => ()
+              let _ = runtime.call_compiled(func_name, [
+                @runtime.Value::I32(rep),
+              ]) catch {
+                _ => []
               }
 
             }

@@ -2,6 +2,8 @@
 package "moonbitlang/wasm5/test"
 
 // Values
+pub async fn process_component_wast_file(String, String) -> (Array[TestFailure], Int)
+
 pub async fn process_wast_file(String, String, runtime_type? : RuntimeType) -> (Array[TestFailure], Int)
 
 pub async fn process_wast_file_cruntime(String, String) -> (Array[TestFailure], Int)

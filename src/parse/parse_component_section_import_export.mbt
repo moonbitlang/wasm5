@@ -17,6 +17,7 @@ fn parse_externname(parser : Parser) -> (Bytes, Bytes?) raise ParseError {
       let hash_len = parser.read_u32_leb128()
       for _ in 0U..<hash_len {
         let _ = parser.read_byte()
+
       }
       (parser.read_name(), None)
     }
@@ -25,6 +26,7 @@ fn parse_externname(parser : Parser) -> (Bytes, Bytes?) raise ParseError {
       let hash_len = parser.read_u32_leb128()
       for _ in 0U..<hash_len {
         let _ = parser.read_byte()
+
       }
       (parser.read_name(), None)
     }

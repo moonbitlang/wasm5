@@ -205,7 +205,10 @@ fn validate_semver(version : String) -> String? {
       }
       // Must have at least one character after - or +
       let start = i
-      while i < chars.length() && chars[i] != '-' && chars[i] != '+' && chars[i] != '.' {
+      while i < chars.length() &&
+            chars[i] != '-' &&
+            chars[i] != '+' &&
+            chars[i] != '.' {
         i = i + 1
       }
       if i == start {

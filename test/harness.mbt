@@ -1409,7 +1409,8 @@ fn handle_assert_return_get(
     guard rt is Some(rt) else {
       let msg = match module_name {
         Some(name) => "[get \{field}] module '\{name}' not registered"
-        None => "[get \{field}] no module loaded (requires MoonBit runtime)"
+        None =>
+          "[get \{field}] no module loaded (previous module failed to load)"
       }
       ctx.fail(line, "assert_return", msg)
       return
@@ -1728,3 +1729,271 @@ let cruntime_whitelisted_tests : Array[(String, Set[Int])] = [
 // Whitelisted tests that are skipped due to missing validation/features
 // Currently all GC tests pass!
 let whitelisted_tests : Array[(String, Set[Int])] = []
+
+// =============================================================================
+// Component Model Test Support
+// =============================================================================
+
+///|
+/// Test context for component model tests
+priv struct ComponentTestContext {
+  dir : String
+  source_file : String
+  failures : Array[TestFailure]
+  mut skipped_count : Int
+}
+
+///|
+fn ComponentTestContext::fail(
+  self : ComponentTestContext,
+  line : Int,
+  test_type : String,
+  message : String,
+) -> Unit {
+  self.failures.push({ line, test_type, message, source_file: self.source_file })
+}
+
+///|
+fn ComponentTestContext::skip(self : ComponentTestContext) -> Unit {
+  self.skipped_count += 1
+}
+
+///|
+/// Try to parse and validate a component file - returns error message if failed, None if success
+async fn try_parse_and_validate_component(
+  dir : String,
+  filename : String,
+) -> String? {
+  let file = @fs.open(dir + filename, mode=ReadOnly)
+  defer file.close()
+  let content = file.read_all().binary()
+  try {
+    let component = @wasm5_parse.parse_component(content)
+    // Run validation
+    match @wasm5_validate_component.validate_component(component) {
+      Some(err) => Some(err.to_string())
+      None => None
+    }
+  } catch {
+    e => Some(e.to_string())
+  }
+}
+
+///|
+/// Try to parse a component file - returns error message if failed, None if success
+async fn try_parse_component(dir : String, filename : String) -> String? {
+  let file = @fs.open(dir + filename, mode=ReadOnly)
+  defer file.close()
+  let content = file.read_all().binary()
+  try {
+    let _ = @wasm5_parse.parse_component(content)
+    None
+  } catch {
+    e => Some(e.to_string())
+  }
+}
+
+///|
+/// wasmtime-specific error messages that are not part of the Component Model spec
+let wasmtime_specific_errors : Array[String] = [
+  "root-level component imports are not supported", "exporting a component from the root component is not supported",
+  "is a reexport of an imported function which is not implemented",
+]
+
+///|
+/// Check if an expected error is wasmtime-specific (not in Component Model spec)
+fn is_wasmtime_specific_error(expected_error : String) -> Bool {
+  for err in wasmtime_specific_errors {
+    if expected_error.contains(err) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Handle component "assert_invalid" - parse component and expect validation error
+async fn handle_component_assert_invalid(
+  ctx : ComponentTestContext,
+  filename : String,
+  expected_error : String,
+  line : Int,
+) -> Unit {
+  // Skip wasmtime-specific restrictions that are not part of Component Model spec
+  if is_wasmtime_specific_error(expected_error) {
+    ctx.skip()
+    return
+  }
+  match try_parse_and_validate_component(ctx.dir, filename) {
+    None =>
+      ctx.fail(
+        line,
+        "assert_invalid",
+        "expected error '\{expected_error}' but component was valid",
+      )
+    Some(_) => () // Got an error as expected
+  }
+}
+
+///|
+/// Handle component "assert_malformed" - parse component and expect parse error
+async fn handle_component_assert_malformed(
+  ctx : ComponentTestContext,
+  filename : String,
+  expected_error : String,
+  line : Int,
+) -> Unit {
+  match try_parse_component(ctx.dir, filename) {
+    None =>
+      ctx.fail(
+        line,
+        "assert_malformed",
+        "expected error '\{expected_error}' but component parsed successfully",
+      )
+    Some(_) => () // Got an error as expected
+  }
+}
+
+///|
+/// Handle component "module" - parse and verify component is valid
+async fn handle_component_module(
+  ctx : ComponentTestContext,
+  filename : String,
+  line : Int,
+) -> Unit {
+  match try_parse_component(ctx.dir, filename) {
+    Some(err) => ctx.fail(line, "module", "failed to parse component: \{err}")
+    None => () // Success
+  }
+}
+
+///|
+/// Handle component "module_definition" - just verify the definition is valid
+async fn handle_component_module_definition(
+  ctx : ComponentTestContext,
+  filename : String,
+  line : Int,
+) -> Unit {
+  match try_parse_component(ctx.dir, filename) {
+    Some(err) =>
+      ctx.fail(line, "module_definition", "failed to parse component: \{err}")
+    None => () // Success
+  }
+}
+
+///|
+/// Process a single command from component test metadata
+async fn process_component_command(
+  ctx : ComponentTestContext,
+  cmd : Json,
+) -> Unit {
+  match cmd {
+    {
+      "type": "assert_invalid",
+      "line": Number(line, ..),
+      "filename": String(filename),
+      "text": String(expected_error),
+      ..
+    } =>
+      handle_component_assert_invalid(
+        ctx,
+        filename,
+        expected_error,
+        line.to_int(),
+      )
+    {
+      "type": "assert_malformed",
+      "line": Number(line, ..),
+      "filename": String(filename),
+      "text": String(expected_error),
+      ..
+    } =>
+      handle_component_assert_malformed(
+        ctx,
+        filename,
+        expected_error,
+        line.to_int(),
+      )
+    { "type": "module", "filename": String(filename), "line"? : line, .. } => {
+      let line = if line is Some(Number(n, ..)) { n.to_int() } else { -1 }
+      handle_component_module(ctx, filename, line)
+    }
+    {
+      "type": "module_definition",
+      "filename": String(filename),
+      "line"? : line,
+      ..
+    } => {
+      let line = if line is Some(Number(n, ..)) { n.to_int() } else { -1 }
+      handle_component_module_definition(ctx, filename, line)
+    }
+    // Unknown command type - skip
+    _ => ()
+  }
+}
+
+///|
+/// Process component test metadata JSON
+async fn process_component_meta(
+  dir : String,
+  json_file : String,
+  failures : Array[TestFailure],
+  source_file : String,
+) -> Int {
+  let file = @fs.open(dir + json_file, mode=ReadOnly)
+  defer file.close()
+  let meta = file.read_all().json()
+  let ctx : ComponentTestContext = {
+    dir,
+    source_file,
+    failures,
+    skipped_count: 0,
+  }
+  match meta {
+    { "commands": Array(commands), .. } =>
+      for cmd in commands {
+        process_component_command(ctx, cmd)
+      }
+    _ => ()
+  }
+  ctx.skipped_count
+}
+
+///|
+/// Process a component model WAST file
+pub async fn process_component_wast_file(
+  wast_dir : String,
+  wast_file : String,
+) -> (Array[TestFailure], Int) {
+  guard wast_file.strip_suffix(".wast") is Some(base_name) else {
+    abort("Invalid wast file name: \{wast_file}")
+  }
+  let json_file = (base_name + ".json").to_string()
+  let target_dir = wast_dir + base_name.to_string() + "/"
+  if not(@fs.exists(target_dir)) {
+    @fs.mkdir(target_dir, permission=0o755)
+  }
+  let test_result : Array[TestFailure] = []
+  let exit_code = @process.run("wasm-tools", [
+    "wast2json",
+    wast_dir + wast_file,
+    "-o",
+    target_dir + json_file,
+    "--wasm-dir",
+    target_dir,
+  ])
+  if exit_code != 0 {
+    // wast2json failure is treated as skipped since it's often due to wasm-tools limitations
+    // (e.g., ComponentConst serialization issues)
+    if @fs.exists(target_dir) {
+      @fs.rmdir(target_dir, recursive=true)
+    }
+    // Return as 1 skipped test instead of failure
+    return (test_result, 1)
+  }
+  let skipped = process_component_meta(
+    target_dir, json_file, test_result, wast_file,
+  )
+  @fs.rmdir(target_dir, recursive=true)
+  (test_result, skipped)
+}

@@ -25,6 +25,16 @@
     {
       "path": "moonbitlang/wasm5/src/validate",
       "alias": "wasm5_validate"
+    },
+    {
+      "path": "moonbitlang/wasm5/src/validate_component",
+      "alias": "wasm5_validate_component"
+    }
+  ],
+  "test-import": [
+    {
+      "path": "moonbitlang/wasm5/src/component",
+      "alias": "wasm5_component"
     }
   ],
   "pre-build": [

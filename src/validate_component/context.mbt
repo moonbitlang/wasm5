@@ -143,18 +143,25 @@ pub fn ComponentValidationContext::new() -> ComponentValidationContext {
 
 ///|
 /// Add an error to the context
-pub fn ComponentValidationContext::add_error(self : ComponentValidationContext, error : ComponentValidationError) -> Unit {
+pub fn ComponentValidationContext::add_error(
+  self : ComponentValidationContext,
+  error : ComponentValidationError,
+) -> Unit {
   self.errors.push(error)
 }
 
 ///|
 /// Check if validation passed (no errors)
-pub fn ComponentValidationContext::is_valid(self : ComponentValidationContext) -> Bool {
+pub fn ComponentValidationContext::is_valid(
+  self : ComponentValidationContext,
+) -> Bool {
   self.errors.is_empty()
 }
 
 ///|
 /// Get all errors
-pub fn ComponentValidationContext::get_errors(self : ComponentValidationContext) -> Array[ComponentValidationError] {
+pub fn ComponentValidationContext::get_errors(
+  self : ComponentValidationContext,
+) -> Array[ComponentValidationError] {
   self.errors
 }

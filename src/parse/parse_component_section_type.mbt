@@ -49,7 +49,9 @@ fn parse_component_type_def(
 
 ///|
 /// Parse import declaration within type
-fn parse_import_decl_in_type(parser : Parser) -> @core.ComponentImportDecl raise ParseError {
+fn parse_import_decl_in_type(
+  parser : Parser,
+) -> @core.ComponentImportDecl raise ParseError {
   let (name, url) = parse_externname(parser)
   let desc = parse_extern_desc_in_type(parser)
   @core.ComponentImportDecl::{ name, url, desc }
@@ -58,7 +60,9 @@ fn parse_import_decl_in_type(parser : Parser) -> @core.ComponentImportDecl raise
 ///|
 /// Parse export declaration within type
 /// exportdecl ::= externname externdesc
-fn parse_export_decl_in_type(parser : Parser) -> @core.ComponentExportDecl raise ParseError {
+fn parse_export_decl_in_type(
+  parser : Parser,
+) -> @core.ComponentExportDecl raise ParseError {
   let (name, url) = parse_externname(parser)
   let desc = parse_extern_desc_in_type(parser)
   @core.ComponentExportDecl::{ name, url, desc }
@@ -99,7 +103,9 @@ fn parse_extern_desc_in_type(
       match bound_kind {
         0x00 => {
           let idx = parser.read_u32_leb128()
-          @core.ComponentExternDesc::Value(@core.ComponentValType::TypeIndex(idx))
+          @core.ComponentExternDesc::Value(
+            @core.ComponentValType::TypeIndex(idx),
+          )
         }
         0x01 => {
           let val_type = parse_component_valtype(parser)
@@ -318,10 +324,9 @@ fn parse_defvaltype(parser : Parser) -> @core.ComponentValType raise ParseError 
       }
       @core.ComponentValType::Future(elem_type)
     }
-    0x64 => {
+    0x64 =>
       // Error-context: 0x64
       @core.ComponentValType::ErrorContext
-    }
     _ =>
       raise ParseError::InvalidFormat(
         "invalid defvaltype kind: 0x\{kind.to_string()}",
@@ -927,10 +932,9 @@ fn parse_component_valtype(
       }
       @core.ComponentValType::Future(elem_type)
     }
-    0x64 => {
+    0x64 =>
       // Error-context: 0x64
       @core.ComponentValType::ErrorContext
-    }
     _ => {
       // Type index (negative LEB128)
       parser.set_pos(parser.get_pos() - 1)

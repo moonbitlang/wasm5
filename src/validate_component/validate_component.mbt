@@ -1,16 +1,19 @@
 // Type size limit constant (1 million)
+
+///|
 const TypeSizeLimitValue : UInt64 = 1000000UL
 
 ///|
 /// Validate a Component
 /// Returns None if valid, Some(error) if invalid
-pub fn validate_component(component : @core.Component) -> ComponentValidationError? {
+pub fn validate_component(
+  component : @core.Component,
+) -> ComponentValidationError? {
   // First check: effective type size limit
   let total_size = calculate_effective_type_size(component)
   if total_size > TypeSizeLimitValue {
     return Some(TypeSizeExceedsLimit)
   }
-
   let ctx = ComponentValidationContext::new()
   let _ = validate_sections_with_size(ctx, component.sections)
   if ctx.is_valid() {
@@ -33,7 +36,7 @@ fn calculate_effective_type_size(component : @core.Component) -> UInt64 {
 fn calculate_effective_type_size_with_context(
   component : @core.Component,
   parent_component_sizes : Array[UInt64],
-  type_sizes : Array[UInt64]
+  type_sizes : Array[UInt64],
 ) -> UInt64 {
   // Track component sizes at this level
   let sibling_sizes : Array[UInt64] = []
@@ -43,9 +46,7 @@ fn calculate_effective_type_size_with_context(
     match section {
       @core.ComponentSection::Component(nested) => {
         let nested_size = calculate_effective_type_size_with_context(
-          nested,
-          sibling_sizes,
-          type_sizes
+          nested, sibling_sizes, type_sizes,
         )
         sibling_sizes.push(nested_size)
       }
@@ -55,29 +56,28 @@ fn calculate_effective_type_size_with_context(
 
   // Build local component index mapping
   let local_component_sizes : Array[UInt64] = []
-
   for section in component.sections {
     match section {
-      @core.ComponentSection::Alias(alias_section) => {
+      @core.ComponentSection::Alias(alias_section) =>
         match alias_section.target {
           @core.AliasTarget::Outer(count, idx) =>
             match alias_section.kind {
-              @core.AliasKind::Component => {
-                if count == 1U && idx < parent_component_sizes.length().reinterpret_as_uint() {
-                  local_component_sizes.push(parent_component_sizes[idx.reinterpret_as_int()])
+              @core.AliasKind::Component =>
+                if count == 1U &&
+                  idx < parent_component_sizes.length().reinterpret_as_uint() {
+                  local_component_sizes.push(
+                    parent_component_sizes[idx.reinterpret_as_int()],
+                  )
                 } else {
                   local_component_sizes.push(1UL)
                 }
-              }
               _ => ()
             }
           _ => ()
         }
-      }
       _ => ()
     }
   }
-
   for size in sibling_sizes {
     local_component_sizes.push(size)
   }
@@ -108,16 +108,19 @@ fn calculate_effective_type_size_with_context(
       @core.ComponentSection::Instance(instance) => {
         has_content = true
         let inst_size = match instance {
-          @core.ComponentInstance::Instantiate(comp_idx, _) => {
+          @core.ComponentInstance::Instantiate(comp_idx, _) =>
             if comp_idx < local_component_sizes.length().reinterpret_as_uint() {
               local_component_sizes[comp_idx.reinterpret_as_int()]
             } else {
               1UL
             }
-          }
           @core.ComponentInstance::FromExports(exports) => {
             let len = exports.length().to_uint64()
-            if len > 0UL { len } else { 1UL }
+            if len > 0UL {
+              len
+            } else {
+              1UL
+            }
           }
         }
         total_size = total_size + inst_size
@@ -137,13 +140,19 @@ fn calculate_effective_type_size_with_context(
       return total_size
     }
   }
-
-  if has_content { total_size } else { 1UL }
+  if has_content {
+    total_size
+  } else {
+    1UL
+  }
 }
 
 ///|
 /// Calculate size of a type definition
-fn calculate_type_def_size(type_def : @core.ComponentTypeDef, type_sizes : Array[UInt64]) -> UInt64 {
+fn calculate_type_def_size(
+  type_def : @core.ComponentTypeDef,
+  type_sizes : Array[UInt64],
+) -> UInt64 {
   match type_def {
     @core.ComponentTypeDef::Defined(val_type) =>
       calculate_val_type_size(val_type, type_sizes)
@@ -165,7 +174,10 @@ fn calculate_type_def_size(type_def : @core.ComponentTypeDef, type_sizes : Array
 
 ///|
 /// Calculate size of a component value type
-fn calculate_val_type_size(val_type : @core.ComponentValType, type_sizes : Array[UInt64]) -> UInt64 {
+fn calculate_val_type_size(
+  val_type : @core.ComponentValType,
+  type_sizes : Array[UInt64],
+) -> UInt64 {
   match val_type {
     // Primitive types: size = 1
     @core.ComponentValType::Primitive(_) => 1UL
@@ -173,20 +185,18 @@ fn calculate_val_type_size(val_type : @core.ComponentValType, type_sizes : Array
     @core.ComponentValType::Borrow(_) => 1UL
 
     // Type index reference: look up computed size
-    @core.ComponentValType::TypeIndex(idx) => {
+    @core.ComponentValType::TypeIndex(idx) =>
       if idx < type_sizes.length().reinterpret_as_uint() {
         type_sizes[idx.reinterpret_as_int()]
       } else {
         1UL
       }
-    }
 
     // Composite types
     @core.ComponentValType::List(elem_type) =>
       1UL + calculate_val_type_size(elem_type, type_sizes)
     @core.ComponentValType::Option(inner_type) =>
       1UL + calculate_val_type_size(inner_type, type_sizes)
-
     @core.ComponentValType::Result(ok_type, err_type) => {
       let mut size : UInt64 = 1UL
       match ok_type {
@@ -199,23 +209,28 @@ fn calculate_val_type_size(val_type : @core.ComponentValType, type_sizes : Array
       }
       size
     }
-
     @core.ComponentValType::Tuple(elems) => {
       let mut size : UInt64 = 0UL
       for elem in elems {
         size = size + calculate_val_type_size(elem, type_sizes)
       }
-      if size == 0UL { 1UL } else { size }
+      if size == 0UL {
+        1UL
+      } else {
+        size
+      }
     }
-
     @core.ComponentValType::Record(fields) => {
       let mut size : UInt64 = 0UL
       for field in fields {
         size = size + calculate_val_type_size(field.type_, type_sizes)
       }
-      if size == 0UL { 1UL } else { size }
+      if size == 0UL {
+        1UL
+      } else {
+        size
+      }
     }
-
     @core.ComponentValType::Variant(cases) => {
       let mut size : UInt64 = 0UL
       for case in cases {
@@ -224,9 +239,12 @@ fn calculate_val_type_size(val_type : @core.ComponentValType, type_sizes : Array
           None => size = size + 1UL
         }
       }
-      if size == 0UL { 1UL } else { size }
+      if size == 0UL {
+        1UL
+      } else {
+        size
+      }
     }
-
     @core.ComponentValType::Flags(_) => 1UL
     @core.ComponentValType::Enum(_) => 1UL
 
@@ -245,13 +263,20 @@ fn calculate_val_type_size(val_type : @core.ComponentValType, type_sizes : Array
 
 ///|
 /// Validate a Component with parent's component sizes for outer alias resolution
-fn validate_component_with_parent_sizes(component : @core.Component, parent_sizes : Array[UInt64]) -> (ComponentValidationError?, UInt64) {
+fn validate_component_with_parent_sizes(
+  component : @core.Component,
+  parent_sizes : Array[UInt64],
+) -> (ComponentValidationError?, UInt64) {
   let ctx = ComponentValidationContext::new()
   // Copy parent sizes for outer alias resolution
   for size in parent_sizes {
     ctx.component_sizes.push(size)
   }
-  let size = validate_sections_with_size_and_parent(ctx, component.sections, parent_sizes)
+  let size = validate_sections_with_size_and_parent(
+    ctx,
+    component.sections,
+    parent_sizes,
+  )
   if ctx.is_valid() {
     (None, size)
   } else {
@@ -262,13 +287,20 @@ fn validate_component_with_parent_sizes(component : @core.Component, parent_size
 ///|
 /// Validate all sections in a component and return effective size
 /// Size is based on the structural size of exported items
-fn validate_sections_with_size(ctx : ComponentValidationContext, sections : Array[@core.ComponentSection]) -> UInt64 {
+fn validate_sections_with_size(
+  ctx : ComponentValidationContext,
+  sections : Array[@core.ComponentSection],
+) -> UInt64 {
   validate_sections_with_size_and_parent(ctx, sections, [])
 }
 
 ///|
 /// Validate all sections with parent component sizes for outer alias resolution
-fn validate_sections_with_size_and_parent(ctx : ComponentValidationContext, sections : Array[@core.ComponentSection], parent_sizes : Array[UInt64]) -> UInt64 {
+fn validate_sections_with_size_and_parent(
+  ctx : ComponentValidationContext,
+  sections : Array[@core.ComponentSection],
+  parent_sizes : Array[UInt64],
+) -> UInt64 {
   let mut export_size : UInt64 = 1UL // Base size of 1 for the component itself
 
   // Track locally defined component count (for proper indexing)
@@ -279,7 +311,10 @@ fn validate_sections_with_size_and_parent(ctx : ComponentValidationContext, sect
     match section {
       @core.ComponentSection::Component(nested) => {
         // Pass current accumulated component_sizes to nested validation
-        let (err, component_export_size) = validate_component_with_parent_sizes(nested, ctx.component_sizes)
+        let (err, component_export_size) = validate_component_with_parent_sizes(
+          nested,
+          ctx.component_sizes,
+        )
         match err {
           Some(e) => ctx.add_error(e)
           None => ()
@@ -306,7 +341,7 @@ fn validate_sections_with_size_and_parent(ctx : ComponentValidationContext, sect
         validate_alias(ctx, alias_def)
         // If this is an outer alias for a component, add its size
         match (alias_def.kind, alias_def.target) {
-          (@core.AliasKind::Component, @core.AliasTarget::Outer(count, idx)) => {
+          (@core.AliasKind::Component, @core.AliasTarget::Outer(count, idx)) =>
             // Outer alias to a component
             // The referenced component is at parent_sizes[idx] if count == 1
             if count == 1U && idx < parent_sizes.length().reinterpret_as_uint() {
@@ -315,7 +350,6 @@ fn validate_sections_with_size_and_parent(ctx : ComponentValidationContext, sect
             } else {
               ctx.component_sizes.push(1UL) // Fallback
             }
-          }
           _ => ()
         }
       }
@@ -355,6 +389,7 @@ fn validate_sections_with_size_and_parent(ctx : ComponentValidationContext, sect
       }
       _ => {
         let _ = validate_section_with_size(ctx, section)
+
       }
     }
   }
@@ -364,31 +399,35 @@ fn validate_sections_with_size_and_parent(ctx : ComponentValidationContext, sect
 
 ///|
 /// Get the effective size of an export
-fn get_export_size(ctx : ComponentValidationContext, export_def : @core.ComponentExport) -> UInt64 {
+fn get_export_size(
+  ctx : ComponentValidationContext,
+  export_def : @core.ComponentExport,
+) -> UInt64 {
   match export_def.kind {
-    @core.ComponentExportKind::Instance(idx) => {
+    @core.ComponentExportKind::Instance(idx) =>
       // Instance export: size = the instance's size
       if idx < ctx.instance_sizes.length().reinterpret_as_uint() {
         ctx.instance_sizes[idx.reinterpret_as_int()]
       } else {
         1UL
       }
-    }
-    @core.ComponentExportKind::Component(idx) => {
+    @core.ComponentExportKind::Component(idx) =>
       // Component export: size = the component's size
       if idx < ctx.component_sizes.length().reinterpret_as_uint() {
         ctx.component_sizes[idx.reinterpret_as_int()]
       } else {
         1UL
       }
-    }
     _ => 1UL // Other exports have base size of 1
   }
 }
 
 ///|
 /// Validate a single section and return its effective size
-fn validate_section_with_size(ctx : ComponentValidationContext, section : @core.ComponentSection) -> UInt64 {
+fn validate_section_with_size(
+  ctx : ComponentValidationContext,
+  section : @core.ComponentSection,
+) -> UInt64 {
   match section {
     @core.ComponentSection::CoreModule(core_module) => {
       ctx.core_modules.push(ctx.core_modules.length().reinterpret_as_uint())
@@ -411,11 +450,10 @@ fn validate_section_with_size(ctx : ComponentValidationContext, section : @core.
       ctx.core_types.push(core_type)
       1UL // Core types have base size of 1
     }
-    @core.ComponentSection::Component(_) => {
+    @core.ComponentSection::Component(_) =>
       // Component sections are processed in the first pass of validate_sections_with_size
       // Return 0 here as the size is already accounted for
       0UL
-    }
     @core.ComponentSection::Instance(instance) => {
       validate_instance(ctx, instance)
       let instance_exports_info = collect_instance_exports(ctx, instance)
@@ -446,7 +484,7 @@ fn validate_section_with_size(ctx : ComponentValidationContext, section : @core.
     @core.ComponentSection::Import(import_def) => {
       validate_import(ctx, import_def)
       match import_def.desc {
-        @core.ComponentExternDesc::Type(bounds) => {
+        @core.ComponentExternDesc::Type(bounds) =>
           match bounds {
             @core.TypeBounds::SubResource => {
               let type_idx = ctx.types.length().reinterpret_as_uint()
@@ -455,22 +493,24 @@ fn validate_section_with_size(ctx : ComponentValidationContext, section : @core.
                 is_local: false,
                 name: None,
               })
-              ctx.types.push(@core.ComponentTypeDef::Resource(@core.ResourceType::{
-                rep: @core.ValType::I32,
-                dtor: None,
-              }))
+              ctx.types.push(
+                @core.ComponentTypeDef::Resource(@core.ResourceType::{
+                  rep: @core.ValType::I32,
+                  dtor: None,
+                }),
+              )
               ctx.named_types.push(type_idx)
             }
-            @core.TypeBounds::Eq(ref_idx) => {
+            @core.TypeBounds::Eq(ref_idx) =>
               if ref_idx < ctx.types.length().reinterpret_as_uint() {
                 if not(check_type_exportable(ctx, ref_idx)) {
-                  ctx.add_error(TypeNotValidAsImport("type not valid to be used as import"))
+                  ctx.add_error(
+                    TypeNotValidAsImport("type not valid to be used as import"),
+                  )
                 }
                 ctx.named_types.push(ref_idx)
               }
-            }
           }
-        }
         _ => ()
       }
       1UL // Imports have base size of 1
@@ -485,25 +525,29 @@ fn validate_section_with_size(ctx : ComponentValidationContext, section : @core.
 
 ///|
 /// Get the effective size of an instance based on what it instantiates
-fn get_instance_size(ctx : ComponentValidationContext, instance : @core.ComponentInstance) -> UInt64 {
+fn get_instance_size(
+  ctx : ComponentValidationContext,
+  instance : @core.ComponentInstance,
+) -> UInt64 {
   match instance {
-    @core.ComponentInstance::Instantiate(component_idx, _args) => {
+    @core.ComponentInstance::Instantiate(component_idx, _args) =>
       // Get the size of the instantiated component
       if component_idx < ctx.component_sizes.length().reinterpret_as_uint() {
         ctx.component_sizes[component_idx.reinterpret_as_int()]
       } else {
         1UL // Fallback for out-of-bounds
       }
-    }
-    @core.ComponentInstance::FromExports(exports) => {
+    @core.ComponentInstance::FromExports(exports) =>
       // Size is the number of exports
       exports.length().reinterpret_as_uint().to_uint64()
-    }
   }
 }
 
 ///|
-fn validate_core_instance(ctx : ComponentValidationContext, instance : @core.CoreInstance) -> Unit {
+fn validate_core_instance(
+  ctx : ComponentValidationContext,
+  instance : @core.CoreInstance,
+) -> Unit {
   match instance {
     @core.CoreInstance::Instantiate(module_idx, args) => {
       if module_idx >= ctx.core_modules.length().reinterpret_as_uint() {
@@ -520,14 +564,19 @@ fn validate_core_instance(ctx : ComponentValidationContext, instance : @core.Cor
             let name_str = bytes_to_string(name)
             for prev in seen_names {
               if prev == name_str {
-                ctx.add_error(DuplicateName("duplicate module instantiation argument named `\{name_str}`"))
+                ctx.add_error(
+                  DuplicateName(
+                    "duplicate module instantiation argument named `\{name_str}`",
+                  ),
+                )
               }
             }
             seen_names.push(name_str)
 
             // Check that instance exports match module's expected imports
-            if module_idx < ctx.core_module_imports.length().reinterpret_as_uint() &&
-               idx < ctx.core_instance_exports.length().reinterpret_as_uint() {
+            if module_idx <
+              ctx.core_module_imports.length().reinterpret_as_uint() &&
+              idx < ctx.core_instance_exports.length().reinterpret_as_uint() {
               let module_imports = ctx.core_module_imports[module_idx.reinterpret_as_int()]
               let instance_exports = ctx.core_instance_exports[idx.reinterpret_as_int()]
               // Check each import from this module name
@@ -547,26 +596,45 @@ fn validate_core_instance(ctx : ComponentValidationContext, instance : @core.Cor
                   }
                   if found {
                     match found_kind {
-                      Some(exp_kind) => {
+                      Some(exp_kind) =>
                         if exp_kind != imp.kind {
                           let expected = core_export_kind_to_string(imp.kind)
                           let actual = core_export_kind_to_string(exp_kind)
-                          ctx.add_error(ExportTypeMismatch("expected \{expected}, found \{actual}"))
+                          ctx.add_error(
+                            ExportTypeMismatch(
+                              "expected \{expected}, found \{actual}",
+                            ),
+                          )
                         } else {
                           // Kind matches, now check memory64/table64 if applicable
                           match (exp_kind, imp.memory64, found_memory64) {
-                            (CoreExportKind::Memory, Some(imp_mem64), Some(exp_mem64)) =>
+                            (
+                              CoreExportKind::Memory,
+                              Some(imp_mem64),
+                              Some(exp_mem64),
+                            ) =>
                               if imp_mem64 != exp_mem64 {
-                                ctx.add_error(ExportTypeMismatch("mismatch in index type used for memories"))
+                                ctx.add_error(
+                                  ExportTypeMismatch(
+                                    "mismatch in index type used for memories",
+                                  ),
+                                )
                               }
-                            (CoreExportKind::Table, Some(imp_table64), Some(exp_table64)) =>
+                            (
+                              CoreExportKind::Table,
+                              Some(imp_table64),
+                              Some(exp_table64),
+                            ) =>
                               if imp_table64 != exp_table64 {
-                                ctx.add_error(ExportTypeMismatch("mismatch in index type used for tables"))
+                                ctx.add_error(
+                                  ExportTypeMismatch(
+                                    "mismatch in index type used for tables",
+                                  ),
+                                )
                               }
                             _ => ()
                           }
                         }
-                      }
                       None => ()
                     }
                   }
@@ -577,43 +645,40 @@ fn validate_core_instance(ctx : ComponentValidationContext, instance : @core.Cor
         }
       }
     }
-    @core.CoreInstance::FromExports(exports) => {
+    @core.CoreInstance::FromExports(exports) =>
       // Validate each export in the inline core instance
       for export_def in exports {
         match export_def.kind {
-          @core.CoreExportKind::Func(idx) => {
+          @core.CoreExportKind::Func(idx) =>
             if idx >= ctx.core_funcs.length().reinterpret_as_uint() {
               ctx.add_error(CoreFuncIndexOutOfBounds(idx))
             }
-          }
-          @core.CoreExportKind::Table(idx) => {
+          @core.CoreExportKind::Table(idx) =>
             if idx >= ctx.core_tables.length().reinterpret_as_uint() {
               ctx.add_error(CoreTableIndexOutOfBounds(idx))
             }
-          }
-          @core.CoreExportKind::Memory(idx) => {
+          @core.CoreExportKind::Memory(idx) =>
             if idx >= ctx.core_memories.length().reinterpret_as_uint() {
               ctx.add_error(CoreMemoryIndexOutOfBounds(idx))
             }
-          }
-          @core.CoreExportKind::Global(idx) => {
+          @core.CoreExportKind::Global(idx) =>
             if idx >= ctx.core_globals.length().reinterpret_as_uint() {
               ctx.add_error(CoreGlobalIndexOutOfBounds(idx))
             }
-          }
-          @core.CoreExportKind::Tag(idx) => {
+          @core.CoreExportKind::Tag(idx) =>
             if idx >= ctx.core_tags.length().reinterpret_as_uint() {
               ctx.add_error(CoreTagIndexOutOfBounds(idx))
             }
-          }
         }
       }
-    }
   }
 }
 
 ///|
-fn validate_core_module(ctx : ComponentValidationContext, core_module : @core.Module) -> Unit {
+fn validate_core_module(
+  ctx : ComponentValidationContext,
+  core_module : @core.Module,
+) -> Unit {
   // Check for duplicate import names (format: module:name)
   let import_names : Array[String] = []
   for import_item in core_module.imports {
@@ -641,17 +706,22 @@ fn validate_core_module(ctx : ComponentValidationContext, core_module : @core.Mo
 }
 
 ///|
-fn validate_core_type(ctx : ComponentValidationContext, core_type : @core.CoreType) -> Unit {
+fn validate_core_type(
+  ctx : ComponentValidationContext,
+  core_type : @core.CoreType,
+) -> Unit {
   match core_type {
-    @core.CoreType::Module(module_type) => {
+    @core.CoreType::Module(module_type) =>
       validate_module_type(ctx, module_type)
-    }
     @core.CoreType::Func(_) => ()
   }
 }
 
 ///|
-fn validate_module_type(ctx : ComponentValidationContext, module_type : @core.ModuleType) -> Unit {
+fn validate_module_type(
+  ctx : ComponentValidationContext,
+  module_type : @core.ModuleType,
+) -> Unit {
   // Track number of types defined within this module type
   let mut type_count : UInt = 0U
   // Track export names for duplicate detection
@@ -660,9 +730,7 @@ fn validate_module_type(ctx : ComponentValidationContext, module_type : @core.Mo
   let import_names : Array[String] = []
   for decl in module_type.decls {
     match decl {
-      @core.ModuleTypeDecl::Type(_) => {
-        type_count = type_count + 1U
-      }
+      @core.ModuleTypeDecl::Type(_) => type_count = type_count + 1U
       @core.ModuleTypeDecl::Import(import_item) => {
         // Check for duplicate import name (format: module:name)
         let mod_str = bytes_to_string(import_item.module_)
@@ -675,48 +743,51 @@ fn validate_module_type(ctx : ComponentValidationContext, module_type : @core.Mo
         }
         import_names.push(full_name)
         match import_item.desc {
-          @core.ImportDesc::Func(type_idx) => {
+          @core.ImportDesc::Func(type_idx) =>
             if type_idx >= type_count {
               ctx.add_error(TypeIndexOutOfBounds(type_idx))
             }
-          }
-          @core.ImportDesc::Tag(type_idx) => {
+          @core.ImportDesc::Tag(type_idx) =>
             if type_idx >= type_count {
               ctx.add_error(TypeIndexOutOfBounds(type_idx))
             }
-          }
           @core.ImportDesc::Table(_) => ()
           @core.ImportDesc::Mem(mem_type) => {
             // Memory size limit: 65536 pages for 32-bit (4GB)
             let max_pages : UInt64 = 65536UL
             if mem_type.limits.min > max_pages {
-              ctx.add_error(LimitsMismatch("memory size must be at most 65536 pages (4 GiB)"))
+              ctx.add_error(
+                LimitsMismatch(
+                  "memory size must be at most 65536 pages (4 GiB)",
+                ),
+              )
             }
             match mem_type.limits.max {
-              Some(max) => {
+              Some(max) =>
                 if max > max_pages {
-                  ctx.add_error(LimitsMismatch("memory size must be at most 65536 pages (4 GiB)"))
+                  ctx.add_error(
+                    LimitsMismatch(
+                      "memory size must be at most 65536 pages (4 GiB)",
+                    ),
+                  )
                 }
-              }
               None => ()
             }
           }
           @core.ImportDesc::Global(_) => ()
         }
       }
-      @core.ModuleTypeDecl::Alias(core_alias) => {
+      @core.ModuleTypeDecl::Alias(core_alias) =>
         // Validate core alias in module type context
         match core_alias.target {
-          @core.AliasTarget::Outer(count, idx) => {
+          @core.AliasTarget::Outer(count, idx) =>
             // Outer alias count must not exceed nesting depth
             if count > ctx.nesting_depth {
               ctx.add_error(TypeIndexOutOfBounds(idx))
             }
-          }
           @core.AliasTarget::Export(_instance_idx, _name)
           | @core.AliasTarget::CoreExport(_instance_idx, _name) => ()
         }
-      }
       @core.ModuleTypeDecl::Export(name, desc) => {
         let name_str = bytes_to_string(name)
         // Check for duplicate export name
@@ -728,16 +799,14 @@ fn validate_module_type(ctx : ComponentValidationContext, module_type : @core.Mo
         export_names.push(name_str)
         // Check type reference in export desc
         match desc {
-          @core.ImportDesc::Func(type_idx) => {
+          @core.ImportDesc::Func(type_idx) =>
             if type_idx >= type_count {
               ctx.add_error(TypeIndexOutOfBounds(type_idx))
             }
-          }
-          @core.ImportDesc::Tag(type_idx) => {
+          @core.ImportDesc::Tag(type_idx) =>
             if type_idx >= type_count {
               ctx.add_error(TypeIndexOutOfBounds(type_idx))
             }
-          }
           @core.ImportDesc::Table(_)
           | @core.ImportDesc::Mem(_)
           | @core.ImportDesc::Global(_) => ()
@@ -748,14 +817,18 @@ fn validate_module_type(ctx : ComponentValidationContext, module_type : @core.Mo
 }
 
 ///|
-fn validate_instance(ctx : ComponentValidationContext, instance : @core.ComponentInstance) -> Unit {
+fn validate_instance(
+  ctx : ComponentValidationContext,
+  instance : @core.ComponentInstance,
+) -> Unit {
   match instance {
     @core.ComponentInstance::Instantiate(component_idx, args) => {
       if component_idx >= ctx.components.length().reinterpret_as_uint() {
         ctx.add_error(ComponentIndexOutOfBounds(component_idx))
       }
       // Get the component being instantiated for type checking
-      let target_component : @core.Component? = if component_idx < ctx.nested_components.length().reinterpret_as_uint() {
+      let target_component : @core.Component? = if component_idx <
+        ctx.nested_components.length().reinterpret_as_uint() {
         Some(ctx.nested_components[component_idx.reinterpret_as_int()])
       } else {
         None
@@ -781,98 +854,95 @@ fn validate_instance(ctx : ComponentValidationContext, instance : @core.Componen
         let name_str = bytes_to_string(name)
         for prev in seen_names {
           if prev == name_str {
-            ctx.add_error(DuplicateName("instantiation argument `\{name_str}` conflicts with previous argument `\{name_str}`"))
+            ctx.add_error(
+              DuplicateName(
+                "instantiation argument `\{name_str}` conflicts with previous argument `\{name_str}`",
+              ),
+            )
           }
         }
         seen_names.push(name_str)
         // Check if the argument kind matches what the component expects
         match target_component {
-          Some(comp) => {
+          Some(comp) =>
             match get_component_import_kind(comp, name) {
-              Some(expected) => {
+              Some(expected) =>
                 if not(check_arg_matches_import(arg, expected)) {
                   let expected_kind = get_extern_desc_kind_name(expected)
                   let actual_kind = get_arg_kind_name(arg)
-                  ctx.add_error(TypeMismatch("expected \{expected_kind}, found \{actual_kind}"))
+                  ctx.add_error(
+                    TypeMismatch(
+                      "expected \{expected_kind}, found \{actual_kind}",
+                    ),
+                  )
                 } else {
                   // For Type arguments, also check type bounds (resource vs defined)
                   match (arg, expected) {
-                    (@core.InstantiateArg::Type(_, type_idx), @core.ComponentExternDesc::Type(bounds)) => {
-                      match check_type_arg_matches(ctx, type_idx, bounds, comp) {
+                    (
+                      @core.InstantiateArg::Type(_, type_idx),
+                      @core.ComponentExternDesc::Type(bounds),
+                    ) =>
+                      match
+                        check_type_arg_matches(ctx, type_idx, bounds, comp) {
                         Some(err_msg) => ctx.add_error(TypeMismatch(err_msg))
                         None => ()
                       }
-                    }
                     _ => ()
                   }
                 }
-              }
               None => ()
             }
-          }
           None => ()
         }
         match arg {
-          @core.InstantiateArg::CoreFunc(_name, idx) => {
+          @core.InstantiateArg::CoreFunc(_name, idx) =>
             if idx >= ctx.core_funcs.length().reinterpret_as_uint() {
               ctx.add_error(CoreFuncIndexOutOfBounds(idx))
             }
-          }
-          @core.InstantiateArg::CoreTable(_name, idx) => {
+          @core.InstantiateArg::CoreTable(_name, idx) =>
             if idx >= ctx.core_tables.length().reinterpret_as_uint() {
               ctx.add_error(CoreTableIndexOutOfBounds(idx))
             }
-          }
-          @core.InstantiateArg::CoreMemory(_name, idx) => {
+          @core.InstantiateArg::CoreMemory(_name, idx) =>
             if idx >= ctx.core_memories.length().reinterpret_as_uint() {
               ctx.add_error(CoreMemoryIndexOutOfBounds(idx))
             }
-          }
-          @core.InstantiateArg::CoreGlobal(_name, idx) => {
+          @core.InstantiateArg::CoreGlobal(_name, idx) =>
             if idx >= ctx.core_globals.length().reinterpret_as_uint() {
               ctx.add_error(CoreGlobalIndexOutOfBounds(idx))
             }
-          }
-          @core.InstantiateArg::CoreType(_name, idx) => {
+          @core.InstantiateArg::CoreType(_name, idx) =>
             if idx >= ctx.core_types.length().reinterpret_as_uint() {
               ctx.add_error(CoreTypeIndexOutOfBounds(idx))
             }
-          }
-          @core.InstantiateArg::CoreModule(_name, idx) => {
+          @core.InstantiateArg::CoreModule(_name, idx) =>
             if idx >= ctx.core_modules.length().reinterpret_as_uint() {
               ctx.add_error(ModuleIndexOutOfBounds(idx))
             }
-          }
-          @core.InstantiateArg::CoreInstance(_name, idx) => {
+          @core.InstantiateArg::CoreInstance(_name, idx) =>
             if idx >= ctx.core_instances.length().reinterpret_as_uint() {
               ctx.add_error(CoreInstanceIndexOutOfBounds(idx))
             }
-          }
-          @core.InstantiateArg::Func(_name, idx) => {
+          @core.InstantiateArg::Func(_name, idx) =>
             if idx >= ctx.funcs.length().reinterpret_as_uint() {
               ctx.add_error(FuncIndexOutOfBounds(idx))
             }
-          }
-          @core.InstantiateArg::Value(_name, idx) => {
+          @core.InstantiateArg::Value(_name, idx) =>
             if idx >= ctx.values.length().reinterpret_as_uint() {
               ctx.add_error(ValueIndexOutOfBounds(idx))
             }
-          }
-          @core.InstantiateArg::Type(_name, idx) => {
+          @core.InstantiateArg::Type(_name, idx) =>
             if idx >= ctx.types.length().reinterpret_as_uint() {
               ctx.add_error(TypeIndexOutOfBounds(idx))
             }
-          }
-          @core.InstantiateArg::Component(_name, idx) => {
+          @core.InstantiateArg::Component(_name, idx) =>
             if idx >= ctx.components.length().reinterpret_as_uint() {
               ctx.add_error(ComponentIndexOutOfBounds(idx))
             }
-          }
-          @core.InstantiateArg::Instance(_name, idx) => {
+          @core.InstantiateArg::Instance(_name, idx) =>
             if idx >= ctx.instances.length().reinterpret_as_uint() {
               ctx.add_error(InstanceIndexOutOfBounds(idx))
             }
-          }
         }
       }
       // Check that all component imports are satisfied
@@ -889,7 +959,9 @@ fn validate_instance(ctx : ComponentValidationContext, instance : @core.Componen
               }
             }
             if not(found) {
-              ctx.add_error(MissingImport("missing import named `\{import_name_str}`"))
+              ctx.add_error(
+                MissingImport("missing import named `\{import_name_str}`"),
+              )
             }
           }
         }
@@ -907,50 +979,48 @@ fn validate_instance(ctx : ComponentValidationContext, instance : @core.Componen
           // Check for duplicate export names
           for prev in export_names {
             if prev == name_str {
-              ctx.add_error(DuplicateName("export name `\{name_str}` conflicts with previous name `\{name_str}`"))
+              ctx.add_error(
+                DuplicateName(
+                  "export name `\{name_str}` conflicts with previous name `\{name_str}`",
+                ),
+              )
             }
           }
           export_names.push(name_str)
           // Check for kebab-case (for plain names)
           if not(name_str.has_prefix("https://")) &&
-             not(name_str.has_prefix("http://")) &&
-             not(name_str.contains(":")) &&
-             not(is_kebab_case(name_str)) {
+            not(name_str.has_prefix("http://")) &&
+            not(name_str.contains(":")) &&
+            not(is_kebab_case(name_str)) {
             ctx.add_error(NotKebabCase("`\{name_str}` is not in kebab case"))
           }
         }
         // Validate export index
         match export_def.kind {
-          @core.ComponentExportKind::Module(idx) => {
+          @core.ComponentExportKind::Module(idx) =>
             if idx >= ctx.core_modules.length().reinterpret_as_uint() {
               ctx.add_error(ModuleIndexOutOfBounds(idx))
             }
-          }
-          @core.ComponentExportKind::Func(idx) => {
+          @core.ComponentExportKind::Func(idx) =>
             if idx >= ctx.funcs.length().reinterpret_as_uint() {
               ctx.add_error(FuncIndexOutOfBounds(idx))
             }
-          }
-          @core.ComponentExportKind::Value(idx) => {
+          @core.ComponentExportKind::Value(idx) =>
             if idx >= ctx.values.length().reinterpret_as_uint() {
               ctx.add_error(ValueIndexOutOfBounds(idx))
             }
-          }
-          @core.ComponentExportKind::Type(idx) => {
+          @core.ComponentExportKind::Type(idx) =>
             if idx >= ctx.types.length().reinterpret_as_uint() {
               ctx.add_error(TypeIndexOutOfBounds(idx))
             }
-          }
-          @core.ComponentExportKind::Instance(idx) => {
+          @core.ComponentExportKind::Instance(idx) =>
             if idx >= ctx.instances.length().reinterpret_as_uint() {
               ctx.add_error(InstanceIndexOutOfBounds(idx))
             }
-          }
-          @core.ComponentExportKind::Component(idx) => {
+          @core.ComponentExportKind::Component(idx) =>
             if idx >= ctx.components.length().reinterpret_as_uint() {
               ctx.add_error(ComponentIndexOutOfBounds(idx))
             }
-          }
         }
       }
     }
@@ -958,9 +1028,12 @@ fn validate_instance(ctx : ComponentValidationContext, instance : @core.Componen
 }
 
 ///|
-fn validate_alias(ctx : ComponentValidationContext, alias_def : @core.Alias) -> Unit {
+fn validate_alias(
+  ctx : ComponentValidationContext,
+  alias_def : @core.Alias,
+) -> Unit {
   match alias_def.target {
-    @core.AliasTarget::Export(instance_idx, name) => {
+    @core.AliasTarget::Export(instance_idx, name) =>
       match alias_def.kind {
         @core.AliasKind::CoreModule
         | @core.AliasKind::CoreType
@@ -968,29 +1041,30 @@ fn validate_alias(ctx : ComponentValidationContext, alias_def : @core.Alias) -> 
         | @core.AliasKind::CoreFunc
         | @core.AliasKind::CoreMemory
         | @core.AliasKind::CoreGlobal
-        | @core.AliasKind::CoreTag => {
+        | @core.AliasKind::CoreTag =>
           if instance_idx >= ctx.core_instances.length().reinterpret_as_uint() {
             ctx.add_error(CoreInstanceIndexOutOfBounds(instance_idx))
           }
-        }
         @core.AliasKind::Type
         | @core.AliasKind::Component
         | @core.AliasKind::Instance
         | @core.AliasKind::Func
-        | @core.AliasKind::Value => {
+        | @core.AliasKind::Value =>
           if instance_idx >= ctx.instances.length().reinterpret_as_uint() {
             ctx.add_error(InstanceIndexOutOfBounds(instance_idx))
           } else {
             // Check that the export exists
             let name_str = bytes_to_string(name)
             if not(has_instance_export(ctx, instance_idx, name_str)) {
-              ctx.add_error(MissingExport("instance \{instance_idx} has no export named `\{name_str}`"))
+              ctx.add_error(
+                MissingExport(
+                  "instance \{instance_idx} has no export named `\{name_str}`",
+                ),
+              )
             }
           }
-        }
       }
-    }
-    @core.AliasTarget::CoreExport(instance_idx, name) => {
+    @core.AliasTarget::CoreExport(instance_idx, name) =>
       if instance_idx >= ctx.core_instances.length().reinterpret_as_uint() {
         ctx.add_error(CoreInstanceIndexOutOfBounds(instance_idx))
       } else {
@@ -1005,25 +1079,29 @@ fn validate_alias(ctx : ComponentValidationContext, alias_def : @core.Alias) -> 
           _ => None
         }
         match expected_kind {
-          Some(expected) => {
+          Some(expected) =>
             match get_core_instance_export_kind(ctx, instance_idx, name_str) {
-              Some(actual) => {
+              Some(actual) =>
                 if actual != expected {
                   let actual_str = core_export_kind_to_string(actual)
                   let expected_str = core_export_kind_to_string(expected)
-                  ctx.add_error(ExportTypeMismatch("export `\{name_str}` for core instance \{instance_idx} is \{actual_str}, expected \{expected_str}"))
+                  ctx.add_error(
+                    ExportTypeMismatch(
+                      "export `\{name_str}` for core instance \{instance_idx} is \{actual_str}, expected \{expected_str}",
+                    ),
+                  )
                 }
-              }
-              None => {
-                ctx.add_error(MissingExport("core instance \{instance_idx} has no export named `\{name_str}`"))
-              }
+              None =>
+                ctx.add_error(
+                  MissingExport(
+                    "core instance \{instance_idx} has no export named `\{name_str}`",
+                  ),
+                )
             }
-          }
           None => ()
         }
       }
-    }
-    @core.AliasTarget::Outer(count, idx) => {
+    @core.AliasTarget::Outer(count, idx) =>
       // Outer alias count must not exceed nesting depth
       if count > ctx.nesting_depth {
         // Trying to access an outer component that doesn't exist
@@ -1032,73 +1110,65 @@ fn validate_alias(ctx : ComponentValidationContext, alias_def : @core.Alias) -> 
       } else if count == 0U {
         // Count 0 means current component - check index bounds
         match alias_def.kind {
-          @core.AliasKind::CoreType => {
+          @core.AliasKind::CoreType =>
             if idx >= ctx.core_types.length().reinterpret_as_uint() {
               ctx.add_error(CoreTypeIndexOutOfBounds(idx))
             }
-          }
-          @core.AliasKind::CoreModule => {
+          @core.AliasKind::CoreModule =>
             if idx >= ctx.core_modules.length().reinterpret_as_uint() {
               ctx.add_error(ModuleIndexOutOfBounds(idx))
             }
-          }
-          @core.AliasKind::Type => {
+          @core.AliasKind::Type =>
             if idx >= ctx.types.length().reinterpret_as_uint() {
               ctx.add_error(TypeIndexOutOfBounds(idx))
             }
-          }
-          @core.AliasKind::Component => {
+          @core.AliasKind::Component =>
             if idx >= ctx.components.length().reinterpret_as_uint() {
               ctx.add_error(ComponentIndexOutOfBounds(idx))
             }
-          }
-          @core.AliasKind::Instance => {
+          @core.AliasKind::Instance =>
             if idx >= ctx.instances.length().reinterpret_as_uint() {
               ctx.add_error(InstanceIndexOutOfBounds(idx))
             }
-          }
-          @core.AliasKind::Func => {
+          @core.AliasKind::Func =>
             if idx >= ctx.funcs.length().reinterpret_as_uint() {
               ctx.add_error(FuncIndexOutOfBounds(idx))
             }
-          }
-          @core.AliasKind::Value => {
+          @core.AliasKind::Value =>
             if idx >= ctx.values.length().reinterpret_as_uint() {
               ctx.add_error(ValueIndexOutOfBounds(idx))
             }
-          }
-          @core.AliasKind::CoreFunc => {
+          @core.AliasKind::CoreFunc =>
             if idx >= ctx.core_funcs.length().reinterpret_as_uint() {
               ctx.add_error(CoreFuncIndexOutOfBounds(idx))
             }
-          }
-          @core.AliasKind::CoreTable => {
+          @core.AliasKind::CoreTable =>
             if idx >= ctx.core_tables.length().reinterpret_as_uint() {
               ctx.add_error(CoreTableIndexOutOfBounds(idx))
             }
-          }
-          @core.AliasKind::CoreMemory => {
+          @core.AliasKind::CoreMemory =>
             if idx >= ctx.core_memories.length().reinterpret_as_uint() {
               ctx.add_error(CoreMemoryIndexOutOfBounds(idx))
             }
-          }
-          @core.AliasKind::CoreGlobal => {
+          @core.AliasKind::CoreGlobal =>
             if idx >= ctx.core_globals.length().reinterpret_as_uint() {
               ctx.add_error(CoreGlobalIndexOutOfBounds(idx))
             }
-          }
           @core.AliasKind::CoreTag => ()
         }
       }
-    }
   }
 }
 
 ///|
-fn validate_type_def(ctx : ComponentValidationContext, type_def : @core.ComponentTypeDef) -> Unit {
+fn validate_type_def(
+  ctx : ComponentValidationContext,
+  type_def : @core.ComponentTypeDef,
+) -> Unit {
   match type_def {
     @core.ComponentTypeDef::Defined(valtype) => validate_valtype(ctx, valtype)
-    @core.ComponentTypeDef::Func(func_type) => validate_func_type(ctx, func_type)
+    @core.ComponentTypeDef::Func(func_type) =>
+      validate_func_type(ctx, func_type)
     @core.ComponentTypeDef::Component(component_type) =>
       validate_component_type(ctx, component_type)
     @core.ComponentTypeDef::Instance(instance_type) =>
@@ -1107,16 +1177,18 @@ fn validate_type_def(ctx : ComponentValidationContext, type_def : @core.Componen
       // Validate representation type (must be i32)
       match resource.rep {
         @core.ValType::I32 => ()
-        _ => ctx.add_error(InvalidRepresentation("resources can only be represented by `i32`"))
+        _ =>
+          ctx.add_error(
+            InvalidRepresentation("resources can only be represented by `i32`"),
+          )
       }
       // Validate destructor if present
       match resource.dtor {
-        Some(dtor_idx) => {
+        Some(dtor_idx) =>
           if dtor_idx >= ctx.core_funcs.length().reinterpret_as_uint() {
             ctx.add_error(CoreFuncIndexOutOfBounds(dtor_idx))
           }
-          // TODO: Validate destructor signature (param i32, no results)
-        }
+        // TODO: Validate destructor signature (param i32, no results)
         None => ()
       }
       ctx.resources.push(ResourceInfo::{
@@ -1129,10 +1201,13 @@ fn validate_type_def(ctx : ComponentValidationContext, type_def : @core.Componen
 }
 
 ///|
-fn validate_valtype(ctx : ComponentValidationContext, vt : @core.ComponentValType) -> Unit {
+fn validate_valtype(
+  ctx : ComponentValidationContext,
+  vt : @core.ComponentValType,
+) -> Unit {
   match vt {
     @core.ComponentValType::Primitive(_) => ()
-    @core.ComponentValType::TypeIndex(type_idx) => {
+    @core.ComponentValType::TypeIndex(type_idx) =>
       if type_idx >= ctx.types.length().reinterpret_as_uint() {
         ctx.add_error(TypeIndexOutOfBounds(type_idx))
       } else {
@@ -1143,7 +1218,6 @@ fn validate_valtype(ctx : ComponentValidationContext, vt : @core.ComponentValTyp
           _ => ctx.add_error(NotADefinedType(type_idx))
         }
       }
-    }
     @core.ComponentValType::List(inner) => validate_valtype(ctx, inner)
     @core.ComponentValType::Record(fields) => {
       // Record must have at least one field
@@ -1158,7 +1232,11 @@ fn validate_valtype(ctx : ComponentValidationContext, vt : @core.ComponentValTyp
         let name_lower = to_lowercase(name_str)
         for prev in seen_names {
           if to_lowercase(prev) == name_lower {
-            ctx.add_error(TypeMismatch("record field name `\{name_str}` conflicts with previous field name `\{prev}`"))
+            ctx.add_error(
+              TypeMismatch(
+                "record field name `\{name_str}` conflicts with previous field name `\{prev}`",
+              ),
+            )
           }
         }
         seen_names.push(name_str)
@@ -1166,7 +1244,9 @@ fn validate_valtype(ctx : ComponentValidationContext, vt : @core.ComponentValTyp
         if name_str.is_empty() {
           ctx.add_error(NameCannotBeEmpty)
         } else if not(is_kebab_case(name_str)) {
-          ctx.add_error(NotKebabCase("record field name `\{name_str}` is not in kebab case"))
+          ctx.add_error(
+            NotKebabCase("record field name `\{name_str}` is not in kebab case"),
+          )
         }
       }
     }
@@ -1184,11 +1264,14 @@ fn validate_valtype(ctx : ComponentValidationContext, vt : @core.ComponentValTyp
         }
         // Check refines refers to a previously defined case
         match case_.refines {
-          Some(refines_idx) => {
+          Some(refines_idx) =>
             if refines_idx >= case_idx {
-              ctx.add_error(TypeMismatch("variant case can only refine a previously defined case"))
+              ctx.add_error(
+                TypeMismatch(
+                  "variant case can only refine a previously defined case",
+                ),
+              )
             }
-          }
           None => ()
         }
         let name_str = bytes_to_string(case_.name)
@@ -1196,7 +1279,11 @@ fn validate_valtype(ctx : ComponentValidationContext, vt : @core.ComponentValTyp
         let name_lower = to_lowercase(name_str)
         for prev in seen_names {
           if to_lowercase(prev) == name_lower {
-            ctx.add_error(TypeMismatch("variant case name `\{name_str}` conflicts with previous case name `\{prev}`"))
+            ctx.add_error(
+              TypeMismatch(
+                "variant case name `\{name_str}` conflicts with previous case name `\{prev}`",
+              ),
+            )
           }
         }
         seen_names.push(name_str)
@@ -1204,7 +1291,9 @@ fn validate_valtype(ctx : ComponentValidationContext, vt : @core.ComponentValTyp
         if name_str.is_empty() {
           ctx.add_error(NameCannotBeEmpty)
         } else if not(is_kebab_case(name_str)) {
-          ctx.add_error(NotKebabCase("variant case name `\{name_str}` is not in kebab case"))
+          ctx.add_error(
+            NotKebabCase("variant case name `\{name_str}` is not in kebab case"),
+          )
         }
         case_idx = case_idx + 1U
       }
@@ -1238,7 +1327,11 @@ fn validate_valtype(ctx : ComponentValidationContext, vt : @core.ComponentValTyp
           let name_lower = to_lowercase(name_str)
           for prev in seen_names {
             if to_lowercase(prev) == name_lower {
-              ctx.add_error(TypeMismatch("flag name `\{name_str}` conflicts with previous flag name `\{prev}`"))
+              ctx.add_error(
+                TypeMismatch(
+                  "flag name `\{name_str}` conflicts with previous flag name `\{prev}`",
+                ),
+              )
             }
           }
           seen_names.push(name_str)
@@ -1261,13 +1354,19 @@ fn validate_valtype(ctx : ComponentValidationContext, vt : @core.ComponentValTyp
           let name_lower = to_lowercase(name_str)
           for prev in seen_names {
             if to_lowercase(prev) == name_lower {
-              ctx.add_error(TypeMismatch("enum case name `\{name_str}` conflicts with previous case name `\{prev}`"))
+              ctx.add_error(
+                TypeMismatch(
+                  "enum case name `\{name_str}` conflicts with previous case name `\{prev}`",
+                ),
+              )
             }
           }
           seen_names.push(name_str)
           // Check case name is in kebab-case
           if not(is_kebab_case(name_str)) {
-            ctx.add_error(NotKebabCase("enum tag name `\{name_str}` is not in kebab case"))
+            ctx.add_error(
+              NotKebabCase("enum tag name `\{name_str}` is not in kebab case"),
+            )
           }
         }
       }
@@ -1283,7 +1382,7 @@ fn validate_valtype(ctx : ComponentValidationContext, vt : @core.ComponentValTyp
         None => ()
       }
     }
-    @core.ComponentValType::Own(type_idx) => {
+    @core.ComponentValType::Own(type_idx) =>
       if type_idx >= ctx.types.length().reinterpret_as_uint() {
         ctx.add_error(TypeIndexOutOfBounds(type_idx))
       } else {
@@ -1293,8 +1392,7 @@ fn validate_valtype(ctx : ComponentValidationContext, vt : @core.ComponentValTyp
           _ => ctx.add_error(NotAResourceType(type_idx))
         }
       }
-    }
-    @core.ComponentValType::Borrow(type_idx) => {
+    @core.ComponentValType::Borrow(type_idx) =>
       if type_idx >= ctx.types.length().reinterpret_as_uint() {
         ctx.add_error(TypeIndexOutOfBounds(type_idx))
       } else {
@@ -1304,26 +1402,27 @@ fn validate_valtype(ctx : ComponentValidationContext, vt : @core.ComponentValTyp
           _ => ctx.add_error(NotAResourceType(type_idx))
         }
       }
-    }
-    @core.ComponentValType::Future(vt_opt) => {
+    @core.ComponentValType::Future(vt_opt) =>
       match vt_opt {
         Some(inner) => validate_valtype(ctx, inner)
         None => ()
       }
-    }
-    @core.ComponentValType::Stream(vt_opt) => {
+    @core.ComponentValType::Stream(vt_opt) =>
       match vt_opt {
         Some(inner) => validate_valtype(ctx, inner)
         None => ()
       }
-    }
     @core.ComponentValType::ErrorContext => ()
-    @core.ComponentValType::FixedSizeList(inner, _len) => validate_valtype(ctx, inner)
+    @core.ComponentValType::FixedSizeList(inner, _len) =>
+      validate_valtype(ctx, inner)
   }
 }
 
 ///|
-fn validate_func_type(ctx : ComponentValidationContext, func_type : @core.ComponentFuncType) -> Unit {
+fn validate_func_type(
+  ctx : ComponentValidationContext,
+  func_type : @core.ComponentFuncType,
+) -> Unit {
   for param in func_type.params {
     validate_valtype(ctx, param.type_)
     // Check parameter name
@@ -1331,7 +1430,11 @@ fn validate_func_type(ctx : ComponentValidationContext, func_type : @core.Compon
     if name_str.is_empty() {
       ctx.add_error(NameCannotBeEmpty)
     } else if not(is_kebab_case(name_str)) {
-      ctx.add_error(NotKebabCase("function parameter name `\{name_str}` is not in kebab case"))
+      ctx.add_error(
+        NotKebabCase(
+          "function parameter name `\{name_str}` is not in kebab case",
+        ),
+      )
     }
   }
   for result in func_type.results {
@@ -1341,11 +1444,16 @@ fn validate_func_type(ctx : ComponentValidationContext, func_type : @core.Compon
 }
 
 ///|
-fn check_no_borrow_in_result(ctx : ComponentValidationContext, vt : @core.ComponentValType) -> Unit {
+fn check_no_borrow_in_result(
+  ctx : ComponentValidationContext,
+  vt : @core.ComponentValType,
+) -> Unit {
   match vt {
     @core.ComponentValType::Borrow(_) =>
-      ctx.add_error(BorrowInResult("function result cannot contain a `borrow` type"))
-    @core.ComponentValType::TypeIndex(type_idx) => {
+      ctx.add_error(
+        BorrowInResult("function result cannot contain a `borrow` type"),
+      )
+    @core.ComponentValType::TypeIndex(type_idx) =>
       if type_idx < ctx.types.length().reinterpret_as_uint() {
         match ctx.types[type_idx.reinterpret_as_int()] {
           @core.ComponentTypeDef::Defined(inner) =>
@@ -1353,9 +1461,7 @@ fn check_no_borrow_in_result(ctx : ComponentValidationContext, vt : @core.Compon
           _ => ()
         }
       }
-    }
-    @core.ComponentValType::List(inner) =>
-      check_no_borrow_in_result(ctx, inner)
+    @core.ComponentValType::List(inner) => check_no_borrow_in_result(ctx, inner)
     @core.ComponentValType::Option(inner) =>
       check_no_borrow_in_result(ctx, inner)
     @core.ComponentValType::Result(ok, err) => {
@@ -1368,24 +1474,21 @@ fn check_no_borrow_in_result(ctx : ComponentValidationContext, vt : @core.Compon
         None => ()
       }
     }
-    @core.ComponentValType::Tuple(vts) => {
+    @core.ComponentValType::Tuple(vts) =>
       for inner in vts {
         check_no_borrow_in_result(ctx, inner)
       }
-    }
-    @core.ComponentValType::Record(fields) => {
+    @core.ComponentValType::Record(fields) =>
       for field in fields {
         check_no_borrow_in_result(ctx, field.type_)
       }
-    }
-    @core.ComponentValType::Variant(cases) => {
+    @core.ComponentValType::Variant(cases) =>
       for case_ in cases {
         match case_.type_ {
           Some(inner) => check_no_borrow_in_result(ctx, inner)
           None => ()
         }
       }
-    }
     _ => ()
   }
 }
@@ -1397,19 +1500,27 @@ fn validate_component_type(
 ) -> Unit {
   for decl in component_type.decls {
     match decl {
-      @core.ComponentTypeDecl::CoreType(core_type) => validate_core_type(ctx, core_type)
+      @core.ComponentTypeDecl::CoreType(core_type) =>
+        validate_core_type(ctx, core_type)
       @core.ComponentTypeDecl::Type(type_def) => {
         // Resources cannot be defined inside component types
         match type_def {
           @core.ComponentTypeDef::Resource(_) =>
-            ctx.add_error(ResourceNotDefinedInComponent("resources can only be defined within a concrete component"))
+            ctx.add_error(
+              ResourceNotDefinedInComponent(
+                "resources can only be defined within a concrete component",
+              ),
+            )
           _ => ()
         }
         validate_type_def(ctx, type_def)
       }
-      @core.ComponentTypeDecl::Alias(alias_def) => validate_alias(ctx, alias_def)
-      @core.ComponentTypeDecl::Import(import_decl) => validate_import_decl(ctx, import_decl)
-      @core.ComponentTypeDecl::Export(export_decl) => validate_export_decl(ctx, export_decl)
+      @core.ComponentTypeDecl::Alias(alias_def) =>
+        validate_alias(ctx, alias_def)
+      @core.ComponentTypeDecl::Import(import_decl) =>
+        validate_import_decl(ctx, import_decl)
+      @core.ComponentTypeDecl::Export(export_decl) =>
+        validate_export_decl(ctx, export_decl)
     }
   }
 }
@@ -1421,25 +1532,35 @@ fn validate_instance_type(
 ) -> Unit {
   for decl in instance_type.decls {
     match decl {
-      @core.InstanceTypeDecl::CoreType(core_type) => validate_core_type(ctx, core_type)
+      @core.InstanceTypeDecl::CoreType(core_type) =>
+        validate_core_type(ctx, core_type)
       @core.InstanceTypeDecl::Type(type_def) => {
         // Resources cannot be defined inside instance types
         match type_def {
           @core.ComponentTypeDef::Resource(_) =>
-            ctx.add_error(ResourceNotDefinedInComponent("resources can only be defined within a concrete component"))
+            ctx.add_error(
+              ResourceNotDefinedInComponent(
+                "resources can only be defined within a concrete component",
+              ),
+            )
           _ => ()
         }
         validate_type_def(ctx, type_def)
       }
       @core.InstanceTypeDecl::Alias(alias_def) => validate_alias(ctx, alias_def)
-      @core.InstanceTypeDecl::Import(import_decl) => validate_import_decl(ctx, import_decl)
-      @core.InstanceTypeDecl::Export(export_decl) => validate_export_decl(ctx, export_decl)
+      @core.InstanceTypeDecl::Import(import_decl) =>
+        validate_import_decl(ctx, import_decl)
+      @core.InstanceTypeDecl::Export(export_decl) =>
+        validate_export_decl(ctx, export_decl)
     }
   }
 }
 
 ///|
-fn validate_import_decl(ctx : ComponentValidationContext, decl : @core.ComponentImportDecl) -> Unit {
+fn validate_import_decl(
+  ctx : ComponentValidationContext,
+  decl : @core.ComponentImportDecl,
+) -> Unit {
   let name_str = bytes_to_string(decl.name)
   if name_str.is_empty() {
     ctx.add_error(NameCannotBeEmpty)
@@ -1448,7 +1569,10 @@ fn validate_import_decl(ctx : ComponentValidationContext, decl : @core.Component
 }
 
 ///|
-fn validate_export_decl(ctx : ComponentValidationContext, decl : @core.ComponentExportDecl) -> Unit {
+fn validate_export_decl(
+  ctx : ComponentValidationContext,
+  decl : @core.ComponentExportDecl,
+) -> Unit {
   let name_str = bytes_to_string(decl.name)
   if name_str.is_empty() {
     ctx.add_error(NameCannotBeEmpty)
@@ -1457,7 +1581,10 @@ fn validate_export_decl(ctx : ComponentValidationContext, decl : @core.Component
 }
 
 ///|
-fn validate_canon(ctx : ComponentValidationContext, canon : @core.Canon) -> Unit {
+fn validate_canon(
+  ctx : ComponentValidationContext,
+  canon : @core.Canon,
+) -> Unit {
   match canon {
     @core.Canon::Lift(core_func_idx, options, type_idx) => {
       if core_func_idx >= ctx.core_funcs.length().reinterpret_as_uint() {
@@ -1479,16 +1606,16 @@ fn validate_canon(ctx : ComponentValidationContext, canon : @core.Canon) -> Unit
       }
       validate_canon_options(ctx, options)
     }
-    @core.Canon::ResourceNew(type_idx) => {
+    @core.Canon::ResourceNew(type_idx) =>
       if type_idx >= ctx.types.length().reinterpret_as_uint() {
         ctx.add_error(TypeIndexOutOfBounds(type_idx))
       } else {
         match ctx.types[type_idx.reinterpret_as_int()] {
           @core.ComponentTypeDef::Resource(_) => {
             // Check if it's a local resource
-            let is_local = ctx.resources.iter().any(
-              fn(r) { r.type_idx == type_idx && r.is_local },
-            )
+            let is_local = ctx.resources
+              .iter()
+              .any(fn(r) { r.type_idx == type_idx && r.is_local })
             if not(is_local) {
               ctx.add_error(NotALocalResource(type_idx))
             }
@@ -1496,17 +1623,16 @@ fn validate_canon(ctx : ComponentValidationContext, canon : @core.Canon) -> Unit
           _ => ctx.add_error(NotAResourceType(type_idx))
         }
       }
-    }
-    @core.Canon::ResourceRep(type_idx) => {
+    @core.Canon::ResourceRep(type_idx) =>
       if type_idx >= ctx.types.length().reinterpret_as_uint() {
         ctx.add_error(TypeIndexOutOfBounds(type_idx))
       } else {
         match ctx.types[type_idx.reinterpret_as_int()] {
           @core.ComponentTypeDef::Resource(_) => {
             // Check if it's a local resource
-            let is_local = ctx.resources.iter().any(
-              fn(r) { r.type_idx == type_idx && r.is_local },
-            )
+            let is_local = ctx.resources
+              .iter()
+              .any(fn(r) { r.type_idx == type_idx && r.is_local })
             if not(is_local) {
               ctx.add_error(NotALocalResource(type_idx))
             }
@@ -1514,8 +1640,7 @@ fn validate_canon(ctx : ComponentValidationContext, canon : @core.Canon) -> Unit
           _ => ctx.add_error(NotAResourceType(type_idx))
         }
       }
-    }
-    @core.Canon::ResourceDrop(type_idx) => {
+    @core.Canon::ResourceDrop(type_idx) =>
       if type_idx >= ctx.types.length().reinterpret_as_uint() {
         ctx.add_error(TypeIndexOutOfBounds(type_idx))
       } else {
@@ -1524,7 +1649,6 @@ fn validate_canon(ctx : ComponentValidationContext, canon : @core.Canon) -> Unit
           _ => ctx.add_error(NotAResourceType(type_idx))
         }
       }
-    }
   }
 }
 
@@ -1544,32 +1668,37 @@ fn validate_canon_options(
     }
   }
   let _ = ctx
+
 }
 
 ///|
-fn validate_start(ctx : ComponentValidationContext, start : @core.ComponentStart) -> Unit {
+fn validate_start(
+  ctx : ComponentValidationContext,
+  start : @core.ComponentStart,
+) -> Unit {
   if start.func_idx >= ctx.funcs.length().reinterpret_as_uint() {
     ctx.add_error(FuncIndexOutOfBounds(start.func_idx))
   }
 }
 
 ///|
-fn validate_import(ctx : ComponentValidationContext, import_def : @core.ComponentImport) -> Unit {
+fn validate_import(
+  ctx : ComponentValidationContext,
+  import_def : @core.ComponentImport,
+) -> Unit {
   let name_str = bytes_to_string(import_def.name)
   if name_str.is_empty() {
     ctx.add_error(NameCannotBeEmpty)
-  } else {
     // Check for interface name format and validate with detailed errors
-    if name_str.contains(":") && name_str.contains("/") {
-      match validate_interface_name_detailed(name_str) {
-        Some(err) => ctx.add_error(InvalidImportName(err))
-        None => ()
-      }
-    } else if not(name_str.has_prefix("https://")) &&
-              not(name_str.has_prefix("http://")) &&
-              not(is_kebab_case(name_str)) {
-      ctx.add_error(InvalidImportName(name_str))
+  } else if name_str.contains(":") && name_str.contains("/") {
+    match validate_interface_name_detailed(name_str) {
+      Some(err) => ctx.add_error(InvalidImportName(err))
+      None => ()
     }
+  } else if not(name_str.has_prefix("https://")) &&
+    not(name_str.has_prefix("http://")) &&
+    not(is_kebab_case(name_str)) {
+    ctx.add_error(InvalidImportName(name_str))
   }
   // Check for duplicate import name
   for prev in ctx.import_names {
@@ -1582,20 +1711,21 @@ fn validate_import(ctx : ComponentValidationContext, import_def : @core.Componen
 }
 
 ///|
-fn validate_export(ctx : ComponentValidationContext, export_def : @core.ComponentExport) -> Unit {
+fn validate_export(
+  ctx : ComponentValidationContext,
+  export_def : @core.ComponentExport,
+) -> Unit {
   let name_str = bytes_to_string(export_def.name)
   if name_str.is_empty() {
     ctx.add_error(NameCannotBeEmpty)
-  } else {
     // Check for kebab-case (for plain names, not URLs or interface names)
-    if not(is_valid_extern_name(export_def.name)) {
-      ctx.add_error(InvalidExportName(name_str))
-    } else if not(name_str.has_prefix("https://")) &&
-              not(name_str.has_prefix("http://")) &&
-              not(name_str.contains(":")) &&
-              not(is_kebab_case(name_str)) {
-      ctx.add_error(NotKebabCase("`\{name_str}` is not in kebab case"))
-    }
+  } else if not(is_valid_extern_name(export_def.name)) {
+    ctx.add_error(InvalidExportName(name_str))
+  } else if not(name_str.has_prefix("https://")) &&
+    not(name_str.has_prefix("http://")) &&
+    not(name_str.contains(":")) &&
+    not(is_kebab_case(name_str)) {
+    ctx.add_error(NotKebabCase("`\{name_str}` is not in kebab case"))
   }
   // Check for duplicate export name
   for prev in ctx.export_names {
@@ -1605,54 +1735,53 @@ fn validate_export(ctx : ComponentValidationContext, export_def : @core.Componen
   }
   ctx.export_names.push(name_str)
   match export_def.kind {
-    @core.ComponentExportKind::Module(idx) => {
+    @core.ComponentExportKind::Module(idx) =>
       if idx >= ctx.core_modules.length().reinterpret_as_uint() {
         ctx.add_error(ModuleIndexOutOfBounds(idx))
       }
-    }
-    @core.ComponentExportKind::Func(idx) => {
+    @core.ComponentExportKind::Func(idx) =>
       if idx >= ctx.funcs.length().reinterpret_as_uint() {
         ctx.add_error(FuncIndexOutOfBounds(idx))
       }
-    }
-    @core.ComponentExportKind::Value(idx) => {
+    @core.ComponentExportKind::Value(idx) =>
       if idx >= ctx.values.length().reinterpret_as_uint() {
         ctx.add_error(ValueIndexOutOfBounds(idx))
       }
-    }
-    @core.ComponentExportKind::Type(idx) => {
+    @core.ComponentExportKind::Type(idx) =>
       if idx >= ctx.types.length().reinterpret_as_uint() {
         ctx.add_error(TypeIndexOutOfBounds(idx))
       } else {
         // Check that all referenced types that require naming are named
         if not(check_type_exportable(ctx, idx)) {
-          ctx.add_error(TypeNotValidAsExport("type not valid to be used as export"))
+          ctx.add_error(
+            TypeNotValidAsExport("type not valid to be used as export"),
+          )
         }
         // Mark this type as named
         ctx.named_types.push(idx)
       }
-    }
-    @core.ComponentExportKind::Component(idx) => {
+    @core.ComponentExportKind::Component(idx) =>
       if idx >= ctx.components.length().reinterpret_as_uint() {
         ctx.add_error(ComponentIndexOutOfBounds(idx))
       }
-    }
-    @core.ComponentExportKind::Instance(idx) => {
+    @core.ComponentExportKind::Instance(idx) =>
       if idx >= ctx.instances.length().reinterpret_as_uint() {
         ctx.add_error(InstanceIndexOutOfBounds(idx))
-      } else {
         // Check that all types the instance exports are valid for export
-        if not(check_instance_exportable(ctx, idx)) {
-          ctx.add_error(TypeNotValidAsExport("instance not valid to be used as export"))
-        }
+      } else if not(check_instance_exportable(ctx, idx)) {
+        ctx.add_error(
+          TypeNotValidAsExport("instance not valid to be used as export"),
+        )
       }
-    }
   }
 }
 
 ///|
 /// Check if a type is exportable (all dependencies that require naming are named)
-fn check_type_exportable(ctx : ComponentValidationContext, type_idx : UInt) -> Bool {
+fn check_type_exportable(
+  ctx : ComponentValidationContext,
+  type_idx : UInt,
+) -> Bool {
   let type_def = ctx.types[type_idx.reinterpret_as_int()]
   match type_def {
     @core.ComponentTypeDef::Defined(valtype) =>
@@ -1678,7 +1807,10 @@ fn check_type_exportable(ctx : ComponentValidationContext, type_idx : UInt) -> B
 
 ///|
 /// Check if a valtype is exportable
-fn check_valtype_exportable(ctx : ComponentValidationContext, vt : @core.ComponentValType) -> Bool {
+fn check_valtype_exportable(
+  ctx : ComponentValidationContext,
+  vt : @core.ComponentValType,
+) -> Bool {
   match vt {
     @core.ComponentValType::Primitive(_) => true
     @core.ComponentValType::TypeIndex(ref_idx) => {
@@ -1695,8 +1827,7 @@ fn check_valtype_exportable(ctx : ComponentValidationContext, vt : @core.Compone
         check_type_exportable(ctx, ref_idx)
       }
     }
-    @core.ComponentValType::List(inner) =>
-      check_valtype_exportable(ctx, inner)
+    @core.ComponentValType::List(inner) => check_valtype_exportable(ctx, inner)
     @core.ComponentValType::Record(fields) => {
       for field in fields {
         if not(check_valtype_exportable(ctx, field.type_)) {
@@ -1787,9 +1918,12 @@ fn requires_naming_valtype(vt : @core.ComponentValType) -> Bool {
 }
 
 ///|
-fn validate_extern_desc(ctx : ComponentValidationContext, desc : @core.ComponentExternDesc) -> Unit {
+fn validate_extern_desc(
+  ctx : ComponentValidationContext,
+  desc : @core.ComponentExternDesc,
+) -> Unit {
   match desc {
-    @core.ComponentExternDesc::Module(type_idx) => {
+    @core.ComponentExternDesc::Module(type_idx) =>
       if type_idx >= ctx.core_types.length().reinterpret_as_uint() {
         ctx.add_error(CoreTypeIndexOutOfBounds(type_idx))
       } else {
@@ -1799,35 +1933,32 @@ fn validate_extern_desc(ctx : ComponentValidationContext, desc : @core.Component
           _ => ctx.add_error(NotAModuleType(type_idx))
         }
       }
-    }
-    @core.ComponentExternDesc::Func(type_idx) => {
+    @core.ComponentExternDesc::Func(type_idx) =>
       if type_idx >= ctx.types.length().reinterpret_as_uint() {
         ctx.add_error(TypeIndexOutOfBounds(type_idx))
       } else {
         // Check that it's a function type
         match ctx.types[type_idx.reinterpret_as_int()] {
-          @core.ComponentTypeDef::Func(_) => {
+          @core.ComponentTypeDef::Func(_) =>
             // Check that the function type is valid for import/export
             if not(check_type_exportable(ctx, type_idx)) {
-              ctx.add_error(FuncNotValidAsImport("func not valid to be used as import"))
+              ctx.add_error(
+                FuncNotValidAsImport("func not valid to be used as import"),
+              )
             }
-          }
           _ => ctx.add_error(NotAFunctionType(type_idx))
         }
       }
-    }
     @core.ComponentExternDesc::Value(vt) => validate_valtype(ctx, vt)
-    @core.ComponentExternDesc::Type(bounds) => {
+    @core.ComponentExternDesc::Type(bounds) =>
       match bounds {
-        @core.TypeBounds::Eq(type_idx) => {
+        @core.TypeBounds::Eq(type_idx) =>
           if type_idx >= ctx.types.length().reinterpret_as_uint() {
             ctx.add_error(TypeIndexOutOfBounds(type_idx))
           }
-        }
         @core.TypeBounds::SubResource => ()
       }
-    }
-    @core.ComponentExternDesc::Component(type_idx) => {
+    @core.ComponentExternDesc::Component(type_idx) =>
       if type_idx >= ctx.types.length().reinterpret_as_uint() {
         ctx.add_error(TypeIndexOutOfBounds(type_idx))
       } else {
@@ -1837,8 +1968,7 @@ fn validate_extern_desc(ctx : ComponentValidationContext, desc : @core.Component
           _ => ctx.add_error(NotAComponentType(type_idx))
         }
       }
-    }
-    @core.ComponentExternDesc::Instance(type_idx) => {
+    @core.ComponentExternDesc::Instance(type_idx) =>
       if type_idx >= ctx.types.length().reinterpret_as_uint() {
         ctx.add_error(TypeIndexOutOfBounds(type_idx))
       } else {
@@ -1848,21 +1978,22 @@ fn validate_extern_desc(ctx : ComponentValidationContext, desc : @core.Component
           _ => ctx.add_error(NotAnInstanceType(type_idx))
         }
       }
-    }
   }
 }
 
 ///|
 /// Get the expected import kind for a given name from a component's import list
 /// Returns None if the import is not found
-fn get_component_import_kind(component : @core.Component, name : Bytes) -> @core.ComponentExternDesc? {
+fn get_component_import_kind(
+  component : @core.Component,
+  name : Bytes,
+) -> @core.ComponentExternDesc? {
   for section in component.sections {
     match section {
-      @core.ComponentSection::Import(import_def) => {
+      @core.ComponentSection::Import(import_def) =>
         if import_def.name == name {
           return Some(import_def.desc)
         }
-      }
       _ => ()
     }
   }
@@ -1903,14 +2034,29 @@ fn get_extern_desc_kind_name(desc : @core.ComponentExternDesc) -> String {
 
 ///|
 /// Check if the argument kind matches the expected import kind
-fn check_arg_matches_import(arg : @core.InstantiateArg, expected : @core.ComponentExternDesc) -> Bool {
+fn check_arg_matches_import(
+  arg : @core.InstantiateArg,
+  expected : @core.ComponentExternDesc,
+) -> Bool {
   match (arg, expected) {
-    (@core.InstantiateArg::Func(_, _), @core.ComponentExternDesc::Func(_)) => true
-    (@core.InstantiateArg::Component(_, _), @core.ComponentExternDesc::Component(_)) => true
-    (@core.InstantiateArg::Instance(_, _), @core.ComponentExternDesc::Instance(_)) => true
-    (@core.InstantiateArg::Type(_, _), @core.ComponentExternDesc::Type(_)) => true
-    (@core.InstantiateArg::Value(_, _), @core.ComponentExternDesc::Value(_)) => true
-    (@core.InstantiateArg::CoreModule(_, _), @core.ComponentExternDesc::Module(_)) => true
+    (@core.InstantiateArg::Func(_, _), @core.ComponentExternDesc::Func(_)) =>
+      true
+    (
+      @core.InstantiateArg::Component(_, _),
+      @core.ComponentExternDesc::Component(_),
+    ) => true
+    (
+      @core.InstantiateArg::Instance(_, _),
+      @core.ComponentExternDesc::Instance(_),
+    ) => true
+    (@core.InstantiateArg::Type(_, _), @core.ComponentExternDesc::Type(_)) =>
+      true
+    (@core.InstantiateArg::Value(_, _), @core.ComponentExternDesc::Value(_)) =>
+      true
+    (
+      @core.InstantiateArg::CoreModule(_, _),
+      @core.ComponentExternDesc::Module(_),
+    ) => true
     _ => false
   }
 }
@@ -1932,21 +2078,29 @@ fn check_type_arg_matches(
     None
   }
   match expected_bounds {
-    @core.TypeBounds::SubResource => {
+    @core.TypeBounds::SubResource =>
       // Expects a resource type
       match arg_type {
         Some(@core.ComponentTypeDef::Resource(_)) => None
         Some(_) => Some("expected resource, found defined type")
         None => None // Index error handled elsewhere
       }
-    }
     @core.TypeBounds::Eq(expected_idx) => {
       // Get the expected type from nested component's type space
-      let expected_type = get_nested_component_type(nested_component, expected_idx)
+      let expected_type = get_nested_component_type(
+        nested_component, expected_idx,
+      )
       match (expected_type, arg_type) {
-        (Some(@core.ComponentTypeDef::Resource(_)), Some(@core.ComponentTypeDef::Resource(_))) => None
-        (Some(@core.ComponentTypeDef::Resource(_)), Some(_)) => Some("expected resource, found defined type")
-        (Some(@core.ComponentTypeDef::Defined(_)), Some(@core.ComponentTypeDef::Resource(_))) => Some("expected defined type, found resource")
+        (
+          Some(@core.ComponentTypeDef::Resource(_)),
+          Some(@core.ComponentTypeDef::Resource(_)),
+        ) => None
+        (Some(@core.ComponentTypeDef::Resource(_)), Some(_)) =>
+          Some("expected resource, found defined type")
+        (
+          Some(@core.ComponentTypeDef::Defined(_)),
+          Some(@core.ComponentTypeDef::Resource(_)),
+        ) => Some("expected defined type, found resource")
         _ => None
       }
     }
@@ -1959,9 +2113,7 @@ fn get_component_import_names(component : @core.Component) -> Array[Bytes] {
   let names : Array[Bytes] = []
   for section in component.sections {
     match section {
-      @core.ComponentSection::Import(import_def) => {
-        names.push(import_def.name)
-      }
+      @core.ComponentSection::Import(import_def) => names.push(import_def.name)
       _ => ()
     }
   }
@@ -1970,7 +2122,10 @@ fn get_component_import_names(component : @core.Component) -> Array[Bytes] {
 
 ///|
 /// Get a type definition from a nested component by index
-fn get_nested_component_type(component : @core.Component, idx : UInt) -> @core.ComponentTypeDef? {
+fn get_nested_component_type(
+  component : @core.Component,
+  idx : UInt,
+) -> @core.ComponentTypeDef? {
   let mut type_count : UInt = 0U
   for section in component.sections {
     match section {
@@ -1980,19 +2135,22 @@ fn get_nested_component_type(component : @core.Component, idx : UInt) -> @core.C
         }
         type_count = type_count + 1U
       }
-      @core.ComponentSection::Import(import_def) => {
+      @core.ComponentSection::Import(import_def) =>
         // Imports can add to the type space
         match import_def.desc {
           @core.ComponentExternDesc::Type(_) => {
             if type_count == idx {
               // For imported types, we return a placeholder
-              return Some(@core.ComponentTypeDef::Defined(@core.ComponentValType::Primitive(@core.PrimitiveType::U32)))
+              return Some(
+                @core.ComponentTypeDef::Defined(
+                  @core.ComponentValType::Primitive(@core.PrimitiveType::U32),
+                ),
+              )
             }
             type_count = type_count + 1U
           }
           _ => ()
         }
-      }
       _ => ()
     }
   }
@@ -2040,21 +2198,31 @@ fn collect_core_module_imports(mod_ : @core.Module) -> Array[CoreImportInfo] {
     let name_str = bytes_to_string(import_item.name)
     let (kind, memory64) : (CoreExportKind, Bool?) = match import_item.desc {
       @core.ImportDesc::Func(_) => (CoreExportKind::Func, None)
-      @core.ImportDesc::Table(table_type) => (CoreExportKind::Table, Some(table_type.table64))
-      @core.ImportDesc::Mem(mem_type) => (CoreExportKind::Memory, Some(mem_type.memory64))
+      @core.ImportDesc::Table(table_type) =>
+        (CoreExportKind::Table, Some(table_type.table64))
+      @core.ImportDesc::Mem(mem_type) =>
+        (CoreExportKind::Memory, Some(mem_type.memory64))
       @core.ImportDesc::Global(_) => (CoreExportKind::Global, None)
       @core.ImportDesc::Tag(_) => (CoreExportKind::Tag, None)
     }
-    imports.push(CoreImportInfo::{ module_: mod_str, name: name_str, kind, memory64 })
+    imports.push(CoreImportInfo::{
+      module_: mod_str,
+      name: name_str,
+      kind,
+      memory64,
+    })
   }
   imports
 }
 
 ///|
 /// Collect exports from a core instance
-fn collect_core_instance_exports(ctx : ComponentValidationContext, instance : @core.CoreInstance) -> Array[CoreExportInfo] {
+fn collect_core_instance_exports(
+  ctx : ComponentValidationContext,
+  instance : @core.CoreInstance,
+) -> Array[CoreExportInfo] {
   match instance {
-    @core.CoreInstance::Instantiate(module_idx, _args) => {
+    @core.CoreInstance::Instantiate(module_idx, _args) =>
       // Exports come from the module
       if module_idx < ctx.core_module_exports.length().reinterpret_as_uint() {
         // Copy the module's exports
@@ -2067,7 +2235,6 @@ fn collect_core_instance_exports(ctx : ComponentValidationContext, instance : @c
       } else {
         []
       }
-    }
     @core.CoreInstance::FromExports(exports) => {
       // Explicitly listed exports
       let result : Array[CoreExportInfo] = []
@@ -2093,7 +2260,11 @@ fn collect_core_instance_exports(ctx : ComponentValidationContext, instance : @c
 
 ///|
 /// Get the export kind from a core instance export
-fn get_core_instance_export_kind(ctx : ComponentValidationContext, instance_idx : UInt, name : String) -> CoreExportKind? {
+fn get_core_instance_export_kind(
+  ctx : ComponentValidationContext,
+  instance_idx : UInt,
+  name : String,
+) -> CoreExportKind? {
   if instance_idx < ctx.core_instance_exports.length().reinterpret_as_uint() {
     let exports = ctx.core_instance_exports[instance_idx.reinterpret_as_int()]
     for exp in exports {
@@ -2107,9 +2278,12 @@ fn get_core_instance_export_kind(ctx : ComponentValidationContext, instance_idx 
 
 ///|
 /// Collect exports from a component instance
-fn collect_instance_exports(ctx : ComponentValidationContext, instance : @core.ComponentInstance) -> Array[ExportInfo] {
+fn collect_instance_exports(
+  ctx : ComponentValidationContext,
+  instance : @core.ComponentInstance,
+) -> Array[ExportInfo] {
   match instance {
-    @core.ComponentInstance::Instantiate(component_idx, _args) => {
+    @core.ComponentInstance::Instantiate(component_idx, _args) =>
       // Get exports from the component being instantiated
       if component_idx < ctx.nested_components.length().reinterpret_as_uint() {
         let comp = ctx.nested_components[component_idx.reinterpret_as_int()]
@@ -2117,7 +2291,6 @@ fn collect_instance_exports(ctx : ComponentValidationContext, instance : @core.C
       } else {
         []
       }
-    }
     @core.ComponentInstance::FromExports(exports) => {
       // Explicitly listed exports
       let result : Array[ExportInfo] = []
@@ -2129,7 +2302,8 @@ fn collect_instance_exports(ctx : ComponentValidationContext, instance : @core.C
           @core.ComponentExportKind::Value(_) => (ExportKind::Value, None)
           @core.ComponentExportKind::Type(idx) => (ExportKind::Type, Some(idx))
           @core.ComponentExportKind::Instance(_) => (ExportKind::Instance, None)
-          @core.ComponentExportKind::Component(_) => (ExportKind::Component, None)
+          @core.ComponentExportKind::Component(_) =>
+            (ExportKind::Component, None)
         }
         result.push(ExportInfo::{ name: name_str, kind, type_idx })
       }
@@ -2152,7 +2326,8 @@ fn collect_component_exports(component : @core.Component) -> Array[ExportInfo] {
           @core.ComponentExportKind::Value(_) => (ExportKind::Value, None)
           @core.ComponentExportKind::Type(idx) => (ExportKind::Type, Some(idx))
           @core.ComponentExportKind::Instance(_) => (ExportKind::Instance, None)
-          @core.ComponentExportKind::Component(_) => (ExportKind::Component, None)
+          @core.ComponentExportKind::Component(_) =>
+            (ExportKind::Component, None)
         }
         result.push(ExportInfo::{ name: name_str, kind, type_idx })
       }
@@ -2164,7 +2339,11 @@ fn collect_component_exports(component : @core.Component) -> Array[ExportInfo] {
 
 ///|
 /// Check if a component instance has an export with the given name
-fn has_instance_export(ctx : ComponentValidationContext, instance_idx : UInt, name : String) -> Bool {
+fn has_instance_export(
+  ctx : ComponentValidationContext,
+  instance_idx : UInt,
+  name : String,
+) -> Bool {
   if instance_idx < ctx.instance_exports.length().reinterpret_as_uint() {
     let exports = ctx.instance_exports[instance_idx.reinterpret_as_int()]
     for exp in exports {
@@ -2179,23 +2358,24 @@ fn has_instance_export(ctx : ComponentValidationContext, instance_idx : UInt, na
 ///|
 /// Check if an instance is valid to be exported
 /// All types the instance exports must have their dependencies named
-fn check_instance_exportable(ctx : ComponentValidationContext, instance_idx : UInt) -> Bool {
+fn check_instance_exportable(
+  ctx : ComponentValidationContext,
+  instance_idx : UInt,
+) -> Bool {
   if instance_idx >= ctx.instance_exports.length().reinterpret_as_uint() {
     return true // Index error handled elsewhere
   }
   let exports = ctx.instance_exports[instance_idx.reinterpret_as_int()]
   for exp in exports {
     match exp.kind {
-      ExportKind::Type => {
+      ExportKind::Type =>
         match exp.type_idx {
-          Some(type_idx) => {
+          Some(type_idx) =>
             if not(check_type_exportable(ctx, type_idx)) {
               return false
             }
-          }
           None => ()
         }
-      }
       _ => ()
     }
   }
@@ -2217,7 +2397,10 @@ fn core_export_kind_to_string(kind : CoreExportKind) -> String {
 ///|
 /// Get memory64 flag for a core memory (used in FromExports case)
 /// Returns None if the memory index is not tracked
-fn get_core_memory_memory64(_ctx : ComponentValidationContext, _idx : UInt) -> Bool? {
+fn get_core_memory_memory64(
+  _ctx : ComponentValidationContext,
+  _idx : UInt,
+) -> Bool? {
   // TODO: Track individual core memory types if needed
   None
 }
@@ -2225,7 +2408,10 @@ fn get_core_memory_memory64(_ctx : ComponentValidationContext, _idx : UInt) -> B
 ///|
 /// Get table64 flag for a core table (used in FromExports case)
 /// Returns None if the table index is not tracked
-fn get_core_table_memory64(_ctx : ComponentValidationContext, _idx : UInt) -> Bool? {
+fn get_core_table_memory64(
+  _ctx : ComponentValidationContext,
+  _idx : UInt,
+) -> Bool? {
   // TODO: Track individual core table types if needed
   None
 }
