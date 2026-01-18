@@ -305,7 +305,7 @@ fn build_type_info(
     match type_def {
       Func(ft) => {
         type_sig_hash1.push(compute_type_signature_hash(ft))
-        type_sig_hash2.push(ft.params.length().lsl(16) | ft.results.length())
+        type_sig_hash2.push((ft.params.length() << 16) | ft.results.length())
       }
       _ => {
         // For non-function types (struct, array), use sentinel values

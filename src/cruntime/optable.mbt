@@ -17,9 +17,6 @@
 extern "C" fn wasm_unreachable() -> UInt64 = "wasm_unreachable"
 
 ///|
-extern "C" fn nop() -> UInt64 = "nop"
-
-///|
 extern "C" fn wasm_return() -> UInt64 = "wasm_return"
 
 ///|

@@ -31,23 +31,15 @@ pub(all) enum RuntimeType {
 /// Trait for WebAssembly runtime executors.
 /// Both the MoonBit interpreter and C runtime implement this trait.
 priv trait Executor {
-  run_start(Self) -> Unit raise Error
   call_compiled(Self, Bytes, Array[@wasm5_runtime.Value]) -> Array[
     @wasm5_runtime.Value,
   ] raise Error
-  get_module(Self) -> @wasm5_core.Module?
-  get_globals(Self) -> Array[@wasm5_runtime.Value]?
   // Returns the underlying MoonBit Runtime if available (for cross-module imports)
   as_runtime(Self) -> @wasm5_runtime.Runtime?
 }
 
 ///|
 /// Implement Executor for MoonBit Runtime
-impl Executor for @wasm5_runtime.Runtime with run_start(self) -> Unit raise Error {
-  self.run_start()
-}
-
-///|
 impl Executor for @wasm5_runtime.Runtime with call_compiled(
   self,
   name : Bytes,
@@ -57,49 +49,18 @@ impl Executor for @wasm5_runtime.Runtime with call_compiled(
 }
 
 ///|
-impl Executor for @wasm5_runtime.Runtime with get_module(self) -> @wasm5_core.Module? {
-  Some(self.get_module())
-}
-
-///|
-impl Executor for @wasm5_runtime.Runtime with get_globals(self) -> Array[
-  @wasm5_runtime.Value,
-]? {
-  Some(self.get_globals())
-}
-
-///|
 impl Executor for @wasm5_runtime.Runtime with as_runtime(self) -> @wasm5_runtime.Runtime? {
   Some(self)
 }
 
 ///|
 /// Implement Executor for C Runtime
-impl Executor for @wasm5_cruntime.CRuntime with run_start(self) -> Unit raise Error {
-  self.run_start()
-}
-
-///|
 impl Executor for @wasm5_cruntime.CRuntime with call_compiled(
   self,
   name : Bytes,
   args : Array[@wasm5_runtime.Value],
 ) -> Array[@wasm5_runtime.Value] raise Error {
   self.call_compiled(name, args)
-}
-
-///|
-impl Executor for @wasm5_cruntime.CRuntime with get_module(_self) -> @wasm5_core.Module? {
-  // CRuntime doesn't expose module yet
-  None
-}
-
-///|
-impl Executor for @wasm5_cruntime.CRuntime with get_globals(_self) -> Array[
-  @wasm5_runtime.Value,
-]? {
-  // CRuntime doesn't support globals yet
-  None
 }
 
 ///|
@@ -1749,24 +1710,29 @@ pub async fn process_wast_file_cruntime(
 /// local_init.wast: reference type result conversion
 /// elem.wast: module registration and some trap handling
 let cruntime_whitelisted_tests : Array[(String, Set[Int])] = [
-  ("select.wast", Set::of([251, 252, 258, 259, 279, 280])),
+  ("select.wast", Set::from_array([251, 252, 258, 259, 279, 280])),
   (
     "br_table.wast",
-    Set::of([
+    Set::from_array([
       1249, 1250, 1251, 1253, 1254, 1255, 1256, 1257, 1258, 1259, 1260, 1261, 1262,
       1263, 1264,
     ]),
   ),
   (
     "traps.wast",
-    Set::of([50, 51, 52, 53, 54, 55, 56, 57, 83, 84, 85, 86, 87, 88, 89, 90, 91]),
+    Set::from_array([
+      50, 51, 52, 53, 54, 55, 56, 57, 83, 84, 85, 86, 87, 88, 89, 90, 91,
+    ]),
   ),
-  ("exports.wast", Set::of([23, 26, 93, 94, 97])),
-  ("local_init.wast", Set::of([21, 22, 23, 74])),
-  ("global.wast", Set::of([206, 207, 241, 632, 659, 660, 661, 663, 664])),
+  ("exports.wast", Set::from_array([23, 26, 93, 94, 97])),
+  ("local_init.wast", Set::from_array([21, 22, 23, 74])),
+  (
+    "global.wast",
+    Set::from_array([206, 207, 241, 632, 659, 660, 661, 663, 664]),
+  ),
   (
     "elem.wast",
-    Set::of([
+    Set::from_array([
       706, 716, 944, 946, 947, 948, 959, 960, 961, 972, 973, 974, 1014, 1016, 1017,
       1019, 1020, 1022, 1023, 1029, 1030, 1041, 1053,
     ]),
