@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
 #include <limits.h>
 #include <stdio.h>
@@ -19,11 +20,12 @@
 #define TRAP_INTEGER_OVERFLOW           3
 #define TRAP_INVALID_CONVERSION         4
 #define TRAP_OUT_OF_BOUNDS_MEMORY       5
-#define TRAP_OUT_OF_BOUNDS_TABLE        6  // "undefined element" - index out of bounds
+#define TRAP_OUT_OF_BOUNDS_TABLE        6  // "undefined element" - index out of bounds (call_indirect)
 #define TRAP_INDIRECT_CALL_TYPE_MISMATCH 7
 #define TRAP_NULL_FUNCTION_REFERENCE    8
 #define TRAP_STACK_OVERFLOW             9
 #define TRAP_UNINITIALIZED_ELEMENT      10 // "uninitialized element" - null entry in table
+#define TRAP_TABLE_BOUNDS_ACCESS        11 // "out of bounds table access" - for bulk table ops
 
 // Macro to define getter function that returns op handler pointer
 #define DEFINE_OP(name) uint64_t name(void) { return (uint64_t)op_##name; }
@@ -213,6 +215,19 @@ static int g_num_types = 0;
 static int* g_import_num_params = NULL;    // Number of params for each imported function
 static int* g_import_num_results = NULL;   // Number of results for each imported function
 
+// Data segments for bulk memory operations (memory.init, data.drop)
+static uint8_t* g_data_segments_flat = NULL;   // All data segments concatenated
+static int* g_data_segment_offsets = NULL;     // Offset of each segment in data_segments_flat
+static int* g_data_segment_sizes = NULL;       // Size of each segment (mutable for data.drop)
+static int g_num_data_segments = 0;
+
+// Element segments for bulk table operations (table.init, elem.drop)
+static int* g_elem_segments_flat = NULL;       // All element segments concatenated (func indices, -1 for null)
+static int* g_elem_segment_offsets = NULL;     // Offset of each segment in elem_segments_flat
+static int* g_elem_segment_sizes = NULL;       // Size of each segment (mutable for elem.drop)
+static int* g_elem_segment_dropped = NULL;     // Whether each segment has been dropped
+static int g_num_elem_segments = 0;
+
 // Stack base for result extraction after execution
 static uint64_t* g_stack_base = NULL;
 
@@ -229,7 +244,9 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
             int* memory_pages, int* tables_flat, int* table_offsets, int* table_sizes, int num_tables,
             int* func_entries, int* func_num_locals, int num_funcs, int num_imported_funcs,
             int* func_type_idxs, int* type_sig_hash1, int* type_sig_hash2, int num_types,
-            int* import_num_params, int* import_num_results) {
+            int* import_num_params, int* import_num_results,
+            uint8_t* data_segments_flat, int* data_segment_offsets, int* data_segment_sizes, int num_data_segments,
+            int* elem_segments_flat, int* elem_segment_offsets, int* elem_segment_sizes, int* elem_segment_dropped, int num_elem_segments) {
     // Allocate stack on heap to avoid C stack limits
     uint64_t* stack = (uint64_t*)malloc(STACK_SIZE * sizeof(uint64_t));
     if (!stack) {
@@ -270,6 +287,19 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     // Store import function metadata for op_call_import
     g_import_num_params = import_num_params;
     g_import_num_results = import_num_results;
+
+    // Store data segment info for bulk memory operations
+    g_data_segments_flat = data_segments_flat;
+    g_data_segment_offsets = data_segment_offsets;
+    g_data_segment_sizes = data_segment_sizes;
+    g_num_data_segments = num_data_segments;
+
+    // Store element segment info for bulk table operations
+    g_elem_segments_flat = elem_segments_flat;
+    g_elem_segment_offsets = elem_segment_offsets;
+    g_elem_segment_sizes = elem_segment_sizes;
+    g_elem_segment_dropped = elem_segment_dropped;
+    g_num_elem_segments = num_elem_segments;
 
     // Store stack base for result extraction
     g_stack_base = stack;
@@ -314,6 +344,15 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     g_num_types = 0;
     g_import_num_params = NULL;
     g_import_num_results = NULL;
+    g_data_segments_flat = NULL;
+    g_data_segment_offsets = NULL;
+    g_data_segment_sizes = NULL;
+    g_num_data_segments = 0;
+    g_elem_segments_flat = NULL;
+    g_elem_segment_offsets = NULL;
+    g_elem_segment_sizes = NULL;
+    g_elem_segment_dropped = NULL;
+    g_num_elem_segments = 0;
     g_stack_base = NULL;
 
     return trap;
@@ -2040,3 +2079,252 @@ int op_call_indirect(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     NEXT();
 }
 DEFINE_OP(call_indirect)
+
+// =============================================================================
+// Bulk memory operations
+// =============================================================================
+
+// memory.copy - copy memory region (handles overlapping regions)
+// Stack: [dest, src, n] -> []
+int op_memory_copy(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)fp;
+    uint32_t n = (uint32_t)sp[-1];
+    uint32_t src = (uint32_t)sp[-2];
+    uint32_t dest = (uint32_t)sp[-3];
+    sp -= 3;
+
+    // Check bounds for both source and destination
+    if ((uint64_t)src + n > (uint64_t)g_memory_size) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+    if ((uint64_t)dest + n > (uint64_t)g_memory_size) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+
+    // Use memmove to handle overlapping regions correctly
+    if (n > 0) {
+        memmove(crt->mem + dest, crt->mem + src, n);
+    }
+    NEXT();
+}
+DEFINE_OP(memory_copy)
+
+// memory.fill - fill memory region with a byte value
+// Stack: [dest, val, n] -> []
+int op_memory_fill(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)fp;
+    uint32_t n = (uint32_t)sp[-1];
+    uint8_t val = (uint8_t)sp[-2];  // Truncate to byte
+    uint32_t dest = (uint32_t)sp[-3];
+    sp -= 3;
+
+    // Check bounds
+    if ((uint64_t)dest + n > (uint64_t)g_memory_size) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+
+    // Fill memory
+    if (n > 0) {
+        memset(crt->mem + dest, val, n);
+    }
+    NEXT();
+}
+DEFINE_OP(memory_fill)
+
+// memory.init - initialize memory from data segment
+// Immediate: data_idx
+// Stack: [dest, src, n] -> []
+int op_memory_init(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)fp;
+    int data_idx = (int)*pc++;
+    uint32_t n = (uint32_t)sp[-1];
+    uint32_t src = (uint32_t)sp[-2];
+    uint32_t dest = (uint32_t)sp[-3];
+    sp -= 3;
+
+    // Check data segment index
+    if (data_idx < 0 || data_idx >= g_num_data_segments) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);  // "unknown data segment"
+    }
+
+    // Get data segment info
+    int seg_offset = g_data_segment_offsets[data_idx];
+    int seg_size = g_data_segment_sizes[data_idx];
+
+    // Check bounds for data segment read
+    if ((uint64_t)src + n > (uint64_t)seg_size) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+
+    // Check bounds for memory write
+    if ((uint64_t)dest + n > (uint64_t)g_memory_size) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+
+    // Copy from data segment to memory
+    if (n > 0) {
+        memcpy(crt->mem + dest, g_data_segments_flat + seg_offset + src, n);
+    }
+    NEXT();
+}
+DEFINE_OP(memory_init)
+
+// data.drop - drop a data segment (make it unusable for memory.init)
+// Immediate: data_idx
+// Stack: [] -> []
+int op_data_drop(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)sp; (void)fp;
+    int data_idx = (int)*pc++;
+
+    // Check data segment index
+    if (data_idx < 0 || data_idx >= g_num_data_segments) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);  // "unknown data segment"
+    }
+
+    // Drop the segment by setting its size to 0
+    g_data_segment_sizes[data_idx] = 0;
+    NEXT();
+}
+DEFINE_OP(data_drop)
+
+// =============================================================================
+// Bulk table operations
+// =============================================================================
+
+// table.copy - copy elements between tables (or within same table)
+// Immediates: dst_table_idx, src_table_idx
+// Stack: [dest, src, n] -> []
+int op_table_copy(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    int dst_table_idx = (int)*pc++;
+    int src_table_idx = (int)*pc++;
+
+    uint32_t n = (uint32_t)sp[-1];
+    uint32_t src = (uint32_t)sp[-2];
+    uint32_t dest = (uint32_t)sp[-3];
+    sp -= 3;
+
+    // Validate table indices
+    if (dst_table_idx < 0 || dst_table_idx >= g_num_tables ||
+        src_table_idx < 0 || src_table_idx >= g_num_tables) {
+        TRAP(TRAP_TABLE_BOUNDS_ACCESS);
+    }
+
+    int dst_offset = g_table_offsets[dst_table_idx];
+    int dst_size = g_table_sizes[dst_table_idx];
+    int src_offset = g_table_offsets[src_table_idx];
+    int src_size = g_table_sizes[src_table_idx];
+
+    // Bounds check
+    if ((uint64_t)src + n > (uint64_t)src_size ||
+        (uint64_t)dest + n > (uint64_t)dst_size) {
+        TRAP(TRAP_TABLE_BOUNDS_ACCESS);
+    }
+
+    // Copy with proper overlap handling
+    if (dst_table_idx == src_table_idx && dest > src && dest < src + n) {
+        // Overlapping, dest > src: copy backwards
+        for (int i = n - 1; i >= 0; i--) {
+            g_tables_flat[dst_offset + dest + i] = g_tables_flat[src_offset + src + i];
+        }
+    } else {
+        // Non-overlapping or src >= dest: copy forwards
+        for (uint32_t i = 0; i < n; i++) {
+            g_tables_flat[dst_offset + dest + i] = g_tables_flat[src_offset + src + i];
+        }
+    }
+    NEXT();
+}
+DEFINE_OP(table_copy)
+
+// table.fill - fill table entries with a value
+// Immediate: table_idx
+// Stack: [dest, val, n] -> []
+int op_table_fill(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    int table_idx = (int)*pc++;
+
+    uint32_t n = (uint32_t)sp[-1];
+    int32_t val = (int32_t)sp[-2];  // Reference value (funcref index or -1 for null)
+    uint32_t dest = (uint32_t)sp[-3];
+    sp -= 3;
+
+    // Validate table index
+    if (table_idx < 0 || table_idx >= g_num_tables) {
+        TRAP(TRAP_TABLE_BOUNDS_ACCESS);
+    }
+
+    int table_offset = g_table_offsets[table_idx];
+    int table_size = g_table_sizes[table_idx];
+
+    // Bounds check
+    if ((uint64_t)dest + n > (uint64_t)table_size) {
+        TRAP(TRAP_TABLE_BOUNDS_ACCESS);
+    }
+
+    // Fill table
+    for (uint32_t i = 0; i < n; i++) {
+        g_tables_flat[table_offset + dest + i] = val;
+    }
+    NEXT();
+}
+DEFINE_OP(table_fill)
+
+// table.init - initialize table from element segment
+// Immediates: elem_idx, table_idx
+// Stack: [dest, src, n] -> []
+int op_table_init(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    int elem_idx = (int)*pc++;
+    int table_idx = (int)*pc++;
+
+    uint32_t n = (uint32_t)sp[-1];
+    uint32_t src = (uint32_t)sp[-2];
+    uint32_t dest = (uint32_t)sp[-3];
+    sp -= 3;
+
+    // Validate element segment index
+    if (elem_idx < 0 || elem_idx >= g_num_elem_segments) {
+        TRAP(TRAP_TABLE_BOUNDS_ACCESS);
+    }
+
+    // Validate table index
+    if (table_idx < 0 || table_idx >= g_num_tables) {
+        TRAP(TRAP_TABLE_BOUNDS_ACCESS);
+    }
+
+    int elem_offset = g_elem_segment_offsets[elem_idx];
+    // Dropped segments are treated as having size 0
+    int elem_size = g_elem_segment_dropped[elem_idx] ? 0 : g_elem_segment_sizes[elem_idx];
+    int table_offset = g_table_offsets[table_idx];
+    int table_size = g_table_sizes[table_idx];
+
+    // Bounds check (n=0 with dropped segment is OK, n>0 with dropped segment traps)
+    if ((uint64_t)src + n > (uint64_t)elem_size ||
+        (uint64_t)dest + n > (uint64_t)table_size) {
+        TRAP(TRAP_TABLE_BOUNDS_ACCESS);
+    }
+
+    // Copy from element segment to table
+    for (uint32_t i = 0; i < n; i++) {
+        g_tables_flat[table_offset + dest + i] = g_elem_segments_flat[elem_offset + src + i];
+    }
+    NEXT();
+}
+DEFINE_OP(table_init)
+
+// elem.drop - drop an element segment
+// Immediate: elem_idx
+// Stack: [] -> []
+int op_elem_drop(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp; (void)sp;
+    int elem_idx = (int)*pc++;
+
+    // Validate element segment index
+    if (elem_idx >= 0 && elem_idx < g_num_elem_segments) {
+        // Mark segment as dropped
+        g_elem_segment_dropped[elem_idx] = 1;
+    }
+    NEXT();
+}
+DEFINE_OP(elem_drop)

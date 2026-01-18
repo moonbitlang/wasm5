@@ -1,0 +1,5 @@
+# Generated wasm files
+benches/*.wasm
+
+# Benchmark results
+results.json

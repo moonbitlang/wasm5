@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "moonbitlang/wasm5/src/runtime"
 
-import(
-  "moonbitlang/wasm5/src/core"
-)
+import {
+  "moonbitlang/wasm5/src/core",
+}
 
 // Values
 pub fn default_import_resolver() -> ImportResolver

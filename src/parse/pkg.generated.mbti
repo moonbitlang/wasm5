@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "moonbitlang/wasm5/src/parse"
 
-import(
-  "moonbitlang/wasm5/src/core"
-)
+import {
+  "moonbitlang/wasm5/src/core",
+}
 
 // Values
 pub fn parse(Bytes) -> @core.Module raise

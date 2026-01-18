@@ -1,10 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "moonbitlang/wasm5/src/cruntime"
 
-import(
-  "moonbitlang/wasm5/src/core"
-  "moonbitlang/wasm5/src/runtime"
-)
+import {
+  "moonbitlang/wasm5/src/core",
+  "moonbitlang/wasm5/src/runtime",
+}
 
 // Values
 pub fn compile(@core.Module) -> CompiledModule
@@ -27,6 +27,13 @@ pub struct CRuntime {
   type_result_counts : FixedArray[Int]
   import_num_params : FixedArray[Int]
   import_num_results : FixedArray[Int]
+  data_segments_flat : FixedArray[Byte]
+  data_segment_offsets : FixedArray[Int]
+  data_segment_sizes : FixedArray[Int]
+  elem_segments_flat : FixedArray[Int]
+  elem_segment_offsets : FixedArray[Int]
+  elem_segment_sizes : FixedArray[Int]
+  elem_segment_dropped : FixedArray[Int]
 }
 pub fn CRuntime::call_compiled(Self, Bytes, Array[@core.Value]) -> Array[@core.Value] raise @runtime.RuntimeError
 pub fn CRuntime::load(@core.Module) -> Self
@@ -52,6 +59,7 @@ pub enum TrapCode {
   NullFunctionReference
   StackOverflow
   UninitializedElement
+  TableBoundsAccess
 }
 pub impl Eq for TrapCode
 pub impl Show for TrapCode

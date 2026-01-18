@@ -18,6 +18,15 @@ pub struct CRuntime {
   // Import function metadata for op_call_import
   import_num_params : FixedArray[Int] // Number of params for each imported function
   import_num_results : FixedArray[Int] // Number of results for each imported function
+  // Data segments for bulk memory operations
+  data_segments_flat : FixedArray[Byte] // All data segments concatenated
+  data_segment_offsets : FixedArray[Int] // Offset of each segment in data_segments_flat
+  data_segment_sizes : FixedArray[Int] // Size of each segment (mutable for data.drop)
+  // Element segments for bulk table operations
+  elem_segments_flat : FixedArray[Int] // All element segments flattened (func indices, -1 for null)
+  elem_segment_offsets : FixedArray[Int] // Offset of each segment in elem_segments_flat
+  elem_segment_sizes : FixedArray[Int] // Size of each segment
+  elem_segment_dropped : FixedArray[Int] // Whether each segment has been dropped (0 or 1)
 }
 
 // Import Value type from core
@@ -35,11 +44,12 @@ fn trap_to_error(trap : TrapCode) -> @runtime.RuntimeError {
     IntegerOverflow => "integer overflow"
     InvalidConversionToInteger => "integer overflow"
     OutOfBoundsMemoryAccess => "out of bounds memory access"
-    OutOfBoundsTableAccess => "undefined element"
+    OutOfBoundsTableAccess => "undefined element" // For call_indirect index out of bounds
     IndirectCallTypeMismatch => "indirect call type mismatch"
     NullFunctionReference => "null function reference"
     StackOverflow => "stack overflow"
     UninitializedElement => "uninitialized element"
+    TableBoundsAccess => "out of bounds table access" // For bulk table ops
   }
   @runtime.RuntimeError::from_detail(detail)
 }
@@ -62,6 +72,17 @@ pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
   )
   // Build import function metadata for op_call_import
   let (import_num_params, import_num_results) = build_import_info(module_)
+  // Flatten data segments for bulk memory operations
+  let (data_segments_flat, data_segment_offsets, data_segment_sizes) = flatten_data_segments(
+    module_,
+  )
+  // Flatten element segments for bulk table operations
+  let (
+    elem_segments_flat,
+    elem_segment_offsets,
+    elem_segment_sizes,
+    elem_segment_dropped,
+  ) = flatten_elem_segments(module_)
   {
     module_,
     compiled,
@@ -77,6 +98,13 @@ pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
     type_result_counts,
     import_num_params,
     import_num_results,
+    data_segments_flat,
+    data_segment_offsets,
+    data_segment_sizes,
+    elem_segments_flat,
+    elem_segment_offsets,
+    elem_segment_sizes,
+    elem_segment_dropped,
   }
 }
 
@@ -116,6 +144,98 @@ fn flatten_tables(
     tables_flat,
     FixedArray::from_array(table_offsets),
     FixedArray::from_array(table_sizes),
+  )
+}
+
+///|
+/// Flatten data segments into a single byte array for C FFI
+/// Returns (data_flat, offsets, sizes) where sizes is mutable for data.drop
+fn flatten_data_segments(
+  module_ : @core.Module,
+) -> (FixedArray[Byte], FixedArray[Int], FixedArray[Int]) {
+  let num_segments = module_.datas.length()
+  if num_segments == 0 {
+    // Return minimal arrays to avoid empty array issues
+    return (FixedArray::make(1, b'\x00'), [0], [0])
+  }
+  // Calculate total size and offsets
+  let segment_sizes : Array[Int] = []
+  let segment_offsets : Array[Int] = []
+  let mut total_size = 0
+  for data in module_.datas {
+    segment_offsets.push(total_size)
+    let size = data.init.length()
+    segment_sizes.push(size)
+    total_size += size
+  }
+  // Flatten into single byte array
+  let data_flat : FixedArray[Byte] = FixedArray::make(
+    if total_size > 0 {
+      total_size
+    } else {
+      1
+    },
+    b'\x00',
+  )
+  for i, data in module_.datas {
+    let offset = segment_offsets[i]
+    for j in 0..<data.init.length() {
+      data_flat[offset + j] = data.init[j]
+    }
+  }
+  (
+    data_flat,
+    FixedArray::from_array(segment_offsets),
+    FixedArray::from_array(segment_sizes),
+  )
+}
+
+///|
+/// Flatten element segments into a single int array for C FFI
+/// Returns (elem_flat, offsets, sizes, dropped) where sizes tracks segment sizes
+/// and dropped tracks whether each segment has been dropped (0 or 1)
+fn flatten_elem_segments(
+  module_ : @core.Module,
+) -> (FixedArray[Int], FixedArray[Int], FixedArray[Int], FixedArray[Int]) {
+  let num_segments = module_.elems.length()
+  if num_segments == 0 {
+    // Return minimal arrays to avoid empty array issues
+    return (FixedArray::make(1, -1), [0], [0], [0])
+  }
+  // Calculate total size and offsets
+  let segment_sizes : Array[Int] = []
+  let segment_offsets : Array[Int] = []
+  let segment_dropped : Array[Int] = []
+  let mut total_size = 0
+  for elem in module_.elems {
+    segment_offsets.push(total_size)
+    let size = elem.init.length()
+    segment_sizes.push(size)
+    // Active element segments are automatically dropped after instantiation
+    segment_dropped.push(if elem.is_active { 1 } else { 0 })
+    total_size += size
+  }
+  // Flatten into single int array
+  let elem_flat : FixedArray[Int] = FixedArray::make(
+    if total_size > 0 {
+      total_size
+    } else {
+      1
+    },
+    -1,
+  )
+  for i, elem in module_.elems {
+    let offset = segment_offsets[i]
+    for j, init_expr in elem.init {
+      // Evaluate the init expression to get the function index
+      elem_flat[offset + j] = eval_elem_expr(init_expr)
+    }
+  }
+  (
+    elem_flat,
+    FixedArray::from_array(segment_offsets),
+    FixedArray::from_array(segment_sizes),
+    FixedArray::from_array(segment_dropped),
   )
 }
 
@@ -549,6 +669,15 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
           self.module_.types.length(),
           self.import_num_params,
           self.import_num_results,
+          self.data_segments_flat,
+          self.data_segment_offsets,
+          self.data_segment_sizes,
+          self.module_.datas.length(),
+          self.elem_segments_flat,
+          self.elem_segment_offsets,
+          self.elem_segment_sizes,
+          self.elem_segment_dropped,
+          self.module_.elems.length(),
         )
         let trap = trap_code_from_int(trap_code)
         if trap != TrapCode::None {
@@ -620,6 +749,15 @@ pub fn CRuntime::call_compiled(
         self.module_.types.length(),
         self.import_num_params,
         self.import_num_results,
+        self.data_segments_flat,
+        self.data_segment_offsets,
+        self.data_segment_sizes,
+        self.module_.datas.length(),
+        self.elem_segments_flat,
+        self.elem_segment_offsets,
+        self.elem_segment_sizes,
+        self.elem_segment_dropped,
+        self.module_.elems.length(),
       )
       // Check for trap
       let trap = trap_code_from_int(trap_code)
