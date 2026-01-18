@@ -1227,7 +1227,15 @@ async test "bulk-memory/memory_init.wast (cruntime)" {
   run_test_harness("bulk-memory/", "memory_init.wast", runtime_type=CRuntime)
 }
 
-// Note: table_copy.wast, table_fill.wast, and table_init.wast are skipped for CRuntime because:
-// - table_fill.wast uses externref tables (CRuntime only supports funcref as int)
-// - table_copy.wast and table_init.wast use multi-module register and imports (not supported)
-// The simpler table operations in bulk.wast are tested separately.
+// Note: table_fill.wast is skipped for CRuntime because it uses externref tables
+// (CRuntime only supports funcref as int).
+
+///|
+async test "bulk-memory/table_copy.wast (cruntime)" {
+  run_test_harness("bulk-memory/", "table_copy.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "bulk-memory/table_init.wast (cruntime)" {
+  run_test_harness("bulk-memory/", "table_init.wast", runtime_type=CRuntime)
+}

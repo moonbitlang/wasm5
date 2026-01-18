@@ -19,6 +19,9 @@ pub struct CRuntime {
   // Import function metadata for op_call_import
   import_num_params : FixedArray[Int] // Number of params for each imported function
   import_num_results : FixedArray[Int] // Number of results for each imported function
+  // Cross-module import resolution for call_indirect
+  import_context_ptrs : FixedArray[Int64] // Target context pointer for each import (-1 if not resolved)
+  import_target_func_idxs : FixedArray[Int] // Target function index for each import
   // Data segments for bulk memory operations
   data_segments_flat : FixedArray[Byte] // All data segments concatenated
   data_segment_offsets : FixedArray[Int] // Offset of each segment in data_segments_flat
@@ -93,6 +96,24 @@ pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
     elem_segment_sizes,
     elem_segment_dropped,
   ) = flatten_elem_segments(module_)
+  // For basic load with no imports, use empty arrays
+  let num_imported = count_imported_funcs(module_)
+  let import_context_ptrs : FixedArray[Int64] = FixedArray::make(
+    if num_imported > 0 {
+      num_imported
+    } else {
+      1
+    },
+    -1L, // -1 means not resolved
+  )
+  let import_target_func_idxs : FixedArray[Int] = FixedArray::make(
+    if num_imported > 0 {
+      num_imported
+    } else {
+      1
+    },
+    -1,
+  )
   {
     module_,
     compiled,
@@ -109,6 +130,8 @@ pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
     type_result_counts,
     import_num_params,
     import_num_results,
+    import_context_ptrs,
+    import_target_func_idxs,
     data_segments_flat,
     data_segment_offsets,
     data_segment_sizes,
@@ -157,6 +180,31 @@ pub fn CRuntime::load_with_imports(
     elem_segment_sizes,
     elem_segment_dropped,
   ) = flatten_elem_segments(module_)
+  // Build import context arrays from resolved imports
+  let num_imported = count_imported_funcs(module_)
+  let import_context_ptrs : FixedArray[Int64] = FixedArray::make(
+    if num_imported > 0 {
+      num_imported
+    } else {
+      1
+    },
+    -1L, // -1 means not resolved
+  )
+  let import_target_func_idxs : FixedArray[Int] = FixedArray::make(
+    if num_imported > 0 {
+      num_imported
+    } else {
+      1
+    },
+    -1,
+  )
+  // Fill in resolved import info
+  for import_idx, resolved in resolved_imports {
+    if import_idx >= 0 && import_idx < num_imported {
+      import_context_ptrs[import_idx] = resolved.target_context_ptr
+      import_target_func_idxs[import_idx] = resolved.target_func_idx
+    }
+  }
   {
     module_,
     compiled,
@@ -173,6 +221,8 @@ pub fn CRuntime::load_with_imports(
     type_result_counts,
     import_num_params,
     import_num_results,
+    import_context_ptrs,
+    import_target_func_idxs,
     data_segments_flat,
     data_segment_offsets,
     data_segment_sizes,
@@ -215,6 +265,8 @@ pub fn CRuntime::get_context_ptr(self : CRuntime) -> Int64 {
       self.module_.types.length(),
       self.import_num_params,
       self.import_num_results,
+      self.import_context_ptrs,
+      self.import_target_func_idxs,
       self.data_segments_flat,
       self.data_segment_offsets,
       self.data_segment_sizes,
@@ -438,8 +490,8 @@ fn build_type_info(
       _ => ()
     }
   }
-  // Then, local function types (from module.funcs, skipping imports)
-  for i = num_imported; i < module_.funcs.length(); i = i + 1 {
+  // Then, local function types (module.funcs contains only local functions)
+  for i = 0; i < module_.funcs.length(); i = i + 1 {
     func_type_idxs.push(module_.funcs[i].reinterpret_as_int())
   }
   // Build type signature hashes for each type
@@ -838,6 +890,8 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
           self.module_.types.length(),
           self.import_num_params,
           self.import_num_results,
+          self.import_context_ptrs,
+          self.import_target_func_idxs,
           self.data_segments_flat,
           self.data_segment_offsets,
           self.data_segment_sizes,
@@ -985,6 +1039,8 @@ pub fn CRuntime::call_compiled(
           self.module_.types.length(),
           self.import_num_params,
           self.import_num_results,
+          self.import_context_ptrs,
+          self.import_target_func_idxs,
           self.data_segments_flat,
           self.data_segment_offsets,
           self.data_segment_sizes,

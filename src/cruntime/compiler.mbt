@@ -942,7 +942,7 @@ fn compile_instr(
       ignore(ctx.pop_slot()) // val
       ignore(ctx.pop_slot()) // dest
     }
-    TableInit(elem_idx, table_idx) => {
+    TableInit(table_idx, elem_idx) => {
       // Immediates: elem_idx, table_idx
       // Stack: [dest, src, n] -> []
       ctx.emit(table_init())

@@ -30,6 +30,8 @@ pub struct CRuntime {
   type_result_counts : FixedArray[Int]
   import_num_params : FixedArray[Int]
   import_num_results : FixedArray[Int]
+  import_context_ptrs : FixedArray[Int64]
+  import_target_func_idxs : FixedArray[Int]
   data_segments_flat : FixedArray[Byte]
   data_segment_offsets : FixedArray[Int]
   data_segment_sizes : FixedArray[Int]

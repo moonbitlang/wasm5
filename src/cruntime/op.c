@@ -216,6 +216,9 @@ static int g_num_types = 0;
 // Import function metadata (for op_call_import)
 static int* g_import_num_params = NULL;    // Number of params for each imported function
 static int* g_import_num_results = NULL;   // Number of results for each imported function
+// Cross-module resolved imports (for call_indirect with imported functions)
+static int64_t* g_import_context_ptrs = NULL;  // Target context pointer for each import (-1 if not resolved)
+static int* g_import_target_func_idxs = NULL;  // Function index in target module for each import
 
 // Data segments for bulk memory operations (memory.init, data.drop)
 static uint8_t* g_data_segments_flat = NULL;   // All data segments concatenated
@@ -259,6 +262,8 @@ typedef struct CRuntimeContext {
     int num_types;
     int* import_num_params;
     int* import_num_results;
+    int64_t* import_context_ptrs;
+    int* import_target_func_idxs;
     uint8_t* data_segments_flat;
     int* data_segment_offsets;
     int* data_segment_sizes;
@@ -297,6 +302,8 @@ static void save_context(CRuntimeContext* ctx, CRuntime* crt) {
     ctx->num_types = g_num_types;
     ctx->import_num_params = g_import_num_params;
     ctx->import_num_results = g_import_num_results;
+    ctx->import_context_ptrs = g_import_context_ptrs;
+    ctx->import_target_func_idxs = g_import_target_func_idxs;
     ctx->data_segments_flat = g_data_segments_flat;
     ctx->data_segment_offsets = g_data_segment_offsets;
     ctx->data_segment_sizes = g_data_segment_sizes;
@@ -330,6 +337,8 @@ static void load_context(const CRuntimeContext* ctx, CRuntime* crt) {
     g_num_types = ctx->num_types;
     g_import_num_params = ctx->import_num_params;
     g_import_num_results = ctx->import_num_results;
+    g_import_context_ptrs = ctx->import_context_ptrs;
+    g_import_target_func_idxs = ctx->import_target_func_idxs;
     g_data_segments_flat = ctx->data_segments_flat;
     g_data_segment_offsets = ctx->data_segment_offsets;
     g_data_segment_sizes = ctx->data_segment_sizes;
@@ -350,6 +359,7 @@ CRuntimeContext* create_runtime_context(
     int num_funcs, int num_imported_funcs, int* func_type_idxs,
     int* type_sig_hash1, int* type_sig_hash2, int num_types,
     int* import_num_params, int* import_num_results,
+    int64_t* import_context_ptrs, int* import_target_func_idxs,
     uint8_t* data_segments_flat, int* data_segment_offsets, int* data_segment_sizes, int num_data_segments,
     int* elem_segments_flat, int* elem_segment_offsets, int* elem_segment_sizes,
     int* elem_segment_dropped, int num_elem_segments
@@ -377,6 +387,8 @@ CRuntimeContext* create_runtime_context(
     ctx->num_types = num_types;
     ctx->import_num_params = import_num_params;
     ctx->import_num_results = import_num_results;
+    ctx->import_context_ptrs = import_context_ptrs;
+    ctx->import_target_func_idxs = import_target_func_idxs;
     ctx->data_segments_flat = data_segments_flat;
     ctx->data_segment_offsets = data_segment_offsets;
     ctx->data_segment_sizes = data_segment_sizes;
@@ -411,6 +423,7 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
             int* func_entries, int* func_num_locals, int num_funcs, int num_imported_funcs,
             int* func_type_idxs, int* type_sig_hash1, int* type_sig_hash2, int num_types,
             int* import_num_params, int* import_num_results,
+            int64_t* import_context_ptrs, int* import_target_func_idxs,
             uint8_t* data_segments_flat, int* data_segment_offsets, int* data_segment_sizes, int num_data_segments,
             int* elem_segments_flat, int* elem_segment_offsets, int* elem_segment_sizes, int* elem_segment_dropped, int num_elem_segments) {
     // Allocate stack on heap to avoid C stack limits
@@ -451,9 +464,11 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     g_type_sig_hash2 = type_sig_hash2;
     g_num_types = num_types;
 
-    // Store import function metadata for op_call_import
+    // Store import function metadata for op_call_import and call_indirect
     g_import_num_params = import_num_params;
     g_import_num_results = import_num_results;
+    g_import_context_ptrs = import_context_ptrs;
+    g_import_target_func_idxs = import_target_func_idxs;
 
     // Store data segment info for bulk memory operations
     g_data_segments_flat = data_segments_flat;
@@ -512,6 +527,8 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     g_num_types = 0;
     g_import_num_params = NULL;
     g_import_num_results = NULL;
+    g_import_context_ptrs = NULL;
+    g_import_target_func_idxs = NULL;
     g_data_segments_flat = NULL;
     g_data_segment_offsets = NULL;
     g_data_segment_sizes = NULL;
@@ -2339,7 +2356,93 @@ int op_call_indirect(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
         }
     }
 
-    // Convert to local function index
+    // Check if this is an imported function (requires cross-module call)
+    if (func_idx < g_num_imported_funcs) {
+        // This is an imported function - need to do cross-module call
+        // Check if we have resolved import info
+        if (g_import_context_ptrs == NULL || g_import_target_func_idxs == NULL) {
+            // No cross-module support - treat as undefined
+            TRAP(TRAP_UNINITIALIZED_ELEMENT);
+        }
+
+        int64_t target_ctx_ptr = g_import_context_ptrs[func_idx];
+        if (target_ctx_ptr <= 0) {
+            // Import not resolved
+            TRAP(TRAP_UNINITIALIZED_ELEMENT);
+        }
+
+        // Get import metadata
+        int num_params = g_import_num_params ? g_import_num_params[func_idx] : 0;
+        int num_results = g_import_num_results ? g_import_num_results[func_idx] : 0;
+        int target_func_idx = g_import_target_func_idxs[func_idx];
+
+        // Args are at fp + frame_offset
+        uint64_t* args_ptr = fp + frame_offset;
+
+        // Call the external function using context switching
+        CRuntimeContext* target_ctx = (CRuntimeContext*)(uintptr_t)target_ctx_ptr;
+
+        // Save current context
+        if (g_context_depth >= MAX_CONTEXT_DEPTH) {
+            TRAP(TRAP_STACK_OVERFLOW);
+        }
+        save_context(&g_saved_contexts[g_context_depth++], crt);
+
+        // Load target context
+        load_context(target_ctx, crt);
+
+        // Get target function info
+        int local_target_idx = target_func_idx - target_ctx->num_imported_funcs;
+        if (local_target_idx < 0 || local_target_idx >= target_ctx->num_funcs) {
+            // Restore context before trap
+            load_context(&g_saved_contexts[--g_context_depth], crt);
+            TRAP(TRAP_OUT_OF_BOUNDS_TABLE);
+        }
+
+        int callee_entry = target_ctx->func_entries[local_target_idx];
+        int callee_num_locals = target_ctx->func_num_locals[local_target_idx];
+
+        // Allocate frame for callee
+        uint64_t* callee_stack = (uint64_t*)malloc(STACK_SIZE * sizeof(uint64_t));
+        if (!callee_stack) {
+            load_context(&g_saved_contexts[--g_context_depth], crt);
+            TRAP(TRAP_STACK_OVERFLOW);
+        }
+
+        // Copy args to callee stack
+        for (int i = 0; i < num_params; i++) {
+            callee_stack[i] = args_ptr[i];
+        }
+        // Zero remaining locals
+        for (int i = num_params; i < callee_num_locals; i++) {
+            callee_stack[i] = 0;
+        }
+
+        // Execute callee
+        uint64_t* callee_pc = target_ctx->code + callee_entry;
+        uint64_t* callee_fp = callee_stack;
+        uint64_t* callee_sp = callee_stack + callee_num_locals;
+
+        int trap = run(crt, callee_pc, callee_sp, callee_fp);
+
+        // Copy results back to our args location (results at callee_stack[0..num_results-1])
+        for (int i = 0; i < num_results; i++) {
+            args_ptr[i] = callee_stack[i];
+        }
+
+        free(callee_stack);
+
+        // Restore our context
+        load_context(&g_saved_contexts[--g_context_depth], crt);
+
+        if (trap != TRAP_NONE) {
+            return trap;
+        }
+
+        NEXT();
+    }
+
+    // Local function call
     int local_idx = func_idx - g_num_imported_funcs;
     if (local_idx < 0 || local_idx >= g_num_funcs) {
         TRAP(TRAP_OUT_OF_BOUNDS_TABLE);
