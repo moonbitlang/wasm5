@@ -1316,6 +1316,7 @@ async test "component/instance-type.wast" {
 }
 
 // ///|
+
 ///|
 async test "component/instantiate.wast" {
   run_component_harness("instantiate.wast")

@@ -1,12 +1,14 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "moonbitlang/wasm5/src/parse"
 
-import {
-  "moonbitlang/wasm5/src/core",
-}
+import(
+  "moonbitlang/wasm5/src/core"
+)
 
 // Values
 pub fn parse(Bytes) -> @core.Module raise
+
+pub fn parse_component(Bytes) -> @core.Component raise ParseError
 
 pub fn parse_novalidate(Bytes) -> @core.Module raise
 
@@ -16,10 +18,32 @@ pub(all) suberror ParseError {
   InvalidMagic
   UnsupportedVersion
   InvalidFormat(String)
+  InvalidLayer
+  UnsupportedSection(UInt)
+  InvalidSectionOrder
+  NestedError(String)
 }
 pub impl Show for ParseError
 
 // Types and methods
+pub struct Parser {
+  bytes : Bytes
+  mut pos : Int
+}
+pub fn Parser::eof(Self) -> Bool
+pub fn Parser::get_pos(Self) -> Int
+pub fn Parser::new(Bytes) -> Self
+pub fn Parser::peek_byte(Self) -> Byte?
+pub fn Parser::read_byte(Self) -> Byte raise ParseError
+pub fn Parser::read_bytes(Self, UInt) -> BytesView raise ParseError
+pub fn Parser::read_i32_leb128(Self) -> Int raise ParseError
+pub fn Parser::read_i64_leb128(Self) -> Int64 raise ParseError
+pub fn Parser::read_name(Self) -> Bytes raise ParseError
+pub fn Parser::read_u32_leb128(Self) -> UInt raise ParseError
+pub fn Parser::read_u64_leb128(Self) -> UInt64 raise ParseError
+pub fn Parser::remaining(Self) -> Int
+pub fn Parser::set_pos(Self, Int) -> Unit
+pub fn Parser::skip(Self, Int) -> Unit raise ParseError
 
 // Type aliases
 

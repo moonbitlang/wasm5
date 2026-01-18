@@ -117,10 +117,9 @@ fn ComponentRuntime::process_core_instance(
               )
             }
           }
-          @core.CoreExportKind::Tag(idx) => {
+          @core.CoreExportKind::Tag(idx) =>
             // Store tag index for exception handling
             export_map[name] = VirtualCoreExport::Tag(idx)
-          }
         }
       }
       self.core_instances.push(CoreInstanceEntry::Virtual(export_map))
@@ -261,11 +260,7 @@ fn ComponentRuntime::link_instance_exports(
             let imported = @runtime.ImportedFunc::new(
               0U, // arity not used in current implementation
               fn(args) {
-                try {
-                  let _ = runtime_ref.compile()
-                  let (_, results) = runtime_ref.call_compiled(func_name, args)
-                  results
-                } catch {
+                runtime_ref.call_compiled(func_name, args) catch {
                   _ => []
                 }
               },

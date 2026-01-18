@@ -80,17 +80,17 @@ fn parse_inline_export(
   let name_kind = parser.read_byte().to_uint()
   let name = match name_kind {
     0x00 => parser.read_name() // kebab-name
-    0x01 => {
+    0x01 =>
       // Interface specifier - may have optional integrity prefix
       // For now, just read the name part
       parser.read_name()
-    }
     0x02 => parser.read_name() // URL format
     0x03 => {
       // Relative integrity - skip hash bytes and read name
       let hash_len = parser.read_u32_leb128()
       for _ in 0U..<hash_len {
         let _ = parser.read_byte()
+
       }
       parser.read_name()
     }
@@ -99,6 +99,7 @@ fn parse_inline_export(
       let hash_len = parser.read_u32_leb128()
       for _ in 0U..<hash_len {
         let _ = parser.read_byte()
+
       }
       parser.read_name()
     }
@@ -118,7 +119,10 @@ fn parse_inline_export(
       // Other core sorts can be added as needed:
       // 0x00 => func, 0x01 => table, 0x02 => memory, 0x03 => global
       // 0x12 => core instance
-      _ => raise ParseError::InvalidFormat("invalid core export sort: 0x\{core_sort.to_string()}")
+      _ =>
+        raise ParseError::InvalidFormat(
+          "invalid core export sort: 0x\{core_sort.to_string()}",
+        )
     }
   } else {
     // Component sort
@@ -129,7 +133,10 @@ fn parse_inline_export(
       0x03 => @core.ComponentExportKind::Type(idx)
       0x04 => @core.ComponentExportKind::Component(idx)
       0x05 => @core.ComponentExportKind::Instance(idx)
-      _ => raise ParseError::InvalidFormat("invalid export sort: 0x\{sort.to_string()}")
+      _ =>
+        raise ParseError::InvalidFormat(
+          "invalid export sort: 0x\{sort.to_string()}",
+        )
     }
   }
   @core.ComponentExport::{ name, kind, extern_type: None }

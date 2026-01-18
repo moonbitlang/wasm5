@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "moonbitlang/wasm5/src/component_runtime"
+package "moonbitlang/wasm5/src/component"
 
 import(
   "moonbitlang/wasm5/src/core"
@@ -31,13 +31,15 @@ pub impl Show for WasmError
 type ComponentFunc
 
 pub struct ComponentImportResolver {
-  funcs : Map[String, ImportedComponentFunc]
+  funcs : Array[(String, ImportedComponentFunc)]
+  mut func_index : Int
   values : Map[String, ComponentValue]
   instances : Map[String, ComponentRuntime]
 }
 pub fn ComponentImportResolver::add_func(Self, String, ImportedComponentFunc) -> Unit
 pub fn ComponentImportResolver::add_instance(Self, String, ComponentRuntime) -> Unit
 pub fn ComponentImportResolver::add_value(Self, String, ComponentValue) -> Unit
+pub fn ComponentImportResolver::get_func(Self, String) -> ImportedComponentFunc?
 pub fn ComponentImportResolver::new() -> Self
 
 type ComponentInstanceEntry
@@ -52,7 +54,7 @@ pub struct ComponentRuntime {
   core_funcs : Array[CoreFunc]
   core_memories : Array[(Array[Byte], UInt64?)]
   core_tables : Array[@runtime.RuntimeTable]
-  core_globals : Array[@runtime.Value]
+  core_globals : Array[@core.Value]
   types : Array[@core.ComponentTypeDef]
   funcs : Array[ComponentFunc]
   values : Array[ComponentValue]
@@ -63,6 +65,9 @@ pub struct ComponentRuntime {
   mut next_resource_handle : UInt
 }
 pub fn ComponentRuntime::call(Self, String, Array[ComponentValue]) -> Array[ComponentValue] raise ComponentRuntimeError
+pub fn ComponentRuntime::get_export_names(Self) -> Array[String]
+pub fn ComponentRuntime::get_func_name(Self, UInt) -> String?
+pub fn ComponentRuntime::get_func_names(Self) -> Array[(Int, String, String)]
 pub fn ComponentRuntime::instantiate(Self) -> Unit raise ComponentRuntimeError
 pub fn ComponentRuntime::new(@core.Component) -> Self
 pub fn ComponentRuntime::new_with_imports(@core.Component, ComponentImportResolver) -> Self

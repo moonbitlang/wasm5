@@ -6,15 +6,11 @@ pub fn atomic_spec_by_name(Bytes) -> AtomicSpec?
 
 pub fn atomic_spec_by_opcode(UInt) -> AtomicSpec?
 
-pub let atomic_specs : Array[AtomicSpec]
-
 pub fn atomic_stack_effect(Bytes) -> AtomicStackEffect
 
 pub fn simd_spec_by_name(Bytes) -> SimdSpec?
 
 pub fn simd_spec_by_opcode(UInt) -> SimdSpec?
-
-pub let simd_specs : Array[SimdSpec]
 
 pub fn simd_stack_effect(Bytes) -> SimdStackEffect
 
@@ -35,6 +31,7 @@ pub(all) enum AliasKind {
   CoreFunc
   CoreMemory
   CoreGlobal
+  CoreTag
   Type
   Component
   Instance
@@ -282,6 +279,10 @@ pub(all) enum ComponentValType {
   Result(ComponentValType?, ComponentValType?)
   Own(UInt)
   Borrow(UInt)
+  ErrorContext
+  Future(ComponentValType?)
+  Stream(ComponentValType?)
+  FixedSizeList(ComponentValType, UInt)
 }
 pub impl Eq for ComponentValType
 pub impl Show for ComponentValType
@@ -305,6 +306,7 @@ pub(all) enum CoreExportKind {
   Table(UInt)
   Memory(UInt)
   Global(UInt)
+  Tag(UInt)
 }
 pub impl Eq for CoreExportKind
 pub impl Show for CoreExportKind
@@ -441,7 +443,17 @@ pub(all) enum InstanceTypeDecl {
 }
 
 pub(all) enum InstantiateArg {
-  Module(Bytes, UInt)
+  CoreFunc(Bytes, UInt)
+  CoreTable(Bytes, UInt)
+  CoreMemory(Bytes, UInt)
+  CoreGlobal(Bytes, UInt)
+  CoreType(Bytes, UInt)
+  CoreModule(Bytes, UInt)
+  CoreInstance(Bytes, UInt)
+  Func(Bytes, UInt)
+  Value(Bytes, UInt)
+  Type(Bytes, UInt)
+  Component(Bytes, UInt)
   Instance(Bytes, UInt)
 }
 pub impl Eq for InstantiateArg
@@ -728,7 +740,7 @@ pub(all) enum ModuleTypeDecl {
   Type(TypeDef)
   Import(Import)
   Alias(CoreAlias)
-  Export(Bytes, ExportDesc)
+  Export(Bytes, ImportDesc)
 }
 
 pub(all) enum PrimitiveType {
@@ -938,6 +950,18 @@ pub fn ValType::is_ref_type(Self) -> Bool
 pub fn ValType::to_non_nullable(Self) -> Self
 pub impl Eq for ValType
 pub impl Show for ValType
+
+pub(all) enum Value {
+  I32(UInt)
+  I64(UInt64)
+  F32(Float)
+  F64(Double)
+  Ref(Int?)
+  Funcref(Int?)
+  Externref(Int?)
+}
+pub impl Eq for Value
+pub impl Show for Value
 
 pub(all) struct VariantCase {
   name : Bytes

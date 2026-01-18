@@ -1,0 +1,12 @@
+// Calculator interface
+package example:calculator;
+
+interface operations {
+    add: func(a: s32, b: s32) -> s32;
+    sub: func(a: s32, b: s32) -> s32;
+    mul: func(a: s32, b: s32) -> s32;
+}
+
+world calculator {
+    export operations;
+}

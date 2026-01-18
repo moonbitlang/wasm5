@@ -37,6 +37,9 @@ pub(all) suberror ValidationError {
   UninitializedLocal(Int)
   UnknownType(Int)
   UndeclaredFunctionReference(Int)
+  InvalidElemIndex(Int)
+  UnknownDataSegment(Int)
+  InvalidSubtype(String)
 }
 pub impl Show for ValidationError
 

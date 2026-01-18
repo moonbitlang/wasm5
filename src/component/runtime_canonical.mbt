@@ -130,7 +130,7 @@ fn CanonicalContext::realloc(
       match func_name {
         None => raise ComponentRuntimeError("realloc function not found")
         Some(name) => {
-          let (_, results) = self.runtime.call_compiled(name, args) catch {
+          let results = self.runtime.call_compiled(name, args) catch {
             e => raise ComponentRuntimeError("realloc call failed: \{e}")
           }
           match results[0] {

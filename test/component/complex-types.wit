@@ -1,0 +1,45 @@
+package test:complex-types;
+
+world complex-types-world {
+  // Record type
+  record point {
+    x: s32,
+    y: s32,
+  }
+
+  // Variant type
+  variant shape {
+    circle(s32),
+    rectangle(point),
+    triangle,
+  }
+
+  // Enum type
+  enum color {
+    red,
+    green,
+    blue,
+  }
+
+  // Flags type
+  flags permissions {
+    read,
+    write,
+    execute,
+  }
+
+  // Tuple type
+  type pair = tuple<s32, s32>;
+
+  // Option and result types
+  type maybe-int = option<s32>;
+  type result-int = result<s32, string>;
+
+  // List type
+  type int-list = list<s32>;
+
+  // Exports using these types
+  export get-point: func() -> point;
+  export make-pair: func(a: s32, b: s32) -> pair;
+  export get-color: func(index: u8) -> color;
+}

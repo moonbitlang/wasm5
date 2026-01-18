@@ -1,0 +1,19 @@
+package test:types;
+
+interface types {
+  record point {
+    x: s32,
+    y: s32,
+  }
+
+  variant shape {
+    circle(s32),
+    rectangle(point),
+  }
+
+  add: func(a: s32, b: s32) -> s32;
+}
+
+world example {
+  export types;
+}

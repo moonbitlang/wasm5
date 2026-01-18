@@ -70,17 +70,6 @@ fn ComponentRuntime::call_func(
           )
       }
 
-      // First compile if needed
-      try {
-        let _ = instance.compile()
-
-      } catch {
-        e =>
-          raise ComponentRuntimeError(
-            "failed to compile module for function '\{get_func_name_str()}': \{e}",
-          )
-      }
-
       // Check if we have memory/realloc options for string/list support
       let has_memory = options
         .iter()
@@ -99,10 +88,9 @@ fn ComponentRuntime::call_func(
       }
 
       // Call the core function
-      let core_results : Array[@runtime.Value] = try {
-        let (_, results) = instance.call_compiled(func_name, core_args)
-        results
-      } catch {
+      let core_results : Array[@runtime.Value] = instance.call_compiled(
+        func_name, core_args,
+      ) catch {
         e =>
           raise ComponentRuntimeError(
             "core function '\{get_func_name_str()}' call failed: \{e}",
@@ -397,7 +385,9 @@ fn ComponentRuntime::lift_values(
         result.push(ComponentValue::S64(n.reinterpret_as_int64()))
       @runtime.Value::F32(n) => result.push(ComponentValue::F32(n))
       @runtime.Value::F64(n) => result.push(ComponentValue::F64(n))
-      @runtime.Value::Ref(_) =>
+      @runtime.Value::Ref(_)
+      | @runtime.Value::Funcref(_)
+      | @runtime.Value::Externref(_) =>
         raise ComponentRuntimeError(
           "ref values not supported in component model",
         )
@@ -464,7 +454,9 @@ fn ComponentRuntime::lift_values_with_context(
         result.push(ComponentValue::S64(n.reinterpret_as_int64()))
       @runtime.Value::F32(n) => result.push(ComponentValue::F32(n))
       @runtime.Value::F64(n) => result.push(ComponentValue::F64(n))
-      @runtime.Value::Ref(_) =>
+      @runtime.Value::Ref(_)
+      | @runtime.Value::Funcref(_)
+      | @runtime.Value::Externref(_) =>
         raise ComponentRuntimeError(
           "ref values not supported in component model",
         )
@@ -702,7 +694,9 @@ fn lift_value_with_type(
     | @core.ComponentValType::Future(_)
     | @core.ComponentValType::ErrorContext
     | @core.ComponentValType::FixedSizeList(_, _) =>
-      raise ComponentRuntimeError("async types (stream/future/error-context/fixed-size list) not yet implemented")
+      raise ComponentRuntimeError(
+        "async types (stream/future/error-context/fixed-size list) not yet implemented",
+      )
   }
 }
 
