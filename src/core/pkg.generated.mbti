@@ -6,17 +6,52 @@ pub fn atomic_spec_by_name(Bytes) -> AtomicSpec?
 
 pub fn atomic_spec_by_opcode(UInt) -> AtomicSpec?
 
+pub let atomic_specs : Array[AtomicSpec]
+
 pub fn atomic_stack_effect(Bytes) -> AtomicStackEffect
 
 pub fn simd_spec_by_name(Bytes) -> SimdSpec?
 
 pub fn simd_spec_by_opcode(UInt) -> SimdSpec?
 
+pub let simd_specs : Array[SimdSpec]
+
 pub fn simd_stack_effect(Bytes) -> SimdStackEffect
 
 // Errors
 
 // Types and methods
+pub(all) struct Alias {
+  kind : AliasKind
+  target : AliasTarget
+}
+pub impl Eq for Alias
+pub impl Show for Alias
+
+pub(all) enum AliasKind {
+  CoreModule
+  CoreType
+  CoreTable
+  CoreFunc
+  CoreMemory
+  CoreGlobal
+  Type
+  Component
+  Instance
+  Func
+  Value
+}
+pub impl Eq for AliasKind
+pub impl Show for AliasKind
+
+pub(all) enum AliasTarget {
+  Export(UInt, Bytes)
+  CoreExport(UInt, Bytes)
+  Outer(UInt, UInt)
+}
+pub impl Eq for AliasTarget
+pub impl Show for AliasTarget
+
 pub(all) struct ArrayType {
   element : FieldType
 }
@@ -69,6 +104,27 @@ pub(all) enum BlockType {
 }
 pub impl Show for BlockType
 
+pub(all) enum Canon {
+  Lift(UInt, Array[CanonOpt], UInt)
+  Lower(UInt, Array[CanonOpt])
+  ResourceNew(UInt)
+  ResourceDrop(UInt)
+  ResourceRep(UInt)
+}
+pub impl Eq for Canon
+pub impl Show for Canon
+
+pub(all) enum CanonOpt {
+  Utf8
+  Utf16
+  Latin1Utf16
+  Memory(UInt)
+  Realloc(UInt)
+  PostReturn(UInt)
+}
+pub impl Eq for CanonOpt
+pub impl Show for CanonOpt
+
 pub(all) enum CatchClause {
   Catch(UInt, UInt)
   CatchRef(UInt, UInt)
@@ -82,6 +138,193 @@ pub(all) struct Code {
   body : Expr
   mut compiled : Int?
   mut max_stack_height : Int
+}
+
+pub(all) struct Component {
+  sections : Array[ComponentSection]
+}
+
+pub(all) struct ComponentExport {
+  name : Bytes
+  kind : ComponentExportKind
+  extern_type : ComponentExternDesc?
+}
+pub impl Eq for ComponentExport
+pub impl Show for ComponentExport
+
+pub(all) struct ComponentExportDecl {
+  name : Bytes
+  url : Bytes?
+  desc : ComponentExternDesc
+}
+pub impl Eq for ComponentExportDecl
+pub impl Show for ComponentExportDecl
+
+pub(all) enum ComponentExportKind {
+  Module(UInt)
+  Func(UInt)
+  Value(UInt)
+  Type(UInt)
+  Instance(UInt)
+  Component(UInt)
+}
+pub impl Eq for ComponentExportKind
+pub impl Show for ComponentExportKind
+
+pub(all) enum ComponentExternDesc {
+  Module(UInt)
+  Func(UInt)
+  Value(ComponentValType)
+  Type(TypeBounds)
+  Instance(UInt)
+  Component(UInt)
+}
+pub impl Eq for ComponentExternDesc
+pub impl Show for ComponentExternDesc
+
+pub(all) struct ComponentFuncType {
+  params : Array[ComponentParam]
+  results : Array[ComponentResult]
+}
+pub impl Eq for ComponentFuncType
+pub impl Show for ComponentFuncType
+
+pub(all) struct ComponentImport {
+  name : Bytes
+  url : Bytes?
+  desc : ComponentExternDesc
+}
+pub impl Eq for ComponentImport
+pub impl Show for ComponentImport
+
+pub(all) struct ComponentImportDecl {
+  name : Bytes
+  url : Bytes?
+  desc : ComponentExternDesc
+}
+pub impl Eq for ComponentImportDecl
+pub impl Show for ComponentImportDecl
+
+pub(all) enum ComponentInstance {
+  Instantiate(UInt, Array[InstantiateArg])
+  FromExports(Array[ComponentExport])
+}
+pub impl Eq for ComponentInstance
+pub impl Show for ComponentInstance
+
+pub(all) struct ComponentParam {
+  name : Bytes
+  type_ : ComponentValType
+}
+pub impl Eq for ComponentParam
+pub impl Show for ComponentParam
+
+pub(all) struct ComponentResult {
+  name : Bytes?
+  type_ : ComponentValType
+}
+pub impl Eq for ComponentResult
+pub impl Show for ComponentResult
+
+pub(all) enum ComponentSection {
+  CoreModule(Module)
+  CoreInstance(CoreInstance)
+  CoreType(CoreType)
+  Component(Component)
+  Instance(ComponentInstance)
+  Alias(Alias)
+  Type(ComponentTypeDef)
+  Canon(Canon)
+  Start(ComponentStart)
+  Import(ComponentImport)
+  Export(ComponentExport)
+  Custom(CustomSection)
+}
+
+pub(all) struct ComponentStart {
+  func_idx : UInt
+  args : Array[UInt]
+  results : UInt
+}
+pub impl Eq for ComponentStart
+pub impl Show for ComponentStart
+
+pub(all) struct ComponentType {
+  decls : Array[ComponentTypeDecl]
+}
+
+pub(all) enum ComponentTypeDecl {
+  CoreType(CoreType)
+  Type(ComponentTypeDef)
+  Alias(Alias)
+  Import(ComponentImportDecl)
+  Export(ComponentExportDecl)
+}
+
+pub(all) enum ComponentTypeDef {
+  Defined(ComponentValType)
+  Func(ComponentFuncType)
+  Component(ComponentType)
+  Instance(InstanceType)
+  Resource(ResourceType)
+}
+
+pub(all) enum ComponentValType {
+  Primitive(PrimitiveType)
+  TypeIndex(UInt)
+  List(ComponentValType)
+  Record(Array[RecordField])
+  Variant(Array[VariantCase])
+  Tuple(Array[ComponentValType])
+  Flags(Array[Bytes])
+  Enum(Array[Bytes])
+  Option(ComponentValType)
+  Result(ComponentValType?, ComponentValType?)
+  Own(UInt)
+  Borrow(UInt)
+}
+pub impl Eq for ComponentValType
+pub impl Show for ComponentValType
+
+pub(all) struct CoreAlias {
+  kind : AliasKind
+  target : AliasTarget
+}
+pub impl Eq for CoreAlias
+pub impl Show for CoreAlias
+
+pub(all) struct CoreExport {
+  name : Bytes
+  kind : CoreExportKind
+}
+pub impl Eq for CoreExport
+pub impl Show for CoreExport
+
+pub(all) enum CoreExportKind {
+  Func(UInt)
+  Table(UInt)
+  Memory(UInt)
+  Global(UInt)
+}
+pub impl Eq for CoreExportKind
+pub impl Show for CoreExportKind
+
+pub(all) enum CoreInstance {
+  Instantiate(UInt, Array[CoreInstantiateArg])
+  FromExports(Array[CoreExport])
+}
+pub impl Eq for CoreInstance
+pub impl Show for CoreInstance
+
+pub(all) enum CoreInstantiateArg {
+  Instance(Bytes, UInt)
+}
+pub impl Eq for CoreInstantiateArg
+pub impl Show for CoreInstantiateArg
+
+pub(all) enum CoreType {
+  Func(FuncType)
+  Module(ModuleType)
 }
 
 pub(all) enum CustomPlacement {
@@ -136,6 +379,17 @@ pub(all) struct Expr {
   instrs : Array[Instr]
 }
 
+pub(all) enum ExternKind {
+  Module
+  Func
+  Value
+  Type
+  Instance
+  Component
+}
+pub impl Eq for ExternKind
+pub impl Show for ExternKind
+
 pub(all) struct FieldType {
   storage : StorageType
   mutable : Bool
@@ -173,6 +427,25 @@ pub(all) enum ImportDesc {
   Global(GlobalType)
   Tag(UInt)
 }
+
+pub(all) struct InstanceType {
+  decls : Array[InstanceTypeDecl]
+}
+
+pub(all) enum InstanceTypeDecl {
+  CoreType(CoreType)
+  Type(ComponentTypeDef)
+  Alias(Alias)
+  Import(ComponentImportDecl)
+  Export(ComponentExportDecl)
+}
+
+pub(all) enum InstantiateArg {
+  Module(Bytes, UInt)
+  Instance(Bytes, UInt)
+}
+pub impl Eq for InstantiateArg
+pub impl Show for InstantiateArg
 
 pub(all) enum Instr {
   Unreachable
@@ -447,6 +720,42 @@ pub(all) struct Module {
   codes : Array[Code]
 }
 
+pub(all) struct ModuleType {
+  decls : Array[ModuleTypeDecl]
+}
+
+pub(all) enum ModuleTypeDecl {
+  Type(TypeDef)
+  Import(Import)
+  Alias(CoreAlias)
+  Export(Bytes, ExportDesc)
+}
+
+pub(all) enum PrimitiveType {
+  Bool
+  S8
+  U8
+  S16
+  U16
+  S32
+  U32
+  S64
+  U64
+  F32
+  F64
+  Char
+  String
+}
+pub impl Eq for PrimitiveType
+pub impl Show for PrimitiveType
+
+pub(all) struct RecordField {
+  name : Bytes
+  type_ : ComponentValType
+}
+pub impl Eq for RecordField
+pub impl Show for RecordField
+
 pub(all) enum RefType {
   Func
   Extern
@@ -464,6 +773,13 @@ pub(all) enum RefType {
 }
 pub impl Eq for RefType
 pub impl Show for RefType
+
+pub(all) struct ResourceType {
+  rep : ValType
+  dtor : UInt?
+}
+pub impl Eq for ResourceType
+pub impl Show for ResourceType
 
 pub(all) enum SectionId {
   Type
@@ -541,6 +857,14 @@ pub(all) enum StorageType {
 pub impl Eq for StorageType
 pub impl Show for StorageType
 
+pub(all) enum StringEncoding {
+  Utf8
+  Utf16
+  Latin1Utf16
+}
+pub impl Eq for StringEncoding
+pub impl Show for StringEncoding
+
 pub(all) struct StructType {
   fields : Array[FieldType]
 }
@@ -566,6 +890,13 @@ pub(all) struct TableType {
 pub(all) struct Tag {
   type_idx : UInt
 }
+
+pub(all) enum TypeBounds {
+  Eq(UInt)
+  SubResource
+}
+pub impl Eq for TypeBounds
+pub impl Show for TypeBounds
 
 pub(all) enum TypeDef {
   Func(FuncType)
@@ -608,17 +939,13 @@ pub fn ValType::to_non_nullable(Self) -> Self
 pub impl Eq for ValType
 pub impl Show for ValType
 
-pub(all) enum Value {
-  I32(UInt)
-  I64(UInt64)
-  F32(Float)
-  F64(Double)
-  Ref(Int?)
-  Funcref(Int?)
-  Externref(Int?)
+pub(all) struct VariantCase {
+  name : Bytes
+  type_ : ComponentValType?
+  refines : UInt?
 }
-pub impl Eq for Value
-pub impl Show for Value
+pub impl Eq for VariantCase
+pub impl Show for VariantCase
 
 // Type aliases
 
