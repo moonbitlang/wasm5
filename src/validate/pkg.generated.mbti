@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "moonbitlang/wasm5/src/validate"
 
-import {
-  "moonbitlang/wasm5/src/core",
-}
+import(
+  "moonbitlang/wasm5/src/core"
+)
 
 // Values
 pub fn validate_module(@core.Module) -> Unit raise ValidationError
@@ -37,9 +37,6 @@ pub(all) suberror ValidationError {
   UninitializedLocal(Int)
   UnknownType(Int)
   UndeclaredFunctionReference(Int)
-  InvalidElemIndex(Int)
-  UnknownDataSegment(Int)
-  InvalidSubtype(String)
 }
 pub impl Show for ValidationError
 
