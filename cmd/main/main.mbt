@@ -1,49 +1,185 @@
 ///|
 async fn main {
   let args = @env.args()
-  match args {
-    [_, "run", wasm_path, func_name, .. rest_args] =>
-      run_unified(wasm_path, func_name, rest_args)
-    [_, "run", wasm_path] => run_unified(wasm_path, "_start", [])
-    // Keep run-component for backwards compatibility
-    [_, "run-component", component_path, func_name, .. rest_args] =>
-      run_unified(component_path, func_name, rest_args)
-    [_, "run-component", component_path] =>
-      run_unified(component_path, "_start", [])
-    _ => {
-      println("Usage:")
-      println("  wasm5 run <wasm-file> [func-name] [args...]")
-      println("")
-      println("Automatically detects Module vs Component binary format.")
-      println("Default function: _start")
+  // Check for component mode flag
+  if args.length() >= 2 && args[1] == "--component" {
+    // Component mode: wasm5 --component <WASM_FILE> --invoke <FUNC_NAME> [<FUNC_ARGS>...]
+    let component_args = Array::from_iter(args[2:].iter())
+    let parsed = parse_args(component_args)
+    match parsed {
+      Some((wasm_path, func_name, func_args)) =>
+        run_component(wasm_path, func_name, func_args)
+      None => print_usage()
+    }
+  } else {
+    // Standard module mode: wasm5 <WASM_FILE> --invoke <FUNC_NAME> [<FUNC_ARGS>...]
+    let parsed = parse_args(args)
+    match parsed {
+      Some((wasm_path, func_name, func_args)) =>
+        run_wasm(wasm_path, func_name, func_args)
+      None => print_usage()
     }
   }
 }
 
 ///|
-async fn run_unified(
+fn print_usage() -> Unit {
+  println("Usage: wasm5 <WASM_FILE> --invoke <FUNC_NAME> [<FUNC_ARGS>...]")
+  println(
+    "       wasm5 --component <WASM_FILE> --invoke <FUNC_NAME> [<FUNC_ARGS>...]",
+  )
+  println("")
+  println(
+    "Execute a WebAssembly module or component and invoke an exported function.",
+  )
+  println("")
+  println("Options:")
+  println(
+    "  --component    Load as Component Model binary (auto-detects if omitted)",
+  )
+  println("")
+  println("Arguments:")
+  println("  <WASM_FILE>    Path to the WebAssembly binary file (.wasm)")
+  println("  --invoke       Specify the exported function to call")
+  println("  <FUNC_NAME>    Name of the exported function")
+  println(
+    "  <FUNC_ARGS>    Arguments to pass to the function (integers or floats)",
+  )
+  println("")
+  println("Examples:")
+  println("  wasm5 myprogram.wasm --invoke add 5 3")
+  println("  wasm5 --component mycomponent.wasm --invoke greet")
+}
+
+///|
+fn parse_args(args : Array[String]) -> (String, String, Array[String])? {
+  // args[0] is the program name (or first real arg if sliced)
+  if args.length() < 4 {
+    return None
+  }
+  let wasm_path = args[1]
+  // Find --invoke flag
+  let mut invoke_idx = -1
+  for i in 2..<args.length() {
+    if args[i] == "--invoke" {
+      invoke_idx = i
+      break
+    }
+  }
+  if invoke_idx < 0 || invoke_idx + 1 >= args.length() {
+    return None
+  }
+  let func_name = args[invoke_idx + 1]
+  // Collect function arguments (everything after function name)
+  let func_args : Array[String] = []
+  for i = invoke_idx + 2; i < args.length(); i = i + 1 {
+    func_args.push(args[i])
+  }
+  Some((wasm_path, func_name, func_args))
+}
+
+///|
+fn parse_value(
+  s : String,
+  expected_type : @wasm5_core.ValType,
+) -> @wasm5_core.Value? {
+  match expected_type {
+    I32 =>
+      try {
+        let n = @strconv.parse_int(s)
+        Some(@wasm5_core.Value::I32(n.reinterpret_as_uint()))
+      } catch {
+        _ => None
+      }
+    I64 =>
+      try {
+        let n = @strconv.parse_int64(s)
+        Some(@wasm5_core.Value::I64(n.reinterpret_as_uint64()))
+      } catch {
+        _ => None
+      }
+    F32 =>
+      try {
+        let f = @strconv.parse_double(s)
+        Some(@wasm5_core.Value::F32(Float::from_double(f)))
+      } catch {
+        _ => None
+      }
+    F64 =>
+      try {
+        let f = @strconv.parse_double(s)
+        Some(@wasm5_core.Value::F64(f))
+      } catch {
+        _ => None
+      }
+    _ => None // Reference types not supported via CLI
+  }
+}
+
+///|
+async fn run_wasm(
   wasm_path : String,
   func_name : String,
-  args : ArrayView[String],
+  arg_strings : Array[String],
 ) -> Unit {
-  // Read binary
+  let wasm_bytes = @fs.read_file(wasm_path).binary()
+  let module_ = @wasm5_parse.parse(wasm_bytes)
+  // Load and compile for C runtime (default)
+  let runtime = @wasm5_cruntime.CRuntime::load(module_)
+  runtime.run_start()
+  // Find the function's type to parse arguments correctly
+  let func_type = find_export_func_type(module_, func_name)
+  match func_type {
+    Some(ft) => {
+      // Parse arguments according to function signature
+      if arg_strings.length() != ft.params.length() {
+        println(
+          "Error: function '\{func_name}' expects \{ft.params.length()} arguments, got \{arg_strings.length()}",
+        )
+        return
+      }
+      let args : Array[@wasm5_core.Value] = []
+      for i in 0..<arg_strings.length() {
+        match parse_value(arg_strings[i], ft.params[i]) {
+          Some(v) => args.push(v)
+          None => {
+            println(
+              "Error: could not parse argument \{i + 1} '\{arg_strings[i]}' as \{ft.params[i]}",
+            )
+            return
+          }
+        }
+      }
+      let results = runtime.call_compiled(@utf8.encode(func_name), args)
+      // Print results (one per line, just the value)
+      for result in results {
+        println(format_value(result))
+      }
+    }
+    None =>
+      println("Error: function '\{func_name}' not found in module exports")
+  }
+}
+
+///|
+async fn run_component(
+  wasm_path : String,
+  func_name : String,
+  arg_strings : Array[String],
+) -> Unit {
   let wasm_bytes = @fs.read_file(wasm_path).binary()
 
-  // Load (auto-detect Module vs Component)
+  // Load as component
   let executable = @component.load(wasm_bytes) catch {
     e => {
-      println("Error loading: \{e}")
+      println("Error loading component: \{e}")
       return
     }
   }
 
-  // Show what type was loaded
-  let type_str = if executable.is_component() { "Component" } else { "Module" }
-  println("Loaded: \{type_str}")
-
-  // Parse arguments as S32 integers
+  // Parse arguments as S32 integers (component model uses s32 by default)
   let comp_args : Array[@component.ComponentValue] = []
-  for arg in args {
+  for arg in arg_strings {
     let n = @strconv.parse_int(arg) catch {
       _ => {
         println("Error: argument '\{arg}' is not a valid integer")
@@ -62,7 +198,90 @@ async fn run_unified(
   }
 
   // Print results
-  if results.length() > 0 {
-    println("Result: \{results}")
+  for result in results {
+    println(format_component_value(result))
   }
+}
+
+///|
+fn format_value(v : @wasm5_core.Value) -> String {
+  match v {
+    I32(n) => n.reinterpret_as_int().to_string()
+    I64(n) => n.reinterpret_as_int64().to_string()
+    F32(f) => f.to_string()
+    F64(f) => f.to_string()
+    Ref(Some(n)) => "ref(\{n})"
+    Ref(None) => "ref.null"
+    Funcref(Some(n)) => "funcref(\{n})"
+    Funcref(None) => "ref.null func"
+    Externref(Some(n)) => "externref(\{n})"
+    Externref(None) => "ref.null extern"
+  }
+}
+
+///|
+fn format_component_value(v : @component.ComponentValue) -> String {
+  v.to_string()
+}
+
+///|
+fn find_export_func_type(
+  module_ : @wasm5_core.Module,
+  name : String,
+) -> @wasm5_core.FuncType? {
+  // Find the export with the given name
+  let name_bytes = @utf8.encode(name)
+  for exp in module_.exports {
+    if exp.name == name_bytes {
+      match exp.desc {
+        Func(func_idx) => {
+          // Get the type index for this function
+          let func_idx_int = func_idx.reinterpret_as_int()
+          // Count imported functions
+          let mut num_imported = 0
+          for imp in module_.imports {
+            match imp.desc {
+              Func(_) => num_imported += 1
+              _ => ()
+            }
+          }
+          // Determine type index
+          let type_idx = if func_idx_int < num_imported {
+            // Imported function - find type from imports
+            let mut import_func_idx = 0
+            let mut found_type_idx = -1
+            for imp in module_.imports {
+              match imp.desc {
+                Func(tidx) =>
+                  if import_func_idx == func_idx_int {
+                    found_type_idx = tidx.reinterpret_as_int()
+                    break
+                  } else {
+                    import_func_idx += 1
+                  }
+                _ => ()
+              }
+            }
+            found_type_idx
+          } else {
+            // Local function - index into funcs array (which only has local functions)
+            let local_idx = func_idx_int - num_imported
+            if local_idx >= 0 && local_idx < module_.funcs.length() {
+              module_.funcs[local_idx].reinterpret_as_int()
+            } else {
+              -1
+            }
+          }
+          if type_idx >= 0 && type_idx < module_.types.length() {
+            match module_.types[type_idx] {
+              Func(ft) => return Some(ft)
+              _ => ()
+            }
+          }
+        }
+        _ => ()
+      }
+    }
+  }
+  None
 }

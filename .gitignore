@@ -17,3 +17,5 @@ wasm3.md
 wasm3/
 wasm3/test/reference_tests/**/*.wasm
 test/reference_tests/**/*.json
+test/reference_tests/**/*.wasm
+test/reference_tests/**/*.wat
