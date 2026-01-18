@@ -1201,3 +1201,317 @@ async test "bulk-memory/memory_init.wast (cruntime)" {
 // - table_fill.wast uses externref tables (CRuntime only supports funcref as int)
 // - table_copy.wast and table_init.wast use multi-module register and imports (not supported)
 // The simpler table operations in bulk.wast are tested separately.
+// Component Model Reference Tests
+// =============================================================================
+
+///|
+async fn run_component_harness(filename : String) -> Unit {
+  let (file_failures, file_skipped) = process_component_wast_file(
+    "test/reference_tests/component/", filename,
+  )
+  if file_failures.length() > 0 {
+    let grouped = group_failures_by_type(file_failures)
+    println(
+      "\n╔══════════════════════════════════════════════════════════════════╗",
+    )
+    println("║ COMPONENT TEST FAILURES: \{filename}")
+    println(
+      "╚══════════════════════════════════════════════════════════════════╝",
+    )
+    for test_type, failures in grouped {
+      println(
+        "\n┌─ \{test_type} (\{failures.length()} failures) ─────────────────────",
+      )
+      for failure in failures {
+        println(format_failure_detail(failure))
+      }
+      println(
+        "└────────────────────────────────────────────────────────────────",
+      )
+    }
+    println(
+      "\n╔══════════════════════════════════════════════════════════════════╗",
+    )
+    println(
+      "║ SUMMARY: \{file_failures.length()} failure(s), \{file_skipped} skipped",
+    )
+    println(
+      "╚══════════════════════════════════════════════════════════════════╝\n",
+    )
+    fail("\{file_failures.length()} failure(s) in \{filename}")
+  }
+  if file_skipped > 0 {
+    println("Skipped \{file_skipped} tests in \{filename}")
+  }
+}
+
+///|
+async test "component/adapt.wast" {
+  run_component_harness("adapt.wast")
+}
+
+///|
+async test "component/alias.wast" {
+  run_component_harness("alias.wast")
+}
+
+///|
+async test "component/big.wast" {
+  run_component_harness("big.wast")
+}
+
+///|
+async test "component/definedtypes.wast" {
+  run_component_harness("definedtypes.wast")
+}
+
+///|
+async test "component/empty.wast" {
+  run_component_harness("empty.wast")
+}
+
+///|
+async test "component/example.wast" {
+  run_component_harness("example.wast")
+}
+
+///|
+async test "component/export-ascription.wast" {
+  run_component_harness("export-ascription.wast")
+}
+
+///|
+async test "component/export-introduces-alias.wast" {
+  run_component_harness("export-introduces-alias.wast")
+}
+
+///|
+async test "component/export.wast" {
+  run_component_harness("export.wast")
+}
+
+///|
+async test "component/func.wast" {
+  run_component_harness("func.wast")
+}
+
+///|
+async test "component/import.wast" {
+  run_component_harness("import.wast")
+}
+
+///|
+async test "component/imports-exports.wast" {
+  run_component_harness("imports-exports.wast")
+}
+
+///|
+async test "component/inline-exports.wast" {
+  run_component_harness("inline-exports.wast")
+}
+
+///|
+async test "component/instance-type.wast" {
+  run_component_harness("instance-type.wast")
+}
+
+// ///|
+///|
+async test "component/instantiate.wast" {
+  run_component_harness("instantiate.wast")
+}
+
+///|
+async test "component/invalid.wast" {
+  run_component_harness("invalid.wast")
+}
+
+///|
+async test "component/link.wast" {
+  run_component_harness("link.wast")
+}
+
+///|
+async test "component/lots-of-aliases.wast" {
+  run_component_harness("lots-of-aliases.wast")
+}
+
+///|
+async test "component/lower.wast" {
+  run_component_harness("lower.wast")
+}
+
+///|
+async test "component/memory64.wast" {
+  run_component_harness("memory64.wast")
+}
+
+///|
+async test "component/module-link.wast" {
+  run_component_harness("module-link.wast")
+}
+
+///|
+async test "component/more-flags.wast" {
+  run_component_harness("more-flags.wast")
+}
+
+///|
+async test "component/naming.wast" {
+  run_component_harness("naming.wast")
+}
+
+///|
+async test "component/nested-modules.wast" {
+  run_component_harness("nested-modules.wast")
+}
+
+///|
+async test "component/resources.wast" {
+  run_component_harness("resources.wast")
+}
+
+///|
+async test "component/tags.wast" {
+  run_component_harness("tags.wast")
+}
+
+///|
+async test "component/type-export-restrictions.wast" {
+  run_component_harness("type-export-restrictions.wast")
+}
+
+///|
+async test "component/types.wast" {
+  run_component_harness("types.wast")
+}
+
+///|
+async test "component/very-nested.wast" {
+  run_component_harness("very-nested.wast")
+}
+
+///|
+async test "component/virtualize.wast" {
+  run_component_harness("virtualize.wast")
+}
+
+///|
+async test "component/wrong-order.wast" {
+  run_component_harness("wrong-order.wast")
+}
+
+// ============================================================================
+// Wasmtime Component Runtime Tests
+// ============================================================================
+
+///|
+async fn run_wasmtime_harness(filename : String) -> Unit {
+  let (file_failures, file_skipped) = process_component_wast_file(
+    "test/reference_tests/wasmtime/", filename,
+  )
+  if file_failures.length() > 0 {
+    let grouped = group_failures_by_type(file_failures)
+    println(
+      "\n╔══════════════════════════════════════════════════════════════════╗",
+    )
+    println("║ WASMTIME TEST FAILURES: \{filename}")
+    println(
+      "╚══════════════════════════════════════════════════════════════════╝",
+    )
+    for test_type, failures in grouped {
+      println(
+        "\n┌─ \{test_type} (\{failures.length()} failures) ─────────────────────",
+      )
+      for failure in failures {
+        println(format_failure_detail(failure))
+      }
+      println(
+        "└────────────────────────────────────────────────────────────────",
+      )
+    }
+    println(
+      "\n╔══════════════════════════════════════════════════════════════════╗",
+    )
+    println(
+      "║ SUMMARY: \{file_failures.length()} failure(s), \{file_skipped} skipped",
+    )
+    println(
+      "╚══════════════════════════════════════════════════════════════════╝\n",
+    )
+    fail("\{file_failures.length()} failure(s) in \{filename}")
+  }
+  if file_skipped > 0 {
+    println("Skipped \{file_skipped} tests in \{filename}")
+  }
+}
+
+///|
+async test "wasmtime/adapter.wast" {
+  run_wasmtime_harness("adapter.wast")
+}
+
+///|
+async test "wasmtime/aliasing.wast" {
+  run_wasmtime_harness("aliasing.wast")
+}
+
+///|
+async test "wasmtime/fused.wast" {
+  run_wasmtime_harness("fused.wast")
+}
+
+///|
+async test "wasmtime/import.wast" {
+  run_wasmtime_harness("import.wast")
+}
+
+///|
+async test "wasmtime/instance.wast" {
+  run_wasmtime_harness("instance.wast")
+}
+
+///|
+async test "wasmtime/linking.wast" {
+  run_wasmtime_harness("linking.wast")
+}
+
+///|
+async test "wasmtime/modules.wast" {
+  run_wasmtime_harness("modules.wast")
+}
+
+///|
+async test "wasmtime/nested.wast" {
+  run_wasmtime_harness("nested.wast")
+}
+
+///|
+async test "wasmtime/resources.wast" {
+  run_wasmtime_harness("resources.wast")
+}
+
+///|
+async test "wasmtime/restrictions.wast" {
+  run_wasmtime_harness("restrictions.wast")
+}
+
+///|
+async test "wasmtime/simple.wast" {
+  run_wasmtime_harness("simple.wast")
+}
+
+///|
+async test "wasmtime/strings.wast" {
+  run_wasmtime_harness("strings.wast")
+}
+
+///|
+async test "wasmtime/tags.wast" {
+  run_wasmtime_harness("tags.wast")
+}
+
+///|
+async test "wasmtime/types.wast" {
+  run_wasmtime_harness("types.wast")
+}
