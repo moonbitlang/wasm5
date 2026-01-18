@@ -193,10 +193,11 @@ typedef int (*OpFn)(CRuntime*, uint64_t*, uint64_t*, uint64_t*);
 static int* g_memory_pages = NULL;
 static int g_memory_size = 0;
 
-// Multiple tables support (for call_indirect)
+// Multiple tables support (for call_indirect and table ops)
 static int* g_tables_flat = NULL;      // All tables concatenated
 static int* g_table_offsets = NULL;    // Offset of each table in g_tables_flat
-static int* g_table_sizes = NULL;      // Size of each table
+static int* g_table_sizes = NULL;      // Current size of each table
+static int* g_table_max_sizes = NULL;  // Maximum size (capacity) of each table for table.grow
 static int g_num_tables = 0;
 
 // Function metadata (for call_indirect)
@@ -241,7 +242,7 @@ static int run(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
 // Returns trap code (0 = success), stores results in result_out[0..num_results-1]
 int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_args,
             uint64_t* result_out, int num_results, uint64_t* globals, uint8_t* mem, int mem_size,
-            int* memory_pages, int* tables_flat, int* table_offsets, int* table_sizes, int num_tables,
+            int* memory_pages, int* tables_flat, int* table_offsets, int* table_sizes, int* table_max_sizes, int num_tables,
             int* func_entries, int* func_num_locals, int num_funcs, int num_imported_funcs,
             int* func_type_idxs, int* type_sig_hash1, int* type_sig_hash2, int num_types,
             int* import_num_params, int* import_num_results,
@@ -266,10 +267,11 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     g_memory_pages = memory_pages;
     g_memory_size = mem_size;
 
-    // Store table data for call_indirect
+    // Store table data for call_indirect and table ops
     g_tables_flat = tables_flat;
     g_table_offsets = table_offsets;
     g_table_sizes = table_sizes;
+    g_table_max_sizes = table_max_sizes;
     g_num_tables = num_tables;
 
     // Store function metadata for call_indirect
@@ -333,6 +335,7 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     g_tables_flat = NULL;
     g_table_offsets = NULL;
     g_table_sizes = NULL;
+    g_table_max_sizes = NULL;
     g_num_tables = 0;
     g_func_entries = NULL;
     g_func_num_locals = NULL;
@@ -2328,3 +2331,195 @@ int op_elem_drop(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     NEXT();
 }
 DEFINE_OP(elem_drop)
+
+// =============================================================================
+// Reference type operations
+// =============================================================================
+
+// Null reference constant: 0xFFFFFFFFFFFFFFFF
+#define REF_NULL 0xFFFFFFFFFFFFFFFFULL
+// Funcref tag: bit 62 set, lower bits are func_idx
+#define FUNCREF_TAG 0x4000000000000000ULL
+
+// ref.null - push a null reference
+// Immediate: heap_type (ignored at runtime)
+// Stack: [] -> [null_ref]
+int op_ref_null(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    ++pc;  // Skip heap type immediate
+    *sp++ = REF_NULL;
+    NEXT();
+}
+DEFINE_OP(ref_null)
+
+// ref.func - push a reference to a function
+// Immediate: func_idx
+// Stack: [] -> [funcref]
+int op_ref_func(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    int func_idx = (int)*pc++;
+    // Tag with bit 62 for funcref
+    *sp++ = FUNCREF_TAG | (uint64_t)func_idx;
+    NEXT();
+}
+DEFINE_OP(ref_func)
+
+// ref.is_null - test if reference is null
+// Stack: [ref] -> [i32]
+int op_ref_is_null(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    uint64_t ref = sp[-1];
+    sp[-1] = (ref == REF_NULL) ? 1 : 0;
+    NEXT();
+}
+DEFINE_OP(ref_is_null)
+
+// ref.eq - test if two references are equal
+// Stack: [ref1, ref2] -> [i32]
+int op_ref_eq(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    uint64_t b = sp[-1];
+    uint64_t a = sp[-2];
+    --sp;
+    sp[-1] = (a == b) ? 1 : 0;
+    NEXT();
+}
+DEFINE_OP(ref_eq)
+
+// =============================================================================
+// Table access operations
+// =============================================================================
+
+// table.get - get element from table
+// Immediate: table_idx
+// Stack: [i32] -> [ref]
+int op_table_get(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    int table_idx = (int)*pc++;
+    int elem_idx = (int)sp[-1];
+
+    // Validate table index
+    if (table_idx < 0 || table_idx >= g_num_tables) {
+        TRAP(TRAP_TABLE_BOUNDS_ACCESS);
+    }
+
+    int offset = g_table_offsets[table_idx];
+    int size = g_table_sizes[table_idx];
+
+    // Bounds check
+    if (elem_idx < 0 || elem_idx >= size) {
+        TRAP(TRAP_TABLE_BOUNDS_ACCESS);
+    }
+
+    int func_idx = g_tables_flat[offset + elem_idx];
+
+    // Convert to tagged reference
+    if (func_idx == -1) {
+        sp[-1] = REF_NULL;  // null
+    } else {
+        sp[-1] = FUNCREF_TAG | (uint64_t)func_idx;
+    }
+    NEXT();
+}
+DEFINE_OP(table_get)
+
+// table.set - set element in table
+// Immediate: table_idx
+// Stack: [i32, ref] -> []
+int op_table_set(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    int table_idx = (int)*pc++;
+    uint64_t ref = sp[-1];
+    int elem_idx = (int)sp[-2];
+    sp -= 2;
+
+    // Validate table index
+    if (table_idx < 0 || table_idx >= g_num_tables) {
+        TRAP(TRAP_TABLE_BOUNDS_ACCESS);
+    }
+
+    int offset = g_table_offsets[table_idx];
+    int size = g_table_sizes[table_idx];
+
+    // Bounds check
+    if (elem_idx < 0 || elem_idx >= size) {
+        TRAP(TRAP_TABLE_BOUNDS_ACCESS);
+    }
+
+    // Convert from tagged reference to func index
+    int func_idx;
+    if (ref == REF_NULL) {
+        func_idx = -1;  // null
+    } else {
+        // Strip tag bits (use lower 62 bits)
+        func_idx = (int)(ref & 0x3FFFFFFFFFFFFFFFULL);
+    }
+
+    g_tables_flat[offset + elem_idx] = func_idx;
+    NEXT();
+}
+DEFINE_OP(table_set)
+
+// table.size - get current size of table
+// Immediate: table_idx
+// Stack: [] -> [i32]
+int op_table_size(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    int table_idx = (int)*pc++;
+
+    // Validate table index
+    if (table_idx < 0 || table_idx >= g_num_tables) {
+        *sp++ = 0;
+        NEXT();
+    }
+
+    *sp++ = (uint64_t)g_table_sizes[table_idx];
+    NEXT();
+}
+DEFINE_OP(table_size)
+
+// table.grow - grow table by delta elements
+// Immediate: table_idx
+// Stack: [ref, i32] -> [i32]  (returns old size, or -1 on failure)
+int op_table_grow(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    int table_idx = (int)*pc++;
+    int delta = (int)sp[-1];
+    uint64_t init_ref = sp[-2];
+    sp -= 2;
+
+    // Validate table index
+    if (table_idx < 0 || table_idx >= g_num_tables) {
+        *sp++ = 0xFFFFFFFFULL;  // -1 (failure)
+        NEXT();
+    }
+
+    int old_size = g_table_sizes[table_idx];
+    int max_size = g_table_max_sizes ? g_table_max_sizes[table_idx] : old_size;
+    int new_size = old_size + delta;
+
+    // Check for overflow or exceeding max
+    if (delta < 0 || new_size > max_size || new_size < old_size) {
+        *sp++ = 0xFFFFFFFFULL;  // -1 (failure)
+        NEXT();
+    }
+
+    // Convert from tagged reference to func index
+    int func_idx;
+    if (init_ref == REF_NULL) {
+        func_idx = -1;
+    } else {
+        func_idx = (int)(init_ref & 0x3FFFFFFFFFFFFFFFULL);
+    }
+
+    // Initialize new elements
+    int offset = g_table_offsets[table_idx];
+    for (int i = old_size; i < new_size; i++) {
+        g_tables_flat[offset + i] = func_idx;
+    }
+
+    g_table_sizes[table_idx] = new_size;
+    *sp++ = (uint64_t)old_size;  // return old size
+    NEXT();
+}
+DEFINE_OP(table_grow)

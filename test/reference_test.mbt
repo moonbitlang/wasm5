@@ -1028,34 +1028,52 @@ async test "memory_redundancy.wast (cruntime)" {
 // }
 
 // --- Table operations ---
-// async test "table.wast (cruntime)" {
-//   run_test_harness("", "table.wast", runtime_type=CRuntime)
-// }
-// async test "table_get.wast (cruntime)" {
-//   run_test_harness("", "table_get.wast", runtime_type=CRuntime)
-// }
-// async test "table_set.wast (cruntime)" {
-//   run_test_harness("", "table_set.wast", runtime_type=CRuntime)
-// }
-// async test "table_grow.wast (cruntime)" {
-//   run_test_harness("", "table_grow.wast", runtime_type=CRuntime)
-// }
-// async test "table_size.wast (cruntime)" {
-//   run_test_harness("", "table_size.wast", runtime_type=CRuntime)
-// }
+
+///|
+async test "table.wast (cruntime)" {
+  run_test_harness("", "table.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "table_get.wast (cruntime)" {
+  run_test_harness("", "table_get.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "table_set.wast (cruntime)" {
+  run_test_harness("", "table_set.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "table_grow.wast (cruntime)" {
+  run_test_harness("", "table_grow.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "table_size.wast (cruntime)" {
+  run_test_harness("", "table_size.wast", runtime_type=CRuntime)
+}
 
 // --- Reference types ---
+
+///|
+async test "ref_null.wast (cruntime)" {
+  run_test_harness("", "ref_null.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "ref_func.wast (cruntime)" {
+  run_test_harness("", "ref_func.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "ref_is_null.wast (cruntime)" {
+  run_test_harness("", "ref_is_null.wast", runtime_type=CRuntime)
+}
+
+// --- Not yet implemented ---
 // async test "ref.wast (cruntime)" {
 //   run_test_harness("", "ref.wast", runtime_type=CRuntime)
-// }
-// async test "ref_null.wast (cruntime)" {
-//   run_test_harness("", "ref_null.wast", runtime_type=CRuntime)
-// }
-// async test "ref_func.wast (cruntime)" {
-//   run_test_harness("", "ref_func.wast", runtime_type=CRuntime)
-// }
-// async test "ref_is_null.wast (cruntime)" {
-//   run_test_harness("", "ref_is_null.wast", runtime_type=CRuntime)
 // }
 // async test "ref_as_non_null.wast (cruntime)" {
 //   run_test_harness("", "ref_as_non_null.wast", runtime_type=CRuntime)

@@ -22,6 +22,7 @@ pub struct CRuntime {
   tables_flat : FixedArray[Int]
   table_offsets : FixedArray[Int]
   table_sizes : FixedArray[Int]
+  table_max_sizes : FixedArray[Int]
   func_type_idxs : FixedArray[Int]
   type_param_counts : FixedArray[Int]
   type_result_counts : FixedArray[Int]

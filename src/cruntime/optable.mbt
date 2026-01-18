@@ -647,3 +647,31 @@ extern "C" fn elem_drop() -> UInt64 = "elem_drop"
 
 ///|
 extern "C" fn call_indirect() -> UInt64 = "call_indirect"
+
+// Reference type operations
+
+///|
+extern "C" fn ref_null() -> UInt64 = "ref_null"
+
+///|
+extern "C" fn ref_func() -> UInt64 = "ref_func"
+
+///|
+extern "C" fn ref_is_null() -> UInt64 = "ref_is_null"
+
+///|
+extern "C" fn ref_eq() -> UInt64 = "ref_eq"
+
+// Table access operations
+
+///|
+extern "C" fn table_get() -> UInt64 = "table_get"
+
+///|
+extern "C" fn table_set() -> UInt64 = "table_set"
+
+///|
+extern "C" fn table_size() -> UInt64 = "table_size"
+
+///|
+extern "C" fn table_grow() -> UInt64 = "table_grow"

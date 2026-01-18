@@ -1309,6 +1309,51 @@ fn compile_instr(
       ctx.emit_idx(ctx.current_sp())
     }
 
+    // Reference type operations
+    RefNull(ref_type) => {
+      ctx.emit(ref_null())
+      // Emit heap type encoding (simplified: just use a type code)
+      let type_code = encode_ref_type(ref_type)
+      ctx.emit_idx(type_code)
+      ignore(ctx.push_slot())
+    }
+    RefFunc(func_idx) => {
+      ctx.emit(ref_func())
+      ctx.emit_idx(func_idx.reinterpret_as_int())
+      ignore(ctx.push_slot())
+    }
+    RefIsNull => ctx.emit(ref_is_null())
+    // Stack: [ref] -> [i32], no net slot change
+    RefEq => {
+      ctx.emit(ref_eq())
+      ignore(ctx.pop_slot()) // consume two, keep one
+    }
+
+    // Table access operations
+    TableGet(table_idx) => {
+      ctx.emit(table_get())
+      ctx.emit_idx(table_idx.reinterpret_as_int())
+      // Stack: [i32] -> [ref], no net slot change
+    }
+    TableSet(table_idx) => {
+      ctx.emit(table_set())
+      ctx.emit_idx(table_idx.reinterpret_as_int())
+      ignore(ctx.pop_slot()) // i32 index
+      ignore(ctx.pop_slot()) // ref value
+    }
+    TableSize(table_idx) => {
+      ctx.emit(table_size())
+      ctx.emit_idx(table_idx.reinterpret_as_int())
+      ignore(ctx.push_slot())
+    }
+    TableGrow(table_idx) => {
+      ctx.emit(table_grow())
+      ctx.emit_idx(table_idx.reinterpret_as_int())
+      ignore(ctx.pop_slot()) // pop delta (i32)
+      // ref value was consumed, i32 result pushed = no net change
+      // Actually: [ref, i32] -> [i32], so net -1
+    }
+
     // Placeholder for unimplemented instructions
     _ =>
       // TODO: implement remaining instructions
@@ -1358,5 +1403,26 @@ fn get_func_type(mod_ : @core.Module, type_idx : Int) -> @core.FuncType {
   match mod_.types[type_idx] {
     Func(ft) => ft
     _ => { params: [], results: [] } // Should not happen for valid modules
+  }
+}
+
+///|
+/// Encode a reference type to an integer for the ref.null immediate
+fn encode_ref_type(ref_type : @core.RefType) -> Int {
+  // Use type codes similar to wasm binary format
+  match ref_type {
+    Func => 0x70 // funcref
+    Extern => 0x6F // externref
+    Any => 0x6E // anyref
+    Eq => 0x6D // eqref
+    I31 => 0x6C // i31ref
+    Struct => 0x6B // structref
+    Array => 0x6A // arrayref
+    Exn => 0x69 // exnref
+    None => 0x71 // none (bottom type)
+    NoFunc => 0x73 // nofunc
+    NoExtern => 0x72 // noextern
+    NoExn => 0x74 // noexn
+    TypeIndex(idx) => idx // concrete type index
   }
 }

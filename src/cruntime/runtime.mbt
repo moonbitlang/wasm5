@@ -10,7 +10,8 @@ pub struct CRuntime {
   // Flattened table data for C FFI
   tables_flat : FixedArray[Int] // All tables concatenated
   table_offsets : FixedArray[Int] // Offset of each table in tables_flat
-  table_sizes : FixedArray[Int] // Size of each table
+  table_sizes : FixedArray[Int] // Current size of each table
+  table_max_sizes : FixedArray[Int] // Max size (capacity) of each table for table.grow
   // Type information for call_indirect type checking
   func_type_idxs : FixedArray[Int] // Type index for each function (imported + local)
   type_param_counts : FixedArray[Int] // Primary signature hash for each type
@@ -63,9 +64,13 @@ pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
   // Initialize memory from module
   let (memory, memory_pages) = init_memory(module_)
   // Initialize tables from module (needs globals for element offset evaluation)
-  let tables = init_tables(module_, globals)
-  // Flatten tables for C FFI
-  let (tables_flat, table_offsets, table_sizes) = flatten_tables(tables)
+  let (tables, table_logical_sizes, table_max_sizes) = init_tables(
+    module_, globals,
+  )
+  // Flatten tables for C FFI (pass sizes and max_sizes for allocation)
+  let (tables_flat, table_offsets, table_sizes, table_max_sizes) = flatten_tables(
+    tables, table_logical_sizes, table_max_sizes,
+  )
   // Build type info for call_indirect type checking
   let (func_type_idxs, type_param_counts, type_result_counts) = build_type_info(
     module_,
@@ -93,6 +98,7 @@ pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
     tables_flat,
     table_offsets,
     table_sizes,
+    table_max_sizes,
     func_type_idxs,
     type_param_counts,
     type_result_counts,
@@ -110,21 +116,23 @@ pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
 
 ///|
 /// Flatten tables into a single array for C FFI
+/// Returns (tables_flat, table_offsets, table_sizes, table_max_sizes)
 fn flatten_tables(
   tables : FixedArray[FixedArray[Int]],
-) -> (FixedArray[Int], FixedArray[Int], FixedArray[Int]) {
+  logical_sizes : FixedArray[Int],
+  max_sizes : FixedArray[Int],
+) -> (FixedArray[Int], FixedArray[Int], FixedArray[Int], FixedArray[Int]) {
   let num_tables = tables.length()
   // Calculate total size and offsets
-  let table_sizes : Array[Int] = []
   let table_offsets : Array[Int] = []
   let mut total_size = 0
   for i in 0..<num_tables {
     table_offsets.push(total_size)
-    let size = tables[i].length()
-    table_sizes.push(size)
-    total_size += size
+    // Use max size to determine total allocation
+    let max_size = if i < max_sizes.length() { max_sizes[i] } else { 1 }
+    total_size += max_size
   }
-  // Flatten into single array
+  // Flatten into single array (allocate to max capacity)
   let tables_flat : FixedArray[Int] = FixedArray::make(
     if total_size > 0 {
       total_size
@@ -136,14 +144,21 @@ fn flatten_tables(
   for i in 0..<num_tables {
     let offset = table_offsets[i]
     let table = tables[i]
-    for j in 0..<table.length() {
+    // Copy elements up to the logical size
+    let logical_size = if i < logical_sizes.length() {
+      logical_sizes[i]
+    } else {
+      0
+    }
+    for j in 0..<logical_size {
       tables_flat[offset + j] = table[j]
     }
   }
   (
     tables_flat,
     FixedArray::from_array(table_offsets),
-    FixedArray::from_array(table_sizes),
+    logical_sizes, // Pass through logical sizes
+    max_sizes,
   )
 }
 
@@ -475,34 +490,49 @@ fn count_imported_tables(module_ : @core.Module) -> Int {
 }
 
 ///|
+/// Default max table size when no max is specified
+/// This is a reasonable limit for our implementation
+let default_table_max_size : Int = 65536
+
+///|
 /// Initialize tables from module's table and elem sections
+/// Returns (tables, logical_sizes, max_sizes) where:
+/// - tables: arrays allocated to max capacity (or at least 1)
+/// - logical_sizes: the actual table sizes (limits.min)
+/// - max_sizes: the max capacity for table.grow
 fn init_tables(
   module_ : @core.Module,
   globals : FixedArray[UInt64],
-) -> FixedArray[FixedArray[Int]] {
+) -> (FixedArray[FixedArray[Int]], FixedArray[Int], FixedArray[Int]) {
   let num_imported_tables = count_imported_tables(module_)
   let num_local_tables = module_.tables.length()
   let num_tables = num_imported_tables + num_local_tables
   if num_tables == 0 {
-    return [[-1]] // Return a dummy table to avoid empty array issues
+    // Return dummy table, sizes, and max_sizes to avoid empty array issues
+    return ([[-1]], [0], [1])
   }
-  // Allocate tables
+  // Allocate tables and track sizes
   let tables : FixedArray[FixedArray[Int]] = FixedArray::make(num_tables, [-1])
+  let logical_sizes_arr : Array[Int] = []
+  let max_sizes_arr : Array[Int] = []
   // Initialize imported tables (from import descriptors)
   let mut import_table_idx = 0
   for imp in module_.imports {
     match imp.desc {
       Table(table_type) => {
-        let size = table_type.limits.min.to_int()
+        let min_size = table_type.limits.min.to_int()
+        // When no max is specified, use a default max to allow growth
+        let max_size = match table_type.limits.max {
+          Some(max) => max.to_int()
+          None => default_table_max_size
+        }
+        // Allocate to max capacity (at least 1 to avoid empty arrays)
+        let alloc_size = if max_size > 0 { max_size } else { 1 }
         // Initialize imported table with -1 (null/undefined)
-        tables[import_table_idx] = FixedArray::make(
-          if size > 0 {
-            size
-          } else {
-            1
-          },
-          -1,
-        )
+        tables[import_table_idx] = FixedArray::make(alloc_size, -1)
+        // Track logical size (actual table size from limits.min)
+        logical_sizes_arr.push(min_size)
+        max_sizes_arr.push(if max_size > 0 { max_size } else { 1 })
         import_table_idx += 1
       }
       _ => ()
@@ -510,16 +540,19 @@ fn init_tables(
   }
   // Initialize local tables
   for i, table_type in module_.tables {
-    let size = table_type.limits.min.to_int()
+    let min_size = table_type.limits.min.to_int()
+    // When no max is specified, use a default max to allow growth
+    let max_size = match table_type.limits.max {
+      Some(max) => max.to_int()
+      None => default_table_max_size
+    }
+    // Allocate to max capacity (at least 1 to avoid empty arrays)
+    let alloc_size = if max_size > 0 { max_size } else { 1 }
     // Initialize table with -1 (null/undefined)
-    tables[num_imported_tables + i] = FixedArray::make(
-      if size > 0 {
-        size
-      } else {
-        1
-      },
-      -1,
-    )
+    tables[num_imported_tables + i] = FixedArray::make(alloc_size, -1)
+    // Track logical size (actual table size from limits.min)
+    logical_sizes_arr.push(min_size)
+    max_sizes_arr.push(if max_size > 0 { max_size } else { 1 })
   }
   // Initialize from element segments
   for elem in module_.elems {
@@ -528,8 +561,9 @@ fn init_tables(
       if table_idx >= 0 && table_idx < tables.length() {
         let offset = eval_const_expr_with_globals(elem.offset, globals).to_int()
         let table = tables[table_idx]
+        let logical_size = logical_sizes_arr[table_idx]
         for i, init_expr in elem.init {
-          if offset + i < table.length() {
+          if offset + i < logical_size {
             // Evaluate the init expression to get the function index
             let func_idx = eval_elem_expr(init_expr)
             table[offset + i] = func_idx
@@ -538,7 +572,11 @@ fn init_tables(
       }
     }
   }
-  tables
+  (
+    tables,
+    FixedArray::from_array(logical_sizes_arr),
+    FixedArray::from_array(max_sizes_arr),
+  )
 }
 
 ///|
@@ -658,6 +696,7 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
           self.tables_flat,
           self.table_offsets,
           self.table_sizes,
+          self.table_max_sizes,
           self.tables.length(),
           self.compiled.func_entries,
           self.compiled.func_num_locals,
@@ -738,6 +777,7 @@ pub fn CRuntime::call_compiled(
         self.tables_flat,
         self.table_offsets,
         self.table_sizes,
+        self.table_max_sizes,
         self.tables.length(),
         self.compiled.func_entries,
         self.compiled.func_num_locals,
@@ -799,17 +839,25 @@ fn u64_to_value(raw : UInt64, ty : @core.ValType) -> Value {
     I64 => Value::I64(raw)
     F32 => Value::F32(Float::reinterpret_from_uint(raw.to_uint()))
     F64 => Value::F64(raw.reinterpret_as_double())
-    FuncRef =>
+    // All reference types - use Ref(None) for null, Ref(Some) for non-null
+    // This provides consistency with the test harness expectations
+    FuncRef
+    | ExternRef
+    | AnyRef
+    | EqRef
+    | I31Ref
+    | StructRef
+    | ArrayRef
+    | NullRef
+    | NullFuncRef
+    | NullExternRef
+    | ExnRef
+    | NullExnRef
+    | Ref(_, _) =>
       if raw == 0xFFFFFFFF_FFFFFFFFUL {
-        Value::Funcref(None)
+        Value::Ref(None)
       } else {
-        Value::Funcref(Some(raw.to_uint().reinterpret_as_int()))
-      }
-    ExternRef =>
-      if raw == 0xFFFFFFFF_FFFFFFFFUL {
-        Value::Externref(None)
-      } else {
-        Value::Externref(Some(raw.to_uint().reinterpret_as_int()))
+        Value::Ref(Some(raw.to_uint().reinterpret_as_int()))
       }
     _ => Value::I64(raw)
   }
