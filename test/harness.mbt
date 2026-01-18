@@ -42,8 +42,6 @@ priv trait Executor {
 
 ///|
 /// Implement Executor for MoonBit Runtime
-
-///|
 impl Executor for @wasm5_runtime.Runtime with call_compiled(
   self,
   name : Bytes,
@@ -51,8 +49,6 @@ impl Executor for @wasm5_runtime.Runtime with call_compiled(
 ) -> Array[@wasm5_runtime.Value] raise Error {
   self.call_compiled(name, args)
 }
-
-///|
 
 ///|
 impl Executor for @wasm5_runtime.Runtime with as_runtime(self) -> @wasm5_runtime.Runtime? {
@@ -66,8 +62,6 @@ impl Executor for @wasm5_runtime.Runtime with as_cruntime(_self) -> @wasm5_crunt
 
 ///|
 /// Implement Executor for C Runtime
-
-///|
 impl Executor for @wasm5_cruntime.CRuntime with call_compiled(
   self,
   name : Bytes,
@@ -75,8 +69,6 @@ impl Executor for @wasm5_cruntime.CRuntime with call_compiled(
 ) -> Array[@wasm5_runtime.Value] raise Error {
   self.call_compiled(name, args)
 }
-
-///|
 
 ///|
 impl Executor for @wasm5_cruntime.CRuntime with as_runtime(_self) -> @wasm5_runtime.Runtime? {
