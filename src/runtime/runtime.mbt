@@ -114,6 +114,12 @@ pub struct ImportedMemory {
 }
 
 ///|
+/// Create a new ImportedMemory
+pub fn ImportedMemory::new(data : Array[Byte], max : UInt64?) -> ImportedMemory {
+  { data, max }
+}
+
+///|
 /// Import resolver for linking modules
 /// Maps (module_name, field_name) to ImportedFunc, global Value, table, or memory
 /// Using Bytes keys to match how WebAssembly module imports work
