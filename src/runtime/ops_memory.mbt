@@ -18,14 +18,7 @@ fn op_i32_load(rt : Runtime) -> Runtime {
     return { ..rt, sp: stack_top, status: Trap }
   }
   let addr = effective_addr.to_int()
-  let b0 = rt.ctx.memory[addr].to_uint()
-  let b1 = rt.ctx.memory[addr + 1].to_uint()
-  let b2 = rt.ctx.memory[addr + 2].to_uint()
-  let b3 = rt.ctx.memory[addr + 3].to_uint()
-  rt.stack.unsafe_set(
-    stack_top,
-    (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)).to_uint64(),
-  )
+  rt.stack.unsafe_set(stack_top, read_u32_le(rt.ctx.memory, addr).to_uint64())
   { ..rt, pc: rt.pc + 2 }
 }
 
@@ -43,10 +36,7 @@ fn op_i32_store(rt : Runtime) -> Runtime {
     return { ..rt, sp: stack_top, status: Trap }
   }
   let addr = effective_addr.to_int()
-  rt.ctx.memory[addr] = (value & 0xFFU).to_byte()
-  rt.ctx.memory[addr + 1] = ((value >> 8) & 0xFFU).to_byte()
-  rt.ctx.memory[addr + 2] = ((value >> 16) & 0xFFU).to_byte()
-  rt.ctx.memory[addr + 3] = ((value >> 24) & 0xFFU).to_byte()
+  write_u32_le(rt.ctx.memory, addr, value)
   { ..rt, sp: stack_top, pc: rt.pc + 2 }
 }
 
@@ -102,9 +92,7 @@ fn op_i32_load16_s(rt : Runtime) -> Runtime {
     return { ..rt, sp: stack_top, status: Trap }
   }
   let addr = effective_addr.to_int()
-  let b0 = rt.ctx.memory[addr].to_int()
-  let b1 = rt.ctx.memory[addr + 1].to_int()
-  let value16 = b0 | (b1 << 8)
+  let value16 = read_u16_le(rt.ctx.memory, addr).reinterpret_as_int()
   // Sign extend from 16 bits
   let value = if value16 >= 32768 { value16 - 65536 } else { value16 }
   rt.stack.unsafe_set(stack_top, value.reinterpret_as_uint().to_uint64())
@@ -124,9 +112,7 @@ fn op_i32_load16_u(rt : Runtime) -> Runtime {
     return { ..rt, sp: stack_top, status: Trap }
   }
   let addr = effective_addr.to_int()
-  let b0 = rt.ctx.memory[addr].to_uint()
-  let b1 = rt.ctx.memory[addr + 1].to_uint()
-  rt.stack.unsafe_set(stack_top, (b0 | (b1 << 8)).to_uint64())
+  rt.stack.unsafe_set(stack_top, read_u16_le(rt.ctx.memory, addr).to_uint64())
   { ..rt, pc: rt.pc + 2 }
 }
 
@@ -143,25 +129,7 @@ fn op_i64_load(rt : Runtime) -> Runtime {
     return { ..rt, sp: stack_top, status: Trap }
   }
   let addr = effective_addr.to_int()
-  let b0 = rt.ctx.memory[addr].to_uint64()
-  let b1 = rt.ctx.memory[addr + 1].to_uint64()
-  let b2 = rt.ctx.memory[addr + 2].to_uint64()
-  let b3 = rt.ctx.memory[addr + 3].to_uint64()
-  let b4 = rt.ctx.memory[addr + 4].to_uint64()
-  let b5 = rt.ctx.memory[addr + 5].to_uint64()
-  let b6 = rt.ctx.memory[addr + 6].to_uint64()
-  let b7 = rt.ctx.memory[addr + 7].to_uint64()
-  rt.stack.unsafe_set(
-    stack_top,
-    b0 |
-    (b1 << 8) |
-    (b2 << 16) |
-    (b3 << 24) |
-    (b4 << 32) |
-    (b5 << 40) |
-    (b6 << 48) |
-    (b7 << 56),
-  )
+  rt.stack.unsafe_set(stack_top, read_u64_le(rt.ctx.memory, addr))
   { ..rt, pc: rt.pc + 2 }
 }
 
@@ -179,14 +147,7 @@ fn op_i64_store(rt : Runtime) -> Runtime {
     return { ..rt, sp: stack_top, status: Trap }
   }
   let addr = effective_addr.to_int()
-  rt.ctx.memory[addr] = (value & 0xFFUL).to_byte()
-  rt.ctx.memory[addr + 1] = ((value >> 8) & 0xFFUL).to_byte()
-  rt.ctx.memory[addr + 2] = ((value >> 16) & 0xFFUL).to_byte()
-  rt.ctx.memory[addr + 3] = ((value >> 24) & 0xFFUL).to_byte()
-  rt.ctx.memory[addr + 4] = ((value >> 32) & 0xFFUL).to_byte()
-  rt.ctx.memory[addr + 5] = ((value >> 40) & 0xFFUL).to_byte()
-  rt.ctx.memory[addr + 6] = ((value >> 48) & 0xFFUL).to_byte()
-  rt.ctx.memory[addr + 7] = ((value >> 56) & 0xFFUL).to_byte()
+  write_u64_le(rt.ctx.memory, addr, value)
   { ..rt, sp: stack_top, pc: rt.pc + 2 }
 }
 
@@ -240,9 +201,7 @@ fn op_i64_load16_s(rt : Runtime) -> Runtime {
     return { ..rt, sp: stack_top, status: Trap }
   }
   let addr = effective_addr.to_int()
-  let b0 = rt.ctx.memory[addr].to_int64()
-  let b1 = rt.ctx.memory[addr + 1].to_int64()
-  let value16 = b0 | (b1 << 8)
+  let value16 = read_u16_le(rt.ctx.memory, addr).to_int64()
   // Sign extend from 16 bits
   let value = if value16 >= 32768L { value16 - 65536L } else { value16 }
   rt.stack.unsafe_set(stack_top, value.reinterpret_as_uint64())
@@ -262,9 +221,7 @@ fn op_i64_load16_u(rt : Runtime) -> Runtime {
     return { ..rt, sp: stack_top, status: Trap }
   }
   let addr = effective_addr.to_int()
-  let b0 = rt.ctx.memory[addr].to_uint64()
-  let b1 = rt.ctx.memory[addr + 1].to_uint64()
-  rt.stack.unsafe_set(stack_top, b0 | (b1 << 8))
+  rt.stack.unsafe_set(stack_top, read_u16_le(rt.ctx.memory, addr).to_uint64())
   { ..rt, pc: rt.pc + 2 }
 }
 
@@ -281,11 +238,7 @@ fn op_i64_load32_s(rt : Runtime) -> Runtime {
     return { ..rt, sp: stack_top, status: Trap }
   }
   let addr = effective_addr.to_int()
-  let b0 = rt.ctx.memory[addr].to_int64()
-  let b1 = rt.ctx.memory[addr + 1].to_int64()
-  let b2 = rt.ctx.memory[addr + 2].to_int64()
-  let b3 = rt.ctx.memory[addr + 3].to_int64()
-  let value32 = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
+  let value32 = read_u32_le(rt.ctx.memory, addr).to_int64()
   // Sign extend from 32 bits
   let value = if value32 >= 0x80000000L {
     value32 - 0x100000000L
@@ -309,11 +262,7 @@ fn op_i64_load32_u(rt : Runtime) -> Runtime {
     return { ..rt, sp: stack_top, status: Trap }
   }
   let addr = effective_addr.to_int()
-  let b0 = rt.ctx.memory[addr].to_uint64()
-  let b1 = rt.ctx.memory[addr + 1].to_uint64()
-  let b2 = rt.ctx.memory[addr + 2].to_uint64()
-  let b3 = rt.ctx.memory[addr + 3].to_uint64()
-  rt.stack.unsafe_set(stack_top, b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
+  rt.stack.unsafe_set(stack_top, read_u32_le(rt.ctx.memory, addr).to_uint64())
   { ..rt, pc: rt.pc + 2 }
 }
 
@@ -330,12 +279,7 @@ fn op_f32_load(rt : Runtime) -> Runtime {
     return { ..rt, sp: stack_top, status: Trap }
   }
   let addr = effective_addr.to_int()
-  let b0 = rt.ctx.memory[addr].to_uint()
-  let b1 = rt.ctx.memory[addr + 1].to_uint()
-  let b2 = rt.ctx.memory[addr + 2].to_uint()
-  let b3 = rt.ctx.memory[addr + 3].to_uint()
-  let bits = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
-  rt.stack.unsafe_set(stack_top, bits.to_uint64())
+  rt.stack.unsafe_set(stack_top, read_u32_le(rt.ctx.memory, addr).to_uint64())
   { ..rt, pc: rt.pc + 2 }
 }
 
@@ -352,23 +296,7 @@ fn op_f64_load(rt : Runtime) -> Runtime {
     return { ..rt, sp: stack_top, status: Trap }
   }
   let addr = effective_addr.to_int()
-  let b0 = rt.ctx.memory[addr].to_uint64()
-  let b1 = rt.ctx.memory[addr + 1].to_uint64()
-  let b2 = rt.ctx.memory[addr + 2].to_uint64()
-  let b3 = rt.ctx.memory[addr + 3].to_uint64()
-  let b4 = rt.ctx.memory[addr + 4].to_uint64()
-  let b5 = rt.ctx.memory[addr + 5].to_uint64()
-  let b6 = rt.ctx.memory[addr + 6].to_uint64()
-  let b7 = rt.ctx.memory[addr + 7].to_uint64()
-  let bits = b0 |
-    (b1 << 8) |
-    (b2 << 16) |
-    (b3 << 24) |
-    (b4 << 32) |
-    (b5 << 40) |
-    (b6 << 48) |
-    (b7 << 56)
-  rt.stack.unsafe_set(stack_top, bits)
+  rt.stack.unsafe_set(stack_top, read_u64_le(rt.ctx.memory, addr))
   { ..rt, pc: rt.pc + 2 }
 }
 
@@ -386,10 +314,7 @@ fn op_f32_store(rt : Runtime) -> Runtime {
     return { ..rt, sp: stack_top, status: Trap }
   }
   let addr = effective_addr.to_int()
-  rt.ctx.memory[addr] = (value & 0xFFU).to_byte()
-  rt.ctx.memory[addr + 1] = ((value >> 8) & 0xFFU).to_byte()
-  rt.ctx.memory[addr + 2] = ((value >> 16) & 0xFFU).to_byte()
-  rt.ctx.memory[addr + 3] = ((value >> 24) & 0xFFU).to_byte()
+  write_u32_le(rt.ctx.memory, addr, value)
   { ..rt, sp: stack_top, pc: rt.pc + 2 }
 }
 
@@ -407,14 +332,7 @@ fn op_f64_store(rt : Runtime) -> Runtime {
     return { ..rt, sp: stack_top, status: Trap }
   }
   let addr = effective_addr.to_int()
-  rt.ctx.memory[addr] = (value & 0xFFUL).to_byte()
-  rt.ctx.memory[addr + 1] = ((value >> 8) & 0xFFUL).to_byte()
-  rt.ctx.memory[addr + 2] = ((value >> 16) & 0xFFUL).to_byte()
-  rt.ctx.memory[addr + 3] = ((value >> 24) & 0xFFUL).to_byte()
-  rt.ctx.memory[addr + 4] = ((value >> 32) & 0xFFUL).to_byte()
-  rt.ctx.memory[addr + 5] = ((value >> 40) & 0xFFUL).to_byte()
-  rt.ctx.memory[addr + 6] = ((value >> 48) & 0xFFUL).to_byte()
-  rt.ctx.memory[addr + 7] = ((value >> 56) & 0xFFUL).to_byte()
+  write_u64_le(rt.ctx.memory, addr, value)
   { ..rt, sp: stack_top, pc: rt.pc + 2 }
 }
 
@@ -452,8 +370,7 @@ fn op_i32_store16(rt : Runtime) -> Runtime {
     return { ..rt, sp: stack_top, status: Trap }
   }
   let addr = effective_addr.to_int()
-  rt.ctx.memory[addr] = (value & 0xFFU).to_byte()
-  rt.ctx.memory[addr + 1] = ((value >> 8) & 0xFFU).to_byte()
+  write_u16_le(rt.ctx.memory, addr, value)
   { ..rt, sp: stack_top, pc: rt.pc + 2 }
 }
 
@@ -489,8 +406,7 @@ fn op_i64_store16(rt : Runtime) -> Runtime {
     return { ..rt, sp: stack_top, status: Trap }
   }
   let addr = effective_addr.to_int()
-  rt.ctx.memory[addr] = (value & 0xFFUL).to_byte()
-  rt.ctx.memory[addr + 1] = ((value >> 8) & 0xFFUL).to_byte()
+  write_u16_le_64(rt.ctx.memory, addr, value)
   { ..rt, sp: stack_top, pc: rt.pc + 2 }
 }
 
@@ -508,10 +424,7 @@ fn op_i64_store32(rt : Runtime) -> Runtime {
     return { ..rt, sp: stack_top, status: Trap }
   }
   let addr = effective_addr.to_int()
-  rt.ctx.memory[addr] = (value & 0xFFUL).to_byte()
-  rt.ctx.memory[addr + 1] = ((value >> 8) & 0xFFUL).to_byte()
-  rt.ctx.memory[addr + 2] = ((value >> 16) & 0xFFUL).to_byte()
-  rt.ctx.memory[addr + 3] = ((value >> 24) & 0xFFUL).to_byte()
+  write_u32_le_64(rt.ctx.memory, addr, value)
   { ..rt, sp: stack_top, pc: rt.pc + 2 }
 }
 
@@ -591,19 +504,9 @@ fn op_memory_copy(rt : Runtime) -> Runtime {
     return { ..rt, sp: stack_top, status: Trap }
   }
 
-  // Handle overlapping regions correctly
+  // Copy memory (unsafe_blit handles overlapping regions correctly)
   if n > 0 {
-    if dest <= src {
-      // Copy forward
-      for i = 0; i < n; i = i + 1 {
-        rt.ctx.memory[dest + i] = rt.ctx.memory[src + i]
-      }
-    } else {
-      // Copy backward (for overlapping regions where dest > src)
-      for i = n - 1; i >= 0; i = i - 1 {
-        rt.ctx.memory[dest + i] = rt.ctx.memory[src + i]
-      }
-    }
+    Array::unsafe_blit(rt.ctx.memory, dest, rt.ctx.memory, src, n)
   }
   { ..rt, sp: stack_top, pc: rt.pc + 1 }
 }
@@ -655,8 +558,8 @@ fn op_memory_init(rt : Runtime) -> Runtime {
   }
 
   // Copy from data segment to memory
-  for i = 0; i < n; i = i + 1 {
-    rt.ctx.memory[dest + i] = data[src + i]
+  if n > 0 {
+    Array::unsafe_blit(rt.ctx.memory, dest, data, src, n)
   }
   { ..rt, sp: stack_top, pc: rt.pc + 2 }
 }

@@ -13,6 +13,10 @@
       "path": "moonbitlang/wasm5/src/cruntime",
       "alias": "wasm5_cruntime"
     },
+    {
+      "path": "moonbitlang/wasm5/src/component",
+      "alias": "component"
+    },
     "moonbitlang/async",
     "moonbitlang/async/fs",
     "moonbitlang/core/strconv",

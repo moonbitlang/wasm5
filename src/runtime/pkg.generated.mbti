@@ -1,12 +1,28 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "moonbitlang/wasm5/src/runtime"
 
-import {
-  "moonbitlang/wasm5/src/core",
-}
+import(
+  "moonbitlang/wasm5/src/core"
+)
 
 // Values
 pub fn default_import_resolver() -> ImportResolver
+
+pub fn read_u16_le(Array[Byte], Int) -> UInt
+
+pub fn read_u32_le(Array[Byte], Int) -> UInt
+
+pub fn read_u64_le(Array[Byte], Int) -> UInt64
+
+pub fn write_u16_le(Array[Byte], Int, UInt) -> Unit
+
+pub fn write_u16_le_64(Array[Byte], Int, UInt64) -> Unit
+
+pub fn write_u32_le(Array[Byte], Int, UInt) -> Unit
+
+pub fn write_u32_le_64(Array[Byte], Int, UInt64) -> Unit
+
+pub fn write_u64_le(Array[Byte], Int, UInt64) -> Unit
 
 // Errors
 pub suberror RuntimeError {
@@ -68,6 +84,7 @@ pub struct ImportedMemory {
   data : Array[Byte]
   max : UInt64?
 }
+pub fn ImportedMemory::new(Array[Byte], UInt64?) -> Self
 
 pub struct Runtime {
   ops : FixedArray[UInt64]

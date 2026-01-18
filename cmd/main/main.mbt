@@ -1,21 +1,42 @@
 ///|
 async fn main {
   let args = @env.args()
-  // Parse CLI arguments following wasmi pattern:
-  // wasm5 <WASM_FILE> --invoke <FUNC_NAME> [<FUNC_ARGS>...]
-  let parsed = parse_args(args)
-  match parsed {
-    Some((wasm_path, func_name, func_args)) =>
-      run_wasm(wasm_path, func_name, func_args)
-    None => print_usage()
+  // Check for component mode flag
+  if args.length() >= 2 && args[1] == "--component" {
+    // Component mode: wasm5 --component <WASM_FILE> --invoke <FUNC_NAME> [<FUNC_ARGS>...]
+    let component_args = Array::from_iter(args[2:].iter())
+    let parsed = parse_args(component_args)
+    match parsed {
+      Some((wasm_path, func_name, func_args)) =>
+        run_component(wasm_path, func_name, func_args)
+      None => print_usage()
+    }
+  } else {
+    // Standard module mode: wasm5 <WASM_FILE> --invoke <FUNC_NAME> [<FUNC_ARGS>...]
+    let parsed = parse_args(args)
+    match parsed {
+      Some((wasm_path, func_name, func_args)) =>
+        run_wasm(wasm_path, func_name, func_args)
+      None => print_usage()
+    }
   }
 }
 
 ///|
 fn print_usage() -> Unit {
   println("Usage: wasm5 <WASM_FILE> --invoke <FUNC_NAME> [<FUNC_ARGS>...]")
+  println(
+    "       wasm5 --component <WASM_FILE> --invoke <FUNC_NAME> [<FUNC_ARGS>...]",
+  )
   println("")
-  println("Execute a WebAssembly module and invoke an exported function.")
+  println(
+    "Execute a WebAssembly module or component and invoke an exported function.",
+  )
+  println("")
+  println("Options:")
+  println(
+    "  --component    Load as Component Model binary (auto-detects if omitted)",
+  )
   println("")
   println("Arguments:")
   println("  <WASM_FILE>    Path to the WebAssembly binary file (.wasm)")
@@ -27,12 +48,12 @@ fn print_usage() -> Unit {
   println("")
   println("Examples:")
   println("  wasm5 myprogram.wasm --invoke add 5 3")
-  println("  wasm5 counter.wasm --invoke run 1000000")
+  println("  wasm5 --component mycomponent.wasm --invoke greet")
 }
 
 ///|
 fn parse_args(args : Array[String]) -> (String, String, Array[String])? {
-  // args[0] is the program name
+  // args[0] is the program name (or first real arg if sliced)
   if args.length() < 4 {
     return None
   }
@@ -141,6 +162,48 @@ async fn run_wasm(
 }
 
 ///|
+async fn run_component(
+  wasm_path : String,
+  func_name : String,
+  arg_strings : Array[String],
+) -> Unit {
+  let wasm_bytes = @fs.read_file(wasm_path).binary()
+
+  // Load as component
+  let executable = @component.load(wasm_bytes) catch {
+    e => {
+      println("Error loading component: \{e}")
+      return
+    }
+  }
+
+  // Parse arguments as S32 integers (component model uses s32 by default)
+  let comp_args : Array[@component.ComponentValue] = []
+  for arg in arg_strings {
+    let n = @strconv.parse_int(arg) catch {
+      _ => {
+        println("Error: argument '\{arg}' is not a valid integer")
+        return
+      }
+    }
+    comp_args.push(@component.ComponentValue::S32(n))
+  }
+
+  // Call the function
+  let results = executable.call(func_name, comp_args) catch {
+    e => {
+      println("Error calling '\{func_name}': \{e}")
+      return
+    }
+  }
+
+  // Print results
+  for result in results {
+    println(format_component_value(result))
+  }
+}
+
+///|
 fn format_value(v : @wasm5_core.Value) -> String {
   match v {
     I32(n) => n.reinterpret_as_int().to_string()
@@ -154,6 +217,11 @@ fn format_value(v : @wasm5_core.Value) -> String {
     Externref(Some(n)) => "externref(\{n})"
     Externref(None) => "ref.null extern"
   }
+}
+
+///|
+fn format_component_value(v : @component.ComponentValue) -> String {
+  v.to_string()
 }
 
 ///|

@@ -1,0 +1,151 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/wasm5/src/component"
+
+import(
+  "moonbitlang/wasm5/src/core"
+  "moonbitlang/wasm5/src/runtime"
+)
+
+// Values
+pub fn is_component_binary(Bytes) -> Bool
+
+pub fn load(Bytes) -> WasmExecutable raise WasmError
+
+pub fn load_with_imports(Bytes, ComponentImportResolver) -> WasmExecutable raise WasmError
+
+pub fn load_with_unified_resolver(Bytes, UnifiedImportResolver) -> WasmExecutable raise WasmError
+
+// Errors
+pub suberror ComponentRuntimeError {
+  ComponentRuntimeError(String)
+}
+pub impl Show for ComponentRuntimeError
+
+pub suberror WasmError {
+  ParseError(String)
+  RuntimeError(String)
+}
+pub impl Show for WasmError
+
+// Types and methods
+type ComponentFunc
+
+pub struct ComponentImportResolver {
+  funcs : Array[(String, ImportedComponentFunc)]
+  mut func_index : Int
+  values : Map[String, ComponentValue]
+  instances : Map[String, ComponentRuntime]
+}
+pub fn ComponentImportResolver::add_func(Self, String, ImportedComponentFunc) -> Unit
+pub fn ComponentImportResolver::add_instance(Self, String, ComponentRuntime) -> Unit
+pub fn ComponentImportResolver::add_value(Self, String, ComponentValue) -> Unit
+pub fn ComponentImportResolver::get_func(Self, String) -> ImportedComponentFunc?
+pub fn ComponentImportResolver::new() -> Self
+
+type ComponentInstanceEntry
+
+pub struct ComponentRuntime {
+  component : @core.Component
+  import_resolver : ComponentImportResolver
+  parent : ComponentRuntime?
+  core_modules : Array[@core.Module]
+  core_instances : Array[CoreInstanceEntry]
+  core_types : Array[@core.CoreType]
+  core_funcs : Array[CoreFunc]
+  core_memories : Array[(Array[Byte], UInt64?)]
+  core_tables : Array[@runtime.RuntimeTable]
+  core_globals : Array[@core.Value]
+  types : Array[@core.ComponentTypeDef]
+  funcs : Array[ComponentFunc]
+  values : Array[ComponentValue]
+  components : Array[@core.Component]
+  component_instances : Array[ComponentInstanceEntry]
+  exports : Map[String, @core.ComponentExportKind]
+  resources : Array[ResourceEntry?]
+  mut next_resource_handle : UInt
+}
+pub fn ComponentRuntime::call(Self, String, Array[ComponentValue]) -> Array[ComponentValue] raise ComponentRuntimeError
+pub fn ComponentRuntime::get_export_names(Self) -> Array[String]
+pub fn ComponentRuntime::get_func_name(Self, UInt) -> String?
+pub fn ComponentRuntime::get_func_names(Self) -> Array[(Int, String, String)]
+pub fn ComponentRuntime::instantiate(Self) -> Unit raise ComponentRuntimeError
+pub fn ComponentRuntime::new(@core.Component) -> Self
+pub fn ComponentRuntime::new_with_imports(@core.Component, ComponentImportResolver) -> Self
+pub fn ComponentRuntime::resolve_type(Self, @core.ComponentValType) -> @core.ComponentValType raise ComponentRuntimeError
+pub fn ComponentRuntime::resource_borrow(Self, UInt) -> UInt raise ComponentRuntimeError
+pub fn ComponentRuntime::resource_drop(Self, UInt) -> UInt? raise ComponentRuntimeError
+pub fn ComponentRuntime::resource_new(Self, UInt, UInt) -> UInt
+pub fn ComponentRuntime::resource_rep(Self, UInt) -> UInt raise ComponentRuntimeError
+
+pub(all) enum ComponentValue {
+  Bool(Bool)
+  S8(Int)
+  U8(Int)
+  S16(Int)
+  U16(Int)
+  S32(Int)
+  U32(UInt)
+  S64(Int64)
+  U64(UInt64)
+  F32(Float)
+  F64(Double)
+  Char(Char)
+  String(String)
+  List(Array[ComponentValue])
+  Record(Array[(String, ComponentValue)])
+  Tuple(Array[ComponentValue])
+  Variant(Int, String, ComponentValue?)
+  Flags(Array[String])
+  Enum(Int, String)
+  OptionNone
+  OptionSome(ComponentValue)
+  ResultOk(ComponentValue?)
+  ResultErr(ComponentValue?)
+  Own(UInt, UInt)
+  Borrow(UInt, UInt)
+}
+pub impl Eq for ComponentValue
+pub impl Show for ComponentValue
+
+type CoreFunc
+
+type CoreInstanceEntry
+
+pub enum ExportInfo {
+  Func(Int)
+}
+
+pub(all) struct ImportedComponentFunc {
+  func : (Array[ComponentValue]) -> Array[ComponentValue]
+}
+
+pub struct LinkedExecutable {
+  executable : WasmExecutable
+  exports : Map[String, ExportInfo]
+}
+
+type ResourceEntry
+pub impl Eq for ResourceEntry
+pub impl Show for ResourceEntry
+
+pub struct UnifiedImportResolver {
+  executables : Map[String, LinkedExecutable]
+  host_funcs : Map[String, Map[String, ImportedComponentFunc]]
+}
+pub fn UnifiedImportResolver::add_host_func(Self, String, String, ImportedComponentFunc) -> Unit
+pub fn UnifiedImportResolver::new() -> Self
+pub fn UnifiedImportResolver::register(Self, String, WasmExecutable) -> Unit
+pub fn UnifiedImportResolver::to_component_resolver(Self) -> ComponentImportResolver
+pub fn UnifiedImportResolver::to_module_resolver(Self) -> @runtime.ImportResolver
+
+pub(all) enum WasmExecutable {
+  Module(@runtime.Runtime)
+  Component(ComponentRuntime)
+}
+pub fn WasmExecutable::call(Self, String, Array[ComponentValue]) -> Array[ComponentValue] raise WasmError
+pub fn WasmExecutable::is_component(Self) -> Bool
+
+// Type aliases
+
+// Traits
+

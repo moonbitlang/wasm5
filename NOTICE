@@ -10,6 +10,11 @@ specification test suite:
 
   https://github.com/WebAssembly/spec/tree/main/test
 
+The test files in test/reference_tests/component/ are derived from the
+WebAssembly Component Model specification test suite:
+
+  https://github.com/WebAssembly/component-model/tree/main/test/wasm-tools
+
 These files are licensed under the Apache License, Version 2.0.
 
 Copyright (c) WebAssembly Community Group participants

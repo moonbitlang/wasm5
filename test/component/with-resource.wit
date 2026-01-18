@@ -1,0 +1,13 @@
+package test:resources;
+
+world resource-world {
+  // Define a resource type
+  resource counter {
+    constructor(initial: s32);
+    increment: func();
+    get-value: func() -> s32;
+  }
+
+  // Export functions that work with the resource
+  export create-counter: func(initial: s32) -> counter;
+}
