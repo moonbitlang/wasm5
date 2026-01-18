@@ -618,6 +618,10 @@ fn Compiler::compile_wasm_instr(
       self.emit_fn(op_throw)
       self.emit_idx(tag_idx_int)
     }
+    ThrowRef => {
+      ctx.pop_type()
+      self.emit_fn(op_throw_ref)
+    }
     Rethrow(label_idx) => {
       self.emit_fn(op_rethrow)
       self.emit_idx(label_idx.reinterpret_as_int())
@@ -884,6 +888,34 @@ fn Compiler::compile_wasm_instr(
       // Patch the jump at end of then branch
       self.ops[end_jump_slot] = end_pc.to_int64().reinterpret_as_uint64()
       // Pop control frame and patch all pending branches from inside the if
+      let block = ctx.pop_control()
+      for slot in block.pending_br_patches {
+        self.ops[slot] = end_pc.to_int64().reinterpret_as_uint64()
+      }
+      ctx.truncate_stack(block.stack_height_at_entry)
+      ctx.push_types(block.results)
+    }
+    Try(block_type, instrs, _catches) => {
+      let (params, results) = get_compile_block_type(self.module_, block_type)
+      ctx.push_control(BlockKind, params, results, 0)
+      for instr in instrs {
+        self.compile_wasm_instr(ctx, instr)
+      }
+      let end_pc = self.ops.length()
+      let block = ctx.pop_control()
+      for slot in block.pending_br_patches {
+        self.ops[slot] = end_pc.to_int64().reinterpret_as_uint64()
+      }
+      ctx.truncate_stack(block.stack_height_at_entry)
+      ctx.push_types(block.results)
+    }
+    TryDelegate(block_type, instrs, _label_idx) => {
+      let (params, results) = get_compile_block_type(self.module_, block_type)
+      ctx.push_control(BlockKind, params, results, 0)
+      for instr in instrs {
+        self.compile_wasm_instr(ctx, instr)
+      }
+      let end_pc = self.ops.length()
       let block = ctx.pop_control()
       for slot in block.pending_br_patches {
         self.ops[slot] = end_pc.to_int64().reinterpret_as_uint64()
