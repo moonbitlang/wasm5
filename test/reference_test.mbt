@@ -1071,22 +1071,32 @@ async test "ref_is_null.wast (cruntime)" {
   run_test_harness("", "ref_is_null.wast", runtime_type=CRuntime)
 }
 
-// --- Not yet implemented ---
-// async test "ref.wast (cruntime)" {
-//   run_test_harness("", "ref.wast", runtime_type=CRuntime)
-// }
-// async test "ref_as_non_null.wast (cruntime)" {
-//   run_test_harness("", "ref_as_non_null.wast", runtime_type=CRuntime)
-// }
-// async test "br_on_null.wast (cruntime)" {
-//   run_test_harness("", "br_on_null.wast", runtime_type=CRuntime)
-// }
-// async test "br_on_non_null.wast (cruntime)" {
-//   run_test_harness("", "br_on_non_null.wast", runtime_type=CRuntime)
-// }
-// async test "call_ref.wast (cruntime)" {
-//   run_test_harness("", "call_ref.wast", runtime_type=CRuntime)
-// }
+// --- Reference types ---
+
+///|
+async test "ref.wast (cruntime)" {
+  run_test_harness("", "ref.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "ref_as_non_null.wast (cruntime)" {
+  run_test_harness("", "ref_as_non_null.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "br_on_null.wast (cruntime)" {
+  run_test_harness("", "br_on_null.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "br_on_non_null.wast (cruntime)" {
+  run_test_harness("", "br_on_non_null.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "call_ref.wast (cruntime)" {
+  run_test_harness("", "call_ref.wast", runtime_type=CRuntime)
+}
 
 // --- Function/calls ---
 

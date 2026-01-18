@@ -662,6 +662,18 @@ extern "C" fn ref_is_null() -> UInt64 = "ref_is_null"
 ///|
 extern "C" fn ref_eq() -> UInt64 = "ref_eq"
 
+///|
+extern "C" fn ref_as_non_null() -> UInt64 = "ref_as_non_null"
+
+///|
+extern "C" fn br_on_null() -> UInt64 = "br_on_null"
+
+///|
+extern "C" fn br_on_non_null() -> UInt64 = "br_on_non_null"
+
+///|
+extern "C" fn call_ref() -> UInt64 = "call_ref"
+
 // Table access operations
 
 ///|

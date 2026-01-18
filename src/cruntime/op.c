@@ -26,6 +26,7 @@
 #define TRAP_STACK_OVERFLOW             9
 #define TRAP_UNINITIALIZED_ELEMENT      10 // "uninitialized element" - null entry in table
 #define TRAP_TABLE_BOUNDS_ACCESS        11 // "out of bounds table access" - for bulk table ops
+#define TRAP_NULL_REFERENCE             12 // "null reference" - for ref.as_non_null
 
 // Macro to define getter function that returns op handler pointer
 #define DEFINE_OP(name) uint64_t name(void) { return (uint64_t)op_##name; }
@@ -2385,6 +2386,133 @@ int op_ref_eq(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     NEXT();
 }
 DEFINE_OP(ref_eq)
+
+// ref.as_non_null - assert reference is non-null
+// Stack: [ref] -> [ref]
+// Traps if reference is null
+int op_ref_as_non_null(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    uint64_t ref = sp[-1];
+    if (ref == REF_NULL) {
+        TRAP(TRAP_NULL_REFERENCE);
+    }
+    // Leave ref on stack unchanged
+    NEXT();
+}
+DEFINE_OP(ref_as_non_null)
+
+// br_on_null - branch if reference is null
+// Immediate: target_pc
+// Stack: [ref] -> [ref] (fall-through) or [] (branch)
+// If null: consumes ref and branches
+// If non-null: leaves ref on stack and continues
+int op_br_on_null(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    int target_pc = (int)*pc++;
+    int not_taken_pc = (int)*pc++;
+    uint64_t ref = sp[-1];
+    if (ref == REF_NULL) {
+        // Null: pop ref and branch
+        --sp;
+        pc = crt->code + target_pc;
+    } else {
+        // Non-null: keep ref and continue
+        pc = crt->code + not_taken_pc;
+    }
+    NEXT();
+}
+DEFINE_OP(br_on_null)
+
+// br_on_non_null - branch if reference is non-null
+// Immediate: target_pc
+// Stack: [ref] -> [] (fall-through) or [ref] (branch)
+// If non-null: branches WITH the ref
+// If null: consumes ref and continues
+int op_br_on_non_null(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    int target_pc = (int)*pc++;
+    int not_taken_pc = (int)*pc++;
+    uint64_t ref = sp[-1];
+    if (ref != REF_NULL) {
+        // Non-null: keep ref and branch
+        pc = crt->code + target_pc;
+    } else {
+        // Null: pop ref and continue
+        --sp;
+        pc = crt->code + not_taken_pc;
+    }
+    NEXT();
+}
+DEFINE_OP(br_on_non_null)
+
+// call_ref - call function via typed funcref
+// Immediate: type_idx, frame_offset
+// Stack: [args..., funcref] -> [results...]
+int op_call_ref(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    int expected_type_idx = (int)*pc++;
+    int frame_offset = (int)*pc++;
+
+    // Pop funcref from stack
+    uint64_t ref = *--sp;
+
+    // Check for null
+    if (ref == REF_NULL) {
+        TRAP(TRAP_NULL_FUNCTION_REFERENCE);
+    }
+
+    // Extract function index from tagged reference
+    int func_idx = (int)(ref & 0x3FFFFFFFFFFFFFFFULL);
+
+    // Check if it's an imported function
+    if (func_idx < g_num_imported_funcs) {
+        // Imported function - trap (not supported yet)
+        TRAP(TRAP_UNREACHABLE);
+    }
+
+    // Local function call
+    int local_idx = func_idx - g_num_imported_funcs;
+    if (local_idx < 0 || local_idx >= g_num_funcs) {
+        TRAP(TRAP_UNREACHABLE);
+    }
+
+    // Type check: compare expected type with actual function type using signature hashes
+    if (func_idx < g_num_imported_funcs + g_num_funcs) {
+        int actual_type_idx = g_func_type_idxs[func_idx];
+        if (expected_type_idx >= 0 && expected_type_idx < g_num_types &&
+            actual_type_idx >= 0 && actual_type_idx < g_num_types) {
+            // Compare both signature hashes - they encode actual types, not just counts
+            int expected_hash1 = g_type_sig_hash1[expected_type_idx];
+            int expected_hash2 = g_type_sig_hash2[expected_type_idx];
+            int actual_hash1 = g_type_sig_hash1[actual_type_idx];
+            int actual_hash2 = g_type_sig_hash2[actual_type_idx];
+            if (expected_hash1 != actual_hash1 || expected_hash2 != actual_hash2) {
+                TRAP(TRAP_INDIRECT_CALL_TYPE_MISMATCH);
+            }
+        }
+    }
+
+    // Get callee entry point
+    int callee_entry = g_func_entries[local_idx];
+
+    // Save caller pc (fp saved via new_fp calculation)
+    uint64_t* caller_pc = pc;
+
+    // New frame starts at fp + frame_offset (args already in place)
+    uint64_t* new_fp = fp + frame_offset;
+    uint64_t* new_pc = crt->code + callee_entry;
+
+    // Execute callee (recursive call using native C stack)
+    int trap = run(crt, new_pc, sp, new_fp);
+
+    if (trap != TRAP_NONE) {
+        return trap;
+    }
+
+    // Restore caller pc, fp unchanged
+    pc = caller_pc;
+    NEXT();
+}
+DEFINE_OP(call_ref)
 
 // =============================================================================
 // Table access operations

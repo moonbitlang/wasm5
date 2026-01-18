@@ -51,6 +51,7 @@ fn trap_to_error(trap : TrapCode) -> @runtime.RuntimeError {
     StackOverflow => "stack overflow"
     UninitializedElement => "uninitialized element"
     TableBoundsAccess => "out of bounds table access" // For bulk table ops
+    NullReference => "null reference"
   }
   @runtime.RuntimeError::from_detail(detail)
 }

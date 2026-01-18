@@ -61,6 +61,7 @@ pub enum TrapCode {
   StackOverflow
   UninitializedElement
   TableBoundsAccess
+  NullReference
 }
 pub impl Eq for TrapCode
 pub impl Show for TrapCode

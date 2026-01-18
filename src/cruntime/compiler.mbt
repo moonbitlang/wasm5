@@ -1328,6 +1328,121 @@ fn compile_instr(
       ctx.emit(ref_eq())
       ignore(ctx.pop_slot()) // consume two, keep one
     }
+    RefAsNonNull => ctx.emit(ref_as_non_null())
+    // Stack: [ref] -> [ref], no net slot change (traps if null)
+
+    // Branch on null reference
+    BrOnNull(label) => {
+      // Stack: [label_args..., ref] -> [ref] (fall-through) or branch with [label_args...]
+      // When branching (null case): ref is consumed, label_args are passed to target
+      // When falling through (non-null): ref stays on stack
+      let label_int = label.reinterpret_as_int()
+      let (target_pc, result_slots, target_sp) = ctx.get_branch_target(
+        label_int,
+      )
+      let arity = result_slots.length()
+      ctx.emit(br_on_null())
+
+      // Capture slots for branch path - skip the ref at top, get the label_args below it
+      // Stack is: [..., label_args..., ref]
+      // We need the 'arity' slots below the ref (offset by 1)
+      let src_slots : Array[Int] = []
+      for i in 0..<arity {
+        src_slots.push(ctx.slot_at(arity - i)) // Skip slot_at(0) which is the ref
+      }
+      let taken_patch = ctx.code.length()
+      ctx.emit_idx(0) // Placeholder for taken (null) path
+      let not_taken_pc = ctx.code.length() + 1
+      ctx.emit_idx(not_taken_pc)
+
+      // Defer the resolution block for the null (branch) case
+      ctx.defer_resolution(
+        taken_patch,
+        src_slots,
+        result_slots,
+        target_sp,
+        label_int,
+        ctx.is_loop_target(label_int),
+        target_pc,
+      )
+      // On fall-through, ref remains on stack (no slot change needed)
+    }
+
+    // Branch on non-null reference
+    BrOnNonNull(label) => {
+      // Stack: [ref] -> [] (fall-through) or [ref] (branch if non-null)
+      let label_int = label.reinterpret_as_int()
+      let (target_pc, result_slots, target_sp) = ctx.get_branch_target(
+        label_int,
+      )
+
+      // The result_slots include the ref that gets passed along on branch
+      // For fall-through, the ref is consumed (popped)
+      ctx.emit(br_on_non_null())
+
+      // Include the ref in captured slots for the branch path
+      let arity = result_slots.length()
+      let src_slots = ctx.capture_result_slots(arity)
+      let taken_patch = ctx.code.length()
+      ctx.emit_idx(0) // Placeholder for taken (non-null) path
+      let not_taken_pc = ctx.code.length() + 1
+      ctx.emit_idx(not_taken_pc)
+
+      // Defer the resolution block for the non-null (branch) case
+      ctx.defer_resolution(
+        taken_patch,
+        src_slots,
+        result_slots,
+        target_sp,
+        label_int,
+        ctx.is_loop_target(label_int),
+        target_pc,
+      )
+      // On fall-through (null case), ref is consumed
+      ignore(ctx.pop_slot())
+    }
+
+    // Call via typed funcref
+    CallRef(type_idx) => {
+      // Get function type from type index
+      let type_int = type_idx.reinterpret_as_int()
+      let func_type = get_func_type(mod_info.mod_, type_int)
+      let num_params = func_type.params.length()
+      let num_results = func_type.results.length()
+
+      // Stack has: [..., args..., funcref]
+      // Pop the funcref from slot stack (handled by C at runtime)
+      ignore(ctx.pop_slot())
+
+      // Compute frame_offset from the args (same as Call)
+      let frame_offset = if num_params > 0 {
+        ctx.slot_at(num_params - 1)
+      } else {
+        ctx.current_sp()
+      }
+
+      // Pop args from slot stack
+      for _ in 0..<num_params {
+        ignore(ctx.pop_slot())
+      }
+
+      // Emit call_ref: type_idx, frame_offset
+      ctx.emit(call_ref())
+      ctx.emit_idx(type_int)
+      ctx.emit_idx(frame_offset)
+
+      // Push result slots
+      for i in 0..<num_results {
+        ctx.slot_stack.push(frame_offset + i)
+      }
+      ctx.next_slot = frame_offset + num_results
+
+      // Set sp to after result slots
+      if num_results > 0 {
+        ctx.emit(set_sp())
+        ctx.emit_idx(ctx.current_sp())
+      }
+    }
 
     // Table access operations
     TableGet(table_idx) => {

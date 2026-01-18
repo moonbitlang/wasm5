@@ -56,6 +56,7 @@ fn trap_code_from_int(code : Int) -> TrapCode {
     9 => TrapCode::StackOverflow
     10 => TrapCode::UninitializedElement
     11 => TrapCode::TableBoundsAccess
+    12 => TrapCode::NullReference
     _ => TrapCode::Unreachable // Unknown trap code
   }
 }

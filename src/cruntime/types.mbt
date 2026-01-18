@@ -10,10 +10,11 @@ pub enum TrapCode {
   OutOfBoundsMemoryAccess = 5
   OutOfBoundsTableAccess = 6 // "undefined element" - index out of bounds (call_indirect)
   IndirectCallTypeMismatch = 7
-  NullFunctionReference = 8
+  NullFunctionReference = 8 // call_ref with null funcref
   StackOverflow = 9
   UninitializedElement = 10 // "uninitialized element" - null entry in table
   TableBoundsAccess = 11 // "out of bounds table access" - for bulk table ops
+  NullReference = 12 // ref.as_non_null on null ref
 } derive(Eq, Show)
 
 ///|
