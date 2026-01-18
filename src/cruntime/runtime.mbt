@@ -28,6 +28,10 @@ pub struct CRuntime {
   elem_segment_offsets : FixedArray[Int] // Offset of each segment in elem_segments_flat
   elem_segment_sizes : FixedArray[Int] // Size of each segment
   elem_segment_dropped : FixedArray[Int] // Whether each segment has been dropped (0 or 1)
+  // Cross-module call support: pointer to C-allocated CRuntimeContext
+  mut context_ptr : Int64
+  // Resolved imports for exported-import calls
+  resolved_imports : Map[Int, ResolvedImport]
 }
 
 // Import Value type from core
@@ -112,7 +116,132 @@ pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
     elem_segment_offsets,
     elem_segment_sizes,
     elem_segment_dropped,
+    context_ptr: 0L, // Will be lazily created when needed for cross-module calls
+    resolved_imports: {}, // No resolved imports for basic load
   }
+}
+
+///|
+/// Load a module with resolved imports for cross-module calls.
+pub fn CRuntime::load_with_imports(
+  module_ : @core.Module,
+  resolved_imports : Map[Int, ResolvedImport],
+) -> CRuntime {
+  let compiled = compile_with_imports(module_, resolved_imports)
+  // Initialize globals from module
+  let globals = init_globals(module_)
+  // Initialize memory from module
+  let (memory, memory_pages) = init_memory(module_)
+  // Initialize tables from module (needs globals for element offset evaluation)
+  let (tables, table_logical_sizes, table_max_sizes) = init_tables(
+    module_, globals,
+  )
+  // Flatten tables for C FFI (pass sizes and max_sizes for allocation)
+  let (tables_flat, table_offsets, table_sizes, table_max_sizes) = flatten_tables(
+    tables, table_logical_sizes, table_max_sizes,
+  )
+  // Build type info for call_indirect type checking
+  let (func_type_idxs, type_param_counts, type_result_counts) = build_type_info(
+    module_,
+  )
+  // Build import function metadata for op_call_import
+  let (import_num_params, import_num_results) = build_import_info(module_)
+  // Flatten data segments for bulk memory operations
+  let (data_segments_flat, data_segment_offsets, data_segment_sizes) = flatten_data_segments(
+    module_,
+  )
+  // Flatten element segments for bulk table operations
+  let (
+    elem_segments_flat,
+    elem_segment_offsets,
+    elem_segment_sizes,
+    elem_segment_dropped,
+  ) = flatten_elem_segments(module_)
+  {
+    module_,
+    compiled,
+    globals,
+    memory,
+    memory_pages,
+    tables,
+    tables_flat,
+    table_offsets,
+    table_sizes,
+    table_max_sizes,
+    func_type_idxs,
+    type_param_counts,
+    type_result_counts,
+    import_num_params,
+    import_num_results,
+    data_segments_flat,
+    data_segment_offsets,
+    data_segment_sizes,
+    elem_segments_flat,
+    elem_segment_offsets,
+    elem_segment_sizes,
+    elem_segment_dropped,
+    context_ptr: 0L,
+    resolved_imports,
+  }
+}
+
+///|
+/// Get or create the CRuntimeContext pointer for cross-module calls.
+/// The context is created lazily on first call and cached.
+pub fn CRuntime::get_context_ptr(self : CRuntime) -> Int64 {
+  if self.context_ptr == 0L {
+    let num_funcs = self.compiled.func_entries.length()
+    let num_imported_funcs = self.module_.imports
+      .filter(fn(imp) { imp.desc is @core.ImportDesc::Func(_) })
+      .length()
+    self.context_ptr = c_create_runtime_context(
+      self.compiled.code,
+      self.globals,
+      self.memory,
+      self.memory.length(),
+      self.memory_pages,
+      self.tables_flat,
+      self.table_offsets,
+      self.table_sizes,
+      self.table_max_sizes,
+      self.tables.length(),
+      self.compiled.func_entries,
+      self.compiled.func_num_locals,
+      num_funcs,
+      num_imported_funcs,
+      self.func_type_idxs,
+      self.type_param_counts,
+      self.type_result_counts,
+      self.module_.types.length(),
+      self.import_num_params,
+      self.import_num_results,
+      self.data_segments_flat,
+      self.data_segment_offsets,
+      self.data_segment_sizes,
+      self.data_segment_sizes.length(),
+      self.elem_segments_flat,
+      self.elem_segment_offsets,
+      self.elem_segment_sizes,
+      self.elem_segment_dropped,
+      self.elem_segment_sizes.length(),
+    )
+  }
+  self.context_ptr
+}
+
+///|
+/// Free the CRuntimeContext if it was created.
+pub fn CRuntime::free_context(self : CRuntime) -> Unit {
+  if self.context_ptr != 0L {
+    c_free_runtime_context(self.context_ptr)
+    self.context_ptr = 0L
+  }
+}
+
+///|
+/// Get the underlying module.
+pub fn CRuntime::get_module(self : CRuntime) -> @core.Module {
+  self.module_
 }
 
 ///|
@@ -730,6 +859,57 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
 }
 
 ///|
+/// Call an external function (in another CRuntime) via resolved import.
+/// This is used for exported imports - functions that re-export an import.
+fn call_external_function(
+  resolved : ResolvedImport,
+  args : Array[Value],
+) -> Array[Value] raise @runtime.RuntimeError {
+  // Convert args to UInt64
+  let args_u64 : Array[UInt64] = []
+  for arg in args {
+    args_u64.push(value_to_u64(arg))
+  }
+  let args_fixed = FixedArray::from_array(args_u64)
+
+  // Allocate result array
+  let result_out : FixedArray[UInt64] = FixedArray::make(
+    if resolved.num_results > 0 {
+      resolved.num_results
+    } else {
+      1
+    },
+    0UL,
+  )
+
+  // Call via C FFI with context switching
+  let trap_code = c_call_external_ffi(
+    resolved.target_context_ptr,
+    resolved.target_func_idx,
+    args_fixed,
+    resolved.num_params,
+    result_out,
+    resolved.num_results,
+  )
+
+  // Check for trap
+  let trap = trap_code_from_int(trap_code)
+  if trap != TrapCode::None {
+    raise trap_to_error(trap)
+  }
+
+  // Convert results - we don't have type info, so use I32/I64 based on result count
+  // This is a simplification; proper implementation would track types
+  let results : Array[Value] = []
+  for i in 0..<resolved.num_results {
+    // Default to I32 for single results (most common case)
+    let raw = result_out[i].reinterpret_as_int64().to_int()
+    results.push(I32(raw.reinterpret_as_uint()))
+  }
+  results
+}
+
+///|
 /// Call an exported function by name.
 pub fn CRuntime::call_compiled(
   self : CRuntime,
@@ -738,80 +918,96 @@ pub fn CRuntime::call_compiled(
 ) -> Array[Value] raise @runtime.RuntimeError {
   let name_str = @encoding/utf8.decode(name) catch { _ => return [] }
   match self.compiled.exports.get(name_str) {
-    Some(func_idx) => {
-      // Get function type for result conversion
-      // Note: func_idx is the local function index, funcs array only has local functions
+    Some(export_idx) => {
       let num_imported = count_imported_funcs(self.module_)
-      let type_idx = self.module_.funcs[func_idx].reinterpret_as_int()
-      let func_type = get_func_type(self.module_, type_idx)
-      let num_results = func_type.results.length()
+      // Check if this is an exported import (negative index)
+      if export_idx < 0 {
+        // Exported import: -(import_idx + 1) is stored
+        let import_idx = -(export_idx + 1)
+        // Look up resolved import
+        match self.resolved_imports.get(import_idx) {
+          Some(resolved) =>
+            // Call through to the target module
+            call_external_function(resolved, args)
+          None =>
+            // Unresolved import - shouldn't happen for properly linked modules
+            raise @runtime.RuntimeError::from_detail("unresolved import")
+        }
+      } else {
+        // Local function
+        let func_idx = export_idx
+        // Get function type for result conversion
+        let type_idx = self.module_.funcs[func_idx].reinterpret_as_int()
+        let func_type = get_func_type(self.module_, type_idx)
+        let num_results = func_type.results.length()
 
-      // Convert args to UInt64
-      let args_u64 : Array[UInt64] = []
-      for arg in args {
-        args_u64.push(value_to_u64(arg))
-      }
-      let entry = self.compiled.func_entries[func_idx]
-      let num_locals = self.compiled.func_num_locals[func_idx]
-      let args_fixed = FixedArray::from_array(args_u64)
-      // Allocate result array with correct size (at least 1 to avoid empty array issues)
-      let result_out : FixedArray[UInt64] = FixedArray::make(
-        if num_results > 0 {
-          num_results
-        } else {
-          1
-        },
-        0UL,
-      )
-      let trap_code = c_execute_ffi(
-        self.compiled.code,
-        entry,
-        num_locals,
-        args_fixed,
-        args_u64.length(),
-        result_out,
-        num_results,
-        self.globals,
-        self.memory,
-        self.memory.length(),
-        self.memory_pages,
-        self.tables_flat,
-        self.table_offsets,
-        self.table_sizes,
-        self.table_max_sizes,
-        self.tables.length(),
-        self.compiled.func_entries,
-        self.compiled.func_num_locals,
-        self.compiled.func_entries.length(),
-        num_imported,
-        self.func_type_idxs,
-        self.type_param_counts,
-        self.type_result_counts,
-        self.module_.types.length(),
-        self.import_num_params,
-        self.import_num_results,
-        self.data_segments_flat,
-        self.data_segment_offsets,
-        self.data_segment_sizes,
-        self.module_.datas.length(),
-        self.elem_segments_flat,
-        self.elem_segment_offsets,
-        self.elem_segment_sizes,
-        self.elem_segment_dropped,
-        self.module_.elems.length(),
-      )
-      // Check for trap
-      let trap = trap_code_from_int(trap_code)
-      if trap != TrapCode::None {
-        raise trap_to_error(trap)
-      }
+        // Convert args to UInt64
+        let args_u64 : Array[UInt64] = []
+        for arg in args {
+          args_u64.push(value_to_u64(arg))
+        }
+        let entry = self.compiled.func_entries[func_idx]
+        let num_locals = self.compiled.func_num_locals[func_idx]
+        let args_fixed = FixedArray::from_array(args_u64)
+        // Allocate result array with correct size (at least 1 to avoid empty array issues)
+        let result_out : FixedArray[UInt64] = FixedArray::make(
+          if num_results > 0 {
+            num_results
+          } else {
+            1
+          },
+          0UL,
+        )
+        let trap_code = c_execute_ffi(
+          self.compiled.code,
+          entry,
+          num_locals,
+          args_fixed,
+          args_u64.length(),
+          result_out,
+          num_results,
+          self.globals,
+          self.memory,
+          self.memory.length(),
+          self.memory_pages,
+          self.tables_flat,
+          self.table_offsets,
+          self.table_sizes,
+          self.table_max_sizes,
+          self.tables.length(),
+          self.compiled.func_entries,
+          self.compiled.func_num_locals,
+          self.compiled.func_entries.length(),
+          num_imported,
+          self.func_type_idxs,
+          self.type_param_counts,
+          self.type_result_counts,
+          self.module_.types.length(),
+          self.import_num_params,
+          self.import_num_results,
+          self.data_segments_flat,
+          self.data_segment_offsets,
+          self.data_segment_sizes,
+          self.module_.datas.length(),
+          self.elem_segments_flat,
+          self.elem_segment_offsets,
+          self.elem_segment_sizes,
+          self.elem_segment_dropped,
+          self.module_.elems.length(),
+        )
+        // Check for trap
+        let trap = trap_code_from_int(trap_code)
+        if trap != TrapCode::None {
+          raise trap_to_error(trap)
+        }
 
-      // Convert all results based on function type
-      let results : Array[Value] = []
-      for i in 0..<num_results {
-        results.push(u64_to_value(result_out[i], func_type.results[i]))
+        // Convert all results based on function type
+        let results : Array[Value] = []
+        for i in 0..<num_results {
+          results.push(u64_to_value(result_out[i], func_type.results[i]))
+        }
+        results
       }
-      results
     }
     None => []
   }

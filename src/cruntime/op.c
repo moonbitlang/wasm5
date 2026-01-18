@@ -233,6 +233,170 @@ static int g_num_elem_segments = 0;
 // Stack base for result extraction after execution
 static uint64_t* g_stack_base = NULL;
 
+// ============================================================================
+// Cross-module call support (context switching)
+// ============================================================================
+
+// CRuntimeContext captures all global state for save/restore during cross-module calls
+typedef struct CRuntimeContext {
+    uint64_t* code;
+    uint64_t* globals;
+    uint8_t* memory;
+    int memory_size;
+    int* memory_pages;
+    int* tables_flat;
+    int* table_offsets;
+    int* table_sizes;
+    int* table_max_sizes;
+    int num_tables;
+    int* func_entries;
+    int* func_num_locals;
+    int num_funcs;
+    int num_imported_funcs;
+    int* func_type_idxs;
+    int* type_sig_hash1;
+    int* type_sig_hash2;
+    int num_types;
+    int* import_num_params;
+    int* import_num_results;
+    uint8_t* data_segments_flat;
+    int* data_segment_offsets;
+    int* data_segment_sizes;
+    int num_data_segments;
+    int* elem_segments_flat;
+    int* elem_segment_offsets;
+    int* elem_segment_sizes;
+    int* elem_segment_dropped;
+    int num_elem_segments;
+} CRuntimeContext;
+
+// Maximum nesting depth for cross-module calls
+#define MAX_CONTEXT_DEPTH 16
+static CRuntimeContext g_saved_contexts[MAX_CONTEXT_DEPTH];
+static int g_context_depth = 0;
+
+// Save current global state to a context structure
+static void save_context(CRuntimeContext* ctx, CRuntime* crt) {
+    ctx->code = crt->code;
+    ctx->globals = crt->globals;
+    ctx->memory = crt->mem;
+    ctx->memory_size = g_memory_size;
+    ctx->memory_pages = g_memory_pages;
+    ctx->tables_flat = g_tables_flat;
+    ctx->table_offsets = g_table_offsets;
+    ctx->table_sizes = g_table_sizes;
+    ctx->table_max_sizes = g_table_max_sizes;
+    ctx->num_tables = g_num_tables;
+    ctx->func_entries = g_func_entries;
+    ctx->func_num_locals = g_func_num_locals;
+    ctx->num_funcs = g_num_funcs;
+    ctx->num_imported_funcs = g_num_imported_funcs;
+    ctx->func_type_idxs = g_func_type_idxs;
+    ctx->type_sig_hash1 = g_type_sig_hash1;
+    ctx->type_sig_hash2 = g_type_sig_hash2;
+    ctx->num_types = g_num_types;
+    ctx->import_num_params = g_import_num_params;
+    ctx->import_num_results = g_import_num_results;
+    ctx->data_segments_flat = g_data_segments_flat;
+    ctx->data_segment_offsets = g_data_segment_offsets;
+    ctx->data_segment_sizes = g_data_segment_sizes;
+    ctx->num_data_segments = g_num_data_segments;
+    ctx->elem_segments_flat = g_elem_segments_flat;
+    ctx->elem_segment_offsets = g_elem_segment_offsets;
+    ctx->elem_segment_sizes = g_elem_segment_sizes;
+    ctx->elem_segment_dropped = g_elem_segment_dropped;
+    ctx->num_elem_segments = g_num_elem_segments;
+}
+
+// Load global state from a context structure
+static void load_context(const CRuntimeContext* ctx, CRuntime* crt) {
+    crt->code = ctx->code;
+    crt->globals = ctx->globals;
+    crt->mem = ctx->memory;
+    g_memory_size = ctx->memory_size;
+    g_memory_pages = ctx->memory_pages;
+    g_tables_flat = ctx->tables_flat;
+    g_table_offsets = ctx->table_offsets;
+    g_table_sizes = ctx->table_sizes;
+    g_table_max_sizes = ctx->table_max_sizes;
+    g_num_tables = ctx->num_tables;
+    g_func_entries = ctx->func_entries;
+    g_func_num_locals = ctx->func_num_locals;
+    g_num_funcs = ctx->num_funcs;
+    g_num_imported_funcs = ctx->num_imported_funcs;
+    g_func_type_idxs = ctx->func_type_idxs;
+    g_type_sig_hash1 = ctx->type_sig_hash1;
+    g_type_sig_hash2 = ctx->type_sig_hash2;
+    g_num_types = ctx->num_types;
+    g_import_num_params = ctx->import_num_params;
+    g_import_num_results = ctx->import_num_results;
+    g_data_segments_flat = ctx->data_segments_flat;
+    g_data_segment_offsets = ctx->data_segment_offsets;
+    g_data_segment_sizes = ctx->data_segment_sizes;
+    g_num_data_segments = ctx->num_data_segments;
+    g_elem_segments_flat = ctx->elem_segments_flat;
+    g_elem_segment_offsets = ctx->elem_segment_offsets;
+    g_elem_segment_sizes = ctx->elem_segment_sizes;
+    g_elem_segment_dropped = ctx->elem_segment_dropped;
+    g_num_elem_segments = ctx->num_elem_segments;
+}
+
+// Create a new context from module data (called from MoonBit)
+// Returns pointer to heap-allocated context
+CRuntimeContext* create_runtime_context(
+    uint64_t* code, uint64_t* globals, uint8_t* memory, int memory_size,
+    int* memory_pages, int* tables_flat, int* table_offsets, int* table_sizes,
+    int* table_max_sizes, int num_tables, int* func_entries, int* func_num_locals,
+    int num_funcs, int num_imported_funcs, int* func_type_idxs,
+    int* type_sig_hash1, int* type_sig_hash2, int num_types,
+    int* import_num_params, int* import_num_results,
+    uint8_t* data_segments_flat, int* data_segment_offsets, int* data_segment_sizes, int num_data_segments,
+    int* elem_segments_flat, int* elem_segment_offsets, int* elem_segment_sizes,
+    int* elem_segment_dropped, int num_elem_segments
+) {
+    CRuntimeContext* ctx = (CRuntimeContext*)malloc(sizeof(CRuntimeContext));
+    if (!ctx) return NULL;
+
+    ctx->code = code;
+    ctx->globals = globals;
+    ctx->memory = memory;
+    ctx->memory_size = memory_size;
+    ctx->memory_pages = memory_pages;
+    ctx->tables_flat = tables_flat;
+    ctx->table_offsets = table_offsets;
+    ctx->table_sizes = table_sizes;
+    ctx->table_max_sizes = table_max_sizes;
+    ctx->num_tables = num_tables;
+    ctx->func_entries = func_entries;
+    ctx->func_num_locals = func_num_locals;
+    ctx->num_funcs = num_funcs;
+    ctx->num_imported_funcs = num_imported_funcs;
+    ctx->func_type_idxs = func_type_idxs;
+    ctx->type_sig_hash1 = type_sig_hash1;
+    ctx->type_sig_hash2 = type_sig_hash2;
+    ctx->num_types = num_types;
+    ctx->import_num_params = import_num_params;
+    ctx->import_num_results = import_num_results;
+    ctx->data_segments_flat = data_segments_flat;
+    ctx->data_segment_offsets = data_segment_offsets;
+    ctx->data_segment_sizes = data_segment_sizes;
+    ctx->num_data_segments = num_data_segments;
+    ctx->elem_segments_flat = elem_segments_flat;
+    ctx->elem_segment_offsets = elem_segment_offsets;
+    ctx->elem_segment_sizes = elem_segment_sizes;
+    ctx->elem_segment_dropped = elem_segment_dropped;
+    ctx->num_elem_segments = num_elem_segments;
+
+    return ctx;
+}
+
+// Free a context (called from MoonBit)
+void free_runtime_context(CRuntimeContext* ctx) {
+    free(ctx);
+}
+
+// ============================================================================
+
 // Internal execution helper - starts the tail-call chain
 static int run(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     OpFn first = (OpFn)*pc++;
@@ -452,6 +616,126 @@ int op_call_import(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     NEXT();
 }
 DEFINE_OP(call_import)
+
+// Call a function in another module (cross-module call with context switching)
+// Immediates: target_context_ptr (2 words for 64-bit pointer), func_idx, num_args, num_results
+int op_call_external(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    // Read target context pointer (stored as single uint64_t)
+    CRuntimeContext* target_ctx = (CRuntimeContext*)(uintptr_t)*pc++;
+    int func_idx = (int)*pc++;
+    int num_args = (int)*pc++;
+    int num_results = (int)*pc++;
+
+    // Save caller pc for return
+    uint64_t* caller_pc = pc;
+
+    // Check context depth limit
+    if (g_context_depth >= MAX_CONTEXT_DEPTH) {
+        TRAP(TRAP_STACK_OVERFLOW);
+    }
+
+    // Save current context
+    save_context(&g_saved_contexts[g_context_depth++], crt);
+
+    // Load target context
+    load_context(target_ctx, crt);
+
+    // Get callee info from target module
+    int callee_pc = g_func_entries[func_idx];
+    int callee_num_locals = g_func_num_locals[func_idx];
+
+    // Set up frame: args are at sp[-num_args..sp-1]
+    // New frame starts where args are, locals extend beyond args
+    uint64_t* new_fp = sp - num_args;
+    int extra_locals = callee_num_locals - num_args;
+
+    // Zero-initialize extra locals
+    for (int i = 0; i < extra_locals; i++) {
+        *sp++ = 0;
+    }
+
+    // Execute the function in target module
+    int trap = run(crt, crt->code + callee_pc, sp, new_fp);
+
+    // Save results before restoring context (results are at new_fp[0..num_results-1])
+    uint64_t results[16];  // Assume max 16 results (reasonable limit)
+    int actual_results = num_results < 16 ? num_results : 16;
+    for (int i = 0; i < actual_results; i++) {
+        results[i] = new_fp[i];
+    }
+
+    // Restore our context
+    load_context(&g_saved_contexts[--g_context_depth], crt);
+
+    if (trap != TRAP_NONE) {
+        return trap;
+    }
+
+    // Place results where args were (standard calling convention)
+    // sp - num_args is where args were, results go there
+    // Then sp should be sp - num_args + num_results
+    uint64_t* result_dst = sp - num_args;
+    for (int i = 0; i < actual_results; i++) {
+        result_dst[i] = results[i];
+    }
+    sp = sp - num_args + actual_results;
+
+    // Continue execution with caller's pc and updated sp
+    pc = caller_pc;
+    NEXT();
+}
+DEFINE_OP(call_external)
+
+// FFI function to call a function in another module from MoonBit
+// Used for exported imports
+int call_external_ffi(
+    int64_t target_context_ptr,
+    int func_idx,
+    uint64_t* args,
+    int num_args,
+    uint64_t* result_out,
+    int num_results
+) {
+    CRuntimeContext* target_ctx = (CRuntimeContext*)(uintptr_t)target_context_ptr;
+
+    // Allocate a temporary stack for this call
+    uint64_t temp_stack[256];
+    uint64_t* sp = temp_stack;
+    uint64_t* fp = temp_stack;
+
+    // Copy args to the stack
+    for (int i = 0; i < num_args; i++) {
+        *sp++ = args[i];
+    }
+
+    // Load target context (sets all global variables)
+    CRuntime dummy_crt = {0};
+    load_context(target_ctx, &dummy_crt);
+
+    // Get callee info from target module (now using loaded globals)
+    int callee_pc = target_ctx->func_entries[func_idx];
+    int callee_num_locals = target_ctx->func_num_locals[func_idx];
+
+    // Set up frame: args are already on stack, locals follow
+    int extra_locals = callee_num_locals - num_args;
+    for (int i = 0; i < extra_locals; i++) {
+        *sp++ = 0;
+    }
+
+    // Execute the function using target context's code
+    int trap = run(&dummy_crt, target_ctx->code + callee_pc, sp, fp);
+
+    if (trap != TRAP_NONE) {
+        return trap;
+    }
+
+    // Copy results from frame to output
+    for (int i = 0; i < num_results; i++) {
+        result_out[i] = fp[i];
+    }
+
+    return TRAP_NONE;
+}
 
 // Function entry - set sp and zero non-arg locals
 // Immediates: num_locals (for sp), first_local_to_zero, num_to_zero

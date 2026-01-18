@@ -18,6 +18,20 @@ pub enum TrapCode {
 } derive(Eq, Show)
 
 ///|
+/// Information about a resolved import for cross-module calls.
+/// Used when compiling a module that imports from a registered module.
+pub(all) struct ResolvedImport {
+  /// Pointer to the target CRuntime's context (as Int64)
+  target_context_ptr : Int64
+  /// Function index in the target module
+  target_func_idx : Int
+  /// Number of parameters the function takes
+  num_params : Int
+  /// Number of results the function returns
+  num_results : Int
+} derive(Show)
+
+///|
 /// Compiled module ready for C runtime execution.
 /// The code array is heterogeneous: function pointers and immediates interleaved.
 pub struct CompiledModule {

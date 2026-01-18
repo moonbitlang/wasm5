@@ -1131,9 +1131,11 @@ async test "exports.wast (cruntime)" {
 // async test "instance.wast (cruntime)" {
 //   run_test_harness("", "instance.wast", runtime_type=CRuntime)
 // }
-// async test "linking.wast (cruntime)" {
-//   run_test_harness("", "linking.wast", runtime_type=CRuntime)
-// }
+
+///|
+async test "linking.wast (cruntime)" {
+  run_test_harness("", "linking.wast", runtime_type=CRuntime)
+}
 // TODO: start.wast causes SIGABRT - needs investigation
 // async test "start.wast (cruntime)" {
 //   run_test_harness("", "start.wast", runtime_type=CRuntime)

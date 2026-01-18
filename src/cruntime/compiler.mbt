@@ -6,11 +6,22 @@ priv struct ModuleInfo {
   func_num_params : Array[Int] // Number of params per function
   func_num_results : Array[Int] // Number of results per function
   num_imported_funcs : Int
+  resolved_imports : Map[Int, ResolvedImport] // Resolved cross-module imports (import_idx -> ResolvedImport)
 }
 
 ///|
 /// Compile a module to threaded code for C runtime.
 pub fn compile(mod_ : @core.Module) -> CompiledModule {
+  compile_with_imports(mod_, Map::new())
+}
+
+///|
+/// Compile a module to threaded code for C runtime with resolved imports.
+/// The resolved_imports map is keyed by import index (0..num_imported_funcs-1).
+pub fn compile_with_imports(
+  mod_ : @core.Module,
+  resolved_imports : Map[Int, ResolvedImport],
+) -> CompiledModule {
   let ctx = CompileCtx::new()
   let num_imported_funcs = count_imported_funcs(mod_)
 
@@ -39,6 +50,7 @@ pub fn compile(mod_ : @core.Module) -> CompiledModule {
     func_num_params,
     func_num_results,
     num_imported_funcs,
+    resolved_imports,
   }
 
   // Compile all functions
@@ -111,12 +123,19 @@ pub fn compile(mod_ : @core.Module) -> CompiledModule {
   }
 
   // Collect function exports
+  // For local functions, store positive local_idx
+  // For imported functions, store negative -(import_idx + 1) to distinguish from local idx 0
   let exports : Map[String, Int] = {}
   for exp in mod_.exports {
     if exp.desc is Func(idx) {
-      // Convert absolute func index to local index (excluding imports)
-      let local_idx = idx.reinterpret_as_int() - num_imported_funcs
-      if local_idx >= 0 {
+      let abs_idx = idx.reinterpret_as_int()
+      if abs_idx < num_imported_funcs {
+        // Exported import - store as negative: -(import_idx + 1)
+        let name = @encoding/utf8.decode(exp.name) catch { _ => continue }
+        exports[name] = -(abs_idx + 1)
+      } else {
+        // Local function
+        let local_idx = abs_idx - num_imported_funcs
         let name = @encoding/utf8.decode(exp.name) catch { _ => continue }
         exports[name] = local_idx
       }
@@ -1249,10 +1268,23 @@ fn compile_instr(
           ignore(ctx.pop_slot())
         }
 
-        // Emit call_import instruction
-        ctx.emit(call_import())
-        ctx.emit_idx(func_idx) // Import index (0..num_imported_funcs-1)
-        ctx.emit_idx(frame_offset)
+        // Check if this import is resolved to an external module
+        match mod_info.resolved_imports.get(func_idx) {
+          Some(resolved) => {
+            // Emit call_external instruction for cross-module call
+            ctx.emit(call_external())
+            ctx.emit_i64(resolved.target_context_ptr.reinterpret_as_uint64())
+            ctx.emit_idx(resolved.target_func_idx)
+            ctx.emit_idx(resolved.num_params)
+            ctx.emit_idx(resolved.num_results)
+          }
+          None => {
+            // Emit call_import instruction (no-op for spectest, etc.)
+            ctx.emit(call_import())
+            ctx.emit_idx(func_idx) // Import index (0..num_imported_funcs-1)
+            ctx.emit_idx(frame_offset)
+          }
+        }
 
         // Push result slots
         for i in 0..<num_results {
