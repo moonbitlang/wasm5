@@ -6,11 +6,22 @@ priv struct ModuleInfo {
   func_num_params : Array[Int] // Number of params per function
   func_num_results : Array[Int] // Number of results per function
   num_imported_funcs : Int
+  resolved_imports : Map[Int, ResolvedImport] // Resolved cross-module imports (import_idx -> ResolvedImport)
 }
 
 ///|
 /// Compile a module to threaded code for C runtime.
 pub fn compile(mod_ : @core.Module) -> CompiledModule {
+  compile_with_imports(mod_, Map::new())
+}
+
+///|
+/// Compile a module to threaded code for C runtime with resolved imports.
+/// The resolved_imports map is keyed by import index (0..num_imported_funcs-1).
+pub fn compile_with_imports(
+  mod_ : @core.Module,
+  resolved_imports : Map[Int, ResolvedImport],
+) -> CompiledModule {
   let ctx = CompileCtx::new()
   let num_imported_funcs = count_imported_funcs(mod_)
 
@@ -39,6 +50,7 @@ pub fn compile(mod_ : @core.Module) -> CompiledModule {
     func_num_params,
     func_num_results,
     num_imported_funcs,
+    resolved_imports,
   }
 
   // Compile all functions
@@ -111,12 +123,19 @@ pub fn compile(mod_ : @core.Module) -> CompiledModule {
   }
 
   // Collect function exports
+  // For local functions, store positive local_idx
+  // For imported functions, store negative -(import_idx + 1) to distinguish from local idx 0
   let exports : Map[String, Int] = {}
   for exp in mod_.exports {
     if exp.desc is Func(idx) {
-      // Convert absolute func index to local index (excluding imports)
-      let local_idx = idx.reinterpret_as_int() - num_imported_funcs
-      if local_idx >= 0 {
+      let abs_idx = idx.reinterpret_as_int()
+      if abs_idx < num_imported_funcs {
+        // Exported import - store as negative: -(import_idx + 1)
+        let name = @encoding/utf8.decode(exp.name) catch { _ => continue }
+        exports[name] = -(abs_idx + 1)
+      } else {
+        // Local function
+        let local_idx = abs_idx - num_imported_funcs
         let name = @encoding/utf8.decode(exp.name) catch { _ => continue }
         exports[name] = local_idx
       }
@@ -923,7 +942,7 @@ fn compile_instr(
       ignore(ctx.pop_slot()) // val
       ignore(ctx.pop_slot()) // dest
     }
-    TableInit(elem_idx, table_idx) => {
+    TableInit(table_idx, elem_idx) => {
       // Immediates: elem_idx, table_idx
       // Stack: [dest, src, n] -> []
       ctx.emit(table_init())
@@ -1249,10 +1268,23 @@ fn compile_instr(
           ignore(ctx.pop_slot())
         }
 
-        // Emit call_import instruction
-        ctx.emit(call_import())
-        ctx.emit_idx(func_idx) // Import index (0..num_imported_funcs-1)
-        ctx.emit_idx(frame_offset)
+        // Check if this import is resolved to an external module
+        match mod_info.resolved_imports.get(func_idx) {
+          Some(resolved) => {
+            // Emit call_external instruction for cross-module call
+            ctx.emit(call_external())
+            ctx.emit_i64(resolved.target_context_ptr.reinterpret_as_uint64())
+            ctx.emit_idx(resolved.target_func_idx)
+            ctx.emit_idx(resolved.num_params)
+            ctx.emit_idx(resolved.num_results)
+          }
+          None => {
+            // Emit call_import instruction (no-op for spectest, etc.)
+            ctx.emit(call_import())
+            ctx.emit_idx(func_idx) // Import index (0..num_imported_funcs-1)
+            ctx.emit_idx(frame_offset)
+          }
+        }
 
         // Push result slots
         for i in 0..<num_results {
@@ -1309,6 +1341,166 @@ fn compile_instr(
       ctx.emit_idx(ctx.current_sp())
     }
 
+    // Reference type operations
+    RefNull(ref_type) => {
+      ctx.emit(ref_null())
+      // Emit heap type encoding (simplified: just use a type code)
+      let type_code = encode_ref_type(ref_type)
+      ctx.emit_idx(type_code)
+      ignore(ctx.push_slot())
+    }
+    RefFunc(func_idx) => {
+      ctx.emit(ref_func())
+      ctx.emit_idx(func_idx.reinterpret_as_int())
+      ignore(ctx.push_slot())
+    }
+    RefIsNull => ctx.emit(ref_is_null())
+    // Stack: [ref] -> [i32], no net slot change
+    RefEq => {
+      ctx.emit(ref_eq())
+      ignore(ctx.pop_slot()) // consume two, keep one
+    }
+    RefAsNonNull => ctx.emit(ref_as_non_null())
+    // Stack: [ref] -> [ref], no net slot change (traps if null)
+
+    // Branch on null reference
+    BrOnNull(label) => {
+      // Stack: [label_args..., ref] -> [ref] (fall-through) or branch with [label_args...]
+      // When branching (null case): ref is consumed, label_args are passed to target
+      // When falling through (non-null): ref stays on stack
+      let label_int = label.reinterpret_as_int()
+      let (target_pc, result_slots, target_sp) = ctx.get_branch_target(
+        label_int,
+      )
+      let arity = result_slots.length()
+      ctx.emit(br_on_null())
+
+      // Capture slots for branch path - skip the ref at top, get the label_args below it
+      // Stack is: [..., label_args..., ref]
+      // We need the 'arity' slots below the ref (offset by 1)
+      let src_slots : Array[Int] = []
+      for i in 0..<arity {
+        src_slots.push(ctx.slot_at(arity - i)) // Skip slot_at(0) which is the ref
+      }
+      let taken_patch = ctx.code.length()
+      ctx.emit_idx(0) // Placeholder for taken (null) path
+      let not_taken_pc = ctx.code.length() + 1
+      ctx.emit_idx(not_taken_pc)
+
+      // Defer the resolution block for the null (branch) case
+      ctx.defer_resolution(
+        taken_patch,
+        src_slots,
+        result_slots,
+        target_sp,
+        label_int,
+        ctx.is_loop_target(label_int),
+        target_pc,
+      )
+      // On fall-through, ref remains on stack (no slot change needed)
+    }
+
+    // Branch on non-null reference
+    BrOnNonNull(label) => {
+      // Stack: [ref] -> [] (fall-through) or [ref] (branch if non-null)
+      let label_int = label.reinterpret_as_int()
+      let (target_pc, result_slots, target_sp) = ctx.get_branch_target(
+        label_int,
+      )
+
+      // The result_slots include the ref that gets passed along on branch
+      // For fall-through, the ref is consumed (popped)
+      ctx.emit(br_on_non_null())
+
+      // Include the ref in captured slots for the branch path
+      let arity = result_slots.length()
+      let src_slots = ctx.capture_result_slots(arity)
+      let taken_patch = ctx.code.length()
+      ctx.emit_idx(0) // Placeholder for taken (non-null) path
+      let not_taken_pc = ctx.code.length() + 1
+      ctx.emit_idx(not_taken_pc)
+
+      // Defer the resolution block for the non-null (branch) case
+      ctx.defer_resolution(
+        taken_patch,
+        src_slots,
+        result_slots,
+        target_sp,
+        label_int,
+        ctx.is_loop_target(label_int),
+        target_pc,
+      )
+      // On fall-through (null case), ref is consumed
+      ignore(ctx.pop_slot())
+    }
+
+    // Call via typed funcref
+    CallRef(type_idx) => {
+      // Get function type from type index
+      let type_int = type_idx.reinterpret_as_int()
+      let func_type = get_func_type(mod_info.mod_, type_int)
+      let num_params = func_type.params.length()
+      let num_results = func_type.results.length()
+
+      // Stack has: [..., args..., funcref]
+      // Pop the funcref from slot stack (handled by C at runtime)
+      ignore(ctx.pop_slot())
+
+      // Compute frame_offset from the args (same as Call)
+      let frame_offset = if num_params > 0 {
+        ctx.slot_at(num_params - 1)
+      } else {
+        ctx.current_sp()
+      }
+
+      // Pop args from slot stack
+      for _ in 0..<num_params {
+        ignore(ctx.pop_slot())
+      }
+
+      // Emit call_ref: type_idx, frame_offset
+      ctx.emit(call_ref())
+      ctx.emit_idx(type_int)
+      ctx.emit_idx(frame_offset)
+
+      // Push result slots
+      for i in 0..<num_results {
+        ctx.slot_stack.push(frame_offset + i)
+      }
+      ctx.next_slot = frame_offset + num_results
+
+      // Set sp to after result slots
+      if num_results > 0 {
+        ctx.emit(set_sp())
+        ctx.emit_idx(ctx.current_sp())
+      }
+    }
+
+    // Table access operations
+    TableGet(table_idx) => {
+      ctx.emit(table_get())
+      ctx.emit_idx(table_idx.reinterpret_as_int())
+      // Stack: [i32] -> [ref], no net slot change
+    }
+    TableSet(table_idx) => {
+      ctx.emit(table_set())
+      ctx.emit_idx(table_idx.reinterpret_as_int())
+      ignore(ctx.pop_slot()) // i32 index
+      ignore(ctx.pop_slot()) // ref value
+    }
+    TableSize(table_idx) => {
+      ctx.emit(table_size())
+      ctx.emit_idx(table_idx.reinterpret_as_int())
+      ignore(ctx.push_slot())
+    }
+    TableGrow(table_idx) => {
+      ctx.emit(table_grow())
+      ctx.emit_idx(table_idx.reinterpret_as_int())
+      ignore(ctx.pop_slot()) // pop delta (i32)
+      // ref value was consumed, i32 result pushed = no net change
+      // Actually: [ref, i32] -> [i32], so net -1
+    }
+
     // Placeholder for unimplemented instructions
     _ =>
       // TODO: implement remaining instructions
@@ -1358,5 +1550,26 @@ fn get_func_type(mod_ : @core.Module, type_idx : Int) -> @core.FuncType {
   match mod_.types[type_idx] {
     Func(ft) => ft
     _ => { params: [], results: [] } // Should not happen for valid modules
+  }
+}
+
+///|
+/// Encode a reference type to an integer for the ref.null immediate
+fn encode_ref_type(ref_type : @core.RefType) -> Int {
+  // Use type codes similar to wasm binary format
+  match ref_type {
+    Func => 0x70 // funcref
+    Extern => 0x6F // externref
+    Any => 0x6E // anyref
+    Eq => 0x6D // eqref
+    I31 => 0x6C // i31ref
+    Struct => 0x6B // structref
+    Array => 0x6A // arrayref
+    Exn => 0x69 // exnref
+    None => 0x71 // none (bottom type)
+    NoFunc => 0x73 // nofunc
+    NoExtern => 0x72 // noextern
+    NoExn => 0x74 // noexn
+    TypeIndex(idx) => idx // concrete type index
   }
 }

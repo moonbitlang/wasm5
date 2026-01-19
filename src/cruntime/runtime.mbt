@@ -10,7 +10,8 @@ pub struct CRuntime {
   // Flattened table data for C FFI
   tables_flat : FixedArray[Int] // All tables concatenated
   table_offsets : FixedArray[Int] // Offset of each table in tables_flat
-  table_sizes : FixedArray[Int] // Size of each table
+  table_sizes : FixedArray[Int] // Current size of each table
+  table_max_sizes : FixedArray[Int] // Max size (capacity) of each table for table.grow
   // Type information for call_indirect type checking
   func_type_idxs : FixedArray[Int] // Type index for each function (imported + local)
   type_param_counts : FixedArray[Int] // Primary signature hash for each type
@@ -18,6 +19,9 @@ pub struct CRuntime {
   // Import function metadata for op_call_import
   import_num_params : FixedArray[Int] // Number of params for each imported function
   import_num_results : FixedArray[Int] // Number of results for each imported function
+  // Cross-module import resolution for call_indirect
+  import_context_ptrs : FixedArray[Int64] // Target context pointer for each import (-1 if not resolved)
+  import_target_func_idxs : FixedArray[Int] // Target function index for each import
   // Data segments for bulk memory operations
   data_segments_flat : FixedArray[Byte] // All data segments concatenated
   data_segment_offsets : FixedArray[Int] // Offset of each segment in data_segments_flat
@@ -27,6 +31,10 @@ pub struct CRuntime {
   elem_segment_offsets : FixedArray[Int] // Offset of each segment in elem_segments_flat
   elem_segment_sizes : FixedArray[Int] // Size of each segment
   elem_segment_dropped : FixedArray[Int] // Whether each segment has been dropped (0 or 1)
+  // Cross-module call support: pointer to C-allocated CRuntimeContext
+  mut context_ptr : Int64
+  // Resolved imports for exported-import calls
+  resolved_imports : Map[Int, ResolvedImport]
 }
 
 // Import Value type from core
@@ -50,6 +58,7 @@ fn trap_to_error(trap : TrapCode) -> @runtime.RuntimeError {
     StackOverflow => "stack overflow"
     UninitializedElement => "uninitialized element"
     TableBoundsAccess => "out of bounds table access" // For bulk table ops
+    NullReference => "null reference"
   }
   @runtime.RuntimeError::from_detail(detail)
 }
@@ -63,9 +72,13 @@ pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
   // Initialize memory from module
   let (memory, memory_pages) = init_memory(module_)
   // Initialize tables from module (needs globals for element offset evaluation)
-  let tables = init_tables(module_, globals)
-  // Flatten tables for C FFI
-  let (tables_flat, table_offsets, table_sizes) = flatten_tables(tables)
+  let (tables, table_logical_sizes, table_max_sizes) = init_tables(
+    module_, globals,
+  )
+  // Flatten tables for C FFI (pass sizes and max_sizes for allocation)
+  let (tables_flat, table_offsets, table_sizes, table_max_sizes) = flatten_tables(
+    tables, table_logical_sizes, table_max_sizes,
+  )
   // Build type info for call_indirect type checking
   let (func_type_idxs, type_param_counts, type_result_counts) = build_type_info(
     module_,
@@ -83,6 +96,24 @@ pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
     elem_segment_sizes,
     elem_segment_dropped,
   ) = flatten_elem_segments(module_)
+  // For basic load with no imports, use empty arrays
+  let num_imported = count_imported_funcs(module_)
+  let import_context_ptrs : FixedArray[Int64] = FixedArray::make(
+    if num_imported > 0 {
+      num_imported
+    } else {
+      1
+    },
+    -1L, // -1 means not resolved
+  )
+  let import_target_func_idxs : FixedArray[Int] = FixedArray::make(
+    if num_imported > 0 {
+      num_imported
+    } else {
+      1
+    },
+    -1,
+  )
   {
     module_,
     compiled,
@@ -93,11 +124,14 @@ pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
     tables_flat,
     table_offsets,
     table_sizes,
+    table_max_sizes,
     func_type_idxs,
     type_param_counts,
     type_result_counts,
     import_num_params,
     import_num_results,
+    import_context_ptrs,
+    import_target_func_idxs,
     data_segments_flat,
     data_segment_offsets,
     data_segment_sizes,
@@ -105,26 +139,182 @@ pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
     elem_segment_offsets,
     elem_segment_sizes,
     elem_segment_dropped,
+    context_ptr: 0L, // Will be lazily created when needed for cross-module calls
+    resolved_imports: {}, // No resolved imports for basic load
   }
 }
 
 ///|
+/// Load a module with resolved imports for cross-module calls.
+pub fn CRuntime::load_with_imports(
+  module_ : @core.Module,
+  resolved_imports : Map[Int, ResolvedImport],
+) -> CRuntime {
+  let compiled = compile_with_imports(module_, resolved_imports)
+  // Initialize globals from module
+  let globals = init_globals(module_)
+  // Initialize memory from module
+  let (memory, memory_pages) = init_memory(module_)
+  // Initialize tables from module (needs globals for element offset evaluation)
+  let (tables, table_logical_sizes, table_max_sizes) = init_tables(
+    module_, globals,
+  )
+  // Flatten tables for C FFI (pass sizes and max_sizes for allocation)
+  let (tables_flat, table_offsets, table_sizes, table_max_sizes) = flatten_tables(
+    tables, table_logical_sizes, table_max_sizes,
+  )
+  // Build type info for call_indirect type checking
+  let (func_type_idxs, type_param_counts, type_result_counts) = build_type_info(
+    module_,
+  )
+  // Build import function metadata for op_call_import
+  let (import_num_params, import_num_results) = build_import_info(module_)
+  // Flatten data segments for bulk memory operations
+  let (data_segments_flat, data_segment_offsets, data_segment_sizes) = flatten_data_segments(
+    module_,
+  )
+  // Flatten element segments for bulk table operations
+  let (
+    elem_segments_flat,
+    elem_segment_offsets,
+    elem_segment_sizes,
+    elem_segment_dropped,
+  ) = flatten_elem_segments(module_)
+  // Build import context arrays from resolved imports
+  let num_imported = count_imported_funcs(module_)
+  let import_context_ptrs : FixedArray[Int64] = FixedArray::make(
+    if num_imported > 0 {
+      num_imported
+    } else {
+      1
+    },
+    -1L, // -1 means not resolved
+  )
+  let import_target_func_idxs : FixedArray[Int] = FixedArray::make(
+    if num_imported > 0 {
+      num_imported
+    } else {
+      1
+    },
+    -1,
+  )
+  // Fill in resolved import info
+  for import_idx, resolved in resolved_imports {
+    if import_idx >= 0 && import_idx < num_imported {
+      import_context_ptrs[import_idx] = resolved.target_context_ptr
+      import_target_func_idxs[import_idx] = resolved.target_func_idx
+    }
+  }
+  {
+    module_,
+    compiled,
+    globals,
+    memory,
+    memory_pages,
+    tables,
+    tables_flat,
+    table_offsets,
+    table_sizes,
+    table_max_sizes,
+    func_type_idxs,
+    type_param_counts,
+    type_result_counts,
+    import_num_params,
+    import_num_results,
+    import_context_ptrs,
+    import_target_func_idxs,
+    data_segments_flat,
+    data_segment_offsets,
+    data_segment_sizes,
+    elem_segments_flat,
+    elem_segment_offsets,
+    elem_segment_sizes,
+    elem_segment_dropped,
+    context_ptr: 0L,
+    resolved_imports,
+  }
+}
+
+///|
+/// Get or create the CRuntimeContext pointer for cross-module calls.
+/// The context is created lazily on first call and cached.
+pub fn CRuntime::get_context_ptr(self : CRuntime) -> Int64 {
+  if self.context_ptr == 0L {
+    let num_funcs = self.compiled.func_entries.length()
+    let num_imported_funcs = self.module_.imports
+      .filter(fn(imp) { imp.desc is @core.ImportDesc::Func(_) })
+      .length()
+    self.context_ptr = c_create_runtime_context(
+      self.compiled.code,
+      self.globals,
+      self.memory,
+      self.memory.length(),
+      self.memory_pages,
+      self.tables_flat,
+      self.table_offsets,
+      self.table_sizes,
+      self.table_max_sizes,
+      self.tables.length(),
+      self.compiled.func_entries,
+      self.compiled.func_num_locals,
+      num_funcs,
+      num_imported_funcs,
+      self.func_type_idxs,
+      self.type_param_counts,
+      self.type_result_counts,
+      self.module_.types.length(),
+      self.import_num_params,
+      self.import_num_results,
+      self.import_context_ptrs,
+      self.import_target_func_idxs,
+      self.data_segments_flat,
+      self.data_segment_offsets,
+      self.data_segment_sizes,
+      self.data_segment_sizes.length(),
+      self.elem_segments_flat,
+      self.elem_segment_offsets,
+      self.elem_segment_sizes,
+      self.elem_segment_dropped,
+      self.elem_segment_sizes.length(),
+    )
+  }
+  self.context_ptr
+}
+
+///|
+/// Free the CRuntimeContext if it was created.
+pub fn CRuntime::free_context(self : CRuntime) -> Unit {
+  if self.context_ptr != 0L {
+    c_free_runtime_context(self.context_ptr)
+    self.context_ptr = 0L
+  }
+}
+
+///|
+/// Get the underlying module.
+pub fn CRuntime::get_module(self : CRuntime) -> @core.Module {
+  self.module_
+}
+
+///|
 /// Flatten tables into a single array for C FFI
+/// Returns (tables_flat, table_offsets, table_sizes, table_max_sizes)
 fn flatten_tables(
   tables : FixedArray[FixedArray[Int]],
-) -> (FixedArray[Int], FixedArray[Int], FixedArray[Int]) {
+  logical_sizes : FixedArray[Int],
+  max_sizes : FixedArray[Int],
+) -> (FixedArray[Int], FixedArray[Int], FixedArray[Int], FixedArray[Int]) {
   let num_tables = tables.length()
   // Calculate total size and offsets
-  let table_sizes : Array[Int] = []
   let table_offsets : Array[Int] = []
   let mut total_size = 0
   for i in 0..<num_tables {
     table_offsets.push(total_size)
-    let size = tables[i].length()
-    table_sizes.push(size)
-    total_size += size
+    // Use max size to determine total allocation
+    let max_size = if i < max_sizes.length() { max_sizes[i] } else { 1 }
+    total_size += max_size
   }
-  // Flatten into single array
+  // Flatten into single array (allocate to max capacity)
   let tables_flat : FixedArray[Int] = FixedArray::make(
     if total_size > 0 {
       total_size
@@ -136,14 +326,21 @@ fn flatten_tables(
   for i in 0..<num_tables {
     let offset = table_offsets[i]
     let table = tables[i]
-    for j in 0..<table.length() {
+    // Copy elements up to the logical size
+    let logical_size = if i < logical_sizes.length() {
+      logical_sizes[i]
+    } else {
+      0
+    }
+    for j in 0..<logical_size {
       tables_flat[offset + j] = table[j]
     }
   }
   (
     tables_flat,
     FixedArray::from_array(table_offsets),
-    FixedArray::from_array(table_sizes),
+    logical_sizes, // Pass through logical sizes
+    max_sizes,
   )
 }
 
@@ -293,8 +490,8 @@ fn build_type_info(
       _ => ()
     }
   }
-  // Then, local function types (from module.funcs, skipping imports)
-  for i = num_imported; i < module_.funcs.length(); i = i + 1 {
+  // Then, local function types (module.funcs contains only local functions)
+  for i = 0; i < module_.funcs.length(); i = i + 1 {
     func_type_idxs.push(module_.funcs[i].reinterpret_as_int())
   }
   // Build type signature hashes for each type
@@ -475,34 +672,49 @@ fn count_imported_tables(module_ : @core.Module) -> Int {
 }
 
 ///|
+/// Default max table size when no max is specified
+/// This is a reasonable limit for our implementation
+let default_table_max_size : Int = 65536
+
+///|
 /// Initialize tables from module's table and elem sections
+/// Returns (tables, logical_sizes, max_sizes) where:
+/// - tables: arrays allocated to max capacity (or at least 1)
+/// - logical_sizes: the actual table sizes (limits.min)
+/// - max_sizes: the max capacity for table.grow
 fn init_tables(
   module_ : @core.Module,
   globals : FixedArray[UInt64],
-) -> FixedArray[FixedArray[Int]] {
+) -> (FixedArray[FixedArray[Int]], FixedArray[Int], FixedArray[Int]) {
   let num_imported_tables = count_imported_tables(module_)
   let num_local_tables = module_.tables.length()
   let num_tables = num_imported_tables + num_local_tables
   if num_tables == 0 {
-    return [[-1]] // Return a dummy table to avoid empty array issues
+    // Return dummy table, sizes, and max_sizes to avoid empty array issues
+    return ([[-1]], [0], [1])
   }
-  // Allocate tables
+  // Allocate tables and track sizes
   let tables : FixedArray[FixedArray[Int]] = FixedArray::make(num_tables, [-1])
+  let logical_sizes_arr : Array[Int] = []
+  let max_sizes_arr : Array[Int] = []
   // Initialize imported tables (from import descriptors)
   let mut import_table_idx = 0
   for imp in module_.imports {
     match imp.desc {
       Table(table_type) => {
-        let size = table_type.limits.min.to_int()
+        let min_size = table_type.limits.min.to_int()
+        // When no max is specified, use a default max to allow growth
+        let max_size = match table_type.limits.max {
+          Some(max) => max.to_int()
+          None => default_table_max_size
+        }
+        // Allocate to max capacity (at least 1 to avoid empty arrays)
+        let alloc_size = if max_size > 0 { max_size } else { 1 }
         // Initialize imported table with -1 (null/undefined)
-        tables[import_table_idx] = FixedArray::make(
-          if size > 0 {
-            size
-          } else {
-            1
-          },
-          -1,
-        )
+        tables[import_table_idx] = FixedArray::make(alloc_size, -1)
+        // Track logical size (actual table size from limits.min)
+        logical_sizes_arr.push(min_size)
+        max_sizes_arr.push(if max_size > 0 { max_size } else { 1 })
         import_table_idx += 1
       }
       _ => ()
@@ -510,16 +722,19 @@ fn init_tables(
   }
   // Initialize local tables
   for i, table_type in module_.tables {
-    let size = table_type.limits.min.to_int()
+    let min_size = table_type.limits.min.to_int()
+    // When no max is specified, use a default max to allow growth
+    let max_size = match table_type.limits.max {
+      Some(max) => max.to_int()
+      None => default_table_max_size
+    }
+    // Allocate to max capacity (at least 1 to avoid empty arrays)
+    let alloc_size = if max_size > 0 { max_size } else { 1 }
     // Initialize table with -1 (null/undefined)
-    tables[num_imported_tables + i] = FixedArray::make(
-      if size > 0 {
-        size
-      } else {
-        1
-      },
-      -1,
-    )
+    tables[num_imported_tables + i] = FixedArray::make(alloc_size, -1)
+    // Track logical size (actual table size from limits.min)
+    logical_sizes_arr.push(min_size)
+    max_sizes_arr.push(if max_size > 0 { max_size } else { 1 })
   }
   // Initialize from element segments
   for elem in module_.elems {
@@ -528,8 +743,9 @@ fn init_tables(
       if table_idx >= 0 && table_idx < tables.length() {
         let offset = eval_const_expr_with_globals(elem.offset, globals).to_int()
         let table = tables[table_idx]
+        let logical_size = logical_sizes_arr[table_idx]
         for i, init_expr in elem.init {
-          if offset + i < table.length() {
+          if offset + i < logical_size {
             // Evaluate the init expression to get the function index
             let func_idx = eval_elem_expr(init_expr)
             table[offset + i] = func_idx
@@ -538,7 +754,11 @@ fn init_tables(
       }
     }
   }
-  tables
+  (
+    tables,
+    FixedArray::from_array(logical_sizes_arr),
+    FixedArray::from_array(max_sizes_arr),
+  )
 }
 
 ///|
@@ -658,6 +878,7 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
           self.tables_flat,
           self.table_offsets,
           self.table_sizes,
+          self.table_max_sizes,
           self.tables.length(),
           self.compiled.func_entries,
           self.compiled.func_num_locals,
@@ -669,6 +890,8 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
           self.module_.types.length(),
           self.import_num_params,
           self.import_num_results,
+          self.import_context_ptrs,
+          self.import_target_func_idxs,
           self.data_segments_flat,
           self.data_segment_offsets,
           self.data_segment_sizes,
@@ -690,6 +913,57 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
 }
 
 ///|
+/// Call an external function (in another CRuntime) via resolved import.
+/// This is used for exported imports - functions that re-export an import.
+fn call_external_function(
+  resolved : ResolvedImport,
+  args : Array[Value],
+) -> Array[Value] raise @runtime.RuntimeError {
+  // Convert args to UInt64
+  let args_u64 : Array[UInt64] = []
+  for arg in args {
+    args_u64.push(value_to_u64(arg))
+  }
+  let args_fixed = FixedArray::from_array(args_u64)
+
+  // Allocate result array
+  let result_out : FixedArray[UInt64] = FixedArray::make(
+    if resolved.num_results > 0 {
+      resolved.num_results
+    } else {
+      1
+    },
+    0UL,
+  )
+
+  // Call via C FFI with context switching
+  let trap_code = c_call_external_ffi(
+    resolved.target_context_ptr,
+    resolved.target_func_idx,
+    args_fixed,
+    resolved.num_params,
+    result_out,
+    resolved.num_results,
+  )
+
+  // Check for trap
+  let trap = trap_code_from_int(trap_code)
+  if trap != TrapCode::None {
+    raise trap_to_error(trap)
+  }
+
+  // Convert results - we don't have type info, so use I32/I64 based on result count
+  // This is a simplification; proper implementation would track types
+  let results : Array[Value] = []
+  for i in 0..<resolved.num_results {
+    // Default to I32 for single results (most common case)
+    let raw = result_out[i].reinterpret_as_int64().to_int()
+    results.push(I32(raw.reinterpret_as_uint()))
+  }
+  results
+}
+
+///|
 /// Call an exported function by name.
 pub fn CRuntime::call_compiled(
   self : CRuntime,
@@ -698,79 +972,98 @@ pub fn CRuntime::call_compiled(
 ) -> Array[Value] raise @runtime.RuntimeError {
   let name_str = @encoding/utf8.decode(name) catch { _ => return [] }
   match self.compiled.exports.get(name_str) {
-    Some(func_idx) => {
-      // Get function type for result conversion
-      // Note: func_idx is the local function index, funcs array only has local functions
+    Some(export_idx) => {
       let num_imported = count_imported_funcs(self.module_)
-      let type_idx = self.module_.funcs[func_idx].reinterpret_as_int()
-      let func_type = get_func_type(self.module_, type_idx)
-      let num_results = func_type.results.length()
+      // Check if this is an exported import (negative index)
+      if export_idx < 0 {
+        // Exported import: -(import_idx + 1) is stored
+        let import_idx = -(export_idx + 1)
+        // Look up resolved import
+        match self.resolved_imports.get(import_idx) {
+          Some(resolved) =>
+            // Call through to the target module
+            call_external_function(resolved, args)
+          None =>
+            // Unresolved import - shouldn't happen for properly linked modules
+            raise @runtime.RuntimeError::from_detail("unresolved import")
+        }
+      } else {
+        // Local function
+        let func_idx = export_idx
+        // Get function type for result conversion
+        let type_idx = self.module_.funcs[func_idx].reinterpret_as_int()
+        let func_type = get_func_type(self.module_, type_idx)
+        let num_results = func_type.results.length()
 
-      // Convert args to UInt64
-      let args_u64 : Array[UInt64] = []
-      for arg in args {
-        args_u64.push(value_to_u64(arg))
-      }
-      let entry = self.compiled.func_entries[func_idx]
-      let num_locals = self.compiled.func_num_locals[func_idx]
-      let args_fixed = FixedArray::from_array(args_u64)
-      // Allocate result array with correct size (at least 1 to avoid empty array issues)
-      let result_out : FixedArray[UInt64] = FixedArray::make(
-        if num_results > 0 {
-          num_results
-        } else {
-          1
-        },
-        0UL,
-      )
-      let trap_code = c_execute_ffi(
-        self.compiled.code,
-        entry,
-        num_locals,
-        args_fixed,
-        args_u64.length(),
-        result_out,
-        num_results,
-        self.globals,
-        self.memory,
-        self.memory.length(),
-        self.memory_pages,
-        self.tables_flat,
-        self.table_offsets,
-        self.table_sizes,
-        self.tables.length(),
-        self.compiled.func_entries,
-        self.compiled.func_num_locals,
-        self.compiled.func_entries.length(),
-        num_imported,
-        self.func_type_idxs,
-        self.type_param_counts,
-        self.type_result_counts,
-        self.module_.types.length(),
-        self.import_num_params,
-        self.import_num_results,
-        self.data_segments_flat,
-        self.data_segment_offsets,
-        self.data_segment_sizes,
-        self.module_.datas.length(),
-        self.elem_segments_flat,
-        self.elem_segment_offsets,
-        self.elem_segment_sizes,
-        self.elem_segment_dropped,
-        self.module_.elems.length(),
-      )
-      // Check for trap
-      let trap = trap_code_from_int(trap_code)
-      if trap != TrapCode::None {
-        raise trap_to_error(trap)
-      }
+        // Convert args to UInt64
+        let args_u64 : Array[UInt64] = []
+        for arg in args {
+          args_u64.push(value_to_u64(arg))
+        }
+        let entry = self.compiled.func_entries[func_idx]
+        let num_locals = self.compiled.func_num_locals[func_idx]
+        let args_fixed = FixedArray::from_array(args_u64)
+        // Allocate result array with correct size (at least 1 to avoid empty array issues)
+        let result_out : FixedArray[UInt64] = FixedArray::make(
+          if num_results > 0 {
+            num_results
+          } else {
+            1
+          },
+          0UL,
+        )
+        let trap_code = c_execute_ffi(
+          self.compiled.code,
+          entry,
+          num_locals,
+          args_fixed,
+          args_u64.length(),
+          result_out,
+          num_results,
+          self.globals,
+          self.memory,
+          self.memory.length(),
+          self.memory_pages,
+          self.tables_flat,
+          self.table_offsets,
+          self.table_sizes,
+          self.table_max_sizes,
+          self.tables.length(),
+          self.compiled.func_entries,
+          self.compiled.func_num_locals,
+          self.compiled.func_entries.length(),
+          num_imported,
+          self.func_type_idxs,
+          self.type_param_counts,
+          self.type_result_counts,
+          self.module_.types.length(),
+          self.import_num_params,
+          self.import_num_results,
+          self.import_context_ptrs,
+          self.import_target_func_idxs,
+          self.data_segments_flat,
+          self.data_segment_offsets,
+          self.data_segment_sizes,
+          self.module_.datas.length(),
+          self.elem_segments_flat,
+          self.elem_segment_offsets,
+          self.elem_segment_sizes,
+          self.elem_segment_dropped,
+          self.module_.elems.length(),
+        )
+        // Check for trap
+        let trap = trap_code_from_int(trap_code)
+        if trap != TrapCode::None {
+          raise trap_to_error(trap)
+        }
 
-      // Convert all results based on function type
-      let results : Array[Value] = []
-      for i in 0..<num_results {
-        results.push(u64_to_value(result_out[i], func_type.results[i]))
+        // Convert all results based on function type
+        let results : Array[Value] = []
+        for i in 0..<num_results {
+          results.push(u64_to_value(result_out[i], func_type.results[i]))
+        }
+        results
       }
-      results
     }
     None => []
   }
@@ -799,17 +1092,25 @@ fn u64_to_value(raw : UInt64, ty : @core.ValType) -> Value {
     I64 => Value::I64(raw)
     F32 => Value::F32(Float::reinterpret_from_uint(raw.to_uint()))
     F64 => Value::F64(raw.reinterpret_as_double())
-    FuncRef =>
+    // All reference types - use Ref(None) for null, Ref(Some) for non-null
+    // This provides consistency with the test harness expectations
+    FuncRef
+    | ExternRef
+    | AnyRef
+    | EqRef
+    | I31Ref
+    | StructRef
+    | ArrayRef
+    | NullRef
+    | NullFuncRef
+    | NullExternRef
+    | ExnRef
+    | NullExnRef
+    | Ref(_, _) =>
       if raw == 0xFFFFFFFF_FFFFFFFFUL {
-        Value::Funcref(None)
+        Value::Ref(None)
       } else {
-        Value::Funcref(Some(raw.to_uint().reinterpret_as_int()))
-      }
-    ExternRef =>
-      if raw == 0xFFFFFFFF_FFFFFFFFUL {
-        Value::Externref(None)
-      } else {
-        Value::Externref(Some(raw.to_uint().reinterpret_as_int()))
+        Value::Ref(Some(raw.to_uint().reinterpret_as_int()))
       }
     _ => Value::I64(raw)
   }

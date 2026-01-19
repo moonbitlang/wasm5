@@ -1,7 +1,7 @@
 ///|
 /// Execute threaded code (FFI binding)
 /// Returns trap code (0 = success), stores results in result_out[0..num_results-1]
-#borrow(code, args, result_out, globals, memory, memory_pages, tables_flat, table_offsets, table_sizes, func_entries, func_num_locals, func_type_idxs, type_sig_hash1, type_sig_hash2, import_num_params, import_num_results, data_segments_flat, data_segment_offsets, data_segment_sizes, elem_segments_flat, elem_segment_offsets, elem_segment_sizes, elem_segment_dropped)
+#borrow(code, args, result_out, globals, memory, memory_pages, tables_flat, table_offsets, table_sizes, table_max_sizes, func_entries, func_num_locals, func_type_idxs, type_sig_hash1, type_sig_hash2, import_num_params, import_num_results, import_context_ptrs, import_target_func_idxs, data_segments_flat, data_segment_offsets, data_segment_sizes, elem_segments_flat, elem_segment_offsets, elem_segment_sizes, elem_segment_dropped)
 extern "C" fn c_execute_ffi(
   code : FixedArray[UInt64],
   entry : Int,
@@ -16,7 +16,8 @@ extern "C" fn c_execute_ffi(
   memory_pages : FixedArray[Int],
   tables_flat : FixedArray[Int], // All tables flattened into one array
   table_offsets : FixedArray[Int], // Offset of each table in tables_flat
-  table_sizes : FixedArray[Int], // Size of each table
+  table_sizes : FixedArray[Int], // Current size of each table
+  table_max_sizes : FixedArray[Int], // Max size (capacity) of each table for table.grow
   num_tables : Int,
   func_entries : FixedArray[Int], // Entry points for local functions
   func_num_locals : FixedArray[Int], // Number of locals per local function
@@ -28,6 +29,8 @@ extern "C" fn c_execute_ffi(
   num_types : Int,
   import_num_params : FixedArray[Int], // Number of params for each imported function
   import_num_results : FixedArray[Int], // Number of results for each imported function
+  import_context_ptrs : FixedArray[Int64], // Target context pointers for cross-module calls
+  import_target_func_idxs : FixedArray[Int], // Target function indices for cross-module calls
   data_segments_flat : FixedArray[Byte], // All data segments flattened
   data_segment_offsets : FixedArray[Int], // Offset of each segment in data_segments_flat
   data_segment_sizes : FixedArray[Int], // Size of each segment (mutable for data.drop)
@@ -55,6 +58,7 @@ fn trap_code_from_int(code : Int) -> TrapCode {
     9 => TrapCode::StackOverflow
     10 => TrapCode::UninitializedElement
     11 => TrapCode::TableBoundsAccess
+    12 => TrapCode::NullReference
     _ => TrapCode::Unreachable // Unknown trap code
   }
 }

@@ -1028,47 +1028,75 @@ async test "memory_redundancy.wast (cruntime)" {
 // }
 
 // --- Table operations ---
-// async test "table.wast (cruntime)" {
-//   run_test_harness("", "table.wast", runtime_type=CRuntime)
-// }
-// async test "table_get.wast (cruntime)" {
-//   run_test_harness("", "table_get.wast", runtime_type=CRuntime)
-// }
-// async test "table_set.wast (cruntime)" {
-//   run_test_harness("", "table_set.wast", runtime_type=CRuntime)
-// }
-// async test "table_grow.wast (cruntime)" {
-//   run_test_harness("", "table_grow.wast", runtime_type=CRuntime)
-// }
-// async test "table_size.wast (cruntime)" {
-//   run_test_harness("", "table_size.wast", runtime_type=CRuntime)
-// }
+
+///|
+async test "table.wast (cruntime)" {
+  run_test_harness("", "table.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "table_get.wast (cruntime)" {
+  run_test_harness("", "table_get.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "table_set.wast (cruntime)" {
+  run_test_harness("", "table_set.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "table_grow.wast (cruntime)" {
+  run_test_harness("", "table_grow.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "table_size.wast (cruntime)" {
+  run_test_harness("", "table_size.wast", runtime_type=CRuntime)
+}
 
 // --- Reference types ---
-// async test "ref.wast (cruntime)" {
-//   run_test_harness("", "ref.wast", runtime_type=CRuntime)
-// }
-// async test "ref_null.wast (cruntime)" {
-//   run_test_harness("", "ref_null.wast", runtime_type=CRuntime)
-// }
-// async test "ref_func.wast (cruntime)" {
-//   run_test_harness("", "ref_func.wast", runtime_type=CRuntime)
-// }
-// async test "ref_is_null.wast (cruntime)" {
-//   run_test_harness("", "ref_is_null.wast", runtime_type=CRuntime)
-// }
-// async test "ref_as_non_null.wast (cruntime)" {
-//   run_test_harness("", "ref_as_non_null.wast", runtime_type=CRuntime)
-// }
-// async test "br_on_null.wast (cruntime)" {
-//   run_test_harness("", "br_on_null.wast", runtime_type=CRuntime)
-// }
-// async test "br_on_non_null.wast (cruntime)" {
-//   run_test_harness("", "br_on_non_null.wast", runtime_type=CRuntime)
-// }
-// async test "call_ref.wast (cruntime)" {
-//   run_test_harness("", "call_ref.wast", runtime_type=CRuntime)
-// }
+
+///|
+async test "ref_null.wast (cruntime)" {
+  run_test_harness("", "ref_null.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "ref_func.wast (cruntime)" {
+  run_test_harness("", "ref_func.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "ref_is_null.wast (cruntime)" {
+  run_test_harness("", "ref_is_null.wast", runtime_type=CRuntime)
+}
+
+// --- Reference types ---
+
+///|
+async test "ref.wast (cruntime)" {
+  run_test_harness("", "ref.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "ref_as_non_null.wast (cruntime)" {
+  run_test_harness("", "ref_as_non_null.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "br_on_null.wast (cruntime)" {
+  run_test_harness("", "br_on_null.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "br_on_non_null.wast (cruntime)" {
+  run_test_harness("", "br_on_non_null.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "call_ref.wast (cruntime)" {
+  run_test_harness("", "call_ref.wast", runtime_type=CRuntime)
+}
 
 // --- Function/calls ---
 
@@ -1103,6 +1131,8 @@ async test "exports.wast (cruntime)" {
 // async test "instance.wast (cruntime)" {
 //   run_test_harness("", "instance.wast", runtime_type=CRuntime)
 // }
+
+// ///|
 // async test "linking.wast (cruntime)" {
 //   run_test_harness("", "linking.wast", runtime_type=CRuntime)
 // }
@@ -1197,7 +1227,15 @@ async test "bulk-memory/memory_init.wast (cruntime)" {
   run_test_harness("bulk-memory/", "memory_init.wast", runtime_type=CRuntime)
 }
 
-// Note: table_copy.wast, table_fill.wast, and table_init.wast are skipped for CRuntime because:
-// - table_fill.wast uses externref tables (CRuntime only supports funcref as int)
-// - table_copy.wast and table_init.wast use multi-module register and imports (not supported)
-// The simpler table operations in bulk.wast are tested separately.
+// Note: table_fill.wast is skipped for CRuntime because it uses externref tables
+// (CRuntime only supports funcref as int).
+
+///|
+async test "bulk-memory/table_copy.wast (cruntime)" {
+  run_test_harness("bulk-memory/", "table_copy.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "bulk-memory/table_init.wast (cruntime)" {
+  run_test_harness("bulk-memory/", "table_init.wast", runtime_type=CRuntime)
+}

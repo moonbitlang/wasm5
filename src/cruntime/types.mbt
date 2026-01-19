@@ -10,11 +10,26 @@ pub enum TrapCode {
   OutOfBoundsMemoryAccess = 5
   OutOfBoundsTableAccess = 6 // "undefined element" - index out of bounds (call_indirect)
   IndirectCallTypeMismatch = 7
-  NullFunctionReference = 8
+  NullFunctionReference = 8 // call_ref with null funcref
   StackOverflow = 9
   UninitializedElement = 10 // "uninitialized element" - null entry in table
   TableBoundsAccess = 11 // "out of bounds table access" - for bulk table ops
+  NullReference = 12 // ref.as_non_null on null ref
 } derive(Eq, Show)
+
+///|
+/// Information about a resolved import for cross-module calls.
+/// Used when compiling a module that imports from a registered module.
+pub(all) struct ResolvedImport {
+  /// Pointer to the target CRuntime's context (as Int64)
+  target_context_ptr : Int64
+  /// Function index in the target module
+  target_func_idx : Int
+  /// Number of parameters the function takes
+  num_params : Int
+  /// Number of results the function returns
+  num_results : Int
+} derive(Show)
 
 ///|
 /// Compiled module ready for C runtime execution.

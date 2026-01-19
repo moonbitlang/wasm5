@@ -9,6 +9,8 @@ import {
 // Values
 pub fn compile(@core.Module) -> CompiledModule
 
+pub fn compile_with_imports(@core.Module, Map[Int, ResolvedImport]) -> CompiledModule
+
 // Errors
 
 // Types and methods
@@ -22,11 +24,14 @@ pub struct CRuntime {
   tables_flat : FixedArray[Int]
   table_offsets : FixedArray[Int]
   table_sizes : FixedArray[Int]
+  table_max_sizes : FixedArray[Int]
   func_type_idxs : FixedArray[Int]
   type_param_counts : FixedArray[Int]
   type_result_counts : FixedArray[Int]
   import_num_params : FixedArray[Int]
   import_num_results : FixedArray[Int]
+  import_context_ptrs : FixedArray[Int64]
+  import_target_func_idxs : FixedArray[Int]
   data_segments_flat : FixedArray[Byte]
   data_segment_offsets : FixedArray[Int]
   data_segment_sizes : FixedArray[Int]
@@ -34,9 +39,15 @@ pub struct CRuntime {
   elem_segment_offsets : FixedArray[Int]
   elem_segment_sizes : FixedArray[Int]
   elem_segment_dropped : FixedArray[Int]
+  mut context_ptr : Int64
+  resolved_imports : Map[Int, ResolvedImport]
 }
 pub fn CRuntime::call_compiled(Self, Bytes, Array[@core.Value]) -> Array[@core.Value] raise @runtime.RuntimeError
+pub fn CRuntime::free_context(Self) -> Unit
+pub fn CRuntime::get_context_ptr(Self) -> Int64
+pub fn CRuntime::get_module(Self) -> @core.Module
 pub fn CRuntime::load(@core.Module) -> Self
+pub fn CRuntime::load_with_imports(@core.Module, Map[Int, ResolvedImport]) -> Self
 pub fn CRuntime::run_start(Self) -> Unit raise @runtime.RuntimeError
 
 pub struct CompiledModule {
@@ -46,6 +57,14 @@ pub struct CompiledModule {
   func_max_stack : FixedArray[Int]
   exports : Map[String, Int]
 }
+
+pub(all) struct ResolvedImport {
+  target_context_ptr : Int64
+  target_func_idx : Int
+  num_params : Int
+  num_results : Int
+}
+pub impl Show for ResolvedImport
 
 pub enum TrapCode {
   None
@@ -60,6 +79,7 @@ pub enum TrapCode {
   StackOverflow
   UninitializedElement
   TableBoundsAccess
+  NullReference
 }
 pub impl Eq for TrapCode
 pub impl Show for TrapCode

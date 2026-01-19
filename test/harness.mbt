@@ -39,6 +39,8 @@ priv trait Executor {
   get_globals(Self) -> Array[@wasm5_runtime.Value]?
   // Returns the underlying MoonBit Runtime if available (for cross-module imports)
   as_runtime(Self) -> @wasm5_runtime.Runtime?
+  // Returns the underlying CRuntime if available (for cross-module imports)
+  as_cruntime(Self) -> @wasm5_cruntime.CRuntime?
 }
 
 ///|
@@ -74,6 +76,11 @@ impl Executor for @wasm5_runtime.Runtime with as_runtime(self) -> @wasm5_runtime
 }
 
 ///|
+impl Executor for @wasm5_runtime.Runtime with as_cruntime(_self) -> @wasm5_cruntime.CRuntime? {
+  None
+}
+
+///|
 /// Implement Executor for C Runtime
 impl Executor for @wasm5_cruntime.CRuntime with run_start(self) -> Unit raise Error {
   self.run_start()
@@ -89,9 +96,8 @@ impl Executor for @wasm5_cruntime.CRuntime with call_compiled(
 }
 
 ///|
-impl Executor for @wasm5_cruntime.CRuntime with get_module(_self) -> @wasm5_core.Module? {
-  // CRuntime doesn't expose module yet
-  None
+impl Executor for @wasm5_cruntime.CRuntime with get_module(self) -> @wasm5_core.Module? {
+  Some(self.get_module())
 }
 
 ///|
@@ -109,9 +115,17 @@ impl Executor for @wasm5_cruntime.CRuntime with as_runtime(_self) -> @wasm5_runt
 }
 
 ///|
+impl Executor for @wasm5_cruntime.CRuntime with as_cruntime(self) -> @wasm5_cruntime.CRuntime? {
+  Some(self)
+}
+
+///|
 /// Registered module entry for cross-module imports
+/// Supports both MoonBit runtime and CRuntime
 priv struct RegisteredModule {
-  runtime : @wasm5_runtime.Runtime
+  runtime : @wasm5_runtime.Runtime?
+  cruntime : @wasm5_cruntime.CRuntime?
+  module_ : @wasm5_core.Module // Needed for resolving imports from this module
 }
 
 ///|
@@ -175,7 +189,13 @@ async fn parse_and_compile(ctx : TestContext, file_name : String) -> &Executor {
     }
     CRuntime => {
       @wasm5_validate.validate_module(module_)
-      let cruntime = @wasm5_cruntime.CRuntime::load(module_)
+      // Resolve imports from registered CRuntime modules
+      let resolved_imports = resolve_imports_for_cruntime(ctx, module_)
+      let cruntime = if resolved_imports.is_empty() {
+        @wasm5_cruntime.CRuntime::load(module_)
+      } else {
+        @wasm5_cruntime.CRuntime::load_with_imports(module_, resolved_imports)
+      }
       cruntime.run_start()
       (cruntime : &Executor)
     }
@@ -194,9 +214,12 @@ fn make_import_wrapper(
     args,
   ) {
     // Call the registered module's exported function
-    let rt = registered.runtime
-    rt.call_compiled(@encoding/utf8.encode(export_name), args) catch {
-      _ => []
+    match registered.runtime {
+      Some(rt) =>
+        rt.call_compiled(@encoding/utf8.encode(export_name), args) catch {
+          _ => []
+        }
+      None => [] // CRuntime uses context switching, not wrappers
     }
   }
   @wasm5_runtime.ImportedFunc::new(arity, func)
@@ -214,9 +237,9 @@ fn make_funcref_wrapper(
     args,
   ) {
     // Call the registered module's function by index
-    let rt = registered.runtime
-    rt.call_by_index(func_idx, args) catch {
-      _ => []
+    match registered.runtime {
+      Some(rt) => rt.call_by_index(func_idx, args) catch { _ => [] }
+      None => [] // CRuntime uses context switching, not wrappers
     }
   }
   @wasm5_runtime.ImportedFunc::new(arity, func)
@@ -231,7 +254,11 @@ fn register_module(
   module_ : @wasm5_core.Module,
 ) -> Unit {
   // Store in registry
-  let entry : RegisteredModule = { runtime, }
+  let entry : RegisteredModule = {
+    runtime: Some(runtime),
+    cruntime: None,
+    module_,
+  }
   ctx.registry.0[name] = entry
 
   // Convert name to bytes for resolver
@@ -378,6 +405,132 @@ fn register_module(
   // When a module stores its own funcrefs into a shared table, we need to
   // replace those local indices with wrappers stored in table.external_funcrefs.
   fix_shared_table_elements(entry, module_, runtime)
+}
+
+///|
+/// Register a CRuntime module. Unlike MoonBit runtime, CRuntime uses
+/// context switching for cross-module calls, so we don't need wrappers.
+/// The module's exports are recorded for resolving imports at compile time.
+fn register_cruntime(
+  ctx : TestContext,
+  name : String,
+  cruntime : @wasm5_cruntime.CRuntime,
+  module_ : @wasm5_core.Module,
+) -> Unit {
+  // Ensure context is created (lazily creates the C-side context)
+  let _ = cruntime.get_context_ptr()
+  // Store in registry
+  let entry : RegisteredModule = {
+    runtime: None,
+    cruntime: Some(cruntime),
+    module_,
+  }
+  ctx.registry.0[name] = entry
+}
+
+///|
+/// Resolve imports for a module being loaded with CRuntime.
+/// Returns a map from import func index to ResolvedImport info.
+fn resolve_imports_for_cruntime(
+  ctx : TestContext,
+  module_ : @wasm5_core.Module,
+) -> Map[Int, @wasm5_cruntime.ResolvedImport] {
+  let resolved : Map[Int, @wasm5_cruntime.ResolvedImport] = {}
+  let mut import_func_idx = 0
+  for imp in module_.imports {
+    match imp.desc {
+      @wasm5_core.ImportDesc::Func(type_idx) => {
+        // Convert import module name from Bytes to String
+        let module_name = @encoding/utf8.decode(imp.module_) catch { _ => "" }
+        let field_name = @encoding/utf8.decode(imp.name) catch { _ => "" }
+        // Look up the registered module
+        match ctx.registry.0.get(module_name) {
+          Some(registered) =>
+            match registered.cruntime {
+              Some(target_crt) => {
+                // Find the exported function index in the target module
+                let target_func_idx = find_exported_func_idx(
+                  registered.module_,
+                  field_name,
+                )
+                match target_func_idx {
+                  Some(func_idx) => {
+                    // Get function type info
+                    let (num_params, num_results) = get_func_type_info(
+                      registered.module_,
+                      func_idx,
+                    )
+                    resolved[import_func_idx] = {
+                      target_context_ptr: target_crt.get_context_ptr(),
+                      target_func_idx: func_idx,
+                      num_params,
+                      num_results,
+                    }
+                  }
+                  None => () // Export not found, will fail at runtime
+                }
+              }
+              None => () // Not a CRuntime module, can't resolve
+            }
+          None => () // Module not registered
+        }
+        import_func_idx += 1
+      }
+      _ => ()
+    }
+  }
+  resolved
+}
+
+///|
+/// Find the function index for an exported function name in a module.
+fn find_exported_func_idx(module_ : @wasm5_core.Module, name : String) -> Int? {
+  let name_bytes = @encoding/utf8.encode(name)
+  for exp in module_.exports {
+    if exp.name == name_bytes {
+      match exp.desc {
+        @wasm5_core.ExportDesc::Func(func_idx) =>
+          return Some(func_idx.reinterpret_as_int())
+        _ => ()
+      }
+    }
+  }
+  None
+}
+
+///|
+/// Get the number of params and results for a function in a module.
+fn get_func_type_info(
+  module_ : @wasm5_core.Module,
+  func_idx : Int,
+) -> (Int, Int) {
+  // Count imported functions
+  let mut num_imported_funcs = 0
+  for imp in module_.imports {
+    match imp.desc {
+      @wasm5_core.ImportDesc::Func(_) => num_imported_funcs += 1
+      _ => ()
+    }
+  }
+  // Get type index
+  let type_idx = if func_idx < num_imported_funcs {
+    // Imported function
+    get_import_func_type_idx(module_, func_idx)
+  } else {
+    // Local function
+    let local_idx = func_idx - num_imported_funcs
+    if local_idx >= 0 && local_idx < module_.funcs.length() {
+      module_.funcs[local_idx].reinterpret_as_int()
+    } else {
+      0
+    }
+  }
+  // Get param/result counts from type
+  match module_.types.get(type_idx) {
+    Some(@wasm5_core.TypeDef::Func(ft)) =>
+      (ft.params.length(), ft.results.length())
+    _ => (0, 0)
+  }
 }
 
 ///|
@@ -947,10 +1100,18 @@ async fn handle_module(
   try {
     let executor = parse_and_compile(ctx, filename)
     ctx.executor = Some(executor)
-    // If a name is provided and we have MoonBit runtime, register the module
-    match (name, executor.as_runtime()) {
-      (Some(n), Some(rt)) => register_module(ctx, n, rt, rt.get_module())
-      _ => ()
+    // If a name is provided, register the module for later reference
+    match name {
+      Some(n) =>
+        match executor.as_runtime() {
+          Some(rt) => register_module(ctx, n, rt, rt.get_module())
+          None =>
+            match executor.as_cruntime() {
+              Some(crt) => register_cruntime(ctx, n, crt, crt.get_module())
+              None => ()
+            }
+        }
+      None => ()
     }
   } catch {
     e => ctx.fail(line, "module", "Error loading module: \{e}")
@@ -964,14 +1125,19 @@ fn handle_register(ctx : TestContext, name : String, line : Int) -> Unit {
     ctx.fail(line, "register", "no module loaded to register")
     return
   }
-  guard executor.as_runtime() is Some(rt) else {
-    ctx.fail(
-      line, "register", "register requires MoonBit runtime (CRuntime not supported)",
-    )
-    return
+  // Try MoonBit runtime first
+  match executor.as_runtime() {
+    Some(rt) => register_module(ctx, name, rt, rt.get_module())
+    None =>
+      // Try CRuntime
+      match executor.as_cruntime() {
+        Some(crt) => register_cruntime(ctx, name, crt, crt.get_module())
+        None => {
+          ctx.fail(line, "register", "unknown executor type")
+          return
+        }
+      }
   }
-  // Register the module with its exports
-  register_module(ctx, name, rt, rt.get_module())
 }
 
 ///|
@@ -982,9 +1148,18 @@ fn get_executor_for_module(
 ) -> &Executor? {
   match module_name {
     Some(name) =>
-      // Look up the registered module (only works with MoonBit runtime)
+      // Look up the registered module
       match ctx.registry.0.get(name) {
-        Some(registered) => Some(registered.runtime)
+        Some(registered) =>
+          // Try MoonBit runtime first, then CRuntime
+          match registered.runtime {
+            Some(rt) => Some(rt)
+            None =>
+              match registered.cruntime {
+                Some(crt) => Some(crt)
+                None => None
+              }
+          }
         None => None
       }
     None => ctx.executor
@@ -1428,7 +1603,7 @@ fn handle_assert_return_get(
     let rt : @wasm5_runtime.Runtime? = match module_name {
       Some(name) =>
         match ctx.registry.0.get(name) {
-          Some(registered) => Some(registered.runtime)
+          Some(registered) => registered.runtime
           None => None
         }
       None =>

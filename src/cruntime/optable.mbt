@@ -53,6 +53,9 @@ extern "C" fn call() -> UInt64 = "call"
 extern "C" fn call_import() -> UInt64 = "call_import"
 
 ///|
+extern "C" fn call_external() -> UInt64 = "call_external"
+
+///|
 extern "C" fn entry() -> UInt64 = "entry"
 
 // Constants
@@ -647,3 +650,100 @@ extern "C" fn elem_drop() -> UInt64 = "elem_drop"
 
 ///|
 extern "C" fn call_indirect() -> UInt64 = "call_indirect"
+
+// Reference type operations
+
+///|
+extern "C" fn ref_null() -> UInt64 = "ref_null"
+
+///|
+extern "C" fn ref_func() -> UInt64 = "ref_func"
+
+///|
+extern "C" fn ref_is_null() -> UInt64 = "ref_is_null"
+
+///|
+extern "C" fn ref_eq() -> UInt64 = "ref_eq"
+
+///|
+extern "C" fn ref_as_non_null() -> UInt64 = "ref_as_non_null"
+
+///|
+extern "C" fn br_on_null() -> UInt64 = "br_on_null"
+
+///|
+extern "C" fn br_on_non_null() -> UInt64 = "br_on_non_null"
+
+///|
+extern "C" fn call_ref() -> UInt64 = "call_ref"
+
+// Table access operations
+
+///|
+extern "C" fn table_get() -> UInt64 = "table_get"
+
+///|
+extern "C" fn table_set() -> UInt64 = "table_set"
+
+///|
+extern "C" fn table_size() -> UInt64 = "table_size"
+
+///|
+extern "C" fn table_grow() -> UInt64 = "table_grow"
+
+// Cross-module call support
+
+///|
+/// Create a CRuntimeContext for cross-module calls.
+/// Returns a pointer (as Int64) to a heap-allocated context structure.
+#borrow(code, globals, memory, memory_pages, tables_flat, table_offsets, table_sizes, table_max_sizes, func_entries, func_num_locals, func_type_idxs, type_sig_hash1, type_sig_hash2, import_num_params, import_num_results, import_context_ptrs, import_target_func_idxs, data_segments_flat, data_segment_offsets, data_segment_sizes, elem_segments_flat, elem_segment_offsets, elem_segment_sizes, elem_segment_dropped)
+extern "C" fn c_create_runtime_context(
+  code : FixedArray[UInt64],
+  globals : FixedArray[UInt64],
+  memory : FixedArray[Byte],
+  memory_size : Int,
+  memory_pages : FixedArray[Int],
+  tables_flat : FixedArray[Int],
+  table_offsets : FixedArray[Int],
+  table_sizes : FixedArray[Int],
+  table_max_sizes : FixedArray[Int],
+  num_tables : Int,
+  func_entries : FixedArray[Int],
+  func_num_locals : FixedArray[Int],
+  num_funcs : Int,
+  num_imported_funcs : Int,
+  func_type_idxs : FixedArray[Int],
+  type_sig_hash1 : FixedArray[Int],
+  type_sig_hash2 : FixedArray[Int],
+  num_types : Int,
+  import_num_params : FixedArray[Int],
+  import_num_results : FixedArray[Int],
+  import_context_ptrs : FixedArray[Int64],
+  import_target_func_idxs : FixedArray[Int],
+  data_segments_flat : FixedArray[Byte],
+  data_segment_offsets : FixedArray[Int],
+  data_segment_sizes : FixedArray[Int],
+  num_data_segments : Int,
+  elem_segments_flat : FixedArray[Int],
+  elem_segment_offsets : FixedArray[Int],
+  elem_segment_sizes : FixedArray[Int],
+  elem_segment_dropped : FixedArray[Int],
+  num_elem_segments : Int,
+) -> Int64 = "create_runtime_context"
+
+///|
+/// Free a CRuntimeContext that was created with c_create_runtime_context.
+extern "C" fn c_free_runtime_context(context_ptr : Int64) -> Unit = "free_runtime_context"
+
+///|
+/// Call a function in another CRuntime module using context switching.
+/// Used for exported imports - functions that re-export an imported function.
+#borrow(args, result_out)
+extern "C" fn c_call_external_ffi(
+  target_context_ptr : Int64,
+  func_idx : Int,
+  args : FixedArray[UInt64],
+  num_args : Int,
+  result_out : FixedArray[UInt64],
+  num_results : Int,
+) -> Int = "call_external_ffi"
