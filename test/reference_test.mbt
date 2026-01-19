@@ -95,9 +95,9 @@ async test "align.wast" {
   run_test_harness("", "align.wast")
 }
 
-// Blacklisted: WAT text format test
+// Disabled: WAT text format test
 // async test "annotations.wast" {
-//   run_test_harness("","annotations.wast")
+//   run_test_harness("", "annotations.wast")
 // }
 
 ///|
@@ -155,9 +155,9 @@ async test "call_ref.wast" {
   run_test_harness("", "call_ref.wast")
 }
 
-// Blacklisted: WAT text format test
+// Disabled: WAT text format test
 // async test "comments.wast" {
-//   run_test_harness("","comments.wast")
+//   run_test_harness("", "comments.wast")
 // }
 
 ///|
@@ -300,9 +300,9 @@ async test "inline-module.wast" {
   run_test_harness("", "inline-module.wast")
 }
 
-// Blacklisted: Requires module instances (linking)
+// Disabled: Requires module instances (linking)
 // async test "instance.wast" {
-//   run_test_harness("","instance.wast")
+//   run_test_harness("", "instance.wast")
 // }
 
 ///|
@@ -325,9 +325,9 @@ async test "left-to-right.wast" {
   run_test_harness("", "left-to-right.wast")
 }
 
-// Blacklisted: Requires cross-module imports/exports
+// Disabled: Requires cross-module imports/exports
 // async test "linking.wast" {
-//   run_test_harness("","linking.wast")
+//   run_test_harness("", "linking.wast")
 // }
 
 ///|
@@ -510,9 +510,9 @@ async test "traps.wast" {
   run_test_harness("", "traps.wast")
 }
 
-// Blacklisted: Requires exception handling
+// Disabled: Requires exception handling
 // async test "try_table.wast" {
-//   run_test_harness("","try_table.wast")
+//   run_test_harness("", "try_table.wast")
 // }
 
 ///|
@@ -712,136 +712,24 @@ async test "bulk-memory/table_init.wast" {
 // C Runtime Tests
 // =============================================================================
 
-///|
-async test "i32.wast (cruntime)" {
-  run_test_harness("", "i32.wast", runtime_type=CRuntime)
-}
-
-// Temporarily disabled - debugging crash
+// Disabled: cruntime SIGSEGV
+// async test "address.wast (cruntime)" {
+//   run_test_harness("", "address.wast", runtime_type=CRuntime)
+// }
 
 ///|
-async test "call.wast (cruntime)" {
-  run_test_harness("", "call.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "i64.wast (cruntime)" {
-  run_test_harness("", "i64.wast", runtime_type=CRuntime)
+async test "align.wast (cruntime)" {
+  run_test_harness("", "align.wast", runtime_type=CRuntime)
 }
 
 ///|
-async test "f32_cmp.wast (cruntime)" {
-  run_test_harness("", "f32_cmp.wast", runtime_type=CRuntime)
+async test "binary-leb128.wast (cruntime)" {
+  run_test_harness("", "binary-leb128.wast", runtime_type=CRuntime)
 }
 
 ///|
-async test "f64_cmp.wast (cruntime)" {
-  run_test_harness("", "f64_cmp.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "f32_bitwise.wast (cruntime)" {
-  run_test_harness("", "f32_bitwise.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "f64_bitwise.wast (cruntime)" {
-  run_test_harness("", "f64_bitwise.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "f32.wast (cruntime)" {
-  run_test_harness("", "f32.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "f64.wast (cruntime)" {
-  run_test_harness("", "f64.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "nop.wast (cruntime)" {
-  run_test_harness("", "nop.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "local_get.wast (cruntime)" {
-  run_test_harness("", "local_get.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "local_set.wast (cruntime)" {
-  run_test_harness("", "local_set.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "local_tee.wast (cruntime)" {
-  run_test_harness("", "local_tee.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "return.wast (cruntime)" {
-  run_test_harness("", "return.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "stack.wast (cruntime)" {
-  run_test_harness("", "stack.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "forward.wast (cruntime)" {
-  run_test_harness("", "forward.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "unreachable.wast (cruntime)" {
-  run_test_harness("", "unreachable.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "type.wast (cruntime)" {
-  run_test_harness("", "type.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "int_exprs.wast (cruntime)" {
-  run_test_harness("", "int_exprs.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "int_literals.wast (cruntime)" {
-  run_test_harness("", "int_literals.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "float_literals.wast (cruntime)" {
-  run_test_harness("", "float_literals.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "float_misc.wast (cruntime)" {
-  run_test_harness("", "float_misc.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "const.wast (cruntime)" {
-  run_test_harness("", "const.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "skip-stack-guard-page.wast (cruntime)" {
-  run_test_harness("", "skip-stack-guard-page.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "loop.wast (cruntime)" {
-  run_test_harness("", "loop.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "select.wast (cruntime)" {
-  run_test_harness("", "select.wast", runtime_type=CRuntime)
+async test "binary.wast (cruntime)" {
+  run_test_harness("", "binary.wast", runtime_type=CRuntime)
 }
 
 ///|
@@ -860,8 +748,13 @@ async test "br_if.wast (cruntime)" {
 }
 
 ///|
-async test "if.wast (cruntime)" {
-  run_test_harness("", "if.wast", runtime_type=CRuntime)
+async test "br_on_non_null.wast (cruntime)" {
+  run_test_harness("", "br_on_non_null.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "br_on_null.wast (cruntime)" {
+  run_test_harness("", "br_on_null.wast", runtime_type=CRuntime)
 }
 
 ///|
@@ -870,53 +763,28 @@ async test "br_table.wast (cruntime)" {
 }
 
 ///|
-async test "fac.wast (cruntime)" {
-  run_test_harness("", "fac.wast", runtime_type=CRuntime)
+async test "call.wast (cruntime)" {
+  run_test_harness("", "call.wast", runtime_type=CRuntime)
 }
 
 ///|
-async test "switch.wast (cruntime)" {
-  run_test_harness("", "switch.wast", runtime_type=CRuntime)
+async test "call_indirect.wast (cruntime)" {
+  run_test_harness("", "call_indirect.wast", runtime_type=CRuntime)
 }
 
 ///|
-async test "unwind.wast (cruntime)" {
-  run_test_harness("", "unwind.wast", runtime_type=CRuntime)
+async test "call_ref.wast (cruntime)" {
+  run_test_harness("", "call_ref.wast", runtime_type=CRuntime)
 }
 
 ///|
-async test "labels.wast (cruntime)" {
-  run_test_harness("", "labels.wast", runtime_type=CRuntime)
+async test "const.wast (cruntime)" {
+  run_test_harness("", "const.wast", runtime_type=CRuntime)
 }
 
 ///|
-async test "traps.wast (cruntime)" {
-  run_test_harness("", "traps.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "load.wast (cruntime)" {
-  run_test_harness("", "load.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "store.wast (cruntime)" {
-  run_test_harness("", "store.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "left-to-right.wast (cruntime)" {
-  run_test_harness("", "left-to-right.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "token.wast (cruntime)" {
-  run_test_harness("", "token.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "binary.wast (cruntime)" {
-  run_test_harness("", "binary.wast", runtime_type=CRuntime)
+async test "conversions.wast (cruntime)" {
+  run_test_harness("", "conversions.wast", runtime_type=CRuntime)
 }
 
 ///|
@@ -925,8 +793,108 @@ async test "custom.wast (cruntime)" {
 }
 
 ///|
-async test "binary-leb128.wast (cruntime)" {
-  run_test_harness("", "binary-leb128.wast", runtime_type=CRuntime)
+async test "data.wast (cruntime)" {
+  run_test_harness("", "data.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "elem.wast (cruntime)" {
+  run_test_harness("", "elem.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "endianness.wast (cruntime)" {
+  run_test_harness("", "endianness.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "exports.wast (cruntime)" {
+  run_test_harness("", "exports.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "f32.wast (cruntime)" {
+  run_test_harness("", "f32.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "f32_bitwise.wast (cruntime)" {
+  run_test_harness("", "f32_bitwise.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "f32_cmp.wast (cruntime)" {
+  run_test_harness("", "f32_cmp.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "f64.wast (cruntime)" {
+  run_test_harness("", "f64.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "f64_bitwise.wast (cruntime)" {
+  run_test_harness("", "f64_bitwise.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "f64_cmp.wast (cruntime)" {
+  run_test_harness("", "f64_cmp.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "fac.wast (cruntime)" {
+  run_test_harness("", "fac.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "float_exprs.wast (cruntime)" {
+  run_test_harness("", "float_exprs.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "float_literals.wast (cruntime)" {
+  run_test_harness("", "float_literals.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "float_memory.wast (cruntime)" {
+  run_test_harness("", "float_memory.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "float_misc.wast (cruntime)" {
+  run_test_harness("", "float_misc.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "forward.wast (cruntime)" {
+  run_test_harness("", "forward.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "func.wast (cruntime)" {
+  run_test_harness("", "func.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "func_ptrs.wast (cruntime)" {
+  run_test_harness("", "func_ptrs.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "global.wast (cruntime)" {
+  run_test_harness("", "global.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "i32.wast (cruntime)" {
+  run_test_harness("", "i32.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "i64.wast (cruntime)" {
+  run_test_harness("", "i64.wast", runtime_type=CRuntime)
 }
 
 ///|
@@ -935,8 +903,8 @@ async test "id.wast (cruntime)" {
 }
 
 ///|
-async test "obsolete-keywords.wast (cruntime)" {
-  run_test_harness("", "obsolete-keywords.wast", runtime_type=CRuntime)
+async test "if.wast (cruntime)" {
+  run_test_harness("", "if.wast", runtime_type=CRuntime)
 }
 
 ///|
@@ -945,13 +913,213 @@ async test "inline-module.wast (cruntime)" {
 }
 
 ///|
-async test "unreached-valid.wast (cruntime)" {
-  run_test_harness("", "unreached-valid.wast", runtime_type=CRuntime)
+async test "int_exprs.wast (cruntime)" {
+  run_test_harness("", "int_exprs.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "int_literals.wast (cruntime)" {
+  run_test_harness("", "int_literals.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "labels.wast (cruntime)" {
+  run_test_harness("", "labels.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "left-to-right.wast (cruntime)" {
+  run_test_harness("", "left-to-right.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "load.wast (cruntime)" {
+  run_test_harness("", "load.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "local_get.wast (cruntime)" {
+  run_test_harness("", "local_get.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "local_init.wast (cruntime)" {
+  run_test_harness("", "local_init.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "local_set.wast (cruntime)" {
+  run_test_harness("", "local_set.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "local_tee.wast (cruntime)" {
+  run_test_harness("", "local_tee.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "loop.wast (cruntime)" {
+  run_test_harness("", "loop.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "memory.wast (cruntime)" {
+  run_test_harness("", "memory.wast", runtime_type=CRuntime)
+}
+
+// Disabled: memory_grow doesn't allocate new memory
+// async test "memory_grow.wast (cruntime)" {
+//   run_test_harness("", "memory_grow.wast", runtime_type=CRuntime)
+// }
+
+///|
+async test "memory_redundancy.wast (cruntime)" {
+  run_test_harness("", "memory_redundancy.wast", runtime_type=CRuntime)
+}
+
+// Disabled: memory_grow state not properly isolated
+// async test "memory_size.wast (cruntime)" {
+//   run_test_harness("", "memory_size.wast", runtime_type=CRuntime)
+// }
+
+// Disabled: SIGSEGV trap handling
+// async test "memory_trap.wast (cruntime)" {
+//   run_test_harness("", "memory_trap.wast", runtime_type=CRuntime)
+// }
+
+// Disabled: SIGABRT
+// async test "names.wast (cruntime)" {
+//   run_test_harness("", "names.wast", runtime_type=CRuntime)
+// }
+
+///|
+async test "nop.wast (cruntime)" {
+  run_test_harness("", "nop.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "obsolete-keywords.wast (cruntime)" {
+  run_test_harness("", "obsolete-keywords.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "ref.wast (cruntime)" {
+  run_test_harness("", "ref.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "ref_as_non_null.wast (cruntime)" {
+  run_test_harness("", "ref_as_non_null.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "ref_func.wast (cruntime)" {
+  run_test_harness("", "ref_func.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "ref_is_null.wast (cruntime)" {
+  run_test_harness("", "ref_is_null.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "ref_null.wast (cruntime)" {
+  run_test_harness("", "ref_null.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "return.wast (cruntime)" {
+  run_test_harness("", "return.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "select.wast (cruntime)" {
+  run_test_harness("", "select.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "skip-stack-guard-page.wast (cruntime)" {
+  run_test_harness("", "skip-stack-guard-page.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "stack.wast (cruntime)" {
+  run_test_harness("", "stack.wast", runtime_type=CRuntime)
+}
+
+// Disabled: SIGABRT
+// async test "start.wast (cruntime)" {
+//   run_test_harness("", "start.wast", runtime_type=CRuntime)
+// }
+
+///|
+async test "store.wast (cruntime)" {
+  run_test_harness("", "store.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "switch.wast (cruntime)" {
+  run_test_harness("", "switch.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "table.wast (cruntime)" {
+  run_test_harness("", "table.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "table_get.wast (cruntime)" {
+  run_test_harness("", "table_get.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "table_grow.wast (cruntime)" {
+  run_test_harness("", "table_grow.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "table_set.wast (cruntime)" {
+  run_test_harness("", "table_set.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "table_size.wast (cruntime)" {
+  run_test_harness("", "table_size.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "token.wast (cruntime)" {
+  run_test_harness("", "token.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "traps.wast (cruntime)" {
+  run_test_harness("", "traps.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "type.wast (cruntime)" {
+  run_test_harness("", "type.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "unreachable.wast (cruntime)" {
+  run_test_harness("", "unreachable.wast", runtime_type=CRuntime)
 }
 
 ///|
 async test "unreached-invalid.wast (cruntime)" {
   run_test_harness("", "unreached-invalid.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "unreached-valid.wast (cruntime)" {
+  run_test_harness("", "unreached-valid.wast", runtime_type=CRuntime)
+}
+
+///|
+async test "unwind.wast (cruntime)" {
+  run_test_harness("", "unwind.wast", runtime_type=CRuntime)
 }
 
 ///|
@@ -974,240 +1142,11 @@ async test "utf8-invalid-encoding.wast (cruntime)" {
   run_test_harness("", "utf8-invalid-encoding.wast", runtime_type=CRuntime)
 }
 
-///|
-async test "call_indirect.wast (cruntime)" {
-  run_test_harness("", "call_indirect.wast", runtime_type=CRuntime)
-}
-
-// =============================================================================
-// Uncovered CRuntime tests - TODO: enable as support is added
-// =============================================================================
-
-// --- Memory operations ---
-// TODO: address.wast causes SIGSEGV - needs investigation
-// async test "address.wast (cruntime)" {
-//   run_test_harness("", "address.wast", runtime_type=CRuntime)
-// }
-
-///|
-async test "align.wast (cruntime)" {
-  run_test_harness("", "align.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "endianness.wast (cruntime)" {
-  run_test_harness("", "endianness.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "float_memory.wast (cruntime)" {
-  run_test_harness("", "float_memory.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "memory.wast (cruntime)" {
-  run_test_harness("", "memory.wast", runtime_type=CRuntime)
-}
-// TODO: memory_grow.wast has 24 failures - memory_grow doesn't actually allocate new memory
-// async test "memory_grow.wast (cruntime)" {
-//   run_test_harness("", "memory_grow.wast", runtime_type=CRuntime)
-// }
-
-///|
-async test "memory_redundancy.wast (cruntime)" {
-  run_test_harness("", "memory_redundancy.wast", runtime_type=CRuntime)
-}
-// TODO: memory_size.wast has 7 failures - memory_grow state not properly isolated per module
-// async test "memory_size.wast (cruntime)" {
-//   run_test_harness("", "memory_size.wast", runtime_type=CRuntime)
-// }
-
-// TODO: memory_trap.wast causes SIGSEGV - trap handling in memory ops causes crash
-// async test "memory_trap.wast (cruntime)" {
-//   run_test_harness("", "memory_trap.wast", runtime_type=CRuntime)
-// }
-
-// --- Table operations ---
-
-///|
-async test "table.wast (cruntime)" {
-  run_test_harness("", "table.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "table_get.wast (cruntime)" {
-  run_test_harness("", "table_get.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "table_set.wast (cruntime)" {
-  run_test_harness("", "table_set.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "table_grow.wast (cruntime)" {
-  run_test_harness("", "table_grow.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "table_size.wast (cruntime)" {
-  run_test_harness("", "table_size.wast", runtime_type=CRuntime)
-}
-
-// --- Reference types ---
-
-///|
-async test "ref_null.wast (cruntime)" {
-  run_test_harness("", "ref_null.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "ref_func.wast (cruntime)" {
-  run_test_harness("", "ref_func.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "ref_is_null.wast (cruntime)" {
-  run_test_harness("", "ref_is_null.wast", runtime_type=CRuntime)
-}
-
-// --- Reference types ---
-
-///|
-async test "ref.wast (cruntime)" {
-  run_test_harness("", "ref.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "ref_as_non_null.wast (cruntime)" {
-  run_test_harness("", "ref_as_non_null.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "br_on_null.wast (cruntime)" {
-  run_test_harness("", "br_on_null.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "br_on_non_null.wast (cruntime)" {
-  run_test_harness("", "br_on_non_null.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "call_ref.wast (cruntime)" {
-  run_test_harness("", "call_ref.wast", runtime_type=CRuntime)
-}
-
-// --- Function/calls ---
-
-///|
-async test "func.wast (cruntime)" {
-  run_test_harness("", "func.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "func_ptrs.wast (cruntime)" {
-  run_test_harness("", "func_ptrs.wast", runtime_type=CRuntime)
-}
-// async test "return_call.wast (cruntime)" {
-//   run_test_harness("", "return_call.wast", runtime_type=CRuntime)
-// }
-// async test "return_call_indirect.wast (cruntime)" {
-//   run_test_harness("", "return_call_indirect.wast", runtime_type=CRuntime)
-// }
-// async test "return_call_ref.wast (cruntime)" {
-//   run_test_harness("", "return_call_ref.wast", runtime_type=CRuntime)
-// }
-
-// --- Module structure ---
-
-///|
-async test "exports.wast (cruntime)" {
-  run_test_harness("", "exports.wast", runtime_type=CRuntime)
-}
-// async test "imports.wast (cruntime)" {
-//   run_test_harness("", "imports.wast", runtime_type=CRuntime)
-// }
-// async test "instance.wast (cruntime)" {
-//   run_test_harness("", "instance.wast", runtime_type=CRuntime)
-// }
-
-// ///|
-// async test "linking.wast (cruntime)" {
-//   run_test_harness("", "linking.wast", runtime_type=CRuntime)
-// }
-// TODO: start.wast causes SIGABRT - needs investigation
-// async test "start.wast (cruntime)" {
-//   run_test_harness("", "start.wast", runtime_type=CRuntime)
-// }
-// TODO: names.wast causes SIGABRT - needs investigation
-// async test "names.wast (cruntime)" {
-//   run_test_harness("", "names.wast", runtime_type=CRuntime)
-// }
-
-// --- Data/Element segments ---
-
-///|
-async test "data.wast (cruntime)" {
-  run_test_harness("", "data.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "elem.wast (cruntime)" {
-  run_test_harness("", "elem.wast", runtime_type=CRuntime)
-}
-
-// --- Type system ---
-// async test "type-canon.wast (cruntime)" {
-//   run_test_harness("", "type-canon.wast", runtime_type=CRuntime)
-// }
-// async test "type-equivalence.wast (cruntime)" {
-//   run_test_harness("", "type-equivalence.wast", runtime_type=CRuntime)
-// }
-// async test "type-rec.wast (cruntime)" {
-//   run_test_harness("", "type-rec.wast", runtime_type=CRuntime)
-// }
-
-// --- Conversions/expressions ---
-
-///|
-async test "conversions.wast (cruntime)" {
-  run_test_harness("", "conversions.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "float_exprs.wast (cruntime)" {
-  run_test_harness("", "float_exprs.wast", runtime_type=CRuntime)
-}
-
-// --- Other ---
-
-///|
-async test "global.wast (cruntime)" {
-  run_test_harness("", "global.wast", runtime_type=CRuntime)
-}
-
-///|
-async test "local_init.wast (cruntime)" {
-  run_test_harness("", "local_init.wast", runtime_type=CRuntime)
-}
-// async test "annotations.wast (cruntime)" {
-//   run_test_harness("", "annotations.wast", runtime_type=CRuntime)
-// }
-// async test "comments.wast (cruntime)" {
-//   run_test_harness("", "comments.wast", runtime_type=CRuntime)
-// }
-// async test "try_table.wast (cruntime)" {
-//   run_test_harness("", "try_table.wast", runtime_type=CRuntime)
-// }
-
 // =============================================================================
 // Bulk Memory CRuntime Tests
 // =============================================================================
 
-// bulk.wast has 2 remaining failures related to active element segment dropping
-// that need further investigation. Commenting out for now.
-// ///|
+// Disabled: active element segment dropping
 // async test "bulk-memory/bulk.wast (cruntime)" {
 //   run_test_harness("bulk-memory/", "bulk.wast", runtime_type=CRuntime)
 // }
@@ -1227,13 +1166,15 @@ async test "bulk-memory/memory_init.wast (cruntime)" {
   run_test_harness("bulk-memory/", "memory_init.wast", runtime_type=CRuntime)
 }
 
-// Note: table_fill.wast is skipped for CRuntime because it uses externref tables
-// (CRuntime only supports funcref as int).
-
 ///|
 async test "bulk-memory/table_copy.wast (cruntime)" {
   run_test_harness("bulk-memory/", "table_copy.wast", runtime_type=CRuntime)
 }
+
+// Disabled: externref tables not supported
+// async test "bulk-memory/table_fill.wast (cruntime)" {
+//   run_test_harness("bulk-memory/", "table_fill.wast", runtime_type=CRuntime)
+// }
 
 ///|
 async test "bulk-memory/table_init.wast (cruntime)" {

@@ -1,0 +1,257 @@
+#!/usr/bin/env python3
+"""
+Generate reference_test.mbt from test_manifest.json
+
+Usage:
+    python scripts/generate_tests.py > test/reference_test.mbt
+
+Or to preview changes:
+    python scripts/generate_tests.py --diff
+"""
+
+import json
+import sys
+from pathlib import Path
+
+
+def load_manifest():
+    """Load the test manifest from test/test_manifest.json"""
+    manifest_path = Path(__file__).parent.parent / "test" / "test_manifest.json"
+    with open(manifest_path) as f:
+        return json.load(f)
+
+
+def generate_test_name(test: dict, cruntime: bool = False) -> str:
+    """Generate a test name like 'gc/array.wast' or 'call.wast (cruntime)'"""
+    subdir = test.get("subdir", "")
+    filename = test["file"]
+    name = f"{subdir}{filename}"
+    if cruntime:
+        name += " (cruntime)"
+    return name
+
+
+def generate_test_function(test: dict, cruntime: bool = False) -> str:
+    """Generate a single test function"""
+    name = generate_test_name(test, cruntime)
+    subdir = test.get("subdir", "")
+    filename = test["file"]
+
+    runtime_arg = ", runtime_type=CRuntime" if cruntime else ""
+
+    return f'''///|
+async test "{name}" {{
+  run_test_harness("{subdir}", "{filename}"{runtime_arg})
+}}
+'''
+
+
+def generate_disabled_comment(test: dict, cruntime: bool = False) -> str:
+    """Generate a commented-out test with reason"""
+    name = generate_test_name(test, cruntime)
+    subdir = test.get("subdir", "")
+    filename = test["file"]
+
+    # Get the reason
+    if cruntime and test.get("disabled_reason"):
+        reason = test["disabled_reason"]
+    else:
+        reason = test.get("reason", "disabled")
+
+    runtime_arg = ", runtime_type=CRuntime" if cruntime else ""
+
+    return f'''// Disabled: {reason}
+// async test "{name}" {{
+//   run_test_harness("{subdir}", "{filename}"{runtime_arg})
+// }}
+'''
+
+
+def generate_header() -> str:
+    """Generate the file header"""
+    return '''///|
+/// Group failures by test type for better reporting
+fn group_failures_by_type(
+  failures : Array[TestFailure],
+) -> Map[String, Array[TestFailure]] {
+  let grouped : Map[String, Array[TestFailure]] = {}
+  for failure in failures {
+    match grouped.get(failure.test_type) {
+      Some(arr) => arr.push(failure)
+      None => grouped[failure.test_type] = [failure]
+    }
+  }
+  grouped
+}
+
+///|
+/// Format a single failure with additional context
+fn format_failure_detail(failure : TestFailure) -> String {
+  let location = if failure.line >= 0 {
+    "\\{failure.source_file}:\\{failure.line}"
+  } else {
+    failure.source_file
+  }
+  "  [\\{failure.test_type}] \\{location}\\n    → \\{failure.message}"
+}
+
+///|
+async fn run_test_harness(
+  subdir : String,
+  filename : String,
+  runtime_type? : RuntimeType = MoonBit,
+) -> Unit {
+  let path = "test/reference_tests/\\{subdir}"
+  let runtime_suffix = match runtime_type {
+    MoonBit => ""
+    CRuntime => " (cruntime)"
+  }
+  let display_name = if subdir.length() > 0 {
+    "\\{subdir}\\{filename}\\{runtime_suffix}"
+  } else {
+    "\\{filename}\\{runtime_suffix}"
+  }
+  let (file_failures, file_skipped) = process_wast_file(
+    path,
+    filename,
+    runtime_type~,
+  )
+  if file_failures.length() > 0 {
+    let grouped = group_failures_by_type(file_failures)
+    println(
+      "\\n╔══════════════════════════════════════════════════════════════════╗",
+    )
+    println("║ TEST FAILURES: \\{display_name}")
+    println(
+      "╚══════════════════════════════════════════════════════════════════╝",
+    )
+    for test_type, failures in grouped {
+      println(
+        "\\n┌─ \\{test_type} (\\{failures.length()} failures) ─────────────────────",
+      )
+      for failure in failures {
+        println(format_failure_detail(failure))
+      }
+      println(
+        "└────────────────────────────────────────────────────────────────",
+      )
+    }
+    println(
+      "\\n╔══════════════════════════════════════════════════════════════════╗",
+    )
+    println(
+      "║ SUMMARY: \\{file_failures.length()} failure(s), \\{file_skipped} skipped",
+    )
+    println(
+      "╚══════════════════════════════════════════════════════════════════╝\\n",
+    )
+    fail("\\{file_failures.length()} failure(s) in \\{display_name}")
+  }
+  if file_skipped > 0 {
+    println("Skipped \\{file_skipped} tests in \\{display_name}")
+  }
+}
+
+'''
+
+
+def generate_tests(manifest: dict) -> str:
+    """Generate the complete test file"""
+    output = []
+    output.append(generate_header())
+
+    # Group tests by category
+    core_tests = [t for t in manifest["tests"] if t.get("subdir", "") == ""]
+    gc_tests = [t for t in manifest["tests"] if t.get("subdir", "") == "gc/"]
+    bulk_tests = [t for t in manifest["tests"] if t.get("subdir", "") == "bulk-memory/"]
+
+    # Generate core MoonBit tests
+    output.append("// =============================================================================")
+    output.append("// WebAssembly Spec Tests")
+    output.append("// =============================================================================")
+    output.append("")
+
+    for test in core_tests:
+        if test.get("disabled"):
+            output.append(generate_disabled_comment(test))
+        elif test.get("moonbit", False):
+            output.append(generate_test_function(test))
+
+    # Generate GC tests
+    output.append("// =============================================================================")
+    output.append("// WebAssembly GC Spec Tests")
+    output.append("// =============================================================================")
+    output.append("")
+
+    for test in gc_tests:
+        if test.get("disabled"):
+            output.append(generate_disabled_comment(test))
+        elif test.get("moonbit", False):
+            output.append(generate_test_function(test))
+
+    # Generate bulk memory tests
+    output.append("// =============================================================================")
+    output.append("// WebAssembly Bulk Memory Spec Tests")
+    output.append("// =============================================================================")
+    output.append("")
+
+    for test in bulk_tests:
+        if test.get("disabled"):
+            output.append(generate_disabled_comment(test))
+        elif test.get("moonbit", False):
+            output.append(generate_test_function(test))
+
+    # Generate CRuntime tests
+    output.append("// =============================================================================")
+    output.append("// C Runtime Tests")
+    output.append("// =============================================================================")
+    output.append("")
+
+    for test in core_tests:
+        if test.get("disabled"):
+            continue
+        if test.get("cruntime", False):
+            output.append(generate_test_function(test, cruntime=True))
+        elif test.get("moonbit", False) and test.get("disabled_reason"):
+            output.append(generate_disabled_comment(test, cruntime=True))
+
+    # Generate bulk memory CRuntime tests
+    output.append("// =============================================================================")
+    output.append("// Bulk Memory CRuntime Tests")
+    output.append("// =============================================================================")
+    output.append("")
+
+    for test in bulk_tests:
+        if test.get("disabled"):
+            continue
+        if test.get("cruntime", False):
+            output.append(generate_test_function(test, cruntime=True))
+        elif test.get("moonbit", False) and test.get("disabled_reason"):
+            output.append(generate_disabled_comment(test, cruntime=True))
+
+    return "\n".join(output)
+
+
+def main():
+    manifest = load_manifest()
+    output = generate_tests(manifest)
+
+    if "--diff" in sys.argv:
+        # Show diff against current file
+        import difflib
+        current_path = Path(__file__).parent.parent / "test" / "reference_test.mbt"
+        with open(current_path) as f:
+            current = f.read()
+        diff = difflib.unified_diff(
+            current.splitlines(keepends=True),
+            output.splitlines(keepends=True),
+            fromfile="current",
+            tofile="generated",
+        )
+        sys.stdout.writelines(diff)
+    else:
+        print(output)
+
+
+if __name__ == "__main__":
+    main()
