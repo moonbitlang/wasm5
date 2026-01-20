@@ -24,5 +24,12 @@
       "path": "moonbitlang/wasm5/src/validate",
       "alias": "wasm5_validate"
     }
+  ],
+  "pre-build": [
+    {
+      "input": ["test_manifest.json", "../scripts/generate_tests.py"],
+      "output": ["reference_test.mbt"],
+      "command": "python3 scripts/generate_tests.py > $output"
+    }
   ]
 }
