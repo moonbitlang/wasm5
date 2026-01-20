@@ -72,11 +72,11 @@ pub struct ImportedMemory {
 pub struct Runtime {
   ops : FixedArray[UInt64]
   stack : FixedArray[UInt64]
-  sp : Int
-  bp : Int
-  num_locals : Int
-  pc : Int
-  status : RuntimeStatus
+  mut sp : Int
+  mut bp : Int
+  mut num_locals : Int
+  mut pc : Int
+  mut status : RuntimeStatus
   ctx : RuntimeContext
 }
 pub fn Runtime::call_by_index(Self, Int, Array[@core.Value]) -> Array[@core.Value] raise RuntimeError
@@ -103,6 +103,7 @@ pub struct RuntimeContext {
   mut error_detail : String
 }
 
+#alias(ReturnCode)
 pub enum RuntimeStatus {
   Running
   Terminated

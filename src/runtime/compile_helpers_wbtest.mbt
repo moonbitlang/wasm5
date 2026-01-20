@@ -93,22 +93,25 @@ test "compile helpers tail call return branches" {
   // Test nested call (bp != 0) - should set Returned status
   let rt = make_runtime([], [], 0)
   let rt = { ..rt, status: Running, bp: 5, num_locals: 3 }
-  let rt = handle_tail_call_return(rt)
+  let rc = handle_tail_call_return(rt)
+  assert_eq(rc, Returned)
   assert_eq(rt.status, Returned)
   assert_eq(rt.bp, 5) // bp unchanged - caller's execute_call will restore
 
   // Test entry function (bp == 0) - should set Terminated status
   let rt_entry = make_runtime([], [], 0)
   let rt_entry = { ..rt_entry, status: Running, bp: 0 }
-  let rt_entry = handle_tail_call_return(rt_entry)
+  let rc_entry = handle_tail_call_return(rt_entry)
+  assert_eq(rc_entry, Terminated)
   assert_eq(rt_entry.status, Terminated)
 }
 
 ///|
 test "unsafe function to uint64 roundtrip" {
   // Create a simple test function that increments pc
-  fn test_func(rt : Runtime) -> Runtime {
-    { ..rt, pc: rt.pc + 42 }
+  fn test_func(rt : Runtime) -> ReturnCode {
+    rt.pc = rt.pc + 42
+    Running
   }
 
   // Convert function to UInt64
@@ -120,6 +123,6 @@ test "unsafe function to uint64 roundtrip" {
   // Test that the recovered function works
   let rt = make_runtime([], [], 0)
   let rt = { ..rt, pc: 10 }
-  let rt = recovered_func(rt)
+  let _ = recovered_func(rt)
   assert_eq(rt.pc, 52) // 10 + 42
 }

@@ -87,7 +87,8 @@ fn stack_f64(raw : UInt64) -> Double {
 ///|
 fn push_value(rt : Runtime, v : Value) -> Runtime {
   rt.stack.unsafe_set(rt.sp, value_to_stack(v))
-  { ..rt, sp: rt.sp + 1 }
+  rt.sp = rt.sp + 1
+  rt
 }
 
 ///|
@@ -223,10 +224,10 @@ fn f64_bits(value : Double) -> UInt64 {
 ///|
 test "ops i32 const and arithmetic" {
   let rt_const = make_runtime([], [imm(0U), imm(123U)], 0)
-  let rt_const = op_i32_const(rt_const)
+  let _ = op_i32_const(rt_const)
   assert_ok(rt_const)
   assert_stack_elem_eq(rt_const.stack[0], Value::I32(123U))
-  let cases : Array[((Runtime) -> Runtime, UInt)] = [
+  let cases : Array[((Runtime) -> ReturnCode, UInt)] = [
     (op_i32_add, 9U),
     (op_i32_sub, 3U),
     (op_i32_mul, 18U),
@@ -246,7 +247,7 @@ test "ops i32 const and arithmetic" {
   for case in cases {
     let (op, expected) = case
     let rt = make_runtime([Value::I32(6U), Value::I32(3U)], [], 0)
-    let rt = op(rt)
+    let _ = op(rt)
     assert_ok(rt)
     assert_stack_elem_eq(rt.stack.unsafe_get(0), Value::I32(expected))
   }
@@ -254,7 +255,7 @@ test "ops i32 const and arithmetic" {
 
 ///|
 test "ops i32 compare and unary" {
-  let compare_cases : Array[((Runtime) -> Runtime, UInt, UInt, UInt)] = [
+  let compare_cases : Array[((Runtime) -> ReturnCode, UInt, UInt, UInt)] = [
     (op_i32_eq, 7U, 7U, 1U),
     (op_i32_ne, 7U, 6U, 1U),
     (op_i32_lt_s, 0xFFFFFFFFU, 1U, 1U),
@@ -269,57 +270,57 @@ test "ops i32 compare and unary" {
   for case in compare_cases {
     let (op, a, b, expected) = case
     let rt = make_runtime([Value::I32(a), Value::I32(b)], [], 0)
-    let rt = op(rt)
+    let _ = op(rt)
     assert_ok(rt)
     assert_stack_elem_eq(rt.stack.unsafe_get(0), Value::I32(expected))
   }
   let rt_eqz = make_runtime([Value::I32(0U)], [], 0)
-  let rt_eqz = op_i32_eqz(rt_eqz)
+  let _ = op_i32_eqz(rt_eqz)
   assert_ok(rt_eqz)
   assert_stack_elem_eq(rt_eqz.stack[0], Value::I32(1U))
   let rt_clz = make_runtime([Value::I32(1U)], [], 0)
-  let rt_clz = op_i32_clz(rt_clz)
+  let _ = op_i32_clz(rt_clz)
   assert_ok(rt_clz)
   assert_stack_elem_eq(rt_clz.stack[0], Value::I32(clz32(1U)))
   let rt_ctz = make_runtime([Value::I32(8U)], [], 0)
-  let rt_ctz = op_i32_ctz(rt_ctz)
+  let _ = op_i32_ctz(rt_ctz)
   assert_ok(rt_ctz)
   assert_stack_elem_eq(rt_ctz.stack[0], Value::I32(ctz32(8U)))
   let rt_popcnt = make_runtime([Value::I32(0xF0F0U)], [], 0)
-  let rt_popcnt = op_i32_popcnt(rt_popcnt)
+  let _ = op_i32_popcnt(rt_popcnt)
   assert_ok(rt_popcnt)
   assert_stack_elem_eq(rt_popcnt.stack[0], Value::I32(popcnt32(0xF0F0U)))
   let rt_extend8 = make_runtime([Value::I32(0x000000FFU)], [], 0)
-  let rt_extend8 = op_i32_extend8_s(rt_extend8)
+  let _ = op_i32_extend8_s(rt_extend8)
   assert_ok(rt_extend8)
   assert_stack_elem_eq(rt_extend8.stack[0], Value::I32(0xFFFFFFFFU))
   let rt_extend16 = make_runtime([Value::I32(0x00008000U)], [], 0)
-  let rt_extend16 = op_i32_extend16_s(rt_extend16)
+  let _ = op_i32_extend16_s(rt_extend16)
   assert_ok(rt_extend16)
   assert_stack_elem_eq(rt_extend16.stack[0], Value::I32(0xFFFF8000U))
   let rt_wrap = make_runtime([Value::I64(0x0000000200000001UL)], [], 0)
-  let rt_wrap = op_i32_wrap_i64(rt_wrap)
+  let _ = op_i32_wrap_i64(rt_wrap)
   assert_ok(rt_wrap)
   assert_stack_elem_eq(rt_wrap.stack[0], Value::I32(1U))
   let rt_div_zero = make_runtime([Value::I32(1U), Value::I32(0U)], [], 0)
-  let rt_div_zero = op_i32_div_s(rt_div_zero)
+  let _ = op_i32_div_s(rt_div_zero)
   assert_trap(rt_div_zero)
   let rt_overflow = make_runtime(
     [Value::I32(0x80000000U), Value::I32(0xFFFFFFFFU)],
     [],
     0,
   )
-  let rt_overflow = op_i32_div_s(rt_overflow)
+  let _ = op_i32_div_s(rt_overflow)
   assert_trap(rt_overflow)
 }
 
 ///|
 test "ops i64 const and arithmetic" {
   let rt_const = make_runtime([], [imm(0U), imm(3U), imm(2U)], 0)
-  let rt_const = op_i64_const(rt_const)
+  let _ = op_i64_const(rt_const)
   assert_ok(rt_const)
   assert_stack_elem_eq(rt_const.stack[0], Value::I64(0x0000000200000003UL))
-  let cases : Array[((Runtime) -> Runtime, UInt64)] = [
+  let cases : Array[((Runtime) -> ReturnCode, UInt64)] = [
     (op_i64_add, 9UL),
     (op_i64_sub, 3UL),
     (op_i64_mul, 18UL),
@@ -339,7 +340,7 @@ test "ops i64 const and arithmetic" {
   for case in cases {
     let (op, expected) = case
     let rt = make_runtime([Value::I64(6UL), Value::I64(3UL)], [], 0)
-    let rt = op(rt)
+    let _ = op(rt)
     assert_ok(rt)
     assert_stack_elem_eq(rt.stack.unsafe_get(0), Value::I64(expected))
   }
@@ -347,7 +348,7 @@ test "ops i64 const and arithmetic" {
 
 ///|
 test "ops i64 compare and unary" {
-  let compare_cases : Array[((Runtime) -> Runtime, UInt64, UInt64, UInt)] = [
+  let compare_cases : Array[((Runtime) -> ReturnCode, UInt64, UInt64, UInt)] = [
     (op_i64_eq, 7UL, 7UL, 1U),
     (op_i64_ne, 7UL, 6UL, 1U),
     (op_i64_lt_s, 0xFFFFFFFFFFFFFFFFUL, 1UL, 1U),
@@ -362,50 +363,50 @@ test "ops i64 compare and unary" {
   for case in compare_cases {
     let (op, a, b, expected) = case
     let rt = make_runtime([Value::I64(a), Value::I64(b)], [], 0)
-    let rt = op(rt)
+    let _ = op(rt)
     assert_ok(rt)
     assert_stack_elem_eq(rt.stack.unsafe_get(0), Value::I32(expected))
   }
   let rt_eqz = make_runtime([Value::I64(0UL)], [], 0)
-  let rt_eqz = op_i64_eqz(rt_eqz)
+  let _ = op_i64_eqz(rt_eqz)
   assert_ok(rt_eqz)
   assert_stack_elem_eq(rt_eqz.stack[0], Value::I32(1U))
   let rt_clz = make_runtime([Value::I64(1UL)], [], 0)
-  let rt_clz = op_i64_clz(rt_clz)
+  let _ = op_i64_clz(rt_clz)
   assert_ok(rt_clz)
   assert_stack_elem_eq(rt_clz.stack[0], Value::I64(clz64(1UL).to_uint64()))
   let rt_ctz = make_runtime([Value::I64(8UL)], [], 0)
-  let rt_ctz = op_i64_ctz(rt_ctz)
+  let _ = op_i64_ctz(rt_ctz)
   assert_ok(rt_ctz)
   assert_stack_elem_eq(rt_ctz.stack[0], Value::I64(ctz64(8UL).to_uint64()))
   let rt_popcnt = make_runtime([Value::I64(0xF0F0UL)], [], 0)
-  let rt_popcnt = op_i64_popcnt(rt_popcnt)
+  let _ = op_i64_popcnt(rt_popcnt)
   assert_ok(rt_popcnt)
   assert_stack_elem_eq(
     rt_popcnt.stack[0],
     Value::I64(popcnt64(0xF0F0UL).to_uint64()),
   )
   let rt_extend8 = make_runtime([Value::I64(0x00000000000000FFUL)], [], 0)
-  let rt_extend8 = op_i64_extend8_s(rt_extend8)
+  let _ = op_i64_extend8_s(rt_extend8)
   assert_ok(rt_extend8)
   assert_stack_elem_eq(rt_extend8.stack[0], Value::I64(0xFFFFFFFFFFFFFFFFUL))
   let rt_extend16 = make_runtime([Value::I64(0x0000000000008000UL)], [], 0)
-  let rt_extend16 = op_i64_extend16_s(rt_extend16)
+  let _ = op_i64_extend16_s(rt_extend16)
   assert_ok(rt_extend16)
   assert_stack_elem_eq(rt_extend16.stack[0], Value::I64(0xFFFFFFFFFFFF8000UL))
   let rt_extend32 = make_runtime([Value::I64(0x0000000080000000UL)], [], 0)
-  let rt_extend32 = op_i64_extend32_s(rt_extend32)
+  let _ = op_i64_extend32_s(rt_extend32)
   assert_ok(rt_extend32)
   assert_stack_elem_eq(rt_extend32.stack[0], Value::I64(0xFFFFFFFF80000000UL))
   let rt_extend_i32_s = make_runtime([Value::I32(0xFFFFFFFFU)], [], 0)
-  let rt_extend_i32_s = op_i64_extend_i32_s(rt_extend_i32_s)
+  let _ = op_i64_extend_i32_s(rt_extend_i32_s)
   assert_ok(rt_extend_i32_s)
   assert_stack_elem_eq(
     rt_extend_i32_s.stack[0],
     Value::I64(0xFFFFFFFFFFFFFFFFUL),
   )
   let rt_extend_i32_u = make_runtime([Value::I32(0xFFFFFFFFU)], [], 0)
-  let rt_extend_i32_u = op_i64_extend_i32_u(rt_extend_i32_u)
+  let _ = op_i64_extend_i32_u(rt_extend_i32_u)
   assert_ok(rt_extend_i32_u)
   assert_stack_elem_eq(
     rt_extend_i32_u.stack[0],
@@ -416,20 +417,20 @@ test "ops i64 compare and unary" {
 ///|
 test "ops i32 error paths" {
   let rt_div_zero = make_runtime([Value::I32(1U), Value::I32(0U)], [], 0)
-  let rt_div_zero = op_i32_div_u(rt_div_zero)
+  let _ = op_i32_div_u(rt_div_zero)
   assert_trap(rt_div_zero)
   let rt_rem_s = make_runtime([Value::I32(1U), Value::I32(0U)], [], 0)
-  let rt_rem_s = op_i32_rem_s(rt_rem_s)
+  let _ = op_i32_rem_s(rt_rem_s)
   assert_trap(rt_rem_s)
   let rt_rem_u = make_runtime([Value::I32(1U), Value::I32(0U)], [], 0)
-  let rt_rem_u = op_i32_rem_u(rt_rem_u)
+  let _ = op_i32_rem_u(rt_rem_u)
   assert_trap(rt_rem_u)
   let rt_lt_false = make_runtime([Value::I32(5U), Value::I32(1U)], [], 0)
-  let rt_lt_false = op_i32_lt_s(rt_lt_false)
+  let _ = op_i32_lt_s(rt_lt_false)
   assert_ok(rt_lt_false)
   assert_stack_elem_eq(rt_lt_false.stack[0], Value::I32(0U))
   let rt_gt_false = make_runtime([Value::I32(1U), Value::I32(5U)], [], 0)
-  let rt_gt_false = op_i32_gt_s(rt_gt_false)
+  let _ = op_i32_gt_s(rt_gt_false)
   assert_ok(rt_gt_false)
   assert_stack_elem_eq(rt_gt_false.stack[0], Value::I32(0U))
 }
@@ -437,7 +438,7 @@ test "ops i32 error paths" {
 ///|
 test "ops float const and arithmetic" {
   let rt_f32_const = make_runtime([], [imm(0U), imm(0x3F800000U)], 0)
-  let rt_f32_const = op_f32_const(rt_f32_const)
+  let _ = op_f32_const(rt_f32_const)
   assert_ok(rt_f32_const)
   assert_stack_elem_eq(rt_f32_const.stack[0], Value::F32(1.0))
   let rt_f64_const = make_runtime(
@@ -445,10 +446,10 @@ test "ops float const and arithmetic" {
     [imm(0U), imm(0x00000000U), imm(0x3FF00000U)],
     0,
   )
-  let rt_f64_const = op_f64_const(rt_f64_const)
+  let _ = op_f64_const(rt_f64_const)
   assert_ok(rt_f64_const)
   assert_stack_elem_eq(rt_f64_const.stack[0], Value::F64(1.0))
-  let f32_bin_cases : Array[((Runtime) -> Runtime, Float, Float, Float)] = [
+  let f32_bin_cases : Array[((Runtime) -> ReturnCode, Float, Float, Float)] = [
     (op_f32_add, 6.0, 3.0, 9.0),
     (op_f32_sub, 6.0, 3.0, 3.0),
     (op_f32_mul, 6.0, 3.0, 18.0),
@@ -459,15 +460,15 @@ test "ops float const and arithmetic" {
   for case in f32_bin_cases {
     let (op, a, b, expected) = case
     let rt = make_runtime([Value::F32(a), Value::F32(b)], [], 0)
-    let rt = op(rt)
+    let _ = op(rt)
     assert_ok(rt)
     assert_stack_elem_eq(rt.stack.unsafe_get(0), Value::F32(expected))
   }
   let rt_f32_copysign = make_runtime([Value::F32(3.0), Value::F32(-2.0)], [], 0)
-  let rt_f32_copysign = op_f32_copysign(rt_f32_copysign)
+  let _ = op_f32_copysign(rt_f32_copysign)
   assert_ok(rt_f32_copysign)
   assert_stack_elem_eq(rt_f32_copysign.stack[0], Value::F32(-3.0))
-  let f32_cmp_cases : Array[((Runtime) -> Runtime, Float, Float, UInt)] = [
+  let f32_cmp_cases : Array[((Runtime) -> ReturnCode, Float, Float, UInt)] = [
     (op_f32_eq, 3.0, 3.0, 1U),
     (op_f32_ne, 3.0, 2.0, 1U),
     (op_f32_lt, 2.0, 3.0, 1U),
@@ -478,39 +479,39 @@ test "ops float const and arithmetic" {
   for case in f32_cmp_cases {
     let (op, a, b, expected) = case
     let rt = make_runtime([Value::F32(a), Value::F32(b)], [], 0)
-    let rt = op(rt)
+    let _ = op(rt)
     assert_ok(rt)
     assert_stack_elem_eq(rt.stack.unsafe_get(0), Value::I32(expected))
   }
   let rt_f32_neg = make_runtime([Value::F32(3.0)], [], 0)
-  let rt_f32_neg = op_f32_neg(rt_f32_neg)
+  let _ = op_f32_neg(rt_f32_neg)
   assert_ok(rt_f32_neg)
   assert_stack_elem_eq(rt_f32_neg.stack[0], Value::F32(-3.0))
   let rt_f32_abs = make_runtime([Value::F32(-3.0)], [], 0)
-  let rt_f32_abs = op_f32_abs(rt_f32_abs)
+  let _ = op_f32_abs(rt_f32_abs)
   assert_ok(rt_f32_abs)
   assert_stack_elem_eq(rt_f32_abs.stack[0], Value::F32(3.0))
   let rt_f32_sqrt = make_runtime([Value::F32(4.0)], [], 0)
-  let rt_f32_sqrt = op_f32_sqrt(rt_f32_sqrt)
+  let _ = op_f32_sqrt(rt_f32_sqrt)
   assert_ok(rt_f32_sqrt)
   assert_stack_elem_eq(rt_f32_sqrt.stack.unsafe_get(0), Value::F32(2.0))
   let rt_f32_ceil = make_runtime([Value::F32(1.2)], [], 0)
-  let rt_f32_ceil = op_f32_ceil(rt_f32_ceil)
+  let _ = op_f32_ceil(rt_f32_ceil)
   assert_ok(rt_f32_ceil)
   assert_stack_elem_eq(rt_f32_ceil.stack[0], Value::F32(2.0))
   let rt_f32_floor = make_runtime([Value::F32(1.8)], [], 0)
-  let rt_f32_floor = op_f32_floor(rt_f32_floor)
+  let _ = op_f32_floor(rt_f32_floor)
   assert_ok(rt_f32_floor)
   assert_stack_elem_eq(rt_f32_floor.stack[0], Value::F32(1.0))
   let rt_f32_trunc = make_runtime([Value::F32(1.8)], [], 0)
-  let rt_f32_trunc = op_f32_trunc(rt_f32_trunc)
+  let _ = op_f32_trunc(rt_f32_trunc)
   assert_ok(rt_f32_trunc)
   assert_stack_elem_eq(rt_f32_trunc.stack[0], Value::F32(1.0))
   let rt_f32_nearest = make_runtime([Value::F32(1.2)], [], 0)
-  let rt_f32_nearest = op_f32_nearest(rt_f32_nearest)
+  let _ = op_f32_nearest(rt_f32_nearest)
   assert_ok(rt_f32_nearest)
   assert_stack_elem_eq(rt_f32_nearest.stack[0], Value::F32(1.0))
-  let f64_bin_cases : Array[((Runtime) -> Runtime, Double, Double, Double)] = [
+  let f64_bin_cases : Array[((Runtime) -> ReturnCode, Double, Double, Double)] = [
     (op_f64_add, 6.0, 3.0, 9.0),
     (op_f64_sub, 6.0, 3.0, 3.0),
     (op_f64_mul, 6.0, 3.0, 18.0),
@@ -521,15 +522,15 @@ test "ops float const and arithmetic" {
   for case in f64_bin_cases {
     let (op, a, b, expected) = case
     let rt = make_runtime([Value::F64(a), Value::F64(b)], [], 0)
-    let rt = op(rt)
+    let _ = op(rt)
     assert_ok(rt)
     assert_stack_elem_eq(rt.stack.unsafe_get(0), Value::F64(expected))
   }
   let rt_f64_copysign = make_runtime([Value::F64(3.0), Value::F64(-2.0)], [], 0)
-  let rt_f64_copysign = op_f64_copysign(rt_f64_copysign)
+  let _ = op_f64_copysign(rt_f64_copysign)
   assert_ok(rt_f64_copysign)
   assert_stack_elem_eq(rt_f64_copysign.stack[0], Value::F64(-3.0))
-  let f64_cmp_cases : Array[((Runtime) -> Runtime, Double, Double, UInt)] = [
+  let f64_cmp_cases : Array[((Runtime) -> ReturnCode, Double, Double, UInt)] = [
     (op_f64_eq, 3.0, 3.0, 1U),
     (op_f64_ne, 3.0, 2.0, 1U),
     (op_f64_lt, 2.0, 3.0, 1U),
@@ -540,36 +541,36 @@ test "ops float const and arithmetic" {
   for case in f64_cmp_cases {
     let (op, a, b, expected) = case
     let rt = make_runtime([Value::F64(a), Value::F64(b)], [], 0)
-    let rt = op(rt)
+    let _ = op(rt)
     assert_ok(rt)
     assert_stack_elem_eq(rt.stack.unsafe_get(0), Value::I32(expected))
   }
   let rt_f64_neg = make_runtime([Value::F64(3.0)], [], 0)
-  let rt_f64_neg = op_f64_neg(rt_f64_neg)
+  let _ = op_f64_neg(rt_f64_neg)
   assert_ok(rt_f64_neg)
   assert_stack_elem_eq(rt_f64_neg.stack[0], Value::F64(-3.0))
   let rt_f64_abs = make_runtime([Value::F64(-3.0)], [], 0)
-  let rt_f64_abs = op_f64_abs(rt_f64_abs)
+  let _ = op_f64_abs(rt_f64_abs)
   assert_ok(rt_f64_abs)
   assert_stack_elem_eq(rt_f64_abs.stack[0], Value::F64(3.0))
   let rt_f64_sqrt = make_runtime([Value::F64(4.0)], [], 0)
-  let rt_f64_sqrt = op_f64_sqrt(rt_f64_sqrt)
+  let _ = op_f64_sqrt(rt_f64_sqrt)
   assert_ok(rt_f64_sqrt)
   assert_stack_elem_eq(rt_f64_sqrt.stack.unsafe_get(0), Value::F64(2.0))
   let rt_f64_ceil = make_runtime([Value::F64(1.2)], [], 0)
-  let rt_f64_ceil = op_f64_ceil(rt_f64_ceil)
+  let _ = op_f64_ceil(rt_f64_ceil)
   assert_ok(rt_f64_ceil)
   assert_stack_elem_eq(rt_f64_ceil.stack[0], Value::F64(2.0))
   let rt_f64_floor = make_runtime([Value::F64(1.8)], [], 0)
-  let rt_f64_floor = op_f64_floor(rt_f64_floor)
+  let _ = op_f64_floor(rt_f64_floor)
   assert_ok(rt_f64_floor)
   assert_stack_elem_eq(rt_f64_floor.stack[0], Value::F64(1.0))
   let rt_f64_trunc = make_runtime([Value::F64(1.8)], [], 0)
-  let rt_f64_trunc = op_f64_trunc(rt_f64_trunc)
+  let _ = op_f64_trunc(rt_f64_trunc)
   assert_ok(rt_f64_trunc)
   assert_stack_elem_eq(rt_f64_trunc.stack[0], Value::F64(1.0))
   let rt_f64_nearest = make_runtime([Value::F64(1.2)], [], 0)
-  let rt_f64_nearest = op_f64_nearest(rt_f64_nearest)
+  let _ = op_f64_nearest(rt_f64_nearest)
   assert_ok(rt_f64_nearest)
   assert_stack_elem_eq(rt_f64_nearest.stack[0], Value::F64(1.0))
 }
@@ -583,7 +584,7 @@ test "ops float min/max edge cases" {
     [],
     0,
   )
-  let rt_f32_min_nan = op_f32_min(rt_f32_min_nan)
+  let _ = op_f32_min(rt_f32_min_nan)
   assert_ok(rt_f32_min_nan)
   let rt_f32_min_nan_value = stack_f32(rt_f32_min_nan.stack[0])
   assert_eq(f32_bits(rt_f32_min_nan_value), f32_bits(canonical_nan_f32))
@@ -592,7 +593,7 @@ test "ops float min/max edge cases" {
     [],
     0,
   )
-  let rt_f32_max_nan = op_f32_max(rt_f32_max_nan)
+  let _ = op_f32_max(rt_f32_max_nan)
   assert_ok(rt_f32_max_nan)
   let rt_f32_max_nan_value = stack_f32(rt_f32_max_nan.stack[0])
   assert_eq(f32_bits(rt_f32_max_nan_value), f32_bits(canonical_nan_f32))
@@ -603,7 +604,7 @@ test "ops float min/max edge cases" {
     [],
     0,
   )
-  let rt_f32_min_zero = op_f32_min(rt_f32_min_zero)
+  let _ = op_f32_min(rt_f32_min_zero)
   assert_ok(rt_f32_min_zero)
   let rt_f32_min_value = stack_f32(rt_f32_min_zero.stack[0])
   assert_eq(f32_bits(rt_f32_min_value), f32_bits(neg_zero_f32))
@@ -612,7 +613,7 @@ test "ops float min/max edge cases" {
     [],
     0,
   )
-  let rt_f32_max_zero = op_f32_max(rt_f32_max_zero)
+  let _ = op_f32_max(rt_f32_max_zero)
   assert_ok(rt_f32_max_zero)
   let rt_f32_max_value = stack_f32(rt_f32_max_zero.stack[0])
   assert_eq(f32_bits(rt_f32_max_value), f32_bits(pos_zero_f32))
@@ -621,7 +622,7 @@ test "ops float min/max edge cases" {
     [],
     0,
   )
-  let rt_f64_min_nan = op_f64_min(rt_f64_min_nan)
+  let _ = op_f64_min(rt_f64_min_nan)
   assert_ok(rt_f64_min_nan)
   let rt_f64_min_nan_value = stack_f64(rt_f64_min_nan.stack[0])
   assert_eq(f64_bits(rt_f64_min_nan_value), f64_bits(canonical_nan_f64))
@@ -630,7 +631,7 @@ test "ops float min/max edge cases" {
     [],
     0,
   )
-  let rt_f64_max_nan = op_f64_max(rt_f64_max_nan)
+  let _ = op_f64_max(rt_f64_max_nan)
   assert_ok(rt_f64_max_nan)
   let rt_f64_max_nan_value = stack_f64(rt_f64_max_nan.stack[0])
   assert_eq(f64_bits(rt_f64_max_nan_value), f64_bits(canonical_nan_f64))
@@ -641,7 +642,7 @@ test "ops float min/max edge cases" {
     [],
     0,
   )
-  let rt_f64_min_zero = op_f64_min(rt_f64_min_zero)
+  let _ = op_f64_min(rt_f64_min_zero)
   assert_ok(rt_f64_min_zero)
   let rt_f64_min_value = stack_f64(rt_f64_min_zero.stack[0])
   assert_eq(f64_bits(rt_f64_min_value), f64_bits(neg_zero_f64))
@@ -650,7 +651,7 @@ test "ops float min/max edge cases" {
     [],
     0,
   )
-  let rt_f64_max_zero = op_f64_max(rt_f64_max_zero)
+  let _ = op_f64_max(rt_f64_max_zero)
   assert_ok(rt_f64_max_zero)
   let rt_f64_max_value = stack_f64(rt_f64_max_zero.stack[0])
   assert_eq(f64_bits(rt_f64_max_value), f64_bits(pos_zero_f64))
@@ -662,7 +663,7 @@ test "ops float conversions" {
   let f64_value : Double = 1.0
   let f32_bits = f32_value.reinterpret_as_uint()
   let f64_bits = f64_value.reinterpret_as_uint64()
-  let cases : Array[((Runtime) -> Runtime, Array[Value], Value)] = [
+  let cases : Array[((Runtime) -> ReturnCode, Array[Value], Value)] = [
     (op_f64_convert_i64_u, [Value::I64(5UL)], Value::F64(5.0)),
     (op_f64_convert_i64_s, [Value::I64(5UL)], Value::F64(5.0)),
     (op_f64_convert_i32_u, [Value::I32(5U)], Value::F64(5.0)),
@@ -697,39 +698,39 @@ test "ops float conversions" {
   for case in cases {
     let (op, stack, expected) = case
     let rt = make_runtime(stack, [], 0)
-    let rt = op(rt)
+    let _ = op(rt)
     assert_ok(rt)
     assert_stack_elem_eq(rt.stack.unsafe_get(0), expected)
   }
   let rt_nan = make_runtime([Value::F64(0.0 / 0.0)], [], 0)
-  let rt_nan = op_i64_trunc_f64_s(rt_nan)
+  let _ = op_i64_trunc_f64_s(rt_nan)
   assert_trap(rt_nan)
 }
 
 ///|
 test "ops trunc sat f64 edge cases" {
   let rt_nan = make_runtime([Value::F64(0.0 / 0.0)], [], 0)
-  let rt_nan = op_i64_trunc_sat_f64_s(rt_nan)
+  let _ = op_i64_trunc_sat_f64_s(rt_nan)
   assert_ok(rt_nan)
   assert_stack_elem_eq(rt_nan.stack[0], Value::I64(0UL))
   let rt_over = make_runtime([Value::F64(9223372036854775808.0)], [], 0)
-  let rt_over = op_i64_trunc_sat_f64_s(rt_over)
+  let _ = op_i64_trunc_sat_f64_s(rt_over)
   assert_ok(rt_over)
   assert_stack_elem_eq(rt_over.stack[0], Value::I64(0x7FFFFFFFFFFFFFFFUL))
   let rt_under = make_runtime([Value::F64(-9223372036854775809.0)], [], 0)
-  let rt_under = op_i64_trunc_sat_f64_s(rt_under)
+  let _ = op_i64_trunc_sat_f64_s(rt_under)
   assert_ok(rt_under)
   assert_stack_elem_eq(rt_under.stack[0], Value::I64(0x8000000000000000UL))
   let rt_nan_u = make_runtime([Value::F64(0.0 / 0.0)], [], 0)
-  let rt_nan_u = op_i64_trunc_sat_f64_u(rt_nan_u)
+  let _ = op_i64_trunc_sat_f64_u(rt_nan_u)
   assert_ok(rt_nan_u)
   assert_stack_elem_eq(rt_nan_u.stack[0], Value::I64(0UL))
   let rt_over_u = make_runtime([Value::F64(18446744073709551616.0)], [], 0)
-  let rt_over_u = op_i64_trunc_sat_f64_u(rt_over_u)
+  let _ = op_i64_trunc_sat_f64_u(rt_over_u)
   assert_ok(rt_over_u)
   assert_stack_elem_eq(rt_over_u.stack[0], Value::I64(0xFFFFFFFFFFFFFFFFUL))
   let rt_under_u = make_runtime([Value::F64(-1.0)], [], 0)
-  let rt_under_u = op_i64_trunc_sat_f64_u(rt_under_u)
+  let _ = op_i64_trunc_sat_f64_u(rt_under_u)
   assert_ok(rt_under_u)
   assert_stack_elem_eq(rt_under_u.stack[0], Value::I64(0UL))
 }
@@ -740,38 +741,38 @@ test "ops memory load/store and size" {
   let rt = make_runtime([], ops, 16)
   let rt = push_value(rt, Value::I32(0U))
   let rt = push_value(rt, Value::I32(0x11223344U))
-  let rt = op_i32_store(rt)
+  let _ = op_i32_store(rt)
   assert_ok(rt)
   let rt = { ..rt, sp: 0, pc: 0 }
   let rt = push_value(rt, Value::I32(0U))
-  let rt = op_i32_load(rt)
+  let _ = op_i32_load(rt)
   assert_ok(rt)
   assert_stack_elem_eq(rt.stack.unsafe_get(0), Value::I32(0x11223344U))
   rt.ctx.memory[0] = 0xFFU.to_byte()
   let rt = { ..rt, sp: 0, pc: 0 }
   let rt = push_value(rt, Value::I32(0U))
-  let rt = op_i32_load8_s(rt)
+  let _ = op_i32_load8_s(rt)
   assert_ok(rt)
   assert_stack_elem_eq(rt.stack.unsafe_get(0), Value::I32(0xFFFFFFFFU))
   let rt = { ..rt, sp: 0, pc: 0 }
   let rt = push_value(rt, Value::I32(0U))
-  let rt = op_i32_load8_u(rt)
+  let _ = op_i32_load8_u(rt)
   assert_ok(rt)
   assert_stack_elem_eq(rt.stack.unsafe_get(0), Value::I32(255U))
   rt.ctx.memory[0] = 0x00U.to_byte()
   rt.ctx.memory[1] = 0x80U.to_byte()
   let rt = { ..rt, sp: 0, pc: 0 }
   let rt = push_value(rt, Value::I32(0U))
-  let rt = op_i32_load16_s(rt)
+  let _ = op_i32_load16_s(rt)
   assert_ok(rt)
   assert_stack_elem_eq(rt.stack.unsafe_get(0), Value::I32(0xFFFF8000U))
   let rt = { ..rt, sp: 0, pc: 0 }
   let rt = push_value(rt, Value::I32(0U))
-  let rt = op_i32_load16_u(rt)
+  let _ = op_i32_load16_u(rt)
   assert_ok(rt)
   assert_stack_elem_eq(rt.stack.unsafe_get(0), Value::I32(0x8000U))
   let rt_size = make_runtime([], [], 65536)
-  let rt_size = op_memory_size(rt_size)
+  let _ = op_memory_size(rt_size)
   assert_ok(rt_size)
   assert_stack_elem_eq(rt_size.stack.unsafe_get(0), Value::I32(1U))
   let stack_grow = FixedArray::make(64, 0UL)
@@ -796,7 +797,7 @@ test "ops memory load/store and size" {
     status: Terminated,
     ctx: ctx_grow,
   }
-  let rt_grow = op_memory_grow(rt_grow)
+  let _ = op_memory_grow(rt_grow)
   assert_ok(rt_grow)
   assert_stack_elem_eq(rt_grow.stack.unsafe_get(0), Value::I32(1U))
 }
@@ -805,21 +806,21 @@ test "ops memory load/store and size" {
 test "ops memory out of bounds and bulk ops" {
   let rt_oob = make_runtime([], [idx(0), idx(8)], 8)
   let rt_oob = push_value(rt_oob, Value::I32(0U))
-  let rt_oob = op_i32_load(rt_oob)
+  let _ = op_i32_load(rt_oob)
   assert_trap(rt_oob)
   let rt_oob_store = make_runtime([], [idx(0), idx(8)], 8)
   let rt_oob_store = push_value(rt_oob_store, Value::I32(0U))
   let rt_oob_store = push_value(rt_oob_store, Value::I32(1U))
-  let rt_oob_store = op_i32_store(rt_oob_store)
+  let _ = op_i32_store(rt_oob_store)
   assert_trap(rt_oob_store)
   let rt_i64 = make_runtime([], [idx(0), idx(0)], 16)
   let rt_i64 = push_value(rt_i64, Value::I32(0U))
   let rt_i64 = push_value(rt_i64, Value::I64(0x1122334455667788UL))
-  let rt_i64 = op_i64_store(rt_i64)
+  let _ = op_i64_store(rt_i64)
   assert_ok(rt_i64)
   let rt_i64 = { ..rt_i64, sp: 0, pc: 0 }
   let rt_i64 = push_value(rt_i64, Value::I32(0U))
-  let rt_i64 = op_i64_load(rt_i64)
+  let _ = op_i64_load(rt_i64)
   assert_ok(rt_i64)
   assert_stack_elem_eq(
     rt_i64.stack.unsafe_get(0),
@@ -832,7 +833,7 @@ test "ops memory out of bounds and bulk ops" {
   let rt_copy = push_value(rt_copy, Value::I32(0U))
   let rt_copy = push_value(rt_copy, Value::I32(0U))
   let rt_copy = push_value(rt_copy, Value::I32(3U))
-  let rt_copy = op_memory_copy(rt_copy)
+  let _ = op_memory_copy(rt_copy)
   assert_ok(rt_copy)
   assert_eq(rt_copy.ctx.memory[0], 1U.to_byte())
   assert_eq(rt_copy.ctx.memory[1], 2U.to_byte())
@@ -840,7 +841,7 @@ test "ops memory out of bounds and bulk ops" {
   let rt_fill = push_value(rt_fill, Value::I32(0U))
   let rt_fill = push_value(rt_fill, Value::I32(0x7FU))
   let rt_fill = push_value(rt_fill, Value::I32(3U))
-  let rt_fill = op_memory_fill(rt_fill)
+  let _ = op_memory_fill(rt_fill)
   assert_ok(rt_fill)
   assert_eq(rt_fill.ctx.memory[0], 0x7FU.to_byte())
   assert_eq(rt_fill.ctx.memory[2], 0x7FU.to_byte())
@@ -868,7 +869,7 @@ test "ops memory out of bounds and bulk ops" {
     status: Terminated,
     ctx: ctx_init,
   }
-  let rt_init = op_memory_init(rt_init)
+  let _ = op_memory_init(rt_init)
   assert_ok(rt_init)
   assert_eq(rt_init.ctx.memory[0], 1U.to_byte())
   assert_eq(rt_init.ctx.memory[1], 2U.to_byte())
@@ -892,7 +893,7 @@ test "ops memory out of bounds and bulk ops" {
     status: Terminated,
     ctx: ctx_drop,
   }
-  let rt_drop = op_data_drop(rt_drop)
+  let _ = op_data_drop(rt_drop)
   assert_ok(rt_drop)
   assert_eq(rt_drop.ctx.data_segments[0].length(), 0)
 }

@@ -45,9 +45,10 @@ test "runtime compile start function" {
 ///|
 test "runtime execute error branches" {
   // Test that Trap status causes RuntimeError
-  fn trap_func(rt : Runtime) -> Runtime {
+  fn trap_func(rt : Runtime) -> ReturnCode {
     rt.ctx.error_detail = "bad"
-    { ..rt, status: Trap }
+    rt.status = Trap
+    Trap
   }
 
   let rt_err = make_runtime([], [unsafe_function_to_uint64(trap_func)], 0)

@@ -115,7 +115,7 @@ fn gc_get_object(rt : Runtime, ref_value : Int) -> GcObject? {
 ///|
 /// struct.new type_idx
 /// Pops field values from stack, creates new struct
-fn op_struct_new(rt : Runtime) -> Runtime {
+fn op_struct_new(rt : Runtime) -> ReturnCode {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let num_fields = rt.ops.unsafe_get(rt.pc + 2).to_int()
 
@@ -132,13 +132,15 @@ fn op_struct_new(rt : Runtime) -> Runtime {
 
   // Push reference
   rt.stack.unsafe_set(sp, ref_value.to_uint64())
-  { ..rt, sp: sp + 1, pc: rt.pc + 3 }
+  rt.sp = sp + 1
+  rt.pc = rt.pc + 3
+  Running
 }
 
 ///|
 /// struct.new_default type_idx
 /// Creates a new struct with default (zero) values
-fn op_struct_new_default(rt : Runtime) -> Runtime {
+fn op_struct_new_default(rt : Runtime) -> ReturnCode {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let num_fields = rt.ops.unsafe_get(rt.pc + 2).to_int()
 
@@ -150,13 +152,15 @@ fn op_struct_new_default(rt : Runtime) -> Runtime {
 
   // Push reference
   rt.stack.unsafe_set(rt.sp, ref_value.to_uint64())
-  { ..rt, sp: rt.sp + 1, pc: rt.pc + 3 }
+  rt.sp = rt.sp + 1
+  rt.pc = rt.pc + 3
+  Running
 }
 
 ///|
 /// struct.get type_idx field_idx
 /// Pops struct ref, pushes field value
-fn op_struct_get(rt : Runtime) -> Runtime {
+fn op_struct_get(rt : Runtime) -> ReturnCode {
   let field_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let sp = rt.sp - 1
   let ref_raw = rt.stack.unsafe_get(sp)
@@ -164,25 +168,29 @@ fn op_struct_get(rt : Runtime) -> Runtime {
   // Null check (null is -1 / 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null structure reference"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return Trap
   }
   let ref_value = ref_raw.to_int()
   match gc_get_object(rt, ref_value) {
     Some(Struct(s)) => {
       let value = s.fields[field_idx]
       rt.stack.unsafe_set(sp, value)
-      { ..rt, sp: sp + 1, pc: rt.pc + 2 }
+      rt.sp = sp + 1
+      rt.pc = rt.pc + 2
+      Running
     }
     _ => {
       rt.ctx.error_detail = "struct.get: invalid reference"
-      { ..rt, status: Trap }
+      rt.status = Trap
+      Trap
     }
   }
 }
 
 ///|
 /// struct.get_s type_idx field_idx (sign-extend packed field)
-fn op_struct_get_s(rt : Runtime) -> Runtime {
+fn op_struct_get_s(rt : Runtime) -> ReturnCode {
   let field_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let storage_type = rt.ops.unsafe_get(rt.pc + 2).to_int() // 0=i8, 1=i16
   let sp = rt.sp - 1
@@ -191,7 +199,8 @@ fn op_struct_get_s(rt : Runtime) -> Runtime {
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "struct.get_s: null reference"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return Trap
   }
   let ref_value = ref_raw.to_int()
   match gc_get_object(rt, ref_value) {
@@ -215,18 +224,21 @@ fn op_struct_get_s(rt : Runtime) -> Runtime {
         }
       }
       rt.stack.unsafe_set(sp, signed_value.to_uint64())
-      { ..rt, sp: sp + 1, pc: rt.pc + 3 }
+      rt.sp = sp + 1
+      rt.pc = rt.pc + 3
+      Running
     }
     _ => {
       rt.ctx.error_detail = "struct.get_s: invalid reference"
-      { ..rt, status: Trap }
+      rt.status = Trap
+      Trap
     }
   }
 }
 
 ///|
 /// struct.get_u type_idx field_idx (zero-extend packed field)
-fn op_struct_get_u(rt : Runtime) -> Runtime {
+fn op_struct_get_u(rt : Runtime) -> ReturnCode {
   let field_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let storage_type = rt.ops.unsafe_get(rt.pc + 2).to_int() // 0=i8, 1=i16
   let sp = rt.sp - 1
@@ -235,7 +247,8 @@ fn op_struct_get_u(rt : Runtime) -> Runtime {
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "struct.get_u: null reference"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return Trap
   }
   let ref_value = ref_raw.to_int()
   match gc_get_object(rt, ref_value) {
@@ -247,11 +260,14 @@ fn op_struct_get_u(rt : Runtime) -> Runtime {
         raw_value & 0xFFFFU
       } // i16
       rt.stack.unsafe_set(sp, value.to_uint64())
-      { ..rt, sp: sp + 1, pc: rt.pc + 3 }
+      rt.sp = sp + 1
+      rt.pc = rt.pc + 3
+      Running
     }
     _ => {
       rt.ctx.error_detail = "struct.get_u: invalid reference"
-      { ..rt, status: Trap }
+      rt.status = Trap
+      Trap
     }
   }
 }
@@ -259,7 +275,7 @@ fn op_struct_get_u(rt : Runtime) -> Runtime {
 ///|
 /// struct.set type_idx field_idx
 /// Pops struct ref and value, sets field
-fn op_struct_set(rt : Runtime) -> Runtime {
+fn op_struct_set(rt : Runtime) -> ReturnCode {
   let field_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let sp = rt.sp - 2
   let ref_raw = rt.stack.unsafe_get(sp)
@@ -268,17 +284,20 @@ fn op_struct_set(rt : Runtime) -> Runtime {
   // Null check (null is -1 / 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null structure reference"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return Trap
   }
   let ref_value = ref_raw.to_int()
   match gc_get_object(rt, ref_value) {
     Some(Struct(s)) => {
       s.fields[field_idx] = value
-      { ..rt, sp, pc: rt.pc + 2 }
+      rt.pc = rt.pc + 2
+      Running
     }
     _ => {
       rt.ctx.error_detail = "struct.set: invalid reference"
-      { ..rt, status: Trap }
+      rt.status = Trap
+      Trap
     }
   }
 }
@@ -290,7 +309,7 @@ fn op_struct_set(rt : Runtime) -> Runtime {
 ///|
 /// array.new type_idx
 /// Pops value and length, creates new array filled with value
-fn op_array_new(rt : Runtime) -> Runtime {
+fn op_array_new(rt : Runtime) -> ReturnCode {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let sp = rt.sp - 2
   let init_value = rt.stack.unsafe_get(sp)
@@ -298,13 +317,15 @@ fn op_array_new(rt : Runtime) -> Runtime {
   let elements = Array::make(length, init_value)
   let ref_value = gc_alloc_array(rt, type_idx, elements)
   rt.stack.unsafe_set(sp, ref_value.to_uint64())
-  { ..rt, sp: sp + 1, pc: rt.pc + 2 }
+  rt.sp = sp + 1
+  rt.pc = rt.pc + 2
+  Running
 }
 
 ///|
 /// array.new_default type_idx
 /// Pops length, creates new array with default values
-fn op_array_new_default(rt : Runtime) -> Runtime {
+fn op_array_new_default(rt : Runtime) -> ReturnCode {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let sp = rt.sp - 1
   let length = rt.stack.unsafe_get(sp).to_int()
@@ -318,13 +339,15 @@ fn op_array_new_default(rt : Runtime) -> Runtime {
   let elements : Array[UInt64] = Array::make(length, default_value)
   let ref_value = gc_alloc_array(rt, type_idx, elements)
   rt.stack.unsafe_set(sp, ref_value.to_uint64())
-  { ..rt, sp: sp + 1, pc: rt.pc + 2 }
+  rt.sp = sp + 1
+  rt.pc = rt.pc + 2
+  Running
 }
 
 ///|
 /// array.new_fixed type_idx length
 /// Pops length values from stack, creates array
-fn op_array_new_fixed(rt : Runtime) -> Runtime {
+fn op_array_new_fixed(rt : Runtime) -> ReturnCode {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let length = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let elements : Array[UInt64] = Array::make(length, 0UL)
@@ -335,13 +358,15 @@ fn op_array_new_fixed(rt : Runtime) -> Runtime {
   }
   let ref_value = gc_alloc_array(rt, type_idx, elements)
   rt.stack.unsafe_set(sp, ref_value.to_uint64())
-  { ..rt, sp: sp + 1, pc: rt.pc + 3 }
+  rt.sp = sp + 1
+  rt.pc = rt.pc + 3
+  Running
 }
 
 ///|
 /// array.new_data type_idx data_idx
 /// Pops offset and length, creates array from data segment
-fn op_array_new_data(rt : Runtime) -> Runtime {
+fn op_array_new_data(rt : Runtime) -> ReturnCode {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let data_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let elem_size = rt.ops.unsafe_get(rt.pc + 3).to_int() // 1, 2, 4, or 8 bytes
@@ -352,14 +377,16 @@ fn op_array_new_data(rt : Runtime) -> Runtime {
   // Get data segment
   if data_idx < 0 || data_idx >= rt.ctx.data_segments.length() {
     rt.ctx.error_detail = "array.new_data: invalid data segment index"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return Trap
   }
   let data = rt.ctx.data_segments[data_idx]
 
   // Bounds check
   if offset < 0 || offset + length * elem_size > data.length() {
     rt.ctx.error_detail = "out of bounds memory access"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return Trap
   }
 
   // Create array elements from data segment
@@ -374,13 +401,15 @@ fn op_array_new_data(rt : Runtime) -> Runtime {
   }
   let ref_value = gc_alloc_array(rt, type_idx, elements)
   rt.stack.unsafe_set(sp, ref_value.to_uint64())
-  { ..rt, sp: sp + 1, pc: rt.pc + 4 }
+  rt.sp = sp + 1
+  rt.pc = rt.pc + 4
+  Running
 }
 
 ///|
 /// array.get type_idx
 /// Pops array ref and index, pushes element
-fn op_array_get(rt : Runtime) -> Runtime {
+fn op_array_get(rt : Runtime) -> ReturnCode {
   let sp = rt.sp - 2
   let ref_raw = rt.stack.unsafe_get(sp)
   let index = rt.stack.unsafe_get(sp + 1).to_int()
@@ -388,29 +417,34 @@ fn op_array_get(rt : Runtime) -> Runtime {
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null array reference"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return Trap
   }
   let ref_value = ref_raw.to_int()
   match gc_get_object(rt, ref_value) {
     Some(Array(a)) => {
       if index < 0 || index >= a.elements.length() {
         rt.ctx.error_detail = "out of bounds array access"
-        return { ..rt, status: Trap }
+        rt.status = Trap
+        return Trap
       }
       let value = a.elements[index]
       rt.stack.unsafe_set(sp, value)
-      { ..rt, sp: sp + 1, pc: rt.pc + 1 }
+      rt.sp = sp + 1
+      rt.pc = rt.pc + 1
+      Running
     }
     _ => {
       rt.ctx.error_detail = "array.get: invalid reference"
-      { ..rt, status: Trap }
+      rt.status = Trap
+      Trap
     }
   }
 }
 
 ///|
 /// array.get_s type_idx (sign-extend packed element)
-fn op_array_get_s(rt : Runtime) -> Runtime {
+fn op_array_get_s(rt : Runtime) -> ReturnCode {
   let storage_type = rt.ops.unsafe_get(rt.pc + 1).to_int() // 0=i8, 1=i16
   let sp = rt.sp - 2
   let ref_raw = rt.stack.unsafe_get(sp)
@@ -419,14 +453,16 @@ fn op_array_get_s(rt : Runtime) -> Runtime {
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null array reference"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return Trap
   }
   let ref_value = ref_raw.to_int()
   match gc_get_object(rt, ref_value) {
     Some(Array(a)) => {
       if index < 0 || index >= a.elements.length() {
         rt.ctx.error_detail = "out of bounds array access"
-        return { ..rt, status: Trap }
+        rt.status = Trap
+        return Trap
       }
       let raw_value = a.elements[index].to_uint()
       let signed_value = if storage_type == 0 {
@@ -445,18 +481,21 @@ fn op_array_get_s(rt : Runtime) -> Runtime {
         }
       }
       rt.stack.unsafe_set(sp, signed_value.to_uint64())
-      { ..rt, sp: sp + 1, pc: rt.pc + 2 }
+      rt.sp = sp + 1
+      rt.pc = rt.pc + 2
+      Running
     }
     _ => {
       rt.ctx.error_detail = "array.get_s: invalid reference"
-      { ..rt, status: Trap }
+      rt.status = Trap
+      Trap
     }
   }
 }
 
 ///|
 /// array.get_u type_idx (zero-extend packed element)
-fn op_array_get_u(rt : Runtime) -> Runtime {
+fn op_array_get_u(rt : Runtime) -> ReturnCode {
   let storage_type = rt.ops.unsafe_get(rt.pc + 1).to_int() // 0=i8, 1=i16
   let sp = rt.sp - 2
   let ref_raw = rt.stack.unsafe_get(sp)
@@ -465,14 +504,16 @@ fn op_array_get_u(rt : Runtime) -> Runtime {
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null array reference"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return Trap
   }
   let ref_value = ref_raw.to_int()
   match gc_get_object(rt, ref_value) {
     Some(Array(a)) => {
       if index < 0 || index >= a.elements.length() {
         rt.ctx.error_detail = "out of bounds array access"
-        return { ..rt, status: Trap }
+        rt.status = Trap
+        return Trap
       }
       let raw_value = a.elements[index].to_uint()
       let value = if storage_type == 0 {
@@ -481,11 +522,14 @@ fn op_array_get_u(rt : Runtime) -> Runtime {
         raw_value & 0xFFFFU
       }
       rt.stack.unsafe_set(sp, value.to_uint64())
-      { ..rt, sp: sp + 1, pc: rt.pc + 2 }
+      rt.sp = sp + 1
+      rt.pc = rt.pc + 2
+      Running
     }
     _ => {
       rt.ctx.error_detail = "array.get_u: invalid reference"
-      { ..rt, status: Trap }
+      rt.status = Trap
+      Trap
     }
   }
 }
@@ -493,7 +537,7 @@ fn op_array_get_u(rt : Runtime) -> Runtime {
 ///|
 /// array.set type_idx
 /// Pops array ref, index, and value, sets element
-fn op_array_set(rt : Runtime) -> Runtime {
+fn op_array_set(rt : Runtime) -> ReturnCode {
   let sp = rt.sp - 3
   let ref_raw = rt.stack.unsafe_get(sp)
   let index = rt.stack.unsafe_get(sp + 1).to_int()
@@ -502,21 +546,25 @@ fn op_array_set(rt : Runtime) -> Runtime {
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null array reference"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return Trap
   }
   let ref_value = ref_raw.to_int()
   match gc_get_object(rt, ref_value) {
     Some(Array(a)) => {
       if index < 0 || index >= a.elements.length() {
         rt.ctx.error_detail = "out of bounds array access"
-        return { ..rt, status: Trap }
+        rt.status = Trap
+        return Trap
       }
       a.elements[index] = value
-      { ..rt, sp, pc: rt.pc + 1 }
+      rt.pc = rt.pc + 1
+      Running
     }
     _ => {
       rt.ctx.error_detail = "array.set: invalid reference"
-      { ..rt, status: Trap }
+      rt.status = Trap
+      Trap
     }
   }
 }
@@ -524,25 +572,29 @@ fn op_array_set(rt : Runtime) -> Runtime {
 ///|
 /// array.len
 /// Pops array ref, pushes length
-fn op_array_len(rt : Runtime) -> Runtime {
+fn op_array_len(rt : Runtime) -> ReturnCode {
   let sp = rt.sp - 1
   let ref_raw = rt.stack.unsafe_get(sp)
 
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null array reference"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return Trap
   }
   let ref_value = ref_raw.to_int()
   match gc_get_object(rt, ref_value) {
     Some(Array(a)) => {
       let len = a.elements.length()
       rt.stack.unsafe_set(sp, len.to_uint64())
-      { ..rt, sp: sp + 1, pc: rt.pc + 1 }
+      rt.sp = sp + 1
+      rt.pc = rt.pc + 1
+      Running
     }
     _ => {
       rt.ctx.error_detail = "array.len: invalid reference"
-      { ..rt, status: Trap }
+      rt.status = Trap
+      Trap
     }
   }
 }
@@ -550,7 +602,7 @@ fn op_array_len(rt : Runtime) -> Runtime {
 ///|
 /// array.fill type_idx
 /// Pops array, offset, value, length and fills the array
-fn op_array_fill(rt : Runtime) -> Runtime {
+fn op_array_fill(rt : Runtime) -> ReturnCode {
   let sp = rt.sp - 4
   let ref_raw = rt.stack.unsafe_get(sp)
   let offset = rt.stack.unsafe_get(sp + 1).to_int()
@@ -560,23 +612,27 @@ fn op_array_fill(rt : Runtime) -> Runtime {
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null array reference"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return Trap
   }
   let ref_value = ref_raw.to_int()
   match gc_get_object(rt, ref_value) {
     Some(Array(a)) => {
       if offset < 0 || offset + length > a.elements.length() {
         rt.ctx.error_detail = "out of bounds array access"
-        return { ..rt, status: Trap }
+        rt.status = Trap
+        return Trap
       }
       for i = 0; i < length; i = i + 1 {
         a.elements[offset + i] = value
       }
-      { ..rt, sp, pc: rt.pc + 1 }
+      rt.pc = rt.pc + 1
+      Running
     }
     _ => {
       rt.ctx.error_detail = "array.fill: invalid reference"
-      { ..rt, status: Trap }
+      rt.status = Trap
+      Trap
     }
   }
 }
@@ -584,7 +640,7 @@ fn op_array_fill(rt : Runtime) -> Runtime {
 ///|
 /// array.copy dst_type src_type
 /// Copies elements from src array to dst array
-fn op_array_copy(rt : Runtime) -> Runtime {
+fn op_array_copy(rt : Runtime) -> ReturnCode {
   let sp = rt.sp - 5
   let dst_ref_raw = rt.stack.unsafe_get(sp)
   let dst_offset = rt.stack.unsafe_get(sp + 1).to_int()
@@ -595,7 +651,8 @@ fn op_array_copy(rt : Runtime) -> Runtime {
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if dst_ref_raw == 0xFFFFFFFFFFFFFFFFUL || src_ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null array reference"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return Trap
   }
   let dst_ref = dst_ref_raw.to_int()
   let src_ref = src_ref_raw.to_int()
@@ -606,7 +663,8 @@ fn op_array_copy(rt : Runtime) -> Runtime {
         src_offset < 0 ||
         src_offset + length > src.elements.length() {
         rt.ctx.error_detail = "out of bounds array access"
-        return { ..rt, status: Trap }
+        rt.status = Trap
+        return Trap
       }
       // Handle overlapping regions
       if dst_ref == src_ref && dst_offset > src_offset {
@@ -618,11 +676,13 @@ fn op_array_copy(rt : Runtime) -> Runtime {
           dst.elements[dst_offset + i] = src.elements[src_offset + i]
         }
       }
-      { ..rt, sp, pc: rt.pc + 1 }
+      rt.pc = rt.pc + 1
+      Running
     }
     _ => {
       rt.ctx.error_detail = "array.copy: invalid reference"
-      { ..rt, status: Trap }
+      rt.status = Trap
+      Trap
     }
   }
 }
@@ -634,7 +694,7 @@ fn op_array_copy(rt : Runtime) -> Runtime {
 ///|
 /// ref.i31
 /// Pops i32, pushes i31ref (31-bit signed integer as reference)
-fn op_ref_i31(rt : Runtime) -> Runtime {
+fn op_ref_i31(rt : Runtime) -> ReturnCode {
   let sp = rt.sp - 1
   let value = rt.stack.unsafe_get(sp).to_uint()
 
@@ -643,26 +703,30 @@ fn op_ref_i31(rt : Runtime) -> Runtime {
   let i31_value = value & 0x7FFFFFFFU
   let encoded = (i31_value << 1) | 1U
   rt.stack.unsafe_set(sp, encoded.to_uint64())
-  { ..rt, sp: sp + 1, pc: rt.pc + 1 }
+  rt.sp = sp + 1
+  rt.pc = rt.pc + 1
+  Running
 }
 
 ///|
 /// i31.get_s
 /// Pops i31ref, pushes sign-extended i32
-fn op_i31_get_s(rt : Runtime) -> Runtime {
+fn op_i31_get_s(rt : Runtime) -> ReturnCode {
   let sp = rt.sp - 1
   let encoded = rt.stack.unsafe_get(sp)
 
   // Check for null reference first (null is -1 / 0xFFFFFFFFFFFFFFFF)
   if encoded == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null i31 reference"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return Trap
   }
   let encoded_u32 = encoded.to_uint()
   // Check if it's a valid i31ref (lowest bit set)
   if (encoded_u32 & 1U) != 1U {
     rt.ctx.error_detail = "i31.get_s: not an i31ref"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return Trap
   }
 
   // Decode: (encoded >> 1) with sign extension from bit 30
@@ -673,32 +737,38 @@ fn op_i31_get_s(rt : Runtime) -> Runtime {
     raw
   }
   rt.stack.unsafe_set(sp, signed.to_uint64())
-  { ..rt, sp: sp + 1, pc: rt.pc + 1 }
+  rt.sp = sp + 1
+  rt.pc = rt.pc + 1
+  Running
 }
 
 ///|
 /// i31.get_u
 /// Pops i31ref, pushes zero-extended i32
-fn op_i31_get_u(rt : Runtime) -> Runtime {
+fn op_i31_get_u(rt : Runtime) -> ReturnCode {
   let sp = rt.sp - 1
   let encoded = rt.stack.unsafe_get(sp)
 
   // Check for null reference first (null is -1 / 0xFFFFFFFFFFFFFFFF)
   if encoded == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null i31 reference"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return Trap
   }
   let encoded_u32 = encoded.to_uint()
   // Check if it's a valid i31ref
   if (encoded_u32 & 1U) != 1U {
     rt.ctx.error_detail = "i31.get_u: not an i31ref"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return Trap
   }
 
   // Decode: (encoded >> 1) masked to 31 bits
   let value = (encoded_u32 >> 1) & 0x7FFFFFFFU
   rt.stack.unsafe_set(sp, value.to_uint64())
-  { ..rt, sp: sp + 1, pc: rt.pc + 1 }
+  rt.sp = sp + 1
+  rt.pc = rt.pc + 1
+  Running
 }
 
 // =============================================================================
@@ -710,26 +780,29 @@ fn op_i31_get_u(rt : Runtime) -> Runtime {
 /// Converts externref to anyref
 /// The value keeps its externref tag so it can still be identified as an
 /// "internalized externref" - it matches any/eq but not i31/struct/array
-fn op_any_convert_extern(rt : Runtime) -> Runtime {
+fn op_any_convert_extern(rt : Runtime) -> ReturnCode {
   // Value stays unchanged - an internalized externref still has the externref tag
   // but is now typed as anyref. The tag allows gc_ref_matches_type to correctly
   // identify it as matching "any" but not more specific types like i31/struct/array.
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  Running
 }
 
 ///|
 /// extern.convert_any
 /// Converts anyref to externref by adding externref tag
-fn op_extern_convert_any(rt : Runtime) -> Runtime {
+fn op_extern_convert_any(rt : Runtime) -> ReturnCode {
   let ref_value = rt.stack.unsafe_get(rt.sp - 1)
   // Null stays as null
   if ref_value == ref_null {
-    return { ..rt, pc: rt.pc + 1 }
+    rt.pc = rt.pc + 1
+    return Running
   }
   // Add externref tag (bit 61)
   let tagged = ref_value | 0x2000000000000000UL
   rt.stack.unsafe_set(rt.sp - 1, tagged)
-  { ..rt, pc: rt.pc + 1 }
+  rt.pc = rt.pc + 1
+  Running
 }
 
 // =============================================================================
@@ -1273,7 +1346,7 @@ fn is_type_final_runtime(rt : Runtime, type_idx : Int) -> Bool {
 ///|
 /// ref.test heap_type nullable
 /// Tests if a reference is of the given type, pushes i32 result
-fn op_ref_test(rt : Runtime) -> Runtime {
+fn op_ref_test(rt : Runtime) -> ReturnCode {
   let target_type = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let target_nullable = rt.ops.unsafe_get(rt.pc + 2).to_int() != 0
   let sp = rt.sp - 1
@@ -1281,23 +1354,28 @@ fn op_ref_test(rt : Runtime) -> Runtime {
   let matches = gc_ref_matches_type(rt, ref_value, target_type, target_nullable)
   let result = if matches { 1U } else { 0U }
   rt.stack.unsafe_set(sp, result.to_uint64())
-  { ..rt, sp: sp + 1, pc: rt.pc + 3 }
+  rt.sp = sp + 1
+  rt.pc = rt.pc + 3
+  Running
 }
 
 ///|
 /// ref.cast heap_type nullable
 /// Casts a reference to the given type, traps on failure
-fn op_ref_cast(rt : Runtime) -> Runtime {
+fn op_ref_cast(rt : Runtime) -> ReturnCode {
   let target_type = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let target_nullable = rt.ops.unsafe_get(rt.pc + 2).to_int() != 0
   let sp = rt.sp - 1
   let ref_value = rt.stack.unsafe_get(sp)
   if gc_ref_matches_type(rt, ref_value, target_type, target_nullable) {
     // Cast succeeds - leave value on stack
-    { ..rt, sp: sp + 1, pc: rt.pc + 3 }
+    rt.sp = sp + 1
+    rt.pc = rt.pc + 3
+    Running
   } else {
     rt.ctx.error_detail = "ref.cast: cast failed"
-    { ..rt, status: Trap }
+    rt.status = Trap
+    Trap
   }
 }
 
@@ -1307,7 +1385,7 @@ fn op_ref_cast(rt : Runtime) -> Runtime {
 
 ///|
 /// br_on_cast label target_type target_nullable
-fn op_br_on_cast(rt : Runtime) -> Runtime {
+fn op_br_on_cast(rt : Runtime) -> ReturnCode {
   let target_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let arity = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let drop_count = rt.ops.unsafe_get(rt.pc + 3).to_int()
@@ -1332,16 +1410,20 @@ fn op_br_on_cast(rt : Runtime) -> Runtime {
         )
       }
     }
-    { ..rt, sp: rt.sp - drop_count, pc: target_pc }
+    rt.sp = rt.sp - drop_count
+    rt.pc = target_pc
+    Running
   } else {
     // Continue - leave reference on stack
-    { ..rt, sp: sp + 1, pc: rt.pc + 6 }
+    rt.sp = sp + 1
+    rt.pc = rt.pc + 6
+    Running
   }
 }
 
 ///|
 /// br_on_cast_fail label target_type target_nullable
-fn op_br_on_cast_fail(rt : Runtime) -> Runtime {
+fn op_br_on_cast_fail(rt : Runtime) -> ReturnCode {
   let target_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let arity = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let drop_count = rt.ops.unsafe_get(rt.pc + 3).to_int()
@@ -1366,10 +1448,14 @@ fn op_br_on_cast_fail(rt : Runtime) -> Runtime {
         )
       }
     }
-    { ..rt, sp: rt.sp - drop_count, pc: target_pc }
+    rt.sp = rt.sp - drop_count
+    rt.pc = target_pc
+    Running
   } else {
     // Continue - leave reference on stack
-    { ..rt, sp: sp + 1, pc: rt.pc + 6 }
+    rt.sp = sp + 1
+    rt.pc = rt.pc + 6
+    Running
   }
 }
 
@@ -1380,7 +1466,7 @@ fn op_br_on_cast_fail(rt : Runtime) -> Runtime {
 ///|
 /// array.new_elem type_idx elem_idx
 /// Creates a new array from element segment values
-fn op_array_new_elem(rt : Runtime) -> Runtime {
+fn op_array_new_elem(rt : Runtime) -> ReturnCode {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let elem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let sp = rt.sp - 2
@@ -1390,7 +1476,8 @@ fn op_array_new_elem(rt : Runtime) -> Runtime {
   // Get element segment from module
   if elem_idx < 0 || elem_idx >= rt.ctx.module_.elems.length() {
     rt.ctx.error_detail = "array.new_elem: invalid element segment index"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return Trap
   }
   let elem = rt.ctx.module_.elems[elem_idx]
 
@@ -1401,19 +1488,23 @@ fn op_array_new_elem(rt : Runtime) -> Runtime {
     // Dropped segment: any non-zero length or offset is out of bounds
     if length != 0 || offset != 0 {
       rt.ctx.error_detail = "out of bounds table access"
-      return { ..rt, status: Trap }
+      rt.status = Trap
+      return Trap
     }
     // n=0, src=0 is valid even for dropped segments - create empty array
     let elements : Array[UInt64] = []
     let ref_value = gc_alloc_array(rt, type_idx, elements)
     rt.stack.unsafe_set(sp, ref_value.to_uint64())
-    return { ..rt, sp: sp + 1, pc: rt.pc + 3 }
+    rt.sp = sp + 1
+    rt.pc = rt.pc + 3
+    return Running
   }
 
   // Bounds check
   if offset < 0 || offset + length > elem.init.length() {
     rt.ctx.error_detail = "out of bounds table access"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return Trap
   }
 
   // Create array elements by evaluating element expressions
@@ -1426,13 +1517,15 @@ fn op_array_new_elem(rt : Runtime) -> Runtime {
   }
   let ref_value = gc_alloc_array(rt, type_idx, elements)
   rt.stack.unsafe_set(sp, ref_value.to_uint64())
-  { ..rt, sp: sp + 1, pc: rt.pc + 3 }
+  rt.sp = sp + 1
+  rt.pc = rt.pc + 3
+  Running
 }
 
 ///|
 /// array.init_data type_idx data_idx
 /// Initializes array elements from data segment
-fn op_array_init_data(rt : Runtime) -> Runtime {
+fn op_array_init_data(rt : Runtime) -> ReturnCode {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let data_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let elem_size = rt.ops.unsafe_get(rt.pc + 3).to_int()
@@ -1445,14 +1538,16 @@ fn op_array_init_data(rt : Runtime) -> Runtime {
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if arr_ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null array reference"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return Trap
   }
   let arr_ref = arr_ref_raw.to_int()
 
   // Get data segment
   if data_idx < 0 || data_idx >= rt.ctx.data_segments.length() {
     rt.ctx.error_detail = "array.init_data: invalid data segment index"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return Trap
   }
   let data = rt.ctx.data_segments[data_idx]
   match gc_get_object(rt, arr_ref) {
@@ -1460,13 +1555,15 @@ fn op_array_init_data(rt : Runtime) -> Runtime {
       // Check array bounds first (spec requires this order)
       if arr_offset < 0 || arr_offset + length > a.elements.length() {
         rt.ctx.error_detail = "out of bounds array access"
-        return { ..rt, status: Trap }
+        rt.status = Trap
+        return Trap
       }
 
       // Bounds check on data segment
       if data_offset < 0 || data_offset + length * elem_size > data.length() {
         rt.ctx.error_detail = "out of bounds memory access"
-        return { ..rt, status: Trap }
+        rt.status = Trap
+        return Trap
       }
 
       // Copy data to array elements
@@ -1479,11 +1576,13 @@ fn op_array_init_data(rt : Runtime) -> Runtime {
         a.elements[arr_offset + i] = value
       }
       ignore(type_idx)
-      { ..rt, sp, pc: rt.pc + 4 }
+      rt.pc = rt.pc + 4
+      Running
     }
     _ => {
       rt.ctx.error_detail = "array.init_data: invalid reference"
-      { ..rt, status: Trap }
+      rt.status = Trap
+      Trap
     }
   }
 }
@@ -1491,7 +1590,7 @@ fn op_array_init_data(rt : Runtime) -> Runtime {
 ///|
 /// array.init_elem type_idx elem_idx
 /// Initializes array elements from element segment
-fn op_array_init_elem(rt : Runtime) -> Runtime {
+fn op_array_init_elem(rt : Runtime) -> ReturnCode {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let elem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let sp = rt.sp - 4
@@ -1503,14 +1602,16 @@ fn op_array_init_elem(rt : Runtime) -> Runtime {
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if arr_ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null array reference"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return Trap
   }
   let arr_ref = arr_ref_raw.to_int()
 
   // Get element segment
   if elem_idx < 0 || elem_idx >= rt.ctx.module_.elems.length() {
     rt.ctx.error_detail = "array.init_elem: invalid element segment index"
-    return { ..rt, status: Trap }
+    rt.status = Trap
+    return Trap
   }
   let elem = rt.ctx.module_.elems[elem_idx]
   match gc_get_object(rt, arr_ref) {
@@ -1518,7 +1619,8 @@ fn op_array_init_elem(rt : Runtime) -> Runtime {
       // Check array bounds first (spec requires this order)
       if arr_offset < 0 || arr_offset + length > a.elements.length() {
         rt.ctx.error_detail = "out of bounds array access"
-        return { ..rt, status: Trap }
+        rt.status = Trap
+        return Trap
       }
 
       // Check if segment is dropped (active/declarative segments are dropped after instantiation)
@@ -1528,16 +1630,19 @@ fn op_array_init_elem(rt : Runtime) -> Runtime {
         // Dropped segment: any non-zero length or offset is out of bounds
         if length != 0 || elem_offset != 0 {
           rt.ctx.error_detail = "out of bounds table access"
-          return { ..rt, status: Trap }
+          rt.status = Trap
+          return Trap
         }
         // n=0, src=0 is valid even for dropped segments
-        return { ..rt, sp, pc: rt.pc + 3 }
+        rt.pc = rt.pc + 3
+        return Running
       }
 
       // Bounds check on element segment
       if elem_offset < 0 || elem_offset + length > elem.init.length() {
         rt.ctx.error_detail = "out of bounds table access"
-        return { ..rt, status: Trap }
+        rt.status = Trap
+        return Trap
       }
 
       // Copy element expressions to array elements
@@ -1547,11 +1652,13 @@ fn op_array_init_elem(rt : Runtime) -> Runtime {
         a.elements[arr_offset + i] = value
       }
       ignore(type_idx)
-      { ..rt, sp, pc: rt.pc + 3 }
+      rt.pc = rt.pc + 3
+      Running
     }
     _ => {
       rt.ctx.error_detail = "array.init_elem: invalid reference"
-      { ..rt, status: Trap }
+      rt.status = Trap
+      Trap
     }
   }
 }

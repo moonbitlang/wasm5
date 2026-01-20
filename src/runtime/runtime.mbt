@@ -335,11 +335,11 @@ let initial_stack_capacity : Int = 1024
 pub struct Runtime {
   ops : FixedArray[UInt64] // Compiled instructions (tagless: fn ptrs and immediates as UInt64)
   stack : FixedArray[UInt64] // Unified stack for locals and operand stack (tagless)
-  sp : Int // Current top of stack (next push position)
-  bp : Int // Base pointer: index of first local in unified stack
-  num_locals : Int // Number of locals for current function
-  pc : Int // Program counter
-  status : RuntimeStatus // Execution status: Running, Terminated, or Trap
+  mut sp : Int // Current top of stack (next push position)
+  mut bp : Int // Base pointer: index of first local in unified stack
+  mut num_locals : Int // Number of locals for current function
+  mut pc : Int // Program counter
+  mut status : RuntimeStatus // Execution status: Running, Terminated, or Trap
   ctx : RuntimeContext // Reference to cold data (module, memory, globals, etc.)
 }
 

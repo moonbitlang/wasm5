@@ -26,7 +26,7 @@ fn Compiler::new(module_ : @core.Module) -> Compiler {
 
 ///|
 /// Emit a function pointer as UInt64
-fn Compiler::emit_fn(self : Compiler, f : (Runtime) -> Runtime) -> Unit {
+fn Compiler::emit_fn(self : Compiler, f : (Runtime) -> ReturnCode) -> Unit {
   self.ops.push(unsafe_function_to_uint64(f))
 }
 

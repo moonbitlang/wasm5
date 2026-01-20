@@ -7,6 +7,10 @@ pub enum RuntimeStatus {
   Returned // Used by native stack approach: callee returned, continue in caller
 } derive(Eq, Show)
 
+///|
+/// Return code from runtime ops (mirrors RuntimeStatus for compatibility).
+pub type ReturnCode = RuntimeStatus
+
 // MInstr is now represented as FixedArray[UInt64]:
 // - Function pointers: stored via unsafe_function_to_uint64
 // - ImmediateI32: stored as value.to_uint64()
