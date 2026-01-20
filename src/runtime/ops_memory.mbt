@@ -16,7 +16,6 @@ fn op_i32_load(rt : Runtime) -> ReturnCode {
     rt.ctx.memory.length().reinterpret_as_uint().to_uint64() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let addr = effective_addr.to_int()
@@ -44,7 +43,6 @@ fn op_i32_store(rt : Runtime) -> ReturnCode {
     rt.ctx.memory.length().reinterpret_as_uint().to_uint64() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let addr = effective_addr.to_int()
@@ -70,7 +68,6 @@ fn op_i32_load8_s(rt : Runtime) -> ReturnCode {
     rt.ctx.memory.length().reinterpret_as_uint().to_uint64() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let addr = effective_addr.to_int()
@@ -93,7 +90,6 @@ fn op_i32_load8_u(rt : Runtime) -> ReturnCode {
     rt.ctx.memory.length().reinterpret_as_uint().to_uint64() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let addr = effective_addr.to_int()
@@ -113,7 +109,6 @@ fn op_i32_load16_s(rt : Runtime) -> ReturnCode {
     rt.ctx.memory.length().reinterpret_as_uint().to_uint64() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let addr = effective_addr.to_int()
@@ -138,7 +133,6 @@ fn op_i32_load16_u(rt : Runtime) -> ReturnCode {
     rt.ctx.memory.length().reinterpret_as_uint().to_uint64() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let addr = effective_addr.to_int()
@@ -160,7 +154,6 @@ fn op_i64_load(rt : Runtime) -> ReturnCode {
     rt.ctx.memory.length().reinterpret_as_uint().to_uint64() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let addr = effective_addr.to_int()
@@ -199,7 +192,6 @@ fn op_i64_store(rt : Runtime) -> ReturnCode {
     rt.ctx.memory.length().reinterpret_as_uint().to_uint64() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let addr = effective_addr.to_int()
@@ -227,7 +219,6 @@ fn op_i64_load8_s(rt : Runtime) -> ReturnCode {
     rt.ctx.memory.length().reinterpret_as_uint().to_uint64() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let addr = effective_addr.to_int()
@@ -250,7 +241,6 @@ fn op_i64_load8_u(rt : Runtime) -> ReturnCode {
     rt.ctx.memory.length().reinterpret_as_uint().to_uint64() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let addr = effective_addr.to_int()
@@ -270,7 +260,6 @@ fn op_i64_load16_s(rt : Runtime) -> ReturnCode {
     rt.ctx.memory.length().reinterpret_as_uint().to_uint64() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let addr = effective_addr.to_int()
@@ -295,7 +284,6 @@ fn op_i64_load16_u(rt : Runtime) -> ReturnCode {
     rt.ctx.memory.length().reinterpret_as_uint().to_uint64() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let addr = effective_addr.to_int()
@@ -317,7 +305,6 @@ fn op_i64_load32_s(rt : Runtime) -> ReturnCode {
     rt.ctx.memory.length().reinterpret_as_uint().to_uint64() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let addr = effective_addr.to_int()
@@ -348,7 +335,6 @@ fn op_i64_load32_u(rt : Runtime) -> ReturnCode {
     rt.ctx.memory.length().reinterpret_as_uint().to_uint64() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let addr = effective_addr.to_int()
@@ -372,7 +358,6 @@ fn op_f32_load(rt : Runtime) -> ReturnCode {
     rt.ctx.memory.length().reinterpret_as_uint().to_uint64() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let addr = effective_addr.to_int()
@@ -397,7 +382,6 @@ fn op_f64_load(rt : Runtime) -> ReturnCode {
     rt.ctx.memory.length().reinterpret_as_uint().to_uint64() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let addr = effective_addr.to_int()
@@ -434,7 +418,6 @@ fn op_f32_store(rt : Runtime) -> ReturnCode {
     rt.ctx.memory.length().reinterpret_as_uint().to_uint64() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let addr = effective_addr.to_int()
@@ -459,7 +442,6 @@ fn op_f64_store(rt : Runtime) -> ReturnCode {
     rt.ctx.memory.length().reinterpret_as_uint().to_uint64() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let addr = effective_addr.to_int()
@@ -490,7 +472,6 @@ fn op_i32_store8(rt : Runtime) -> ReturnCode {
     rt.ctx.memory.length().reinterpret_as_uint().to_uint64() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let addr = effective_addr.to_int()
@@ -512,7 +493,6 @@ fn op_i32_store16(rt : Runtime) -> ReturnCode {
     rt.ctx.memory.length().reinterpret_as_uint().to_uint64() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let addr = effective_addr.to_int()
@@ -535,7 +515,6 @@ fn op_i64_store8(rt : Runtime) -> ReturnCode {
     rt.ctx.memory.length().reinterpret_as_uint().to_uint64() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let addr = effective_addr.to_int()
@@ -557,7 +536,6 @@ fn op_i64_store16(rt : Runtime) -> ReturnCode {
     rt.ctx.memory.length().reinterpret_as_uint().to_uint64() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let addr = effective_addr.to_int()
@@ -580,7 +558,6 @@ fn op_i64_store32(rt : Runtime) -> ReturnCode {
     rt.ctx.memory.length().reinterpret_as_uint().to_uint64() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let addr = effective_addr.to_int()
@@ -672,7 +649,6 @@ fn op_memory_copy(rt : Runtime) -> ReturnCode {
     dest + n > rt.ctx.memory.length() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
 
@@ -706,7 +682,6 @@ fn op_memory_fill(rt : Runtime) -> ReturnCode {
   if dest < 0 || n < 0 || dest + n > rt.ctx.memory.length() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
 
@@ -732,7 +707,6 @@ fn op_memory_init(rt : Runtime) -> ReturnCode {
   if data_idx < 0 || data_idx >= rt.ctx.data_segments.length() {
     rt.ctx.error_detail = "unknown data segment"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let data = rt.ctx.data_segments[data_idx]
@@ -745,7 +719,6 @@ fn op_memory_init(rt : Runtime) -> ReturnCode {
     dest + n > rt.ctx.memory.length() {
     rt.ctx.error_detail = "out of bounds memory access"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
 
@@ -765,7 +738,6 @@ fn op_data_drop(rt : Runtime) -> ReturnCode {
   // Check data segment index
   if data_idx < 0 || data_idx >= rt.ctx.data_segments.length() {
     rt.ctx.error_detail = "unknown data segment"
-    rt.status = Trap
     return Trap
   }
 

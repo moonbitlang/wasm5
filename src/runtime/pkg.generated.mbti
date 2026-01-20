@@ -76,7 +76,6 @@ pub struct Runtime {
   mut bp : Int
   mut num_locals : Int
   mut pc : Int
-  mut status : RuntimeStatus
   ctx : RuntimeContext
 }
 pub fn Runtime::call_by_index(Self, Int, Array[@core.Value]) -> Array[@core.Value] raise RuntimeError

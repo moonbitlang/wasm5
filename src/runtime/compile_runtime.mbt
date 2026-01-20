@@ -21,13 +21,9 @@ pub fn Runtime::run_start(self : Runtime) -> Unit raise RuntimeError {
         // Clear stack before setting up locals
         let rt = self
         rt.sp = 0
-        rt.status = Terminated
 
         // Initialize entry locals (start function has no parameters)
         let rt = initialize_entry_locals(rt, [], code)
-        if rt.status == Trap {
-          raise RuntimeError::from_detail(rt.ctx.error_detail)
-        }
         rt.pc = start_pc
 
         // Execute start function, ignoring runtime errors
@@ -43,15 +39,12 @@ pub fn Runtime::run_start(self : Runtime) -> Unit raise RuntimeError {
 ///|
 fn execute(rt : Runtime) -> Runtime raise RuntimeError {
   let rt = rt
-  rt.status = Running
-  while rt.status is Running {
+  let mut code = Running
+  while code is Running {
     let f = unsafe_uint64_to_function(rt.ops.unsafe_get(rt.pc))
-    let code = f(rt)
-    if code != Running {
-      rt.status = code
-    }
+    code = f(rt)
   }
-  if rt.status is Trap {
+  if code is Trap {
     raise RuntimeError::from_detail(rt.ctx.error_detail)
   }
   // Returned and Terminated both exit normally
@@ -80,7 +73,6 @@ fn execute_call(
   rt.bp = caller_bp
   rt.num_locals = caller_num_locals
   rt.pc = return_pc
-  rt.status = Running
   rt
 }
 
@@ -128,13 +120,9 @@ pub fn Runtime::call_compiled(
   // Clear stack before setting up entry frame
   let rt = self
   rt.sp = 0
-  rt.status = Terminated
 
   // Initialize entry locals (pushes args and locals onto stack, sets sp/num_locals)
   let rt = initialize_entry_locals(rt, args, code)
-  if rt.status == Trap {
-    raise RuntimeError::from_detail(rt.ctx.error_detail)
-  }
   rt.pc = start_pc
   let rt = execute(rt)
 
@@ -190,13 +178,9 @@ pub fn Runtime::call_by_index(
   // Clear stack before setting up entry frame
   let rt = self
   rt.sp = 0
-  rt.status = Terminated
 
   // Initialize entry locals (pushes args and locals onto stack, sets sp/num_locals)
   let rt = initialize_entry_locals(rt, args, code)
-  if rt.status == Trap {
-    raise RuntimeError::from_detail(rt.ctx.error_detail)
-  }
   rt.pc = start_pc
   let rt = execute(rt)
 

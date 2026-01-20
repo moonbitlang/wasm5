@@ -339,7 +339,6 @@ pub struct Runtime {
   mut bp : Int // Base pointer: index of first local in unified stack
   mut num_locals : Int // Number of locals for current function
   mut pc : Int // Program counter
-  mut status : RuntimeStatus // Execution status: Running, Terminated, or Trap
   ctx : RuntimeContext // Reference to cold data (module, memory, globals, etc.)
 }
 
@@ -720,7 +719,6 @@ pub fn Runtime::load_with_resolver(
     bp: 0,
     num_locals: 0,
     pc: 0,
-    status: Terminated,
     ctx,
   }
 }

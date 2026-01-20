@@ -52,13 +52,11 @@ fn op_i32_div_s(rt : Runtime) -> ReturnCode {
   if b == 0U {
     rt.ctx.error_detail = "division by zero"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   if a == 0x80000000U && b == 0xFFFFFFFFU {
     rt.ctx.error_detail = "integer overflow"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let result = (a.reinterpret_as_int() / b.reinterpret_as_int()).reinterpret_as_uint()
@@ -76,7 +74,6 @@ fn op_i32_div_u(rt : Runtime) -> ReturnCode {
   if b == 0U {
     rt.ctx.error_detail = "division by zero"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   rt.stack.unsafe_set(stack_top - 1, (a / b).to_uint64())
@@ -93,7 +90,6 @@ fn op_i32_rem_s(rt : Runtime) -> ReturnCode {
   if b == 0U {
     rt.ctx.error_detail = "division by zero"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   // INT_MIN % -1 = 0, but division would overflow and cause SIGFPE
@@ -118,7 +114,6 @@ fn op_i32_rem_u(rt : Runtime) -> ReturnCode {
   if b == 0U {
     rt.ctx.error_detail = "division by zero"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   rt.stack.unsafe_set(stack_top - 1, (a % b).to_uint64())
@@ -494,13 +489,11 @@ fn op_i64_div_s(rt : Runtime) -> ReturnCode {
   if b == 0UL {
     rt.ctx.error_detail = "division by zero"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   if a == 0x8000000000000000UL && b == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "integer overflow"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   let result = (a.reinterpret_as_int64() / b.reinterpret_as_int64()).reinterpret_as_uint64()
@@ -518,7 +511,6 @@ fn op_i64_div_u(rt : Runtime) -> ReturnCode {
   if b == 0UL {
     rt.ctx.error_detail = "division by zero"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   rt.stack.unsafe_set(stack_top - 1, a / b)
@@ -535,7 +527,6 @@ fn op_i64_rem_s(rt : Runtime) -> ReturnCode {
   if b == 0UL {
     rt.ctx.error_detail = "division by zero"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   // INT64_MIN % -1 = 0, but division would overflow and cause SIGFPE
@@ -560,7 +551,6 @@ fn op_i64_rem_u(rt : Runtime) -> ReturnCode {
   if b == 0UL {
     rt.ctx.error_detail = "division by zero"
     rt.sp = stack_top
-    rt.status = Trap
     return Trap
   }
   rt.stack.unsafe_set(stack_top - 1, a % b)

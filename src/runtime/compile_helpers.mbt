@@ -286,34 +286,31 @@ fn initialize_entry_locals(
 
 ///|
 /// Check if two function type signatures match.
-/// Returns Runtime with status set to Trap on mismatch.
+/// Returns Trap on mismatch.
 fn check_type_signature_match(
   expected : @core.FuncType,
   actual : @core.FuncType,
   error_msg : String,
   rt : Runtime,
-) -> Runtime {
+) -> ReturnCode {
   if expected.params.length() != actual.params.length() ||
     expected.results.length() != actual.results.length() {
     rt.ctx.error_detail = error_msg
-    rt.status = Trap
-    return rt
+    return Trap
   }
   for i in 0..<expected.params.length() {
     if expected.params[i] != actual.params[i] {
       rt.ctx.error_detail = error_msg
-      rt.status = Trap
-      return rt
+      return Trap
     }
   }
   for i in 0..<expected.results.length() {
     if expected.results[i] != actual.results[i] {
       rt.ctx.error_detail = error_msg
-      rt.status = Trap
-      return rt
+      return Trap
     }
   }
-  rt
+  Running
 }
 
 ///|
@@ -356,18 +353,16 @@ fn push_results(rt : Runtime, results : Array[Value]) -> Runtime {
 
 ///|
 /// Handle return from a tail call to imported function.
-/// Results are already on stack at sp, copy to bp and set Returned status.
+/// Results are already on stack at sp, copy to bp and return a tail-call code.
 /// Uses native stack approach - caller's execute_call will restore caller state.
 fn handle_tail_call_return(rt : Runtime) -> ReturnCode {
   // Results are at stack[rt.bp..rt.sp) - they're already in place for tail calls
   // Just signal return to let native stack unwind
   if rt.bp == 0 {
     // Entry function - terminate
-    rt.status = Terminated
     Terminated
   } else {
     // Nested call - let native stack restore caller state
-    rt.status = Returned
     Returned
   }
 }

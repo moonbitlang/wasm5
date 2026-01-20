@@ -168,7 +168,6 @@ fn op_struct_get(rt : Runtime) -> ReturnCode {
   // Null check (null is -1 / 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null structure reference"
-    rt.status = Trap
     return Trap
   }
   let ref_value = ref_raw.to_int()
@@ -182,7 +181,6 @@ fn op_struct_get(rt : Runtime) -> ReturnCode {
     }
     _ => {
       rt.ctx.error_detail = "struct.get: invalid reference"
-      rt.status = Trap
       Trap
     }
   }
@@ -199,7 +197,6 @@ fn op_struct_get_s(rt : Runtime) -> ReturnCode {
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "struct.get_s: null reference"
-    rt.status = Trap
     return Trap
   }
   let ref_value = ref_raw.to_int()
@@ -230,7 +227,6 @@ fn op_struct_get_s(rt : Runtime) -> ReturnCode {
     }
     _ => {
       rt.ctx.error_detail = "struct.get_s: invalid reference"
-      rt.status = Trap
       Trap
     }
   }
@@ -247,7 +243,6 @@ fn op_struct_get_u(rt : Runtime) -> ReturnCode {
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "struct.get_u: null reference"
-    rt.status = Trap
     return Trap
   }
   let ref_value = ref_raw.to_int()
@@ -266,7 +261,6 @@ fn op_struct_get_u(rt : Runtime) -> ReturnCode {
     }
     _ => {
       rt.ctx.error_detail = "struct.get_u: invalid reference"
-      rt.status = Trap
       Trap
     }
   }
@@ -284,7 +278,6 @@ fn op_struct_set(rt : Runtime) -> ReturnCode {
   // Null check (null is -1 / 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null structure reference"
-    rt.status = Trap
     return Trap
   }
   let ref_value = ref_raw.to_int()
@@ -296,7 +289,6 @@ fn op_struct_set(rt : Runtime) -> ReturnCode {
     }
     _ => {
       rt.ctx.error_detail = "struct.set: invalid reference"
-      rt.status = Trap
       Trap
     }
   }
@@ -377,7 +369,6 @@ fn op_array_new_data(rt : Runtime) -> ReturnCode {
   // Get data segment
   if data_idx < 0 || data_idx >= rt.ctx.data_segments.length() {
     rt.ctx.error_detail = "array.new_data: invalid data segment index"
-    rt.status = Trap
     return Trap
   }
   let data = rt.ctx.data_segments[data_idx]
@@ -385,7 +376,6 @@ fn op_array_new_data(rt : Runtime) -> ReturnCode {
   // Bounds check
   if offset < 0 || offset + length * elem_size > data.length() {
     rt.ctx.error_detail = "out of bounds memory access"
-    rt.status = Trap
     return Trap
   }
 
@@ -417,7 +407,6 @@ fn op_array_get(rt : Runtime) -> ReturnCode {
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null array reference"
-    rt.status = Trap
     return Trap
   }
   let ref_value = ref_raw.to_int()
@@ -425,7 +414,6 @@ fn op_array_get(rt : Runtime) -> ReturnCode {
     Some(Array(a)) => {
       if index < 0 || index >= a.elements.length() {
         rt.ctx.error_detail = "out of bounds array access"
-        rt.status = Trap
         return Trap
       }
       let value = a.elements[index]
@@ -436,7 +424,6 @@ fn op_array_get(rt : Runtime) -> ReturnCode {
     }
     _ => {
       rt.ctx.error_detail = "array.get: invalid reference"
-      rt.status = Trap
       Trap
     }
   }
@@ -453,7 +440,6 @@ fn op_array_get_s(rt : Runtime) -> ReturnCode {
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null array reference"
-    rt.status = Trap
     return Trap
   }
   let ref_value = ref_raw.to_int()
@@ -461,7 +447,6 @@ fn op_array_get_s(rt : Runtime) -> ReturnCode {
     Some(Array(a)) => {
       if index < 0 || index >= a.elements.length() {
         rt.ctx.error_detail = "out of bounds array access"
-        rt.status = Trap
         return Trap
       }
       let raw_value = a.elements[index].to_uint()
@@ -487,7 +472,6 @@ fn op_array_get_s(rt : Runtime) -> ReturnCode {
     }
     _ => {
       rt.ctx.error_detail = "array.get_s: invalid reference"
-      rt.status = Trap
       Trap
     }
   }
@@ -504,7 +488,6 @@ fn op_array_get_u(rt : Runtime) -> ReturnCode {
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null array reference"
-    rt.status = Trap
     return Trap
   }
   let ref_value = ref_raw.to_int()
@@ -512,7 +495,6 @@ fn op_array_get_u(rt : Runtime) -> ReturnCode {
     Some(Array(a)) => {
       if index < 0 || index >= a.elements.length() {
         rt.ctx.error_detail = "out of bounds array access"
-        rt.status = Trap
         return Trap
       }
       let raw_value = a.elements[index].to_uint()
@@ -528,7 +510,6 @@ fn op_array_get_u(rt : Runtime) -> ReturnCode {
     }
     _ => {
       rt.ctx.error_detail = "array.get_u: invalid reference"
-      rt.status = Trap
       Trap
     }
   }
@@ -546,7 +527,6 @@ fn op_array_set(rt : Runtime) -> ReturnCode {
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null array reference"
-    rt.status = Trap
     return Trap
   }
   let ref_value = ref_raw.to_int()
@@ -554,7 +534,6 @@ fn op_array_set(rt : Runtime) -> ReturnCode {
     Some(Array(a)) => {
       if index < 0 || index >= a.elements.length() {
         rt.ctx.error_detail = "out of bounds array access"
-        rt.status = Trap
         return Trap
       }
       a.elements[index] = value
@@ -563,7 +542,6 @@ fn op_array_set(rt : Runtime) -> ReturnCode {
     }
     _ => {
       rt.ctx.error_detail = "array.set: invalid reference"
-      rt.status = Trap
       Trap
     }
   }
@@ -579,7 +557,6 @@ fn op_array_len(rt : Runtime) -> ReturnCode {
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null array reference"
-    rt.status = Trap
     return Trap
   }
   let ref_value = ref_raw.to_int()
@@ -593,7 +570,6 @@ fn op_array_len(rt : Runtime) -> ReturnCode {
     }
     _ => {
       rt.ctx.error_detail = "array.len: invalid reference"
-      rt.status = Trap
       Trap
     }
   }
@@ -612,7 +588,6 @@ fn op_array_fill(rt : Runtime) -> ReturnCode {
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null array reference"
-    rt.status = Trap
     return Trap
   }
   let ref_value = ref_raw.to_int()
@@ -620,7 +595,6 @@ fn op_array_fill(rt : Runtime) -> ReturnCode {
     Some(Array(a)) => {
       if offset < 0 || offset + length > a.elements.length() {
         rt.ctx.error_detail = "out of bounds array access"
-        rt.status = Trap
         return Trap
       }
       for i = 0; i < length; i = i + 1 {
@@ -631,7 +605,6 @@ fn op_array_fill(rt : Runtime) -> ReturnCode {
     }
     _ => {
       rt.ctx.error_detail = "array.fill: invalid reference"
-      rt.status = Trap
       Trap
     }
   }
@@ -651,7 +624,6 @@ fn op_array_copy(rt : Runtime) -> ReturnCode {
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if dst_ref_raw == 0xFFFFFFFFFFFFFFFFUL || src_ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null array reference"
-    rt.status = Trap
     return Trap
   }
   let dst_ref = dst_ref_raw.to_int()
@@ -663,7 +635,6 @@ fn op_array_copy(rt : Runtime) -> ReturnCode {
         src_offset < 0 ||
         src_offset + length > src.elements.length() {
         rt.ctx.error_detail = "out of bounds array access"
-        rt.status = Trap
         return Trap
       }
       // Handle overlapping regions
@@ -681,7 +652,6 @@ fn op_array_copy(rt : Runtime) -> ReturnCode {
     }
     _ => {
       rt.ctx.error_detail = "array.copy: invalid reference"
-      rt.status = Trap
       Trap
     }
   }
@@ -718,14 +688,12 @@ fn op_i31_get_s(rt : Runtime) -> ReturnCode {
   // Check for null reference first (null is -1 / 0xFFFFFFFFFFFFFFFF)
   if encoded == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null i31 reference"
-    rt.status = Trap
     return Trap
   }
   let encoded_u32 = encoded.to_uint()
   // Check if it's a valid i31ref (lowest bit set)
   if (encoded_u32 & 1U) != 1U {
     rt.ctx.error_detail = "i31.get_s: not an i31ref"
-    rt.status = Trap
     return Trap
   }
 
@@ -752,14 +720,12 @@ fn op_i31_get_u(rt : Runtime) -> ReturnCode {
   // Check for null reference first (null is -1 / 0xFFFFFFFFFFFFFFFF)
   if encoded == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null i31 reference"
-    rt.status = Trap
     return Trap
   }
   let encoded_u32 = encoded.to_uint()
   // Check if it's a valid i31ref
   if (encoded_u32 & 1U) != 1U {
     rt.ctx.error_detail = "i31.get_u: not an i31ref"
-    rt.status = Trap
     return Trap
   }
 
@@ -1374,7 +1340,6 @@ fn op_ref_cast(rt : Runtime) -> ReturnCode {
     Running
   } else {
     rt.ctx.error_detail = "ref.cast: cast failed"
-    rt.status = Trap
     Trap
   }
 }
@@ -1476,7 +1441,6 @@ fn op_array_new_elem(rt : Runtime) -> ReturnCode {
   // Get element segment from module
   if elem_idx < 0 || elem_idx >= rt.ctx.module_.elems.length() {
     rt.ctx.error_detail = "array.new_elem: invalid element segment index"
-    rt.status = Trap
     return Trap
   }
   let elem = rt.ctx.module_.elems[elem_idx]
@@ -1488,7 +1452,6 @@ fn op_array_new_elem(rt : Runtime) -> ReturnCode {
     // Dropped segment: any non-zero length or offset is out of bounds
     if length != 0 || offset != 0 {
       rt.ctx.error_detail = "out of bounds table access"
-      rt.status = Trap
       return Trap
     }
     // n=0, src=0 is valid even for dropped segments - create empty array
@@ -1503,7 +1466,6 @@ fn op_array_new_elem(rt : Runtime) -> ReturnCode {
   // Bounds check
   if offset < 0 || offset + length > elem.init.length() {
     rt.ctx.error_detail = "out of bounds table access"
-    rt.status = Trap
     return Trap
   }
 
@@ -1538,7 +1500,6 @@ fn op_array_init_data(rt : Runtime) -> ReturnCode {
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if arr_ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null array reference"
-    rt.status = Trap
     return Trap
   }
   let arr_ref = arr_ref_raw.to_int()
@@ -1546,7 +1507,6 @@ fn op_array_init_data(rt : Runtime) -> ReturnCode {
   // Get data segment
   if data_idx < 0 || data_idx >= rt.ctx.data_segments.length() {
     rt.ctx.error_detail = "array.init_data: invalid data segment index"
-    rt.status = Trap
     return Trap
   }
   let data = rt.ctx.data_segments[data_idx]
@@ -1555,14 +1515,12 @@ fn op_array_init_data(rt : Runtime) -> ReturnCode {
       // Check array bounds first (spec requires this order)
       if arr_offset < 0 || arr_offset + length > a.elements.length() {
         rt.ctx.error_detail = "out of bounds array access"
-        rt.status = Trap
         return Trap
       }
 
       // Bounds check on data segment
       if data_offset < 0 || data_offset + length * elem_size > data.length() {
         rt.ctx.error_detail = "out of bounds memory access"
-        rt.status = Trap
         return Trap
       }
 
@@ -1581,7 +1539,6 @@ fn op_array_init_data(rt : Runtime) -> ReturnCode {
     }
     _ => {
       rt.ctx.error_detail = "array.init_data: invalid reference"
-      rt.status = Trap
       Trap
     }
   }
@@ -1602,7 +1559,6 @@ fn op_array_init_elem(rt : Runtime) -> ReturnCode {
   // Null check (null is 0xFFFFFFFFFFFFFFFF)
   if arr_ref_raw == 0xFFFFFFFFFFFFFFFFUL {
     rt.ctx.error_detail = "null array reference"
-    rt.status = Trap
     return Trap
   }
   let arr_ref = arr_ref_raw.to_int()
@@ -1610,7 +1566,6 @@ fn op_array_init_elem(rt : Runtime) -> ReturnCode {
   // Get element segment
   if elem_idx < 0 || elem_idx >= rt.ctx.module_.elems.length() {
     rt.ctx.error_detail = "array.init_elem: invalid element segment index"
-    rt.status = Trap
     return Trap
   }
   let elem = rt.ctx.module_.elems[elem_idx]
@@ -1619,7 +1574,6 @@ fn op_array_init_elem(rt : Runtime) -> ReturnCode {
       // Check array bounds first (spec requires this order)
       if arr_offset < 0 || arr_offset + length > a.elements.length() {
         rt.ctx.error_detail = "out of bounds array access"
-        rt.status = Trap
         return Trap
       }
 
@@ -1630,7 +1584,6 @@ fn op_array_init_elem(rt : Runtime) -> ReturnCode {
         // Dropped segment: any non-zero length or offset is out of bounds
         if length != 0 || elem_offset != 0 {
           rt.ctx.error_detail = "out of bounds table access"
-          rt.status = Trap
           return Trap
         }
         // n=0, src=0 is valid even for dropped segments
@@ -1641,7 +1594,6 @@ fn op_array_init_elem(rt : Runtime) -> ReturnCode {
       // Bounds check on element segment
       if elem_offset < 0 || elem_offset + length > elem.init.length() {
         rt.ctx.error_detail = "out of bounds table access"
-        rt.status = Trap
         return Trap
       }
 
@@ -1657,7 +1609,6 @@ fn op_array_init_elem(rt : Runtime) -> ReturnCode {
     }
     _ => {
       rt.ctx.error_detail = "array.init_elem: invalid reference"
-      rt.status = Trap
       Trap
     }
   }

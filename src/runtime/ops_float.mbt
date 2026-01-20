@@ -710,12 +710,10 @@ fn op_i64_trunc_f64_s(rt : Runtime) -> ReturnCode {
   // Trap on NaN or out of range
   if a.is_nan() {
     rt.ctx.error_detail = "integer overflow"
-    rt.status = Trap
     return Trap
   }
   if a >= 9223372036854775808.0 || a < -9223372036854775808.0 {
     rt.ctx.error_detail = "integer overflow"
-    rt.status = Trap
     return Trap
   }
   rt.stack.unsafe_set(rt.sp - 1, a.to_int64().reinterpret_as_uint64())
@@ -729,12 +727,10 @@ fn op_i64_trunc_f64_u(rt : Runtime) -> ReturnCode {
   // Trap on NaN or out of range
   if a.is_nan() {
     rt.ctx.error_detail = "integer overflow"
-    rt.status = Trap
     return Trap
   }
   if a >= 18446744073709551616.0 || a <= -1.0 {
     rt.ctx.error_detail = "integer overflow"
-    rt.status = Trap
     return Trap
   }
   // Use C function for proper conversion at precision boundaries
@@ -749,12 +745,10 @@ fn op_i32_trunc_f32_s(rt : Runtime) -> ReturnCode {
   // Trap on NaN or out of range
   if a.is_nan() {
     rt.ctx.error_detail = "integer overflow"
-    rt.status = Trap
     return Trap
   }
   if a >= 2147483648.0 || a < -2147483648.0 {
     rt.ctx.error_detail = "integer overflow"
-    rt.status = Trap
     return Trap
   }
   rt.stack.unsafe_set(rt.sp - 1, a.to_int().reinterpret_as_uint().to_uint64())
@@ -768,12 +762,10 @@ fn op_i32_trunc_f32_u(rt : Runtime) -> ReturnCode {
   // Trap on NaN or out of range
   if a.is_nan() {
     rt.ctx.error_detail = "integer overflow"
-    rt.status = Trap
     return Trap
   }
   if a >= 4294967296.0 || a <= -1.0 {
     rt.ctx.error_detail = "integer overflow"
-    rt.status = Trap
     return Trap
   }
   rt.stack.unsafe_set(rt.sp - 1, a.to_double().to_uint64() & 0xFFFFFFFFUL)
@@ -787,12 +779,10 @@ fn op_i32_trunc_f64_s(rt : Runtime) -> ReturnCode {
   // Trap on NaN or out of range
   if a.is_nan() {
     rt.ctx.error_detail = "integer overflow"
-    rt.status = Trap
     return Trap
   }
   if a >= 2147483648.0 || a <= -2147483649.0 {
     rt.ctx.error_detail = "integer overflow"
-    rt.status = Trap
     return Trap
   }
   rt.stack.unsafe_set(rt.sp - 1, a.to_int().reinterpret_as_uint().to_uint64())
@@ -806,12 +796,10 @@ fn op_i32_trunc_f64_u(rt : Runtime) -> ReturnCode {
   // Trap on NaN or out of range
   if a.is_nan() {
     rt.ctx.error_detail = "integer overflow"
-    rt.status = Trap
     return Trap
   }
   if a >= 4294967296.0 || a <= -1.0 {
     rt.ctx.error_detail = "integer overflow"
-    rt.status = Trap
     return Trap
   }
   rt.stack.unsafe_set(rt.sp - 1, a.to_uint64() & 0xFFFFFFFFUL)
@@ -825,12 +813,10 @@ fn op_i64_trunc_f32_s(rt : Runtime) -> ReturnCode {
   // Trap on NaN or out of range
   if a.is_nan() {
     rt.ctx.error_detail = "integer overflow"
-    rt.status = Trap
     return Trap
   }
   if a >= 9223372036854775808.0 || a < -9223372036854775808.0 {
     rt.ctx.error_detail = "integer overflow"
-    rt.status = Trap
     return Trap
   }
   rt.stack.unsafe_set(rt.sp - 1, a.to_int64().reinterpret_as_uint64())
@@ -844,13 +830,11 @@ fn op_i64_trunc_f32_u(rt : Runtime) -> ReturnCode {
   // Trap on NaN or out of range
   if a.is_nan() {
     rt.ctx.error_detail = "integer overflow"
-    rt.status = Trap
     return Trap
   }
   let a_double = a.to_double()
   if a_double >= 18446744073709551616.0 || a_double <= -1.0 {
     rt.ctx.error_detail = "integer overflow"
-    rt.status = Trap
     return Trap
   }
   // Use C function for proper conversion at precision boundaries
