@@ -707,7 +707,7 @@ fn compile_instr(
       ctx.is_unreachable = true
     }
 
-    // Function calls
+    // Function calls (C runtime format: minimal immediates, metadata at runtime)
     Call(func_idx_uint) => {
       let func_idx = func_idx_uint.reinterpret_as_int()
       let local_idx = func_idx - mod_info.num_imported_funcs
@@ -722,12 +722,11 @@ fn compile_instr(
         for _ in 0..<num_params {
           ignore(ctx.pop_slot())
         }
+        // Emit call: callee_pc, frame_offset (C runtime gets params/results from metadata)
         ctx.emit_op(@core.OpTag::Call)
         let patch_pos = ctx.code.length()
-        ctx.emit_idx(0)
+        ctx.emit_idx(0) // callee_pc placeholder
         ctx.emit_idx(frame_offset)
-        ctx.emit_idx(num_params)
-        ctx.emit_idx(num_results)
         ctx.call_patches.push({ patch_pos, func_idx: local_idx })
         for i in 0..<num_results {
           ctx.slot_stack.push(frame_offset + i)
@@ -748,10 +747,10 @@ fn compile_instr(
         for _ in 0..<num_params {
           ignore(ctx.pop_slot())
         }
+        // Emit call_import: import_idx, frame_offset
         ctx.emit_op(@core.OpTag::CallImport)
         ctx.emit_idx(func_idx)
-        ctx.emit_idx(num_params)
-        ctx.emit_idx(num_results)
+        ctx.emit_idx(frame_offset)
         for i in 0..<num_results {
           ctx.slot_stack.push(frame_offset + i)
         }
@@ -776,11 +775,11 @@ fn compile_instr(
       for _ in 0..<num_params {
         ignore(ctx.pop_slot())
       }
+      // Emit call_indirect: type_idx, table_idx, frame_offset
       ctx.emit_op(@core.OpTag::CallIndirect)
-      ctx.emit_idx(table_idx.reinterpret_as_int())
       ctx.emit_idx(type_int)
-      ctx.emit_idx(num_params)
-      ctx.emit_idx(num_results)
+      ctx.emit_idx(table_idx.reinterpret_as_int())
+      ctx.emit_idx(frame_offset)
       for i in 0..<num_results {
         ctx.slot_stack.push(frame_offset + i)
       }
@@ -869,9 +868,10 @@ fn compile_instr(
       for _ in 0..<num_params {
         ignore(ctx.pop_slot())
       }
+      // Emit call_ref: type_idx, frame_offset
       ctx.emit_op(@core.OpTag::CallRef)
       ctx.emit_idx(type_int)
-      ctx.emit_idx(num_results)
+      ctx.emit_idx(frame_offset)
       for i in 0..<num_results {
         ctx.slot_stack.push(frame_offset + i)
       }

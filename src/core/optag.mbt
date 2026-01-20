@@ -787,18 +787,18 @@ pub fn get_immediate_count(opcode : Int64) -> Int {
     4L => 0 // FuncExit
     5L => 2 // CopySlot: src, dst
     6L => 1 // SetSp: new_sp
-    7L => 3 // Br: target_pc, arity, drop_count
-    8L => 4 // BrIf: target_pc, arity, drop_count, fallthrough_pc
-    9L => 2 // If: else_pc, end_pc
-    10L => 0 // BrTable: variable immediates (handled specially by caller)
-    11L => 4 // Call: callee_pc, frame_offset, num_params, num_results
-    12L => 3 // CallImport: import_idx, num_params, num_results
-    13L => 3 // CallExternal: target_context, func_idx, num_results
+    7L => 1 // Br: target_pc
+    8L => 2 // BrIf: taken_pc, fallthrough_pc
+    9L => 1 // If: else_pc
+    10L => 0 // BrTable: variable immediates (handled specially)
+    11L => 2 // Call: callee_pc, frame_offset
+    12L => 2 // CallImport: import_idx, frame_offset
+    13L => 4 // CallExternal: context_ptr, func_idx, num_params, num_results
     14L => 3 // Entry: num_locals, first_local, num_to_zero
-    15L => 4 // CallIndirect: table_idx, type_idx, num_params, num_results
-    16L => 2 // CallRef: type_idx, num_results
-    17L => 4 // BrOnNull: target_pc, arity, drop_count, slot
-    18L => 4 // BrOnNonNull: target_pc, arity, drop_count, slot
+    15L => 3 // CallIndirect: type_idx, table_idx, frame_offset
+    16L => 2 // CallRef: type_idx, frame_offset
+    17L => 2 // BrOnNull: taken_pc, fallthrough_pc
+    18L => 2 // BrOnNonNull: taken_pc, fallthrough_pc
 
     // Constants (1 immediate each)
     20L => 1 // I32Const: value
@@ -855,17 +855,17 @@ pub fn get_immediate_count(opcode : Int64) -> Int {
     195L => 1 // DataDrop: data_idx
 
     // Table operations
-    196L => 0 // TableCopy
+    196L => 2 // TableCopy: dst_table_idx, src_table_idx
     197L => 1 // TableFill: table_idx
     198L => 2 // TableInit: elem_idx, table_idx
     199L => 1 // ElemDrop: elem_idx
     200L => 1 // TableGet: table_idx
     201L => 1 // TableSet: table_idx
     202L => 1 // TableSize: table_idx
-    203L => 2 // TableGrow: table_idx, init_val
+    203L => 1 // TableGrow: table_idx
 
     // Reference types
-    204L => 0 // RefNull (type is implicit)
+    204L => 1 // RefNull: type_code
     205L => 1 // RefFunc: func_idx
     206L => 0 // RefIsNull
     207L => 0 // RefEq
