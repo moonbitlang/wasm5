@@ -3,7 +3,7 @@
 /// This structure is produced by the unified compiler and consumed by
 /// both the MoonBit runtime (via switch dispatch) and the C runtime
 /// (via opcode-to-function-pointer transformation).
-pub struct CompiledModule {
+pub(all) struct CompiledModule {
   /// Universal instruction stream (flat Int64 array).
   /// Opcodes are stored as Int64 values, with immediates following each opcode.
   /// The number of immediates per opcode is determined by get_immediate_count().

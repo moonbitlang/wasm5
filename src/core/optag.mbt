@@ -2,7 +2,7 @@
 /// Universal opcode tags for the compiled IR.
 /// These are stored as Int64 in the code array and can be transformed
 /// to function pointers for the C runtime.
-pub enum OpTag {
+pub(all) enum OpTag {
   // ============================================================
   // Control flow (0-19)
   // ============================================================

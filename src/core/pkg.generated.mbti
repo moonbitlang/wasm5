@@ -90,7 +90,7 @@ pub(all) struct Code {
   mut max_stack_height : Int
 }
 
-pub struct CompiledModule {
+pub(all) struct CompiledModule {
   code : Array[Int64]
   func_entries : Array[Int]
   func_num_locals : Array[Int]
@@ -472,7 +472,7 @@ pub(all) struct Module {
   codes : Array[Code]
 }
 
-pub enum OpTag {
+pub(all) enum OpTag {
   Unreachable
   Nop
   Return
