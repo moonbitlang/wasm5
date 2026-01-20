@@ -65,9 +65,43 @@ fn trap_to_error(trap : TrapCode) -> @runtime.RuntimeError {
 }
 
 ///|
-/// Load a module and compile it for C runtime execution.
-pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
-  let compiled = compile(module_)
+/// Build import context arrays for cross-module calls
+fn build_import_context_arrays(
+  num_imported : Int,
+  resolved_imports : Map[Int, ResolvedImport],
+) -> (FixedArray[Int64], FixedArray[Int]) {
+  let import_context_ptrs : FixedArray[Int64] = FixedArray::make(
+    if num_imported > 0 {
+      num_imported
+    } else {
+      1
+    },
+    -1L, // -1 means not resolved
+  )
+  let import_target_func_idxs : FixedArray[Int] = FixedArray::make(
+    if num_imported > 0 {
+      num_imported
+    } else {
+      1
+    },
+    -1,
+  )
+  for import_idx, resolved in resolved_imports {
+    if import_idx >= 0 && import_idx < num_imported {
+      import_context_ptrs[import_idx] = resolved.target_context_ptr
+      import_target_func_idxs[import_idx] = resolved.target_func_idx
+    }
+  }
+  (import_context_ptrs, import_target_func_idxs)
+}
+
+///|
+/// Build a CRuntime instance from a compiled module.
+fn build_runtime(
+  module_ : @core.Module,
+  compiled : CompiledModule,
+  resolved_imports : Map[Int, ResolvedImport],
+) -> CRuntime {
   // Initialize globals from module
   let globals = init_globals(module_)
   // Initialize memory from module (pre-allocated to max size)
@@ -97,23 +131,9 @@ pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
     elem_segment_sizes,
     elem_segment_dropped,
   ) = flatten_elem_segments(module_)
-  // For basic load with no imports, use empty arrays
   let num_imported = count_imported_funcs(module_)
-  let import_context_ptrs : FixedArray[Int64] = FixedArray::make(
-    if num_imported > 0 {
-      num_imported
-    } else {
-      1
-    },
-    -1L, // -1 means not resolved
-  )
-  let import_target_func_idxs : FixedArray[Int] = FixedArray::make(
-    if num_imported > 0 {
-      num_imported
-    } else {
-      1
-    },
-    -1,
+  let (import_context_ptrs, import_target_func_idxs) = build_import_context_arrays(
+    num_imported, resolved_imports,
   )
   {
     module_,
@@ -142,8 +162,15 @@ pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
     elem_segment_sizes,
     elem_segment_dropped,
     context_ptr: 0L, // Will be lazily created when needed for cross-module calls
-    resolved_imports: {}, // No resolved imports for basic load
+    resolved_imports,
   }
+}
+
+///|
+/// Load a module and compile it for C runtime execution.
+pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
+  let compiled = compile(module_)
+  build_runtime(module_, compiled, {})
 }
 
 ///|
@@ -153,89 +180,7 @@ pub fn CRuntime::load_with_imports(
   resolved_imports : Map[Int, ResolvedImport],
 ) -> CRuntime {
   let compiled = compile_with_imports(module_, resolved_imports)
-  // Initialize globals from module
-  let globals = init_globals(module_)
-  // Initialize memory from module (pre-allocated to max size)
-  let (memory, memory_pages, memory_max_size) = init_memory(module_)
-  // Initialize tables from module (needs globals for element offset evaluation)
-  let (tables, table_logical_sizes, table_max_sizes) = init_tables(
-    module_, globals,
-  )
-  // Flatten tables for C FFI (pass sizes and max_sizes for allocation)
-  let (tables_flat, table_offsets, table_sizes, table_max_sizes) = flatten_tables(
-    tables, table_logical_sizes, table_max_sizes,
-  )
-  // Build type info for call_indirect type checking
-  let (func_type_idxs, type_param_counts, type_result_counts) = build_type_info(
-    module_,
-  )
-  // Build import function metadata for op_call_import
-  let (import_num_params, import_num_results) = build_import_info(module_)
-  // Flatten data segments for bulk memory operations
-  let (data_segments_flat, data_segment_offsets, data_segment_sizes) = flatten_data_segments(
-    module_,
-  )
-  // Flatten element segments for bulk table operations
-  let (
-    elem_segments_flat,
-    elem_segment_offsets,
-    elem_segment_sizes,
-    elem_segment_dropped,
-  ) = flatten_elem_segments(module_)
-  // Build import context arrays from resolved imports
-  let num_imported = count_imported_funcs(module_)
-  let import_context_ptrs : FixedArray[Int64] = FixedArray::make(
-    if num_imported > 0 {
-      num_imported
-    } else {
-      1
-    },
-    -1L, // -1 means not resolved
-  )
-  let import_target_func_idxs : FixedArray[Int] = FixedArray::make(
-    if num_imported > 0 {
-      num_imported
-    } else {
-      1
-    },
-    -1,
-  )
-  // Fill in resolved import info
-  for import_idx, resolved in resolved_imports {
-    if import_idx >= 0 && import_idx < num_imported {
-      import_context_ptrs[import_idx] = resolved.target_context_ptr
-      import_target_func_idxs[import_idx] = resolved.target_func_idx
-    }
-  }
-  {
-    module_,
-    compiled,
-    globals,
-    memory,
-    memory_pages,
-    memory_max_size,
-    tables,
-    tables_flat,
-    table_offsets,
-    table_sizes,
-    table_max_sizes,
-    func_type_idxs,
-    type_param_counts,
-    type_result_counts,
-    import_num_params,
-    import_num_results,
-    import_context_ptrs,
-    import_target_func_idxs,
-    data_segments_flat,
-    data_segment_offsets,
-    data_segment_sizes,
-    elem_segments_flat,
-    elem_segment_offsets,
-    elem_segment_sizes,
-    elem_segment_dropped,
-    context_ptr: 0L,
-    resolved_imports,
-  }
+  build_runtime(module_, compiled, resolved_imports)
 }
 
 ///|
@@ -485,8 +430,6 @@ fn compute_type_signature_hash(ft : @core.FuncType) -> Int {
 fn build_type_info(
   module_ : @core.Module,
 ) -> (FixedArray[Int], FixedArray[Int], FixedArray[Int]) {
-  // Count imported functions
-  let num_imported = count_imported_funcs(module_)
   // Build func_type_idxs: type index for each function
   let func_type_idxs : Array[Int] = []
   // First, imported function types
@@ -508,7 +451,7 @@ fn build_type_info(
     match type_def {
       Func(ft) => {
         type_sig_hash1.push(compute_type_signature_hash(ft))
-        type_sig_hash2.push(ft.params.length().lsl(16) | ft.results.length())
+        type_sig_hash2.push((ft.params.length() << 16) | ft.results.length())
       }
       _ => {
         // For non-function types (struct, array), use sentinel values
@@ -1005,7 +948,7 @@ pub fn CRuntime::call_compiled(
   name : Bytes,
   args : Array[Value],
 ) -> Array[Value] raise @runtime.RuntimeError {
-  let name_str = @encoding/utf8.decode(name) catch { _ => return [] }
+  let name_str = @utf8.decode(name) catch { _ => return [] }
   match self.compiled.exports.get(name_str) {
     Some(export_idx) => {
       let num_imported = count_imported_funcs(self.module_)
