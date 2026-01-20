@@ -252,7 +252,8 @@ fn pop_arguments(rt : Runtime, func_type : @core.FuncType) -> PopArgs {
     let raw = rt.stack.unsafe_get(stack_top)
     args[i] = stack_to_value(raw, func_type.params[i])
   }
-  { rt: { ..rt, sp: stack_top }, args }
+  rt.sp = stack_top
+  { rt, args }
 }
 
 ///|
@@ -277,36 +278,39 @@ fn initialize_entry_locals(
 
   // Set num_locals (declared locals will be initialized by compiled code)
   let num_locals = args.length() + code.locals.length()
-  { ..rt, sp: stack_top, bp, num_locals }
+  rt.sp = stack_top
+  rt.bp = bp
+  rt.num_locals = num_locals
+  rt
 }
 
 ///|
 /// Check if two function type signatures match.
-/// Returns Runtime with status set to Trap on mismatch.
+/// Returns Trap on mismatch.
 fn check_type_signature_match(
   expected : @core.FuncType,
   actual : @core.FuncType,
   error_msg : String,
   rt : Runtime,
-) -> Runtime {
+) -> ReturnCode {
   if expected.params.length() != actual.params.length() ||
     expected.results.length() != actual.results.length() {
     rt.ctx.error_detail = error_msg
-    return { ..rt, status: Trap }
+    return Trap
   }
   for i in 0..<expected.params.length() {
     if expected.params[i] != actual.params[i] {
       rt.ctx.error_detail = error_msg
-      return { ..rt, status: Trap }
+      return Trap
     }
   }
   for i in 0..<expected.results.length() {
     if expected.results[i] != actual.results[i] {
       rt.ctx.error_detail = error_msg
-      return { ..rt, status: Trap }
+      return Trap
     }
   }
-  rt
+  Running
 }
 
 ///|
@@ -330,7 +334,8 @@ fn call_imported_function(
     rt.stack.unsafe_set(stack_top, value_to_stack(results[i]))
     stack_top += 1
   }
-  { ..rt, sp: stack_top }
+  rt.sp = stack_top
+  rt
 }
 
 ///|
@@ -342,22 +347,23 @@ fn push_results(rt : Runtime, results : Array[Value]) -> Runtime {
     rt.stack.unsafe_set(stack_top, value_to_stack(results[i]))
     stack_top += 1
   }
-  { ..rt, sp: stack_top }
+  rt.sp = stack_top
+  rt
 }
 
 ///|
 /// Handle return from a tail call to imported function.
-/// Results are already on stack at sp, copy to bp and set Returned status.
+/// Results are already on stack at sp, copy to bp and return a tail-call code.
 /// Uses native stack approach - caller's execute_call will restore caller state.
-fn handle_tail_call_return(rt : Runtime) -> Runtime {
+fn handle_tail_call_return(rt : Runtime) -> ReturnCode {
   // Results are at stack[rt.bp..rt.sp) - they're already in place for tail calls
   // Just signal return to let native stack unwind
   if rt.bp == 0 {
     // Entry function - terminate
-    { ..rt, status: Terminated }
+    Terminated
   } else {
     // Nested call - let native stack restore caller state
-    { ..rt, status: Returned }
+    Returned
   }
 }
 
@@ -433,7 +439,7 @@ fn value_to_stack(v : Value) -> UInt64 {
 }
 
 ///|
-extern "C" fn unsafe_function_to_uint64(f : (Runtime) -> Runtime) -> UInt64 = "unsafe_function_to_uint64"
+extern "C" fn unsafe_function_to_uint64(f : (Runtime) -> ReturnCode) -> UInt64 = "unsafe_function_to_uint64"
 
 ///|
-extern "C" fn unsafe_uint64_to_function(u : UInt64) -> (Runtime) -> Runtime = "unsafe_uint64_to_function"
+extern "C" fn unsafe_uint64_to_function(u : UInt64) -> (Runtime) -> ReturnCode = "unsafe_uint64_to_function"
