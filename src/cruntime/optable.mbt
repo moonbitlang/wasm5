@@ -58,6 +58,9 @@ extern "C" fn call_external() -> UInt64 = "call_external"
 ///|
 extern "C" fn entry() -> UInt64 = "entry"
 
+///|
+let _unused_nop : () -> UInt64 = nop
+
 // Constants
 
 ///|
@@ -702,6 +705,7 @@ extern "C" fn c_create_runtime_context(
   globals : FixedArray[UInt64],
   memory : FixedArray[Byte],
   memory_size : Int,
+  memory_max_size : Int,
   memory_pages : FixedArray[Int],
   tables_flat : FixedArray[Int],
   table_offsets : FixedArray[Int],

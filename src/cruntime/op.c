@@ -193,6 +193,7 @@ typedef int (*OpFn)(CRuntime*, uint64_t*, uint64_t*, uint64_t*);
 // Memory pages info (shared across calls within same instance)
 static int* g_memory_pages = NULL;
 static int g_memory_size = 0;
+static int g_memory_max_size = 0;  // Maximum memory size (pre-allocated)
 
 // Multiple tables support (for call_indirect and table ops)
 static int* g_tables_flat = NULL;      // All tables concatenated
@@ -246,6 +247,7 @@ typedef struct CRuntimeContext {
     uint64_t* globals;
     uint8_t* memory;
     int memory_size;
+    int memory_max_size;
     int* memory_pages;
     int* tables_flat;
     int* table_offsets;
@@ -286,6 +288,7 @@ static void save_context(CRuntimeContext* ctx, CRuntime* crt) {
     ctx->globals = crt->globals;
     ctx->memory = crt->mem;
     ctx->memory_size = g_memory_size;
+    ctx->memory_max_size = g_memory_max_size;
     ctx->memory_pages = g_memory_pages;
     ctx->tables_flat = g_tables_flat;
     ctx->table_offsets = g_table_offsets;
@@ -321,6 +324,7 @@ static void load_context(const CRuntimeContext* ctx, CRuntime* crt) {
     crt->globals = ctx->globals;
     crt->mem = ctx->memory;
     g_memory_size = ctx->memory_size;
+    g_memory_max_size = ctx->memory_max_size;
     g_memory_pages = ctx->memory_pages;
     g_tables_flat = ctx->tables_flat;
     g_table_offsets = ctx->table_offsets;
@@ -354,7 +358,7 @@ static void load_context(const CRuntimeContext* ctx, CRuntime* crt) {
 // Returns pointer to heap-allocated context
 CRuntimeContext* create_runtime_context(
     uint64_t* code, uint64_t* globals, uint8_t* memory, int memory_size,
-    int* memory_pages, int* tables_flat, int* table_offsets, int* table_sizes,
+    int memory_max_size, int* memory_pages, int* tables_flat, int* table_offsets, int* table_sizes,
     int* table_max_sizes, int num_tables, int* func_entries, int* func_num_locals,
     int num_funcs, int num_imported_funcs, int* func_type_idxs,
     int* type_sig_hash1, int* type_sig_hash2, int num_types,
@@ -371,6 +375,7 @@ CRuntimeContext* create_runtime_context(
     ctx->globals = globals;
     ctx->memory = memory;
     ctx->memory_size = memory_size;
+    ctx->memory_max_size = memory_max_size;
     ctx->memory_pages = memory_pages;
     ctx->tables_flat = tables_flat;
     ctx->table_offsets = table_offsets;
@@ -419,7 +424,7 @@ static int run(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
 // Returns trap code (0 = success), stores results in result_out[0..num_results-1]
 int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_args,
             uint64_t* result_out, int num_results, uint64_t* globals, uint8_t* mem, int mem_size,
-            int* memory_pages, int* tables_flat, int* table_offsets, int* table_sizes, int* table_max_sizes, int num_tables,
+            int mem_max_size, int* memory_pages, int* tables_flat, int* table_offsets, int* table_sizes, int* table_max_sizes, int num_tables,
             int* func_entries, int* func_num_locals, int num_funcs, int num_imported_funcs,
             int* func_type_idxs, int* type_sig_hash1, int* type_sig_hash2, int num_types,
             int* import_num_params, int* import_num_results,
@@ -444,6 +449,7 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     // Store memory info for ops
     g_memory_pages = memory_pages;
     g_memory_size = mem_size;
+    g_memory_max_size = mem_max_size;
 
     // Store table data for call_indirect and table ops
     g_tables_flat = tables_flat;
@@ -1923,15 +1929,35 @@ DEFINE_OP(wasm_select)
 // Memory operations
 
 int op_memory_grow(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)fp;
+    (void)fp;
     ++pc;  // Skip mem_idx (assume 0)
     uint32_t delta = (uint32_t)sp[-1];
-    // Return current page count and update
     int32_t old_pages = g_memory_pages ? *g_memory_pages : 0;
-    // For now, accept any growth (simplified - doesn't actually allocate)
-    if (g_memory_pages) {
-        *g_memory_pages = old_pages + delta;
+
+    // Calculate new size
+    int64_t new_pages = (int64_t)old_pages + (int64_t)delta;
+    int64_t new_size = new_pages * 65536;
+
+    // Check if growth would exceed max size
+    if (new_size > g_memory_max_size) {
+        // Return -1 to indicate failure
+        sp[-1] = (uint64_t)(uint32_t)-1;
+        NEXT();
     }
+
+    // Zero the new pages
+    int old_size = old_pages * 65536;
+    if (delta > 0 && crt->mem) {
+        memset(crt->mem + old_size, 0, (size_t)(new_size - old_size));
+    }
+
+    // Update page count and memory size
+    if (g_memory_pages) {
+        *g_memory_pages = (int)new_pages;
+    }
+    g_memory_size = (int)new_size;
+
+    // Return old page count (success)
     sp[-1] = (uint64_t)(uint32_t)old_pages;
     NEXT();
 }

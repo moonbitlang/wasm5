@@ -20,6 +20,7 @@ pub struct CRuntime {
   globals : FixedArray[UInt64]
   memory : FixedArray[Byte]
   memory_pages : FixedArray[Int]
+  memory_max_size : Int
   tables : FixedArray[FixedArray[Int]]
   tables_flat : FixedArray[Int]
   table_offsets : FixedArray[Int]

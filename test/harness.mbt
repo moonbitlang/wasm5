@@ -31,12 +31,9 @@ pub(all) enum RuntimeType {
 /// Trait for WebAssembly runtime executors.
 /// Both the MoonBit interpreter and C runtime implement this trait.
 priv trait Executor {
-  run_start(Self) -> Unit raise Error
   call_compiled(Self, Bytes, Array[@wasm5_runtime.Value]) -> Array[
     @wasm5_runtime.Value,
   ] raise Error
-  get_module(Self) -> @wasm5_core.Module?
-  get_globals(Self) -> Array[@wasm5_runtime.Value]?
   // Returns the underlying MoonBit Runtime if available (for cross-module imports)
   as_runtime(Self) -> @wasm5_runtime.Runtime?
   // Returns the underlying CRuntime if available (for cross-module imports)
@@ -45,9 +42,6 @@ priv trait Executor {
 
 ///|
 /// Implement Executor for MoonBit Runtime
-impl Executor for @wasm5_runtime.Runtime with run_start(self) -> Unit raise Error {
-  self.run_start()
-}
 
 ///|
 impl Executor for @wasm5_runtime.Runtime with call_compiled(
@@ -59,16 +53,6 @@ impl Executor for @wasm5_runtime.Runtime with call_compiled(
 }
 
 ///|
-impl Executor for @wasm5_runtime.Runtime with get_module(self) -> @wasm5_core.Module? {
-  Some(self.get_module())
-}
-
-///|
-impl Executor for @wasm5_runtime.Runtime with get_globals(self) -> Array[
-  @wasm5_runtime.Value,
-]? {
-  Some(self.get_globals())
-}
 
 ///|
 impl Executor for @wasm5_runtime.Runtime with as_runtime(self) -> @wasm5_runtime.Runtime? {
@@ -82,9 +66,6 @@ impl Executor for @wasm5_runtime.Runtime with as_cruntime(_self) -> @wasm5_crunt
 
 ///|
 /// Implement Executor for C Runtime
-impl Executor for @wasm5_cruntime.CRuntime with run_start(self) -> Unit raise Error {
-  self.run_start()
-}
 
 ///|
 impl Executor for @wasm5_cruntime.CRuntime with call_compiled(
@@ -96,17 +77,6 @@ impl Executor for @wasm5_cruntime.CRuntime with call_compiled(
 }
 
 ///|
-impl Executor for @wasm5_cruntime.CRuntime with get_module(self) -> @wasm5_core.Module? {
-  Some(self.get_module())
-}
-
-///|
-impl Executor for @wasm5_cruntime.CRuntime with get_globals(_self) -> Array[
-  @wasm5_runtime.Value,
-]? {
-  // CRuntime doesn't support globals yet
-  None
-}
 
 ///|
 impl Executor for @wasm5_cruntime.CRuntime with as_runtime(_self) -> @wasm5_runtime.Runtime? {
@@ -216,7 +186,7 @@ fn make_import_wrapper(
     // Call the registered module's exported function
     match registered.runtime {
       Some(rt) =>
-        rt.call_compiled(@encoding/utf8.encode(export_name), args) catch {
+        rt.call_compiled(@utf8.encode(export_name), args) catch {
           _ => []
         }
       None => [] // CRuntime uses context switching, not wrappers
@@ -246,6 +216,119 @@ fn make_funcref_wrapper(
 }
 
 ///|
+/// Count imported functions in a module
+fn count_imported_funcs(module_ : @wasm5_core.Module) -> Int {
+  let mut count = 0
+  for imp in module_.imports {
+    match imp.desc {
+      @wasm5_core.ImportDesc::Func(_) => count += 1
+      _ => ()
+    }
+  }
+  count
+}
+
+///|
+/// Get function arity (number of parameters) for a function by index
+fn get_func_arity(module_ : @wasm5_core.Module, func_idx : Int) -> UInt {
+  let num_imported = count_imported_funcs(module_)
+  let type_idx = if func_idx < num_imported {
+    // Imported function - find its type index
+    get_import_func_type_idx(module_, func_idx)
+  } else {
+    // Local function
+    let local_idx = func_idx - num_imported
+    if local_idx >= 0 && local_idx < module_.funcs.length() {
+      module_.funcs[local_idx].reinterpret_as_int()
+    } else {
+      0
+    }
+  }
+  match module_.types.get(type_idx) {
+    Some(@wasm5_core.TypeDef::Func(ft)) =>
+      ft.params.length().reinterpret_as_uint()
+    _ => 0U
+  }
+}
+
+///|
+/// Register exported functions from a module
+fn register_exported_functions(
+  ctx : TestContext,
+  entry : RegisteredModule,
+  module_ : @wasm5_core.Module,
+  name_bytes : Bytes,
+) -> Unit {
+  for exp in module_.exports {
+    match exp.desc {
+      @wasm5_core.ExportDesc::Func(func_idx) => {
+        let func_idx_int = func_idx.reinterpret_as_int()
+        let arity = get_func_arity(module_, func_idx_int)
+        let export_name_str = @utf8.decode(exp.name) catch { _ => continue }
+        let wrapper = make_import_wrapper(entry, export_name_str, arity)
+        ctx.resolver.add_func(name_bytes, exp.name, wrapper)
+      }
+      _ => ()
+    }
+  }
+}
+
+///|
+/// Register exported globals from a module
+fn register_exported_globals(
+  ctx : TestContext,
+  entry : RegisteredModule,
+  module_ : @wasm5_core.Module,
+  name_bytes : Bytes,
+  runtime : @wasm5_runtime.Runtime,
+) -> Unit {
+  let globals = runtime.get_globals()
+  for exp in module_.exports {
+    match exp.desc {
+      @wasm5_core.ExportDesc::Global(global_idx) => {
+        let global_idx_int = global_idx.reinterpret_as_int()
+        if global_idx_int >= 0 && global_idx_int < globals.length() {
+          let global_value = globals[global_idx_int]
+          ctx.resolver.add_global(name_bytes, exp.name, global_value)
+          // Register funcref wrapper for cross-module call_indirect
+          match global_value {
+            Ref(Some(func_idx)) => {
+              let arity = get_func_arity(module_, func_idx)
+              let wrapper = make_funcref_wrapper(entry, func_idx, arity)
+              ctx.resolver.add_funcref_wrapper(name_bytes, exp.name, wrapper)
+            }
+            _ => ()
+          }
+        }
+      }
+      _ => ()
+    }
+  }
+}
+
+///|
+/// Register exported tables from a module
+fn register_exported_tables(
+  ctx : TestContext,
+  name_bytes : Bytes,
+  runtime : @wasm5_runtime.Runtime,
+  module_ : @wasm5_core.Module,
+) -> Unit {
+  let tables = runtime.get_tables()
+  for exp in module_.exports {
+    match exp.desc {
+      @wasm5_core.ExportDesc::Table(table_idx) => {
+        let table_idx_int = table_idx.reinterpret_as_int()
+        if table_idx_int >= 0 && table_idx_int < tables.length() {
+          ctx.resolver.add_table(name_bytes, exp.name, tables[table_idx_int])
+        }
+      }
+      _ => ()
+    }
+  }
+}
+
+///|
 /// Register a module and add its exports to the resolver
 fn register_module(
   ctx : TestContext,
@@ -253,157 +336,16 @@ fn register_module(
   runtime : @wasm5_runtime.Runtime,
   module_ : @wasm5_core.Module,
 ) -> Unit {
-  // Store in registry
   let entry : RegisteredModule = {
     runtime: Some(runtime),
     cruntime: None,
     module_,
   }
   ctx.registry.0[name] = entry
-
-  // Convert name to bytes for resolver
-  let name_bytes = @encoding/utf8.encode(name)
-
-  // Add all exported functions to the resolver
-  for exp in module_.exports {
-    match exp.desc {
-      @wasm5_core.ExportDesc::Func(func_idx) => {
-        let export_name = exp.name // Already Bytes
-
-        // Get function arity from type
-        let func_idx_int = func_idx.reinterpret_as_int()
-
-        // Count imported functions to get local function index
-        let mut num_imported_funcs = 0
-        for imp in module_.imports {
-          match imp.desc {
-            @wasm5_core.ImportDesc::Func(_) => num_imported_funcs += 1
-            _ => ()
-          }
-        }
-
-        // Determine arity based on whether it's imported or local
-        let arity : UInt = if func_idx_int < num_imported_funcs {
-          // It's an imported function - get type from import
-          let mut import_idx = 0
-          let mut found_arity : UInt = 0
-          for imp in module_.imports {
-            match imp.desc {
-              @wasm5_core.ImportDesc::Func(type_idx) => {
-                if import_idx == func_idx_int {
-                  match module_.types[type_idx.reinterpret_as_int()] {
-                    @wasm5_core.TypeDef::Func(ft) =>
-                      found_arity = ft.params.length().reinterpret_as_uint()
-                    _ => ()
-                  }
-                  break
-                }
-                import_idx += 1
-              }
-              _ => ()
-            }
-          }
-          found_arity
-        } else {
-          // It's a local function
-          let local_idx = func_idx_int - num_imported_funcs
-          let type_idx = module_.funcs[local_idx].reinterpret_as_int()
-          match module_.types[type_idx] {
-            @wasm5_core.TypeDef::Func(ft) =>
-              ft.params.length().reinterpret_as_uint()
-            _ => 0U
-          }
-        }
-
-        // Create wrapper and add to resolver
-        let export_name_str = @encoding/utf8.decode(export_name) catch {
-          _ => continue // Skip invalid UTF-8 export names
-        }
-        let wrapper = make_import_wrapper(entry, export_name_str, arity)
-        ctx.resolver.add_func(name_bytes, export_name, wrapper)
-      }
-      @wasm5_core.ExportDesc::Global(global_idx) => {
-        // Export a global value
-        let global_idx_int = global_idx.reinterpret_as_int()
-        // Get the global value from the runtime
-        let globals = runtime.get_globals()
-        if global_idx_int >= 0 && global_idx_int < globals.length() {
-          let global_value = globals[global_idx_int]
-          ctx.resolver.add_global(name_bytes, exp.name, global_value)
-
-          // For funcref globals, also register a funcref wrapper for cross-module calls.
-          // This allows call_indirect to work correctly when the funcref is imported.
-          match global_value {
-            Ref(Some(func_idx)) => {
-              // Count imported functions
-              let mut num_imported_funcs = 0
-              for imp in module_.imports {
-                match imp.desc {
-                  @wasm5_core.ImportDesc::Func(_) => num_imported_funcs += 1
-                  _ => ()
-                }
-              }
-
-              // Get function type to determine arity
-              let type_idx = if func_idx < num_imported_funcs {
-                // Imported function
-                let mut found_type_idx = 0
-                let mut import_idx = 0
-                for imp in module_.imports {
-                  match imp.desc {
-                    @wasm5_core.ImportDesc::Func(tidx) => {
-                      if import_idx == func_idx {
-                        found_type_idx = tidx.reinterpret_as_int()
-                        break
-                      }
-                      import_idx += 1
-                    }
-                    _ => ()
-                  }
-                }
-                found_type_idx
-              } else {
-                // Local function
-                let local_idx = func_idx - num_imported_funcs
-                if local_idx >= 0 && local_idx < module_.funcs.length() {
-                  module_.funcs[local_idx].reinterpret_as_int()
-                } else {
-                  0
-                }
-              }
-
-              // Create wrapper that calls the function by index
-              let arity : UInt = match module_.types.get(type_idx) {
-                Some(@wasm5_core.TypeDef::Func(ft)) =>
-                  ft.params.length().reinterpret_as_uint()
-                _ => 0U
-              }
-
-              // Use make_funcref_wrapper which calls by index, not by name
-              // This handles cases where the function is not exported by name
-              let wrapper = make_funcref_wrapper(entry, func_idx, arity)
-              ctx.resolver.add_funcref_wrapper(name_bytes, exp.name, wrapper)
-            }
-            _ => () // Not a funcref, or null
-          }
-        }
-      }
-      @wasm5_core.ExportDesc::Table(table_idx) => {
-        // Export a table - this enables cross-module table sharing
-        let table_idx_int = table_idx.reinterpret_as_int()
-        let tables = runtime.get_tables()
-        if table_idx_int >= 0 && table_idx_int < tables.length() {
-          let table = tables[table_idx_int]
-          ctx.resolver.add_table(name_bytes, exp.name, table)
-        }
-      }
-      _ => () // Skip other export types (memory, etc.)
-    }
-  }
-
-  // Fix up element segments that initialized imported tables.
-  // When a module stores its own funcrefs into a shared table, we need to
-  // replace those local indices with wrappers stored in table.external_funcrefs.
+  let name_bytes = @utf8.encode(name)
+  register_exported_functions(ctx, entry, module_, name_bytes)
+  register_exported_globals(ctx, entry, module_, name_bytes, runtime)
+  register_exported_tables(ctx, name_bytes, runtime, module_)
   fix_shared_table_elements(entry, module_, runtime)
 }
 
@@ -439,10 +381,10 @@ fn resolve_imports_for_cruntime(
   let mut import_func_idx = 0
   for imp in module_.imports {
     match imp.desc {
-      @wasm5_core.ImportDesc::Func(type_idx) => {
+      @wasm5_core.ImportDesc::Func(_) => {
         // Convert import module name from Bytes to String
-        let module_name = @encoding/utf8.decode(imp.module_) catch { _ => "" }
-        let field_name = @encoding/utf8.decode(imp.name) catch { _ => "" }
+        let module_name = @utf8.decode(imp.module_) catch { _ => "" }
+        let field_name = @utf8.decode(imp.name) catch { _ => "" }
         // Look up the registered module
         match ctx.registry.0.get(module_name) {
           Some(registered) =>
@@ -485,7 +427,7 @@ fn resolve_imports_for_cruntime(
 ///|
 /// Find the function index for an exported function name in a module.
 fn find_exported_func_idx(module_ : @wasm5_core.Module, name : String) -> Int? {
-  let name_bytes = @encoding/utf8.encode(name)
+  let name_bytes = @utf8.encode(name)
   for exp in module_.exports {
     if exp.name == name_bytes {
       match exp.desc {
@@ -1186,10 +1128,7 @@ fn handle_assert_return(
       ctx.fail(line, "assert_return", msg)
       return
     }
-    let results = executor.call_compiled(
-      @encoding/utf8.encode(fn_name),
-      runtime_args,
-    )
+    let results = executor.call_compiled(@utf8.encode(fn_name), runtime_args)
     // Check result count
     if expected.length() != results.length() {
       ctx.fail(
@@ -1240,7 +1179,7 @@ fn handle_assert_trap(
     return
   }
   try {
-    let _ = executor.call_compiled(@encoding/utf8.encode(fn_name), runtime_args)
+    let _ = executor.call_compiled(@utf8.encode(fn_name), runtime_args)
     ctx.fail(
       line,
       "assert_trap",
@@ -1248,145 +1187,35 @@ fn handle_assert_trap(
     )
   } catch {
     @wasm5_runtime.RuntimeError::DivisionByZero =>
-      if not(expected_error.contains("divide by zero")) {
-        ctx.fail(
-          line,
-          "assert_trap",
-          "[\{fn_name}] expected '\{expected_error}' but got DivisionByZero",
-        )
+      match check_trap_error_mismatch("DivisionByZero", expected_error) {
+        Some(msg) => ctx.fail(line, "assert_trap", "[\{fn_name}] \{msg}")
+        None => ()
       }
     @wasm5_runtime.RuntimeError::IntegerOverflow =>
-      // IntegerOverflow is used for both "integer overflow" and "invalid conversion to integer"
-      if not(
-          expected_error.contains("overflow") ||
-          expected_error.contains("invalid conversion"),
-        ) {
-        ctx.fail(
-          line,
-          "assert_trap",
-          "[\{fn_name}] expected '\{expected_error}' but got IntegerOverflow",
-        )
+      match check_trap_error_mismatch("IntegerOverflow", expected_error) {
+        Some(msg) => ctx.fail(line, "assert_trap", "[\{fn_name}] \{msg}")
+        None => ()
       }
     @wasm5_runtime.RuntimeError::MemoryOutOfBounds =>
-      if not(expected_error.contains("out of bounds memory access")) {
-        ctx.fail(
-          line,
-          "assert_trap",
-          "[\{fn_name}] expected '\{expected_error}' but got MemoryOutOfBounds",
-        )
+      match check_trap_error_mismatch("MemoryOutOfBounds", expected_error) {
+        Some(msg) => ctx.fail(line, "assert_trap", "[\{fn_name}] \{msg}")
+        None => ()
       }
     @wasm5_runtime.RuntimeError::TableOutOfBounds =>
-      if not(expected_error.contains("out of bounds table access")) {
-        ctx.fail(
-          line,
-          "assert_trap",
-          "[\{fn_name}] expected '\{expected_error}' but got TableOutOfBounds",
-        )
+      match check_trap_error_mismatch("TableOutOfBounds", expected_error) {
+        Some(msg) => ctx.fail(line, "assert_trap", "[\{fn_name}] \{msg}")
+        None => ()
       }
     @wasm5_runtime.RuntimeError::Unreachable =>
-      if not(expected_error.contains("unreachable")) {
-        ctx.fail(
-          line,
-          "assert_trap",
-          "[\{fn_name}] expected '\{expected_error}' but got Unreachable",
-        )
+      match check_trap_error_mismatch("Unreachable", expected_error) {
+        Some(msg) => ctx.fail(line, "assert_trap", "[\{fn_name}] \{msg}")
+        None => ()
       }
     @wasm5_runtime.RuntimeError::InvalidType(msg) =>
-      // Handle table out of bounds errors
-      if msg.contains("table") && msg.contains("out of bounds") {
-        if not(expected_error.contains("out of bounds table access")) {
-          ctx.fail(
-            line,
-            "assert_trap",
-            "[\{fn_name}] expected '\{expected_error}' but got table out of bounds",
-          )
-        }
-      } else if msg.contains("array") && msg.contains("out of bounds") {
-        if not(expected_error.contains("out of bounds array access")) {
-          ctx.fail(
-            line,
-            "assert_trap",
-            "[\{fn_name}] expected '\{expected_error}' but got out of bounds array access",
-          )
-        }
-      } else if msg.contains("undefined element") {
-        if not(expected_error.contains("undefined element")) {
-          ctx.fail(
-            line,
-            "assert_trap",
-            "[\{fn_name}] expected '\{expected_error}' but got undefined element",
-          )
-        }
-      } else if msg.contains("uninitialized element") {
-        if not(expected_error.contains("uninitialized element")) {
-          ctx.fail(
-            line,
-            "assert_trap",
-            "[\{fn_name}] expected '\{expected_error}' but got uninitialized element",
-          )
-        }
-      } else if msg.contains("indirect call type mismatch") {
-        if not(expected_error.contains("indirect call type mismatch")) {
-          ctx.fail(
-            line,
-            "assert_trap",
-            "[\{fn_name}] expected '\{expected_error}' but got indirect call type mismatch",
-          )
-        }
-      } else if msg.contains("null") && msg.contains("function reference") {
-        if not(expected_error.contains("null function reference")) {
-          ctx.fail(
-            line,
-            "assert_trap",
-            "[\{fn_name}] expected '\{expected_error}' but got null function reference",
-          )
-        }
-      } else if msg.contains("null i31 reference") {
-        if not(expected_error.contains("null i31 reference")) {
-          ctx.fail(
-            line,
-            "assert_trap",
-            "[\{fn_name}] expected '\{expected_error}' but got null i31 reference",
-          )
-        }
-      } else if msg.contains("null structure reference") {
-        if not(expected_error.contains("null structure reference")) {
-          ctx.fail(
-            line,
-            "assert_trap",
-            "[\{fn_name}] expected '\{expected_error}' but got null structure reference",
-          )
-        }
-      } else if msg.contains("null array reference") {
-        if not(expected_error.contains("null array reference")) {
-          ctx.fail(
-            line,
-            "assert_trap",
-            "[\{fn_name}] expected '\{expected_error}' but got null array reference",
-          )
-        }
-      } else if msg.contains("cast failed") {
-        if not(expected_error.contains("cast failure")) {
-          ctx.fail(
-            line,
-            "assert_trap",
-            "[\{fn_name}] expected '\{expected_error}' but got cast failure",
-          )
-        }
-      } else if msg.contains("null reference") {
-        if not(expected_error.contains("null reference")) {
-          ctx.fail(
-            line,
-            "assert_trap",
-            "[\{fn_name}] expected '\{expected_error}' but got null reference",
-          )
-        }
-      } else {
-        ctx.fail(
-          line,
-          "assert_trap",
-          "[\{fn_name}] expected '\{expected_error}' but got: InvalidType(\{msg})",
-        )
+      match check_trap_error_mismatch("InvalidType", expected_error, msg~) {
+        Some(err_msg) =>
+          ctx.fail(line, "assert_trap", "[\{fn_name}] \{err_msg}")
+        None => ()
       }
     e =>
       ctx.fail(
@@ -1413,153 +1242,118 @@ async fn handle_assert_invalid(
       "expected validation error '\{expected_error}' but module was valid",
     )
   } catch {
-    // The WebAssembly spec uses "type mismatch" for various validation errors.
-    // Our validator distinguishes TypeMismatch and StackSizeMismatch, but both
-    // correspond to the spec's "type mismatch" error message.
     @wasm5_validate.ValidationError::TypeMismatch(msg) =>
-      // TypeMismatch covers various validation errors including "type mismatch", "immutable field", "immutable array", "array types do not match", and "array type is not numeric or vector"
-      if not(expected_error.contains("type mismatch")) &&
-        not(
-          expected_error.contains("immutable field") &&
-          msg.contains("immutable"),
-        ) &&
-        not(
-          expected_error.contains("immutable array") &&
-          msg.contains("immutable"),
-        ) &&
-        not(
-          expected_error.contains("array types do not match") &&
-          msg.contains("array types do not match"),
-        ) &&
-        not(
-          expected_error.contains("array type is not numeric or vector") &&
-          msg.contains("array type is not numeric or vector"),
-        ) {
-        ctx.fail(
-          line,
-          "assert_invalid",
-          "expected '\{expected_error}' but got TypeMismatch",
-        )
+      match
+        check_validation_error_mismatch("TypeMismatch", msg, expected_error) {
+        Some(err_msg) => ctx.fail(line, "assert_invalid", err_msg)
+        None => ()
       }
-    @wasm5_validate.ValidationError::StackSizeMismatch(_) =>
-      if not(expected_error.contains("type mismatch")) {
-        ctx.fail(
-          line,
-          "assert_invalid",
-          "expected '\{expected_error}' but got StackSizeMismatch",
-        )
+    @wasm5_validate.ValidationError::StackSizeMismatch(msg) =>
+      match
+        check_validation_error_mismatch(
+          "StackSizeMismatch", msg, expected_error,
+        ) {
+        Some(err_msg) => ctx.fail(line, "assert_invalid", err_msg)
+        None => ()
       }
     @wasm5_validate.ValidationError::InvalidResultArity(_) =>
-      if not(expected_error.contains("invalid result arity")) {
-        ctx.fail(
-          line,
-          "assert_invalid",
-          "expected '\{expected_error}' but got InvalidResultArity",
-        )
+      match
+        check_validation_error_mismatch(
+          "InvalidResultArity", "", expected_error,
+        ) {
+        Some(err_msg) => ctx.fail(line, "assert_invalid", err_msg)
+        None => ()
       }
     @wasm5_validate.ValidationError::UnknownType(_) =>
-      if not(expected_error.contains("unknown type")) {
-        ctx.fail(
-          line,
-          "assert_invalid",
-          "expected '\{expected_error}' but got UnknownType",
-        )
+      match check_validation_error_mismatch("UnknownType", "", expected_error) {
+        Some(err_msg) => ctx.fail(line, "assert_invalid", err_msg)
+        None => ()
       }
     @wasm5_validate.ValidationError::InvalidAlignment(_) =>
-      if not(expected_error.contains("alignment")) {
-        ctx.fail(
-          line,
-          "assert_invalid",
-          "expected '\{expected_error}' but got InvalidAlignment",
-        )
+      match
+        check_validation_error_mismatch("InvalidAlignment", "", expected_error) {
+        Some(err_msg) => ctx.fail(line, "assert_invalid", err_msg)
+        None => ()
       }
     @wasm5_validate.ValidationError::UnknownLabel(_) =>
-      if not(expected_error.contains("unknown label")) {
-        ctx.fail(
-          line,
-          "assert_invalid",
-          "expected '\{expected_error}' but got UnknownLabel",
-        )
+      match
+        check_validation_error_mismatch("UnknownLabel", "", expected_error) {
+        Some(err_msg) => ctx.fail(line, "assert_invalid", err_msg)
+        None => ()
       }
     @wasm5_validate.ValidationError::InvalidStartFunction(_) =>
-      if not(expected_error.contains("start function")) {
-        ctx.fail(
-          line,
-          "assert_invalid",
-          "expected '\{expected_error}' but got InvalidStartFunction",
-        )
+      match
+        check_validation_error_mismatch(
+          "InvalidStartFunction", "", expected_error,
+        ) {
+        Some(err_msg) => ctx.fail(line, "assert_invalid", err_msg)
+        None => ()
       }
-    @wasm5_validate.ValidationError::DuplicateExport(name) =>
-      if not(expected_error.contains("duplicate export name")) {
-        ctx.fail(
-          line,
-          "assert_invalid",
-          "expected '\{expected_error}' but got DuplicateExport(\{name})",
-        )
+    @wasm5_validate.ValidationError::DuplicateExport(_) =>
+      match
+        check_validation_error_mismatch("DuplicateExport", "", expected_error) {
+        Some(err_msg) => ctx.fail(line, "assert_invalid", err_msg)
+        None => ()
       }
     @wasm5_validate.ValidationError::UnknownExportedFunction(_) =>
-      if not(expected_error.contains("unknown function")) {
-        ctx.fail(
-          line,
-          "assert_invalid",
-          "expected '\{expected_error}' but got UnknownExportedFunction",
-        )
+      match
+        check_validation_error_mismatch(
+          "UnknownExportedFunction", "", expected_error,
+        ) {
+        Some(err_msg) => ctx.fail(line, "assert_invalid", err_msg)
+        None => ()
       }
     @wasm5_validate.ValidationError::UnknownExportedMemory(_) =>
-      if not(expected_error.contains("unknown memory")) {
-        ctx.fail(
-          line,
-          "assert_invalid",
-          "expected '\{expected_error}' but got UnknownExportedMemory",
-        )
+      match
+        check_validation_error_mismatch(
+          "UnknownExportedMemory", "", expected_error,
+        ) {
+        Some(err_msg) => ctx.fail(line, "assert_invalid", err_msg)
+        None => ()
       }
     @wasm5_validate.ValidationError::UnknownExportedTable(_) =>
-      if not(expected_error.contains("unknown table")) {
-        ctx.fail(
-          line,
-          "assert_invalid",
-          "expected '\{expected_error}' but got UnknownExportedTable",
-        )
+      match
+        check_validation_error_mismatch(
+          "UnknownExportedTable", "", expected_error,
+        ) {
+        Some(err_msg) => ctx.fail(line, "assert_invalid", err_msg)
+        None => ()
       }
     @wasm5_validate.ValidationError::UnknownGlobal(_) =>
-      if not(expected_error.contains("unknown global")) {
-        ctx.fail(
-          line,
-          "assert_invalid",
-          "expected '\{expected_error}' but got UnknownGlobal",
-        )
+      match
+        check_validation_error_mismatch("UnknownGlobal", "", expected_error) {
+        Some(err_msg) => ctx.fail(line, "assert_invalid", err_msg)
+        None => ()
       }
     @wasm5_validate.ValidationError::UnknownExportedGlobal(_) =>
-      if not(expected_error.contains("unknown global")) {
-        ctx.fail(
-          line,
-          "assert_invalid",
-          "expected '\{expected_error}' but got UnknownExportedGlobal",
-        )
+      match
+        check_validation_error_mismatch(
+          "UnknownExportedGlobal", "", expected_error,
+        ) {
+        Some(err_msg) => ctx.fail(line, "assert_invalid", err_msg)
+        None => ()
       }
     @wasm5_validate.ValidationError::UninitializedLocal(_) =>
-      if not(expected_error.contains("uninitialized local")) {
-        ctx.fail(
-          line,
-          "assert_invalid",
-          "expected '\{expected_error}' but got UninitializedLocal",
-        )
+      match
+        check_validation_error_mismatch(
+          "UninitializedLocal", "", expected_error,
+        ) {
+        Some(err_msg) => ctx.fail(line, "assert_invalid", err_msg)
+        None => ()
       }
     @wasm5_validate.ValidationError::UnknownDataSegment(_) =>
-      if not(expected_error.contains("unknown data segment")) {
-        ctx.fail(
-          line,
-          "assert_invalid",
-          "expected '\{expected_error}' but got UnknownDataSegment",
-        )
+      match
+        check_validation_error_mismatch(
+          "UnknownDataSegment", "", expected_error,
+        ) {
+        Some(err_msg) => ctx.fail(line, "assert_invalid", err_msg)
+        None => ()
       }
     @wasm5_validate.ValidationError::InvalidElemIndex(_) =>
-      if not(expected_error.contains("unknown elem segment")) {
-        ctx.fail(
-          line,
-          "assert_invalid",
-          "expected '\{expected_error}' but got InvalidElemIndex",
-        )
+      match
+        check_validation_error_mismatch("InvalidElemIndex", "", expected_error) {
+        Some(err_msg) => ctx.fail(line, "assert_invalid", err_msg)
+        None => ()
       }
     _ => () // Other validation errors are acceptable
   }
@@ -1581,7 +1375,7 @@ fn handle_action(
       )
       return
     }
-    let _ = executor.call_compiled(@encoding/utf8.encode(fn_name), runtime_args)
+    let _ = executor.call_compiled(@utf8.encode(fn_name), runtime_args)
 
   } catch {
     e => ctx.fail(line, "action", "Action failed with error: \{e}")
@@ -1622,7 +1416,7 @@ fn handle_assert_return_get(
     }
     // Find the exported global by name
     let module_ = rt.get_module()
-    let field_bytes = @encoding/utf8.encode(field)
+    let field_bytes = @utf8.encode(field)
     let mut global_idx : Int? = None
     for exp in module_.exports {
       if exp.name == field_bytes {
@@ -1918,33 +1712,14 @@ pub async fn process_wast_file_cruntime(
 ///|
 /// Whitelist for C runtime tests (some tests may have features not yet implemented)
 /// select.wast, br_table.wast: ref.func and ref.null instructions not implemented
-/// traps.wast: missing trap checks and i64/f32/f64 load ops
 /// exports.wast, global.wast: module registration not supported
-/// local_init.wast: reference type result conversion
 /// elem.wast: module registration and some trap handling
+/// memory_grow.wast: cross-module memory imports not fully supported
 let cruntime_whitelisted_tests : Array[(String, Set[Int])] = [
-  ("select.wast", Set::of([251, 252, 258, 259, 279, 280])),
-  (
-    "br_table.wast",
-    Set::of([
-      1249, 1250, 1251, 1253, 1254, 1255, 1256, 1257, 1258, 1259, 1260, 1261, 1262,
-      1263, 1264,
-    ]),
-  ),
-  (
-    "traps.wast",
-    Set::of([50, 51, 52, 53, 54, 55, 56, 57, 83, 84, 85, 86, 87, 88, 89, 90, 91]),
-  ),
-  ("exports.wast", Set::of([23, 26, 93, 94, 97])),
-  ("local_init.wast", Set::of([21, 22, 23, 74])),
-  ("global.wast", Set::of([206, 207, 241, 632, 659, 660, 661, 663, 664])),
-  (
-    "elem.wast",
-    Set::of([
-      706, 716, 944, 946, 947, 948, 959, 960, 961, 972, 973, 974, 1014, 1016, 1017,
-      1019, 1020, 1022, 1023, 1029, 1030, 1041, 1053,
-    ]),
-  ),
+  ("memory_grow.wast", Set::from_array([330, 336])),
+  ("exports.wast", Set::from_array([93, 94, 97])),
+  ("global.wast", Set::from_array([663, 664])),
+  ("elem.wast", Set::from_array([716, 959, 960, 972, 973, 974, 1029, 1053])),
 ]
 
 ///|

@@ -6601,7 +6601,7 @@ fn encode_u32_leb128(value : UInt) -> Array[Byte] {
 
 ///|
 fn bytes_to_string(bytes : Bytes) -> String raise WatError {
-  @encoding/utf8.decode(bytes) catch {
+  @utf8.decode(bytes) catch {
     _ => raise WatError::InvalidSyntax("invalid utf8")
   }
 }

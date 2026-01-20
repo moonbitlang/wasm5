@@ -14,7 +14,7 @@ priv struct Lexer {
 
 ///|
 fn Lexer::new(text : String) -> Lexer {
-  { input: @encoding/utf8.encode(text), pos: 0 }
+  { input: @utf8.encode(text), pos: 0 }
 }
 
 ///|

@@ -13,6 +13,7 @@ extern "C" fn c_execute_ffi(
   globals : FixedArray[UInt64],
   memory : FixedArray[Byte],
   mem_size : Int,
+  mem_max_size : Int,
   memory_pages : FixedArray[Int],
   tables_flat : FixedArray[Int], // All tables flattened into one array
   table_offsets : FixedArray[Int], // Offset of each table in tables_flat

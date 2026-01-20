@@ -4,6 +4,8 @@
     "moonbitlang/async/io",
     "moonbitlang/async/process",
     "moonbitlang/async",
+    "moonbitlang/core/encoding/utf8",
+    "moonbitlang/core/strconv",
     {
       "path": "moonbitlang/wasm5/src/runtime",
       "alias": "wasm5_runtime"
@@ -23,6 +25,13 @@
     {
       "path": "moonbitlang/wasm5/src/validate",
       "alias": "wasm5_validate"
+    }
+  ],
+  "pre-build": [
+    {
+      "input": ["test_manifest.json", "../scripts/generate_tests.py"],
+      "output": ["reference_test.mbt"],
+      "command": "python3 scripts/generate_tests.py > $output"
     }
   ]
 }

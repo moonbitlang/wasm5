@@ -4,6 +4,7 @@ target
 .mooncakes/
 .moonagent/
 _build/
+test/reference_test.mbt
 
 # Personal notes and configuration
 .claude/
