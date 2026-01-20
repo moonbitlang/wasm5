@@ -31,12 +31,9 @@ pub(all) enum RuntimeType {
 /// Trait for WebAssembly runtime executors.
 /// Both the MoonBit interpreter and C runtime implement this trait.
 priv trait Executor {
-  run_start(Self) -> Unit raise Error
   call_compiled(Self, Bytes, Array[@wasm5_runtime.Value]) -> Array[
     @wasm5_runtime.Value,
   ] raise Error
-  get_module(Self) -> @wasm5_core.Module?
-  get_globals(Self) -> Array[@wasm5_runtime.Value]?
   // Returns the underlying MoonBit Runtime if available (for cross-module imports)
   as_runtime(Self) -> @wasm5_runtime.Runtime?
   // Returns the underlying CRuntime if available (for cross-module imports)
@@ -45,9 +42,6 @@ priv trait Executor {
 
 ///|
 /// Implement Executor for MoonBit Runtime
-impl Executor for @wasm5_runtime.Runtime with run_start(self) -> Unit raise Error {
-  self.run_start()
-}
 
 ///|
 impl Executor for @wasm5_runtime.Runtime with call_compiled(
@@ -59,16 +53,6 @@ impl Executor for @wasm5_runtime.Runtime with call_compiled(
 }
 
 ///|
-impl Executor for @wasm5_runtime.Runtime with get_module(self) -> @wasm5_core.Module? {
-  Some(self.get_module())
-}
-
-///|
-impl Executor for @wasm5_runtime.Runtime with get_globals(self) -> Array[
-  @wasm5_runtime.Value,
-]? {
-  Some(self.get_globals())
-}
 
 ///|
 impl Executor for @wasm5_runtime.Runtime with as_runtime(self) -> @wasm5_runtime.Runtime? {
@@ -82,9 +66,6 @@ impl Executor for @wasm5_runtime.Runtime with as_cruntime(_self) -> @wasm5_crunt
 
 ///|
 /// Implement Executor for C Runtime
-impl Executor for @wasm5_cruntime.CRuntime with run_start(self) -> Unit raise Error {
-  self.run_start()
-}
 
 ///|
 impl Executor for @wasm5_cruntime.CRuntime with call_compiled(
@@ -96,17 +77,6 @@ impl Executor for @wasm5_cruntime.CRuntime with call_compiled(
 }
 
 ///|
-impl Executor for @wasm5_cruntime.CRuntime with get_module(self) -> @wasm5_core.Module? {
-  Some(self.get_module())
-}
-
-///|
-impl Executor for @wasm5_cruntime.CRuntime with get_globals(_self) -> Array[
-  @wasm5_runtime.Value,
-]? {
-  // CRuntime doesn't support globals yet
-  None
-}
 
 ///|
 impl Executor for @wasm5_cruntime.CRuntime with as_runtime(_self) -> @wasm5_runtime.Runtime? {
@@ -216,7 +186,7 @@ fn make_import_wrapper(
     // Call the registered module's exported function
     match registered.runtime {
       Some(rt) =>
-        rt.call_compiled(@encoding/utf8.encode(export_name), args) catch {
+        rt.call_compiled(@utf8.encode(export_name), args) catch {
           _ => []
         }
       None => [] // CRuntime uses context switching, not wrappers
@@ -294,9 +264,7 @@ fn register_exported_functions(
       @wasm5_core.ExportDesc::Func(func_idx) => {
         let func_idx_int = func_idx.reinterpret_as_int()
         let arity = get_func_arity(module_, func_idx_int)
-        let export_name_str = @encoding/utf8.decode(exp.name) catch {
-          _ => continue
-        }
+        let export_name_str = @utf8.decode(exp.name) catch { _ => continue }
         let wrapper = make_import_wrapper(entry, export_name_str, arity)
         ctx.resolver.add_func(name_bytes, exp.name, wrapper)
       }
@@ -374,7 +342,7 @@ fn register_module(
     module_,
   }
   ctx.registry.0[name] = entry
-  let name_bytes = @encoding/utf8.encode(name)
+  let name_bytes = @utf8.encode(name)
   register_exported_functions(ctx, entry, module_, name_bytes)
   register_exported_globals(ctx, entry, module_, name_bytes, runtime)
   register_exported_tables(ctx, name_bytes, runtime, module_)
@@ -413,10 +381,10 @@ fn resolve_imports_for_cruntime(
   let mut import_func_idx = 0
   for imp in module_.imports {
     match imp.desc {
-      @wasm5_core.ImportDesc::Func(type_idx) => {
+      @wasm5_core.ImportDesc::Func(_) => {
         // Convert import module name from Bytes to String
-        let module_name = @encoding/utf8.decode(imp.module_) catch { _ => "" }
-        let field_name = @encoding/utf8.decode(imp.name) catch { _ => "" }
+        let module_name = @utf8.decode(imp.module_) catch { _ => "" }
+        let field_name = @utf8.decode(imp.name) catch { _ => "" }
         // Look up the registered module
         match ctx.registry.0.get(module_name) {
           Some(registered) =>
@@ -459,7 +427,7 @@ fn resolve_imports_for_cruntime(
 ///|
 /// Find the function index for an exported function name in a module.
 fn find_exported_func_idx(module_ : @wasm5_core.Module, name : String) -> Int? {
-  let name_bytes = @encoding/utf8.encode(name)
+  let name_bytes = @utf8.encode(name)
   for exp in module_.exports {
     if exp.name == name_bytes {
       match exp.desc {
@@ -1160,10 +1128,7 @@ fn handle_assert_return(
       ctx.fail(line, "assert_return", msg)
       return
     }
-    let results = executor.call_compiled(
-      @encoding/utf8.encode(fn_name),
-      runtime_args,
-    )
+    let results = executor.call_compiled(@utf8.encode(fn_name), runtime_args)
     // Check result count
     if expected.length() != results.length() {
       ctx.fail(
@@ -1214,7 +1179,7 @@ fn handle_assert_trap(
     return
   }
   try {
-    let _ = executor.call_compiled(@encoding/utf8.encode(fn_name), runtime_args)
+    let _ = executor.call_compiled(@utf8.encode(fn_name), runtime_args)
     ctx.fail(
       line,
       "assert_trap",
@@ -1410,7 +1375,7 @@ fn handle_action(
       )
       return
     }
-    let _ = executor.call_compiled(@encoding/utf8.encode(fn_name), runtime_args)
+    let _ = executor.call_compiled(@utf8.encode(fn_name), runtime_args)
 
   } catch {
     e => ctx.fail(line, "action", "Action failed with error: \{e}")
@@ -1451,7 +1416,7 @@ fn handle_assert_return_get(
     }
     // Find the exported global by name
     let module_ = rt.get_module()
-    let field_bytes = @encoding/utf8.encode(field)
+    let field_bytes = @utf8.encode(field)
     let mut global_idx : Int? = None
     for exp in module_.exports {
       if exp.name == field_bytes {
@@ -1751,10 +1716,10 @@ pub async fn process_wast_file_cruntime(
 /// elem.wast: module registration and some trap handling
 /// memory_grow.wast: cross-module memory imports not fully supported
 let cruntime_whitelisted_tests : Array[(String, Set[Int])] = [
-  ("memory_grow.wast", Set::of([330, 336])),
-  ("exports.wast", Set::of([93, 94, 97])),
-  ("global.wast", Set::of([663, 664])),
-  ("elem.wast", Set::of([716, 959, 960, 972, 973, 974, 1029, 1053])),
+  ("memory_grow.wast", Set::from_array([330, 336])),
+  ("exports.wast", Set::from_array([93, 94, 97])),
+  ("global.wast", Set::from_array([663, 664])),
+  ("elem.wast", Set::from_array([716, 959, 960, 972, 973, 974, 1029, 1053])),
 ]
 
 ///|

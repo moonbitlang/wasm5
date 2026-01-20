@@ -4,6 +4,8 @@
     "moonbitlang/async/io",
     "moonbitlang/async/process",
     "moonbitlang/async",
+    "moonbitlang/core/encoding/utf8",
+    "moonbitlang/core/strconv",
     {
       "path": "moonbitlang/wasm5/src/runtime",
       "alias": "wasm5_runtime"

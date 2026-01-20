@@ -1,5 +1,8 @@
 {
   "import": [
+    "moonbitlang/core/encoding/utf8",
+    "moonbitlang/core/math",
+    "moonbitlang/core/strconv",
     {
       "path": "moonbitlang/wasm5/src/core",
       "alias": "core"

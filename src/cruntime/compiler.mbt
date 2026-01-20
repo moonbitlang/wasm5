@@ -131,12 +131,12 @@ pub fn compile_with_imports(
       let abs_idx = idx.reinterpret_as_int()
       if abs_idx < num_imported_funcs {
         // Exported import - store as negative: -(import_idx + 1)
-        let name = @encoding/utf8.decode(exp.name) catch { _ => continue }
+        let name = @utf8.decode(exp.name) catch { _ => continue }
         exports[name] = -(abs_idx + 1)
       } else {
         // Local function
         let local_idx = abs_idx - num_imported_funcs
-        let name = @encoding/utf8.decode(exp.name) catch { _ => continue }
+        let name = @utf8.decode(exp.name) catch { _ => continue }
         exports[name] = local_idx
       }
     }

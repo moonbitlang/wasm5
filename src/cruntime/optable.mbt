@@ -58,6 +58,9 @@ extern "C" fn call_external() -> UInt64 = "call_external"
 ///|
 extern "C" fn entry() -> UInt64 = "entry"
 
+///|
+let _unused_nop : () -> UInt64 = nop
+
 // Constants
 
 ///|
