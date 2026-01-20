@@ -1751,8 +1751,10 @@ pub async fn process_wast_file_cruntime(
 /// exports.wast, global.wast: module registration not supported
 /// local_init.wast: reference type result conversion
 /// elem.wast: module registration and some trap handling
+/// memory_grow.wast: cross-module memory imports not fully supported
 let cruntime_whitelisted_tests : Array[(String, Set[Int])] = [
   ("select.wast", Set::of([251, 252, 258, 259, 279, 280])),
+  ("memory_grow.wast", Set::of([330, 336])),
   (
     "br_table.wast",
     Set::of([

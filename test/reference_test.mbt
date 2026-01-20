@@ -967,20 +967,20 @@ async test "memory.wast (cruntime)" {
   run_test_harness("", "memory.wast", runtime_type=CRuntime)
 }
 
-// Disabled: memory_grow doesn't allocate new memory
-// async test "memory_grow.wast (cruntime)" {
-//   run_test_harness("", "memory_grow.wast", runtime_type=CRuntime)
-// }
+///|
+async test "memory_grow.wast (cruntime)" {
+  run_test_harness("", "memory_grow.wast", runtime_type=CRuntime)
+}
 
 ///|
 async test "memory_redundancy.wast (cruntime)" {
   run_test_harness("", "memory_redundancy.wast", runtime_type=CRuntime)
 }
 
-// Disabled: memory_grow state not properly isolated
-// async test "memory_size.wast (cruntime)" {
-//   run_test_harness("", "memory_size.wast", runtime_type=CRuntime)
-// }
+///|
+async test "memory_size.wast (cruntime)" {
+  run_test_harness("", "memory_size.wast", runtime_type=CRuntime)
+}
 
 // Disabled: SIGSEGV trap handling
 // async test "memory_trap.wast (cruntime)" {
@@ -1146,10 +1146,10 @@ async test "utf8-invalid-encoding.wast (cruntime)" {
 // Bulk Memory CRuntime Tests
 // =============================================================================
 
-// Disabled: active element segment dropping
-// async test "bulk-memory/bulk.wast (cruntime)" {
-//   run_test_harness("bulk-memory/", "bulk.wast", runtime_type=CRuntime)
-// }
+///|
+async test "bulk-memory/bulk.wast (cruntime)" {
+  run_test_harness("bulk-memory/", "bulk.wast", runtime_type=CRuntime)
+}
 
 ///|
 async test "bulk-memory/memory_copy.wast (cruntime)" {

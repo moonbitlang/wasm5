@@ -4,8 +4,9 @@ pub struct CRuntime {
   module_ : @core.Module
   compiled : CompiledModule
   globals : FixedArray[UInt64] // Global variables
-  memory : FixedArray[Byte] // Linear memory
+  memory : FixedArray[Byte] // Linear memory (pre-allocated to max size)
   memory_pages : FixedArray[Int] // Current size in pages (single element array for FFI mutability)
+  memory_max_size : Int // Maximum memory size in bytes (for memory.grow bounds)
   tables : FixedArray[FixedArray[Int]] // Tables of function indices
   // Flattened table data for C FFI
   tables_flat : FixedArray[Int] // All tables concatenated
@@ -69,8 +70,8 @@ pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
   let compiled = compile(module_)
   // Initialize globals from module
   let globals = init_globals(module_)
-  // Initialize memory from module
-  let (memory, memory_pages) = init_memory(module_)
+  // Initialize memory from module (pre-allocated to max size)
+  let (memory, memory_pages, memory_max_size) = init_memory(module_)
   // Initialize tables from module (needs globals for element offset evaluation)
   let (tables, table_logical_sizes, table_max_sizes) = init_tables(
     module_, globals,
@@ -120,6 +121,7 @@ pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
     globals,
     memory,
     memory_pages,
+    memory_max_size,
     tables,
     tables_flat,
     table_offsets,
@@ -153,8 +155,8 @@ pub fn CRuntime::load_with_imports(
   let compiled = compile_with_imports(module_, resolved_imports)
   // Initialize globals from module
   let globals = init_globals(module_)
-  // Initialize memory from module
-  let (memory, memory_pages) = init_memory(module_)
+  // Initialize memory from module (pre-allocated to max size)
+  let (memory, memory_pages, memory_max_size) = init_memory(module_)
   // Initialize tables from module (needs globals for element offset evaluation)
   let (tables, table_logical_sizes, table_max_sizes) = init_tables(
     module_, globals,
@@ -211,6 +213,7 @@ pub fn CRuntime::load_with_imports(
     globals,
     memory,
     memory_pages,
+    memory_max_size,
     tables,
     tables_flat,
     table_offsets,
@@ -244,11 +247,14 @@ pub fn CRuntime::get_context_ptr(self : CRuntime) -> Int64 {
     let num_imported_funcs = self.module_.imports
       .filter(fn(imp) { imp.desc is @core.ImportDesc::Func(_) })
       .length()
+    // Current memory size is pages * 65536
+    let current_mem_size = self.memory_pages[0] * page_size
     self.context_ptr = c_create_runtime_context(
       self.compiled.code,
       self.globals,
       self.memory,
-      self.memory.length(),
+      current_mem_size,
+      self.memory_max_size,
       self.memory_pages,
       self.tables_flat,
       self.table_offsets,
@@ -575,31 +581,57 @@ fn build_import_info(
 let page_size : Int = 65536
 
 ///|
+/// Default max memory pages when no max is specified (1024 pages = 64MB)
+/// Note: Memory is pre-allocated to max size, so this affects memory usage
+/// WASM spec allows 65536 pages (4GB) but we use a smaller default for practicality
+let default_memory_max_pages : Int = 1024
+
+///|
 /// Initialize memory from module's memory section
-fn init_memory(module_ : @core.Module) -> (FixedArray[Byte], FixedArray[Int]) {
-  // Get initial memory size from first memory (if any)
+/// Returns (memory, memory_pages, max_size) where memory is pre-allocated to max size
+fn init_memory(
+  module_ : @core.Module,
+) -> (FixedArray[Byte], FixedArray[Int], Int) {
+  // Get initial and max memory size from first memory (if any)
   let initial_pages = if module_.mems.length() > 0 {
     module_.mems[0].limits.min.to_int()
   } else {
     0
   }
-  // Allocate memory (at least 1 byte to avoid empty array)
-  let size = initial_pages * page_size
-  let memory = FixedArray::make(if size > 0 { size } else { 1 }, b'\x00')
-  // Initialize active data segments
+  let max_pages = if module_.mems.length() > 0 {
+    match module_.mems[0].limits.max {
+      Some(max) => max.to_int()
+      None => default_memory_max_pages
+    }
+  } else {
+    default_memory_max_pages
+  }
+  // Pre-allocate memory to max size (at least 1 byte to avoid empty array)
+  let max_size = max_pages * page_size
+  let memory = FixedArray::make(
+    if max_size > 0 {
+      max_size
+    } else {
+      1
+    },
+    b'\x00',
+  )
+  // Initialize active data segments (write to initial region only)
   for data in module_.datas {
     if data.is_active {
       let offset = eval_const_expr(data.offset).to_int()
       for i, b in data.init {
-        if offset + i < memory.length() {
-          memory[offset + i] = b
+        let pos = offset + i
+        let initial_size = initial_pages * page_size
+        if pos < initial_size {
+          memory[pos] = b
         }
       }
     }
   }
   // Use single-element array for memory_pages so it can be mutated by C
   let memory_pages_arr : FixedArray[Int] = [initial_pages]
-  (memory, memory_pages_arr)
+  (memory, memory_pages_arr, max_size)
 }
 
 ///|
@@ -863,6 +895,8 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
         let entry = self.compiled.func_entries[local_idx]
         let num_locals = self.compiled.func_num_locals[local_idx]
         let result_out : FixedArray[UInt64] = [0]
+        // Current memory size is pages * 65536
+        let current_mem_size = self.memory_pages[0] * page_size
         let trap_code = c_execute_ffi(
           self.compiled.code,
           entry,
@@ -873,7 +907,8 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
           0, // start function has no results
           self.globals,
           self.memory,
-          self.memory.length(),
+          current_mem_size,
+          self.memory_max_size,
           self.memory_pages,
           self.tables_flat,
           self.table_offsets,
@@ -1012,6 +1047,8 @@ pub fn CRuntime::call_compiled(
           },
           0UL,
         )
+        // Current memory size is pages * 65536
+        let current_mem_size = self.memory_pages[0] * page_size
         let trap_code = c_execute_ffi(
           self.compiled.code,
           entry,
@@ -1022,7 +1059,8 @@ pub fn CRuntime::call_compiled(
           num_results,
           self.globals,
           self.memory,
-          self.memory.length(),
+          current_mem_size,
+          self.memory_max_size,
           self.memory_pages,
           self.tables_flat,
           self.table_offsets,
