@@ -179,8 +179,14 @@ typedef int (*OpFn)(CRuntime*, uint64_t*, uint64_t*, uint64_t*);
 #  define MUSTTAIL
 #endif
 
+static int g_validate_code = 0;
+
 // NEXT: fetch next opcode and tail-call with updated pc
 #define NEXT() do { \
+    if (g_validate_code && (uintptr_t)*pc < 4096) { \
+        fprintf(stderr, "wasm5: invalid opcode pointer %llu at pc=%p index=%lld\\n", (unsigned long long)*pc, (void*)pc, (long long)(pc - crt->code)); \
+        return TRAP_UNREACHABLE; \
+    } \
     OpFn next = (OpFn)*pc++; \
     MUSTTAIL return next(crt, pc, sp, fp); \
 } while(0)
@@ -416,6 +422,10 @@ void free_runtime_context(CRuntimeContext* ctx) {
 
 // Internal execution helper - starts the tail-call chain
 static int run(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    if (g_validate_code && (uintptr_t)*pc < 4096) {
+        fprintf(stderr, "wasm5: invalid opcode pointer %llu at pc=%p index=%lld\n", (unsigned long long)*pc, (void*)pc, (long long)(pc - crt->code));
+        return TRAP_UNREACHABLE;
+    }
     OpFn first = (OpFn)*pc++;
     return first(crt, pc, sp, fp);
 }
@@ -503,8 +513,14 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     uint64_t* fp = stack;
     uint64_t* sp = stack + num_locals;
 
+    g_validate_code = (getenv("WASM5_VALIDATE_CODE") != NULL);
+    if (g_validate_code) {
+        fprintf(stderr, "wasm5: entry=%d pc=%p opcode=%llu\n", entry, (void*)pc, (unsigned long long)*pc);
+    }
+
     // Start execution
     int trap = run(&crt, pc, sp, fp);
+    g_validate_code = 0;
 
     // Store results (results are placed at stack[0..num_results-1] by end/return)
     if (result_out) {
@@ -1974,7 +1990,6 @@ DEFINE_OP(memory_size)
 
 int op_i32_load(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
-    ++pc;  // Skip align
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint32_t addr = (uint32_t)sp[-1] + offset;
@@ -1989,7 +2004,6 @@ DEFINE_OP(i32_load)
 
 int op_i32_store(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
-    ++pc;  // Skip align
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint32_t value = (uint32_t)sp[-1];
@@ -2006,7 +2020,6 @@ DEFINE_OP(i32_store)
 // Narrow loads - sign/zero extend to i32
 int op_i32_load8_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
-    ++pc;  // Skip align
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint32_t addr = (uint32_t)sp[-1] + offset;
@@ -2021,7 +2034,6 @@ DEFINE_OP(i32_load8_s)
 
 int op_i32_load8_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
-    ++pc;  // Skip align
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint32_t addr = (uint32_t)sp[-1] + offset;
@@ -2036,7 +2048,6 @@ DEFINE_OP(i32_load8_u)
 
 int op_i32_load16_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
-    ++pc;  // Skip align
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint32_t addr = (uint32_t)sp[-1] + offset;
@@ -2051,7 +2062,6 @@ DEFINE_OP(i32_load16_s)
 
 int op_i32_load16_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
-    ++pc;  // Skip align
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint32_t addr = (uint32_t)sp[-1] + offset;
@@ -2067,7 +2077,6 @@ DEFINE_OP(i32_load16_u)
 // Narrow stores - truncate from i32
 int op_i32_store8(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
-    ++pc;  // Skip align
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint8_t value = (uint8_t)sp[-1];
@@ -2083,7 +2092,6 @@ DEFINE_OP(i32_store8)
 
 int op_i32_store16(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
-    ++pc;  // Skip align
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint16_t value = (uint16_t)sp[-1];
@@ -2100,7 +2108,6 @@ DEFINE_OP(i32_store16)
 // i64 loads
 int op_i64_load(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
-    ++pc;  // Skip align
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint32_t addr = (uint32_t)sp[-1] + offset;
@@ -2115,7 +2122,6 @@ DEFINE_OP(i64_load)
 
 int op_i64_load8_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
-    ++pc;  // Skip align
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint32_t addr = (uint32_t)sp[-1] + offset;
@@ -2130,7 +2136,6 @@ DEFINE_OP(i64_load8_s)
 
 int op_i64_load8_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
-    ++pc;  // Skip align
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint32_t addr = (uint32_t)sp[-1] + offset;
@@ -2145,7 +2150,6 @@ DEFINE_OP(i64_load8_u)
 
 int op_i64_load16_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
-    ++pc;  // Skip align
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint32_t addr = (uint32_t)sp[-1] + offset;
@@ -2160,7 +2164,6 @@ DEFINE_OP(i64_load16_s)
 
 int op_i64_load16_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
-    ++pc;  // Skip align
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint32_t addr = (uint32_t)sp[-1] + offset;
@@ -2175,7 +2178,6 @@ DEFINE_OP(i64_load16_u)
 
 int op_i64_load32_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
-    ++pc;  // Skip align
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint32_t addr = (uint32_t)sp[-1] + offset;
@@ -2190,7 +2192,6 @@ DEFINE_OP(i64_load32_s)
 
 int op_i64_load32_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
-    ++pc;  // Skip align
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint32_t addr = (uint32_t)sp[-1] + offset;
@@ -2206,7 +2207,6 @@ DEFINE_OP(i64_load32_u)
 // i64 stores
 int op_i64_store(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
-    ++pc;  // Skip align
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint64_t value = sp[-1];
@@ -2222,7 +2222,6 @@ DEFINE_OP(i64_store)
 
 int op_i64_store8(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
-    ++pc;  // Skip align
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint8_t value = (uint8_t)sp[-1];
@@ -2238,7 +2237,6 @@ DEFINE_OP(i64_store8)
 
 int op_i64_store16(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
-    ++pc;  // Skip align
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint16_t value = (uint16_t)sp[-1];
@@ -2254,7 +2252,6 @@ DEFINE_OP(i64_store16)
 
 int op_i64_store32(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
-    ++pc;  // Skip align
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint32_t value = (uint32_t)sp[-1];
@@ -2271,7 +2268,6 @@ DEFINE_OP(i64_store32)
 // f32 load/store
 int op_f32_load(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
-    ++pc;  // Skip align
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint32_t addr = (uint32_t)sp[-1] + offset;
@@ -2286,7 +2282,6 @@ DEFINE_OP(f32_load)
 
 int op_f32_store(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
-    ++pc;  // Skip align
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint32_t value = (uint32_t)sp[-1];  // f32 bits in lower 32 bits
@@ -2303,7 +2298,6 @@ DEFINE_OP(f32_store)
 // f64 load/store
 int op_f64_load(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
-    ++pc;  // Skip align
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint32_t addr = (uint32_t)sp[-1] + offset;
@@ -2318,7 +2312,6 @@ DEFINE_OP(f64_load)
 
 int op_f64_store(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
-    ++pc;  // Skip align
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint64_t value = sp[-1];  // f64 bits

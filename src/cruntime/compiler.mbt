@@ -15,15 +15,14 @@ pub fn compile_with_imports(
   // TODO: The unified compiler works correctly for individual modules (verified via CLI)
   // but causes SIGSEGV/SIGBUS crashes when running through the test harness.
   // This appears to be a test harness infrastructure issue, not a compiler bug.
-  // Temporarily using legacy compiler until this can be investigated further.
   // See: Issue 3.3 in the plan file for details.
-  return compile_legacy(mod_, resolved_imports)
   // If there are resolved imports, use legacy compiler for cross-module call support
   if resolved_imports.length() > 0 {
     return compile_legacy(mod_, resolved_imports)
   }
   // Use unified compiler to produce universal IR
   let universal = @compile.compile(mod_)
+  validate_universal_code(universal.code, universal.func_entries)
   // Transform opcodes to function pointers
   let code = transform_to_c_runtime(universal.code)
   {
@@ -33,6 +32,325 @@ pub fn compile_with_imports(
     func_max_stack: FixedArray::from_array(universal.func_max_stack),
     exports: universal.exports,
   }
+}
+
+///|
+/// Validate universal IR layout and immediate alignment.
+fn validate_universal_code(
+  code : Array[Int64],
+  func_entries : Array[Int],
+) -> Unit {
+  let code_len = code.length()
+  if code_len == 0 || func_entries.length() == 0 {
+    return
+  }
+  let mut prev_entry = -1
+  let func_entry_set : Set[Int] = Set::new()
+  for entry in func_entries {
+    if entry <= prev_entry || entry < 0 || entry >= code_len {
+      abort(
+        "invalid function entry: \{entry} (prev=\{prev_entry}, len=\{code_len})",
+      )
+    }
+    prev_entry = entry
+    func_entry_set.add(entry)
+  }
+  for func_idx in 0..<func_entries.length() {
+    let start = func_entries[func_idx]
+    let end = if func_idx + 1 < func_entries.length() {
+      func_entries[func_idx + 1]
+    } else {
+      code_len
+    }
+    if start >= end {
+      abort("invalid function range: \{start}..\{end} (func=\{func_idx})")
+    }
+    let entry_op = code[start]
+    match @core.OpTag::from_int64(entry_op) {
+      Some(@core.OpTag::Entry) => ()
+      Some(tag) =>
+        abort("expected Entry at \{start}, got \{tag} (func=\{func_idx})")
+      None => abort("invalid opcode \{entry_op} at \{start} (func=\{func_idx})")
+    }
+    validate_code_range(code, start, end, func_idx, func_entry_set)
+  }
+}
+
+///|
+fn validate_code_range(
+  code : Array[Int64],
+  start : Int,
+  end : Int,
+  func_idx : Int,
+  func_entries : Set[Int],
+) -> Unit {
+  let code_len = code.length()
+  let boundaries = collect_opcode_boundaries(code, start, end, func_idx)
+  let mut i = start
+  while i < end {
+    let opcode = code[i]
+    let tag = match @core.OpTag::from_int64(opcode) {
+      Some(t) => t
+      None => abort("invalid opcode \{opcode} at \{i} (func=\{func_idx})")
+    }
+    i += 1
+    if tag == @core.OpTag::BrTable {
+      if i >= end {
+        abort("br_table missing num_labels at \{i} (func=\{func_idx})")
+      }
+      let num_labels = code[i].to_int()
+      if num_labels < 0 {
+        abort(
+          "br_table negative label count \{num_labels} at \{i} (func=\{func_idx})",
+        )
+      }
+      let total = num_labels + 2
+      if i + total > end {
+        abort(
+          "br_table immediates exceed function range at \{i} (func=\{func_idx})",
+        )
+      }
+      for j in 0..<(num_labels + 1) {
+        check_branch_target(
+          code[i + 1 + j],
+          start,
+          end,
+          boundaries,
+          func_idx,
+          i - 1,
+          "br_table",
+        )
+      }
+      i += total
+      continue
+    }
+    let imm_count = @core.get_immediate_count(opcode)
+    if i + imm_count > end {
+      abort(
+        "opcode \{opcode} at \{i - 1} expects \{imm_count} immediates (func=\{func_idx})",
+      )
+    }
+    match tag {
+      @core.OpTag::Br => {
+        if imm_count < 1 {
+          abort("br immediate count mismatch at \{i - 1} (func=\{func_idx})")
+        }
+        check_branch_target(
+          code[i],
+          start,
+          end,
+          boundaries,
+          func_idx,
+          i - 1,
+          "br",
+        )
+      }
+      @core.OpTag::BrIf => {
+        if imm_count < 2 {
+          abort("br_if immediate count mismatch at \{i - 1} (func=\{func_idx})")
+        }
+        check_branch_target(
+          code[i],
+          start,
+          end,
+          boundaries,
+          func_idx,
+          i - 1,
+          "br_if.taken",
+        )
+        check_branch_target(
+          code[i + 1],
+          start,
+          end,
+          boundaries,
+          func_idx,
+          i - 1,
+          "br_if.fallthrough",
+        )
+      }
+      @core.OpTag::If => {
+        if imm_count < 1 {
+          abort("if immediate count mismatch at \{i - 1} (func=\{func_idx})")
+        }
+        check_branch_target(
+          code[i],
+          start,
+          end,
+          boundaries,
+          func_idx,
+          i - 1,
+          "if.else",
+        )
+      }
+      @core.OpTag::BrOnNull => {
+        if imm_count < 2 {
+          abort(
+            "br_on_null immediate count mismatch at \{i - 1} (func=\{func_idx})",
+          )
+        }
+        check_branch_target(
+          code[i],
+          start,
+          end,
+          boundaries,
+          func_idx,
+          i - 1,
+          "br_on_null.taken",
+        )
+        check_branch_target(
+          code[i + 1],
+          start,
+          end,
+          boundaries,
+          func_idx,
+          i - 1,
+          "br_on_null.fallthrough",
+        )
+      }
+      @core.OpTag::BrOnNonNull => {
+        if imm_count < 2 {
+          abort(
+            "br_on_non_null immediate count mismatch at \{i - 1} (func=\{func_idx})",
+          )
+        }
+        check_branch_target(
+          code[i],
+          start,
+          end,
+          boundaries,
+          func_idx,
+          i - 1,
+          "br_on_non_null.taken",
+        )
+        check_branch_target(
+          code[i + 1],
+          start,
+          end,
+          boundaries,
+          func_idx,
+          i - 1,
+          "br_on_non_null.fallthrough",
+        )
+      }
+      @core.OpTag::Call => {
+        if imm_count < 2 {
+          abort("call immediate count mismatch at \{i - 1} (func=\{func_idx})")
+        }
+        check_code_index(code[i], code_len, func_idx, i - 1, "call")
+        check_func_entry(code[i], func_entries, func_idx, i - 1, "call")
+      }
+      _ => ()
+    }
+    i += imm_count
+  }
+  if i != end {
+    abort("function parse mismatch: \{start}..\{end} ended at \{i}")
+  }
+}
+
+///|
+fn check_code_index(
+  value : Int64,
+  code_len : Int,
+  func_idx : Int,
+  opcode_index : Int,
+  label : String,
+) -> Unit {
+  let code_len_i64 = code_len.to_int64()
+  if value < 0L || value >= code_len_i64 {
+    abort(
+      "invalid code index for \{label}: \{value} at \{opcode_index} (func=\{func_idx}, len=\{code_len})",
+    )
+  }
+}
+
+///|
+fn check_branch_target(
+  value : Int64,
+  start : Int,
+  end : Int,
+  boundaries : Set[Int],
+  func_idx : Int,
+  opcode_index : Int,
+  label : String,
+) -> Unit {
+  let idx = value.to_int()
+  if idx < start || idx >= end {
+    abort(
+      "invalid branch target for \{label}: \{idx} at \{opcode_index} (func=\{func_idx}, range=\{start}..\{end})",
+    )
+  }
+  if not(boundaries.contains(idx)) {
+    abort(
+      "branch target not at opcode boundary for \{label}: \{idx} at \{opcode_index} (func=\{func_idx})",
+    )
+  }
+}
+
+///|
+fn check_func_entry(
+  value : Int64,
+  func_entries : Set[Int],
+  func_idx : Int,
+  opcode_index : Int,
+  label : String,
+) -> Unit {
+  let idx = value.to_int()
+  if not(func_entries.contains(idx)) {
+    abort(
+      "target not at function entry for \{label}: \{idx} at \{opcode_index} (func=\{func_idx})",
+    )
+  }
+}
+
+///|
+fn collect_opcode_boundaries(
+  code : Array[Int64],
+  start : Int,
+  end : Int,
+  func_idx : Int,
+) -> Set[Int] {
+  let boundaries : Set[Int] = Set::new()
+  let mut i = start
+  while i < end {
+    boundaries.add(i)
+    let opcode = code[i]
+    let tag = match @core.OpTag::from_int64(opcode) {
+      Some(t) => t
+      None => abort("invalid opcode \{opcode} at \{i} (func=\{func_idx})")
+    }
+    i += 1
+    if tag == @core.OpTag::BrTable {
+      if i >= end {
+        abort("br_table missing num_labels at \{i} (func=\{func_idx})")
+      }
+      let num_labels = code[i].to_int()
+      if num_labels < 0 {
+        abort(
+          "br_table negative label count \{num_labels} at \{i} (func=\{func_idx})",
+        )
+      }
+      let total = num_labels + 2
+      if i + total > end {
+        abort(
+          "br_table immediates exceed function range at \{i} (func=\{func_idx})",
+        )
+      }
+      i += total
+      continue
+    }
+    let imm_count = @core.get_immediate_count(opcode)
+    if i + imm_count > end {
+      abort(
+        "opcode \{opcode} at \{i - 1} expects \{imm_count} immediates (func=\{func_idx})",
+      )
+    }
+    i += imm_count
+  }
+  if i != end {
+    abort("function parse mismatch: \{start}..\{end} ended at \{i}")
+  }
+  boundaries
 }
 
 ///|

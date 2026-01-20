@@ -12,8 +12,19 @@ pub fn transform_to_c_runtime(code : Array[Int64]) -> FixedArray[UInt64] {
   let mut i = 0
   while i < code.length() {
     let opcode = code[i]
+    let opcode_index = i
+    match @core.OpTag::from_int64(opcode) {
+      Some(_) => ()
+      None => abort("invalid opcode \{opcode} at \{opcode_index}")
+    }
     // Replace opcode with function pointer
-    result[i] = get_c_handler(opcode)
+    let handler = get_c_handler(opcode)
+    if handler < 4096UL {
+      abort(
+        "invalid opcode handler \{handler} for \{opcode} at \{opcode_index}",
+      )
+    }
+    result[i] = handler
     i += 1
     // Handle BrTable specially - variable immediates
     if opcode == 10L {
@@ -43,6 +54,8 @@ pub fn transform_to_c_runtime(code : Array[Int64]) -> FixedArray[UInt64] {
   }
   result
 }
+
+///|
 
 ///|
 /// Get C function pointer for an opcode tag.
