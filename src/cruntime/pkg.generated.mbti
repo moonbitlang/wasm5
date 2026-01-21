@@ -50,9 +50,11 @@ pub struct CRuntime {
 pub fn CRuntime::call_compiled(Self, Bytes, Array[@core.Value]) -> Array[@core.Value] raise @runtime.RuntimeError
 pub fn CRuntime::free_context(Self) -> Unit
 pub fn CRuntime::get_context_ptr(Self) -> Int64
+pub fn CRuntime::get_globals(Self) -> Array[@core.Value]
 pub fn CRuntime::get_module(Self) -> @core.Module
 pub fn CRuntime::load(@core.Module) -> Self
 pub fn CRuntime::load_with_imports(@core.Module, Map[Int, ResolvedImport]) -> Self
+pub fn CRuntime::load_with_imports_and_globals(@core.Module, Map[Int, ResolvedImport], Map[Int, UInt64]) -> Self
 pub fn CRuntime::run_start(Self) -> Unit raise @runtime.RuntimeError
 
 pub struct CompiledModule {

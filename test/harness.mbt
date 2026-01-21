@@ -161,10 +161,14 @@ async fn parse_and_compile(ctx : TestContext, file_name : String) -> &Executor {
       @wasm5_validate.validate_module(module_)
       // Resolve imports from registered CRuntime modules
       let resolved_imports = resolve_imports_for_cruntime(ctx, module_)
-      let cruntime = if resolved_imports.is_empty() {
+      let resolved_globals = resolve_globals_for_cruntime(ctx, module_)
+      let cruntime = if resolved_imports.is_empty() &&
+        resolved_globals.is_empty() {
         @wasm5_cruntime.CRuntime::load(module_)
       } else {
-        @wasm5_cruntime.CRuntime::load_with_imports(module_, resolved_imports)
+        @wasm5_cruntime.CRuntime::load_with_imports_and_globals(
+          module_, resolved_imports, resolved_globals,
+        )
       }
       cruntime.run_start()
       (cruntime : &Executor)
@@ -425,6 +429,52 @@ fn resolve_imports_for_cruntime(
 }
 
 ///|
+/// Resolve imported globals for a module being loaded with CRuntime.
+/// Returns a map from import global index to encoded UInt64 value.
+fn resolve_globals_for_cruntime(
+  ctx : TestContext,
+  module_ : @wasm5_core.Module,
+) -> Map[Int, UInt64] {
+  let resolved : Map[Int, UInt64] = {}
+  let mut import_global_idx = 0
+  for imp in module_.imports {
+    match imp.desc {
+      @wasm5_core.ImportDesc::Global(_) => {
+        let module_name = @utf8.decode(imp.module_) catch { _ => "" }
+        let field_name = @utf8.decode(imp.name) catch { _ => "" }
+        match ctx.registry.0.get(module_name) {
+          Some(registered) =>
+            match registered.cruntime {
+              Some(target_crt) => {
+                let target_global_idx = find_exported_global_idx(
+                  registered.module_,
+                  field_name,
+                )
+                match target_global_idx {
+                  Some(global_idx) => {
+                    let globals = target_crt.get_globals()
+                    if global_idx >= 0 && global_idx < globals.length() {
+                      resolved[import_global_idx] = cruntime_value_to_u64(
+                        globals[global_idx],
+                      )
+                    }
+                  }
+                  None => ()
+                }
+              }
+              None => ()
+            }
+          None => ()
+        }
+        import_global_idx += 1
+      }
+      _ => ()
+    }
+  }
+  resolved
+}
+
+///|
 /// Find the function index for an exported function name in a module.
 fn find_exported_func_idx(module_ : @wasm5_core.Module, name : String) -> Int? {
   let name_bytes = @utf8.encode(name)
@@ -438,6 +488,42 @@ fn find_exported_func_idx(module_ : @wasm5_core.Module, name : String) -> Int? {
     }
   }
   None
+}
+
+///|
+/// Find the global index for an exported global name in a module.
+fn find_exported_global_idx(
+  module_ : @wasm5_core.Module,
+  name : String,
+) -> Int? {
+  let name_bytes = @utf8.encode(name)
+  for exp in module_.exports {
+    if exp.name == name_bytes {
+      match exp.desc {
+        @wasm5_core.ExportDesc::Global(global_idx) =>
+          return Some(global_idx.reinterpret_as_int())
+        _ => ()
+      }
+    }
+  }
+  None
+}
+
+///|
+/// Encode a Value into CRuntime's raw UInt64 representation.
+fn cruntime_value_to_u64(v : @wasm5_runtime.Value) -> UInt64 {
+  match v {
+    I32(n) => n.to_uint64()
+    I64(n) => n
+    F32(f) => f.reinterpret_as_uint().to_uint64()
+    F64(f) => f.reinterpret_as_uint64()
+    Ref(Some(n)) => n.reinterpret_as_uint().to_uint64()
+    Ref(None) => 0xFFFFFFFF_FFFFFFFFUL
+    Funcref(Some(n)) => n.reinterpret_as_uint().to_uint64()
+    Funcref(None) => 0xFFFFFFFF_FFFFFFFFUL
+    Externref(Some(n)) => n.reinterpret_as_uint().to_uint64()
+    Externref(None) => 0xFFFFFFFF_FFFFFFFFUL
+  }
 }
 
 ///|
@@ -1393,7 +1479,6 @@ fn handle_assert_return_get(
   module_name? : String? = None,
 ) -> Unit {
   try {
-    // Get global requires MoonBit runtime (CRuntime doesn't support globals)
     let rt : @wasm5_runtime.Runtime? = match module_name {
       Some(name) =>
         match ctx.registry.0.get(name) {
@@ -1406,16 +1491,32 @@ fn handle_assert_return_get(
           None => None
         }
     }
-    guard rt is Some(rt) else {
+    let crt : @wasm5_cruntime.CRuntime? = match module_name {
+      Some(name) =>
+        match ctx.registry.0.get(name) {
+          Some(registered) => registered.cruntime
+          None => None
+        }
+      None =>
+        match ctx.executor {
+          Some(executor) => executor.as_cruntime()
+          None => None
+        }
+    }
+    guard rt is Some(_) || crt is Some(_) else {
       let msg = match module_name {
         Some(name) => "[get \{field}] module '\{name}' not registered"
-        None => "[get \{field}] no module loaded (requires MoonBit runtime)"
+        None => "[get \{field}] no module loaded"
       }
       ctx.fail(line, "assert_return", msg)
       return
     }
     // Find the exported global by name
-    let module_ = rt.get_module()
+    let module_ = if rt is Some(rt) {
+      rt.get_module()
+    } else {
+      crt.unwrap().get_module()
+    }
     let field_bytes = @utf8.encode(field)
     let mut global_idx : Int? = None
     for exp in module_.exports {
@@ -1437,7 +1538,11 @@ fn handle_assert_return_get(
       )
       return
     }
-    let globals = rt.get_globals()
+    let globals = if rt is Some(rt) {
+      rt.get_globals()
+    } else {
+      crt.unwrap().get_globals()
+    }
     if idx < 0 || idx >= globals.length() {
       ctx.fail(
         line,
@@ -1712,13 +1817,11 @@ pub async fn process_wast_file_cruntime(
 ///|
 /// Whitelist for C runtime tests (some tests may have features not yet implemented)
 /// select.wast, br_table.wast: ref.func and ref.null instructions not implemented
-/// exports.wast, global.wast: module registration not supported
+/// exports.wast, global.wast: global imports/get not supported (now enabled)
 /// elem.wast: module registration and some trap handling
 /// memory_grow.wast: cross-module memory imports not fully supported
 let cruntime_whitelisted_tests : Array[(String, Set[Int])] = [
   ("memory_grow.wast", Set::from_array([330, 336])),
-  ("exports.wast", Set::from_array([93, 94, 97])),
-  ("global.wast", Set::from_array([663, 664])),
   ("elem.wast", Set::from_array([716, 959, 960, 972, 973, 974, 1029, 1053])),
 ]
 

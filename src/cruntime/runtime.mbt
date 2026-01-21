@@ -121,11 +121,12 @@ fn build_runtime(
   module_ : @core.Module,
   compiled : CompiledModule,
   resolved_imports : Map[Int, ResolvedImport],
+  resolved_imported_globals : Map[Int, UInt64],
 ) -> CRuntime {
   // Initialize globals from module
-  let globals = init_globals(module_)
+  let globals = init_globals(module_, resolved_imported_globals)
   // Initialize memory from module (pre-allocated to max size)
-  let (memory, memory_pages, memory_max_size) = init_memory(module_)
+  let (memory, memory_pages, memory_max_size) = init_memory(module_, globals)
   // Initialize tables from module (needs globals for element offset evaluation)
   let (tables, table_logical_sizes, table_max_sizes) = init_tables(
     module_, globals,
@@ -190,7 +191,7 @@ fn build_runtime(
 /// Load a module and compile it for C runtime execution.
 pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
   let compiled = compile(module_)
-  build_runtime(module_, compiled, {})
+  build_runtime(module_, compiled, {}, {})
 }
 
 ///|
@@ -200,7 +201,18 @@ pub fn CRuntime::load_with_imports(
   resolved_imports : Map[Int, ResolvedImport],
 ) -> CRuntime {
   let compiled = compile_with_imports(module_, resolved_imports)
-  build_runtime(module_, compiled, resolved_imports)
+  build_runtime(module_, compiled, resolved_imports, {})
+}
+
+///|
+/// Load a module with resolved imports and imported globals.
+pub fn CRuntime::load_with_imports_and_globals(
+  module_ : @core.Module,
+  resolved_imports : Map[Int, ResolvedImport],
+  resolved_imported_globals : Map[Int, UInt64],
+) -> CRuntime {
+  let compiled = compile_with_imports(module_, resolved_imports)
+  build_runtime(module_, compiled, resolved_imports, resolved_imported_globals)
 }
 
 ///|
@@ -265,6 +277,31 @@ pub fn CRuntime::free_context(self : CRuntime) -> Unit {
 /// Get the underlying module.
 pub fn CRuntime::get_module(self : CRuntime) -> @core.Module {
   self.module_
+}
+
+///|
+/// Get the globals array from the runtime (decoded to Value).
+pub fn CRuntime::get_globals(self : CRuntime) -> Array[Value] {
+  let globals : Array[Value] = []
+  let mut idx = 0
+  for imp in self.module_.imports {
+    match imp.desc {
+      Global(gt) => {
+        if idx >= 0 && idx < self.globals.length() {
+          globals.push(u64_to_value(self.globals[idx], gt.val_type))
+        }
+        idx += 1
+      }
+      _ => ()
+    }
+  }
+  for g in self.module_.globals {
+    if idx >= 0 && idx < self.globals.length() {
+      globals.push(u64_to_value(self.globals[idx], g.type_.val_type))
+    }
+    idx += 1
+  }
+  globals
 }
 
 ///|
@@ -554,6 +591,7 @@ let default_memory_max_pages : Int = 1024
 /// Returns (memory, memory_pages, max_size) where memory is pre-allocated to max size
 fn init_memory(
   module_ : @core.Module,
+  globals : FixedArray[UInt64],
 ) -> (FixedArray[Byte], FixedArray[Int], Int) {
   // Get initial and max memory size from first memory (if any)
   let initial_pages = if module_.mems.length() > 0 {
@@ -582,7 +620,7 @@ fn init_memory(
   // Initialize active data segments (write to initial region only)
   for data in module_.datas {
     if data.is_active {
-      let offset = eval_const_expr(data.offset).to_int()
+      let offset = eval_const_expr_with_globals(data.offset, globals).to_int()
       for i, b in data.init {
         let pos = offset + i
         let initial_size = initial_pages * page_size
@@ -612,7 +650,10 @@ fn count_imported_globals(module_ : @core.Module) -> Int {
 
 ///|
 /// Initialize globals from module's global section
-fn init_globals(module_ : @core.Module) -> FixedArray[UInt64] {
+fn init_globals(
+  module_ : @core.Module,
+  resolved_imported_globals : Map[Int, UInt64],
+) -> FixedArray[UInt64] {
   let num_imported = count_imported_globals(module_)
   let num_local = module_.globals.length()
   let total = num_imported + num_local
@@ -622,21 +663,25 @@ fn init_globals(module_ : @core.Module) -> FixedArray[UInt64] {
   for imp in module_.imports {
     match imp.desc {
       Global(gt) => {
-        // Default values for spectest globals
-        let value : UInt64 = match gt.val_type {
-          I32 => 666UL // spectest global_i32 = 666
-          I64 => 666UL // spectest global_i64 = 666
-          F32 => {
-            let f : Float = 666.6
-            f.reinterpret_as_uint().to_uint64()
-          }
-          F64 => {
-            let d : Double = 666.6
-            d.reinterpret_as_uint64()
-          }
-          FuncRef => 0xFFFFFFFF_FFFFFFFFUL // null funcref
-          ExternRef => 0xFFFFFFFF_FFFFFFFFUL // null externref
-          _ => 0UL
+        let value = match resolved_imported_globals.get(idx) {
+          Some(import_value) => import_value
+          None =>
+            // Default values for spectest globals
+            match gt.val_type {
+              I32 => 666UL // spectest global_i32 = 666
+              I64 => 666UL // spectest global_i64 = 666
+              F32 => {
+                let f : Float = 666.6
+                f.reinterpret_as_uint().to_uint64()
+              }
+              F64 => {
+                let d : Double = 666.6
+                d.reinterpret_as_uint64()
+              }
+              FuncRef => 0xFFFFFFFF_FFFFFFFFUL // null funcref
+              ExternRef => 0xFFFFFFFF_FFFFFFFFUL // null externref
+              _ => 0UL
+            }
         }
         globals[idx] = value
         idx += 1
@@ -767,12 +812,6 @@ fn eval_elem_expr(expr : @core.Expr) -> Int {
     }
   }
   -1
-}
-
-///|
-/// Evaluate a constant expression to get initial value (simple version without globals)
-fn eval_const_expr(expr : @core.Expr) -> UInt64 {
-  eval_const_expr_with_globals(expr, FixedArray::make(1, 0UL))
 }
 
 ///|
