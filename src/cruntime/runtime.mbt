@@ -492,41 +492,408 @@ fn flatten_elem_segments(
 }
 
 ///|
-/// Compute a hash for a value type (for type signature comparison)
-fn valtype_code(vt : @core.ValType) -> Int {
-  match vt {
-    I32 => 1
-    I64 => 2
-    F32 => 3
-    F64 => 4
-    V128 => 5
-    FuncRef => 6
-    ExternRef => 7
-    _ => 0 // Other reference types
+/// Get rec group info for a type index: (group_index, position_in_group)
+fn get_rec_group_info_cruntime(
+  module_ : @core.Module,
+  type_idx : Int,
+) -> (Int, Int) {
+  for i, group in module_.type_groups {
+    for j, subtype_def in group.subtypes {
+      if subtype_def.type_idx.reinterpret_as_int() == type_idx {
+        return (i, j)
+      }
+    }
+  }
+  (-1, -1)
+}
+
+///|
+/// Get all type indices in a rec group
+fn get_rec_group_types_cruntime(
+  module_ : @core.Module,
+  group_idx : Int,
+) -> Array[Int] {
+  let result : Array[Int] = []
+  if group_idx >= 0 && group_idx < module_.type_groups.length() {
+    let group = module_.type_groups[group_idx]
+    for subtype_def in group.subtypes {
+      result.push(subtype_def.type_idx.reinterpret_as_int())
+    }
+  }
+  result
+}
+
+///|
+/// Check if a type index is within a given rec group
+fn is_in_rec_group_cruntime(types : Array[Int], type_idx : Int) -> Bool {
+  for t in types {
+    if t == type_idx {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Get the position of a type within its rec group
+fn get_position_in_group_cruntime(types : Array[Int], type_idx : Int) -> Int {
+  for i, t in types {
+    if t == type_idx {
+      return i
+    }
+  }
+  -1
+}
+
+///|
+/// Check if a type index is final (cannot be extended)
+fn is_type_final_cruntime(module_ : @core.Module, type_idx : Int) -> Bool {
+  for group in module_.type_groups {
+    for subtype_def in group.subtypes {
+      if subtype_def.type_idx.reinterpret_as_int() == type_idx {
+        return subtype_def.is_final
+      }
+    }
+  }
+  true
+}
+
+///|
+/// Get the list of supertypes for a type index
+fn get_supertypes_cruntime(
+  module_ : @core.Module,
+  type_idx : Int,
+) -> Array[Int] {
+  let result : Array[Int] = []
+  for group in module_.type_groups {
+    for subtype_def in group.subtypes {
+      if subtype_def.type_idx.reinterpret_as_int() == type_idx {
+        for sup in subtype_def.supertypes {
+          result.push(sup.reinterpret_as_int())
+        }
+        return result
+      }
+    }
+  }
+  result
+}
+
+///|
+/// Check if two rec groups are structurally equivalent
+fn rec_groups_equivalent_cruntime(
+  module_ : @core.Module,
+  group1_idx : Int,
+  group2_idx : Int,
+  visited : Array[(Int, Int)],
+) -> Bool {
+  if group1_idx == group2_idx {
+    return true
+  }
+  for v in visited {
+    if (v.0 == group1_idx && v.1 == group2_idx) ||
+      (v.0 == group2_idx && v.1 == group1_idx) {
+      return true
+    }
+  }
+  let types1 = get_rec_group_types_cruntime(module_, group1_idx)
+  let types2 = get_rec_group_types_cruntime(module_, group2_idx)
+  if types1.length() != types2.length() {
+    return false
+  }
+  visited.push((group1_idx, group2_idx))
+  for i in 0..<types1.length() {
+    let t1 = types1[i]
+    let t2 = types2[i]
+    if not(
+        types_equivalent_in_context_cruntime(
+          module_, t1, t2, types1, types2, visited,
+        ),
+      ) {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// Check if two types are equivalent in the context of their rec groups
+fn types_equivalent_in_context_cruntime(
+  module_ : @core.Module,
+  type_idx1 : Int,
+  type_idx2 : Int,
+  group1_types : Array[Int],
+  group2_types : Array[Int],
+  visited : Array[(Int, Int)],
+) -> Bool {
+  if type_idx1 < 0 ||
+    type_idx1 >= module_.types.length() ||
+    type_idx2 < 0 ||
+    type_idx2 >= module_.types.length() {
+    return false
+  }
+  match (module_.types[type_idx1], module_.types[type_idx2]) {
+    (Func(f1), Func(f2)) => {
+      if is_type_final_cruntime(module_, type_idx1) !=
+        is_type_final_cruntime(module_, type_idx2) {
+        return false
+      }
+      if f1.params.length() != f2.params.length() ||
+        f1.results.length() != f2.results.length() {
+        return false
+      }
+      for i in 0..<f1.params.length() {
+        if not(
+            valtypes_equivalent_in_context_cruntime(
+              module_,
+              f1.params[i],
+              f2.params[i],
+              group1_types,
+              group2_types,
+              visited,
+            ),
+          ) {
+          return false
+        }
+      }
+      for i in 0..<f1.results.length() {
+        if not(
+            valtypes_equivalent_in_context_cruntime(
+              module_,
+              f1.results[i],
+              f2.results[i],
+              group1_types,
+              group2_types,
+              visited,
+            ),
+          ) {
+          return false
+        }
+      }
+      let supers1 = get_supertypes_cruntime(module_, type_idx1)
+      let supers2 = get_supertypes_cruntime(module_, type_idx2)
+      if supers1.length() != supers2.length() {
+        return false
+      }
+      for i in 0..<supers1.length() {
+        if not(
+            type_refs_equivalent_in_context_cruntime(
+              module_,
+              supers1[i],
+              supers2[i],
+              group1_types,
+              group2_types,
+              visited,
+            ),
+          ) {
+          return false
+        }
+      }
+      true
+    }
+    (Struct(s1), Struct(s2)) => {
+      if is_type_final_cruntime(module_, type_idx1) !=
+        is_type_final_cruntime(module_, type_idx2) {
+        return false
+      }
+      if s1.fields.length() != s2.fields.length() {
+        return false
+      }
+      for i in 0..<s1.fields.length() {
+        if s1.fields[i].mutable != s2.fields[i].mutable {
+          return false
+        }
+        if not(
+            storage_types_equivalent_in_context_cruntime(
+              module_,
+              s1.fields[i].storage,
+              s2.fields[i].storage,
+              group1_types,
+              group2_types,
+              visited,
+            ),
+          ) {
+          return false
+        }
+      }
+      let supers1 = get_supertypes_cruntime(module_, type_idx1)
+      let supers2 = get_supertypes_cruntime(module_, type_idx2)
+      if supers1.length() != supers2.length() {
+        return false
+      }
+      for i in 0..<supers1.length() {
+        if not(
+            type_refs_equivalent_in_context_cruntime(
+              module_,
+              supers1[i],
+              supers2[i],
+              group1_types,
+              group2_types,
+              visited,
+            ),
+          ) {
+          return false
+        }
+      }
+      true
+    }
+    (Array(a1), Array(a2)) => {
+      if is_type_final_cruntime(module_, type_idx1) !=
+        is_type_final_cruntime(module_, type_idx2) {
+        return false
+      }
+      if a1.element.mutable != a2.element.mutable {
+        return false
+      }
+      if not(
+          storage_types_equivalent_in_context_cruntime(
+            module_,
+            a1.element.storage,
+            a2.element.storage,
+            group1_types,
+            group2_types,
+            visited,
+          ),
+        ) {
+        return false
+      }
+      let supers1 = get_supertypes_cruntime(module_, type_idx1)
+      let supers2 = get_supertypes_cruntime(module_, type_idx2)
+      if supers1.length() != supers2.length() {
+        return false
+      }
+      for i in 0..<supers1.length() {
+        if not(
+            type_refs_equivalent_in_context_cruntime(
+              module_,
+              supers1[i],
+              supers2[i],
+              group1_types,
+              group2_types,
+              visited,
+            ),
+          ) {
+          return false
+        }
+      }
+      true
+    }
+    _ => false
   }
 }
 
 ///|
-/// Compute a signature hash for a function type
-/// This hash uniquely identifies the function signature for type checking
-fn compute_type_signature_hash(ft : @core.FuncType) -> Int {
-  // Use a simple polynomial hash that includes both types and positions
-  let mut hash = 0
-  let mut multiplier = 1
-  // Hash params
-  for param in ft.params {
-    hash = hash + valtype_code(param) * multiplier
-    multiplier = multiplier * 17
+/// Check if two type references are equivalent considering rec group context
+fn type_refs_equivalent_in_context_cruntime(
+  module_ : @core.Module,
+  ref1 : Int,
+  ref2 : Int,
+  group1_types : Array[Int],
+  group2_types : Array[Int],
+  visited : Array[(Int, Int)],
+) -> Bool {
+  let in_group1 = is_in_rec_group_cruntime(group1_types, ref1)
+  let in_group2 = is_in_rec_group_cruntime(group2_types, ref2)
+  if in_group1 && in_group2 {
+    let pos1 = get_position_in_group_cruntime(group1_types, ref1)
+    let pos2 = get_position_in_group_cruntime(group2_types, ref2)
+    pos1 == pos2
+  } else if not(in_group1) && not(in_group2) {
+    if ref1 == ref2 {
+      return true
+    }
+    let (g1, _) = get_rec_group_info_cruntime(module_, ref1)
+    let (g2, _) = get_rec_group_info_cruntime(module_, ref2)
+    rec_groups_equivalent_cruntime(module_, g1, g2, visited)
+  } else {
+    false
   }
-  // Add separator
-  hash = hash + 100 * multiplier
-  multiplier = multiplier * 17
-  // Hash results
-  for result in ft.results {
-    hash = hash + valtype_code(result) * multiplier
-    multiplier = multiplier * 17
+}
+
+///|
+/// Check if two value types are equivalent in rec group context
+fn valtypes_equivalent_in_context_cruntime(
+  module_ : @core.Module,
+  vt1 : @core.ValType,
+  vt2 : @core.ValType,
+  group1_types : Array[Int],
+  group2_types : Array[Int],
+  visited : Array[(Int, Int)],
+) -> Bool {
+  match (vt1, vt2) {
+    (Ref(TypeIndex(idx1), n1), Ref(TypeIndex(idx2), n2)) =>
+      n1 == n2 &&
+      type_refs_equivalent_in_context_cruntime(
+        module_, idx1, idx2, group1_types, group2_types, visited,
+      )
+    _ => vt1 == vt2
   }
-  hash
+}
+
+///|
+/// Check if two storage types are equivalent in rec group context
+fn storage_types_equivalent_in_context_cruntime(
+  module_ : @core.Module,
+  st1 : @core.StorageType,
+  st2 : @core.StorageType,
+  group1_types : Array[Int],
+  group2_types : Array[Int],
+  visited : Array[(Int, Int)],
+) -> Bool {
+  match (st1, st2) {
+    (Val(vt1), Val(vt2)) =>
+      valtypes_equivalent_in_context_cruntime(
+        module_, vt1, vt2, group1_types, group2_types, visited,
+      )
+    _ => st1 == st2
+  }
+}
+
+///|
+/// Check if two types are equivalent (rec group aware)
+fn gc_types_equivalent_cruntime(
+  module_ : @core.Module,
+  type_idx1 : Int,
+  type_idx2 : Int,
+) -> Bool {
+  if type_idx1 == type_idx2 {
+    return true
+  }
+  let (group1_idx, _) = get_rec_group_info_cruntime(module_, type_idx1)
+  let (group2_idx, _) = get_rec_group_info_cruntime(module_, type_idx2)
+  let visited : Array[(Int, Int)] = []
+  rec_groups_equivalent_cruntime(module_, group1_idx, group2_idx, visited)
+}
+
+///|
+/// Build equivalence class ids for function types
+fn build_func_type_equiv_ids(module_ : @core.Module) -> Array[Int] {
+  let count = module_.types.length()
+  let ids : Array[Int] = Array::make(count, -1)
+  let mut next_id = 0
+  for i in 0..<count {
+    if ids[i] != -1 {
+      continue
+    }
+    match module_.types[i] {
+      Func(_) => {
+        ids[i] = next_id
+        for j in (i + 1)..<count {
+          if ids[j] == -1 {
+            match module_.types[j] {
+              Func(_) =>
+                if gc_types_equivalent_cruntime(module_, i, j) {
+                  ids[j] = next_id
+                }
+              _ => ()
+            }
+          }
+        }
+        next_id += 1
+      }
+      _ => ()
+    }
+  }
+  ids
 }
 
 ///|
@@ -547,14 +914,15 @@ fn build_type_info(
   for i = 0; i < module_.funcs.length(); i = i + 1 {
     func_type_idxs.push(module_.funcs[i].reinterpret_as_int())
   }
+  let func_type_equiv_ids = build_func_type_equiv_ids(module_)
   // Build type signature hashes for each type
-  // We use two arrays to store high and low bits of the hash for better discrimination
+  // We use two arrays to store equivalence id and param/result count
   let type_sig_hash1 : Array[Int] = [] // Primary hash
   let type_sig_hash2 : Array[Int] = [] // Secondary hash (param count << 16 | result count)
-  for type_def in module_.types {
+  for i, type_def in module_.types {
     match type_def {
       Func(ft) => {
-        type_sig_hash1.push(compute_type_signature_hash(ft))
+        type_sig_hash1.push(func_type_equiv_ids[i])
         type_sig_hash2.push((ft.params.length() << 16) | ft.results.length())
       }
       _ => {

@@ -90,7 +90,7 @@
     {"file": "try_table.wast", "subdir": "", "disabled": true, "reason": "Requires exception handling"},
     {"file": "type-canon.wast", "subdir": "", "moonbit": true, "cruntime": true},
     {"file": "type-equivalence.wast", "subdir": "", "moonbit": true, "cruntime": true},
-    {"file": "type-rec.wast", "subdir": "", "moonbit": true, "cruntime": false, "disabled_reason": "missing indirect call type checks"},
+    {"file": "type-rec.wast", "subdir": "", "moonbit": true, "cruntime": true},
     {"file": "type.wast", "subdir": "", "moonbit": true, "cruntime": true},
     {"file": "unreachable.wast", "subdir": "", "moonbit": true, "cruntime": true},
     {"file": "unreached-invalid.wast", "subdir": "", "moonbit": true, "cruntime": true},
