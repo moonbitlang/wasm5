@@ -249,6 +249,7 @@ static int* g_elem_segment_offsets = NULL;     // Offset of each segment in elem
 static int* g_elem_segment_sizes = NULL;       // Size of each segment (mutable for elem.drop)
 static int* g_elem_segment_dropped = NULL;     // Whether each segment has been dropped
 static int g_num_elem_segments = 0;
+static int g_num_external_funcrefs = 0;
 
 // Host import handler ids (kept in sync with runtime.mbt)
 #define HOST_IMPORT_SPECTEST_PRINT 0
@@ -305,6 +306,7 @@ typedef struct CRuntimeContext {
     int* elem_segment_sizes;
     int* elem_segment_dropped;
     int num_elem_segments;
+    int num_external_funcrefs;
 } CRuntimeContext;
 
 // Maximum nesting depth for cross-module calls
@@ -350,6 +352,7 @@ static void save_context(CRuntimeContext* ctx, CRuntime* crt) {
     ctx->elem_segment_sizes = g_elem_segment_sizes;
     ctx->elem_segment_dropped = g_elem_segment_dropped;
     ctx->num_elem_segments = g_num_elem_segments;
+    ctx->num_external_funcrefs = g_num_external_funcrefs;
 }
 
 // Load global state from a context structure
@@ -390,6 +393,7 @@ static void load_context(const CRuntimeContext* ctx, CRuntime* crt) {
     g_elem_segment_sizes = ctx->elem_segment_sizes;
     g_elem_segment_dropped = ctx->elem_segment_dropped;
     g_num_elem_segments = ctx->num_elem_segments;
+    g_num_external_funcrefs = ctx->num_external_funcrefs;
 }
 
 // Create a new context from module data (called from MoonBit)
@@ -405,7 +409,7 @@ CRuntimeContext* create_runtime_context(
     int64_t* import_context_ptrs, int* import_target_func_idxs,
     uint8_t* data_segments_flat, int* data_segment_offsets, int* data_segment_sizes, int num_data_segments,
     int* elem_segments_flat, int* elem_segment_offsets, int* elem_segment_sizes,
-    int* elem_segment_dropped, int num_elem_segments
+    int* elem_segment_dropped, int num_elem_segments, int num_external_funcrefs
 ) {
     CRuntimeContext* ctx = (CRuntimeContext*)malloc(sizeof(CRuntimeContext));
     if (!ctx) return NULL;
@@ -446,6 +450,7 @@ CRuntimeContext* create_runtime_context(
     ctx->elem_segment_sizes = elem_segment_sizes;
     ctx->elem_segment_dropped = elem_segment_dropped;
     ctx->num_elem_segments = num_elem_segments;
+    ctx->num_external_funcrefs = num_external_funcrefs;
 
     return ctx;
 }
@@ -571,7 +576,8 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
             uint8_t* output_buffer, int* output_length, int output_capacity,
             int64_t* import_context_ptrs, int* import_target_func_idxs,
             uint8_t* data_segments_flat, int* data_segment_offsets, int* data_segment_sizes, int num_data_segments,
-            int* elem_segments_flat, int* elem_segment_offsets, int* elem_segment_sizes, int* elem_segment_dropped, int num_elem_segments) {
+            int* elem_segments_flat, int* elem_segment_offsets, int* elem_segment_sizes, int* elem_segment_dropped, int num_elem_segments,
+            int num_external_funcrefs) {
     // Allocate stack on heap to avoid C stack limits
     uint64_t* stack = (uint64_t*)malloc(STACK_SIZE * sizeof(uint64_t));
     if (!stack) {
@@ -633,6 +639,7 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     g_elem_segment_sizes = elem_segment_sizes;
     g_elem_segment_dropped = elem_segment_dropped;
     g_num_elem_segments = num_elem_segments;
+    g_num_external_funcrefs = num_external_funcrefs;
 
     // Store stack base for result extraction
     g_stack_base = stack;
@@ -1006,6 +1013,80 @@ int op_return_call_indirect(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t*
     // Check for null/uninitialized element (-1 means null)
     if (func_idx < 0) {
         TRAP(TRAP_UNINITIALIZED_ELEMENT);  // "uninitialized element"
+    }
+
+    int external_base = g_num_imported_funcs + g_num_funcs;
+    if (g_num_external_funcrefs > 0 && func_idx >= external_base) {
+        int ext_idx = func_idx - external_base;
+        if (ext_idx < 0 || ext_idx >= g_num_external_funcrefs) {
+            TRAP(TRAP_UNINITIALIZED_ELEMENT);
+        }
+        int import_idx = g_num_imported_funcs + ext_idx;
+        int num_params = g_import_num_params ? g_import_num_params[import_idx] : 0;
+        int num_results = g_import_num_results ? g_import_num_results[import_idx] : 0;
+
+        if (expected_type_idx >= 0 && expected_type_idx < g_num_types) {
+            int expected_sig2 = g_type_sig_hash2[expected_type_idx];
+            int expected_params = expected_sig2 >> 16;
+            int expected_results = expected_sig2 & 0xFFFF;
+            if (expected_params != num_params || expected_results != num_results) {
+                TRAP(TRAP_INDIRECT_CALL_TYPE_MISMATCH);
+            }
+        }
+
+        if (!g_import_context_ptrs || !g_import_target_func_idxs) {
+            TRAP(TRAP_UNINITIALIZED_ELEMENT);
+        }
+        int64_t target_ctx_ptr = g_import_context_ptrs[import_idx];
+        if (target_ctx_ptr < 0) {
+            TRAP(TRAP_UNINITIALIZED_ELEMENT);
+        }
+        CRuntimeContext* target_ctx = (CRuntimeContext*)(uintptr_t)target_ctx_ptr;
+        int target_func_idx = g_import_target_func_idxs[import_idx];
+
+        if (g_context_depth >= MAX_CONTEXT_DEPTH) {
+            TRAP(TRAP_STACK_OVERFLOW);
+        }
+
+        save_context(&g_saved_contexts[g_context_depth++], crt);
+        load_context(target_ctx, crt);
+
+        int local_idx = target_func_idx - target_ctx->num_imported_funcs;
+        if (local_idx < 0 || local_idx >= target_ctx->num_funcs) {
+            load_context(&g_saved_contexts[--g_context_depth], crt);
+            TRAP(TRAP_OUT_OF_BOUNDS_TABLE);
+        }
+
+        int callee_pc = g_func_entries[local_idx];
+        int callee_num_locals = g_func_num_locals[local_idx];
+
+        uint64_t* args_ptr = sp - num_params;
+        uint64_t* new_fp = args_ptr;
+        uint64_t* callee_sp = args_ptr + num_params;
+        int extra_locals = callee_num_locals - num_params;
+
+        for (int i = 0; i < extra_locals; i++) {
+            *callee_sp++ = 0;
+        }
+
+        int trap = run(crt, crt->code + callee_pc, callee_sp, new_fp);
+
+        uint64_t results[16];
+        int actual_results = num_results < 16 ? num_results : 16;
+        for (int i = 0; i < actual_results; i++) {
+            results[i] = new_fp[i];
+        }
+
+        load_context(&g_saved_contexts[--g_context_depth], crt);
+
+        if (trap != TRAP_NONE) {
+            return trap;
+        }
+
+        for (int i = 0; i < actual_results; i++) {
+            fp[i] = results[i];
+        }
+        return TRAP_NONE;
     }
 
     // Type check: compare expected type with actual function type using signature hashes
@@ -2791,6 +2872,86 @@ int op_call_indirect(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
         TRAP(TRAP_UNINITIALIZED_ELEMENT);  // "uninitialized element"
     }
 
+    int external_base = g_num_imported_funcs + g_num_funcs;
+    if (g_num_external_funcrefs > 0 && func_idx >= external_base) {
+        int ext_idx = func_idx - external_base;
+        if (ext_idx < 0 || ext_idx >= g_num_external_funcrefs) {
+            TRAP(TRAP_UNINITIALIZED_ELEMENT);
+        }
+        int import_idx = g_num_imported_funcs + ext_idx;
+        int num_params = g_import_num_params ? g_import_num_params[import_idx] : 0;
+        int num_results = g_import_num_results ? g_import_num_results[import_idx] : 0;
+
+        if (expected_type_idx >= 0 && expected_type_idx < g_num_types) {
+            int expected_sig2 = g_type_sig_hash2[expected_type_idx];
+            int expected_params = expected_sig2 >> 16;
+            int expected_results = expected_sig2 & 0xFFFF;
+            if (expected_params != num_params || expected_results != num_results) {
+                TRAP(TRAP_INDIRECT_CALL_TYPE_MISMATCH);
+            }
+        }
+
+        if (!g_import_context_ptrs || !g_import_target_func_idxs) {
+            TRAP(TRAP_UNINITIALIZED_ELEMENT);
+        }
+        int64_t target_ctx_ptr = g_import_context_ptrs[import_idx];
+        if (target_ctx_ptr < 0) {
+            TRAP(TRAP_UNINITIALIZED_ELEMENT);
+        }
+
+        int target_func_idx = g_import_target_func_idxs[import_idx];
+        uint64_t* args_ptr = fp + frame_offset;
+
+        CRuntimeContext* target_ctx = (CRuntimeContext*)(uintptr_t)target_ctx_ptr;
+        if (g_context_depth >= MAX_CONTEXT_DEPTH) {
+            TRAP(TRAP_STACK_OVERFLOW);
+        }
+        save_context(&g_saved_contexts[g_context_depth++], crt);
+        load_context(target_ctx, crt);
+
+        int local_target_idx = target_func_idx - target_ctx->num_imported_funcs;
+        if (local_target_idx < 0 || local_target_idx >= target_ctx->num_funcs) {
+            load_context(&g_saved_contexts[--g_context_depth], crt);
+            TRAP(TRAP_OUT_OF_BOUNDS_TABLE);
+        }
+
+        int callee_entry = target_ctx->func_entries[local_target_idx];
+        int callee_num_locals = target_ctx->func_num_locals[local_target_idx];
+
+        uint64_t* callee_stack = (uint64_t*)malloc(STACK_SIZE * sizeof(uint64_t));
+        if (!callee_stack) {
+            load_context(&g_saved_contexts[--g_context_depth], crt);
+            TRAP(TRAP_STACK_OVERFLOW);
+        }
+
+        for (int i = 0; i < num_params; i++) {
+            callee_stack[i] = args_ptr[i];
+        }
+        for (int i = num_params; i < callee_num_locals; i++) {
+            callee_stack[i] = 0;
+        }
+
+        uint64_t* callee_pc = target_ctx->code + callee_entry;
+        uint64_t* callee_fp = callee_stack;
+        uint64_t* callee_sp = callee_stack + callee_num_locals;
+
+        int trap = run(crt, callee_pc, callee_sp, callee_fp);
+
+        for (int i = 0; i < num_results; i++) {
+            args_ptr[i] = callee_stack[i];
+        }
+
+        free(callee_stack);
+
+        load_context(&g_saved_contexts[--g_context_depth], crt);
+
+        if (trap != TRAP_NONE) {
+            return trap;
+        }
+
+        NEXT();
+    }
+
     // Type check: compare expected type with actual function type using signature hashes
     if (func_idx < g_num_imported_funcs + g_num_funcs) {
         int actual_type_idx = g_func_type_idxs[func_idx];
@@ -3318,6 +3479,88 @@ int op_call_ref(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
 
     // Extract function index from tagged reference
     int func_idx = (int)(ref & 0x3FFFFFFFFFFFFFFFULL);
+
+    int external_base = g_num_imported_funcs + g_num_funcs;
+    if (g_num_external_funcrefs > 0 && func_idx >= external_base) {
+        int ext_idx = func_idx - external_base;
+        if (ext_idx < 0 || ext_idx >= g_num_external_funcrefs) {
+            TRAP(TRAP_UNINITIALIZED_ELEMENT);
+        }
+        int import_idx = g_num_imported_funcs + ext_idx;
+        int num_params = g_import_num_params ? g_import_num_params[import_idx] : 0;
+        int num_results = g_import_num_results ? g_import_num_results[import_idx] : 0;
+
+        if (expected_type_idx >= 0 && expected_type_idx < g_num_types) {
+            int expected_sig2 = g_type_sig_hash2[expected_type_idx];
+            int expected_params = expected_sig2 >> 16;
+            int expected_results = expected_sig2 & 0xFFFF;
+            if (expected_params != num_params || expected_results != num_results) {
+                TRAP(TRAP_INDIRECT_CALL_TYPE_MISMATCH);
+            }
+        }
+
+        if (!g_import_context_ptrs || !g_import_target_func_idxs) {
+            TRAP(TRAP_UNINITIALIZED_ELEMENT);
+        }
+        int64_t target_ctx_ptr = g_import_context_ptrs[import_idx];
+        if (target_ctx_ptr < 0) {
+            TRAP(TRAP_UNINITIALIZED_ELEMENT);
+        }
+
+        CRuntimeContext* target_ctx = (CRuntimeContext*)(uintptr_t)target_ctx_ptr;
+        int target_func_idx = g_import_target_func_idxs[import_idx];
+        uint64_t* args_ptr = fp + frame_offset;
+        uint64_t* caller_pc = pc;
+
+        if (g_context_depth >= MAX_CONTEXT_DEPTH) {
+            TRAP(TRAP_STACK_OVERFLOW);
+        }
+        save_context(&g_saved_contexts[g_context_depth++], crt);
+        load_context(target_ctx, crt);
+
+        int local_target_idx = target_func_idx - target_ctx->num_imported_funcs;
+        if (local_target_idx < 0 || local_target_idx >= target_ctx->num_funcs) {
+            load_context(&g_saved_contexts[--g_context_depth], crt);
+            TRAP(TRAP_OUT_OF_BOUNDS_TABLE);
+        }
+
+        int callee_entry = target_ctx->func_entries[local_target_idx];
+        int callee_num_locals = target_ctx->func_num_locals[local_target_idx];
+
+        uint64_t* callee_stack = (uint64_t*)malloc(STACK_SIZE * sizeof(uint64_t));
+        if (!callee_stack) {
+            load_context(&g_saved_contexts[--g_context_depth], crt);
+            TRAP(TRAP_STACK_OVERFLOW);
+        }
+
+        for (int i = 0; i < num_params; i++) {
+            callee_stack[i] = args_ptr[i];
+        }
+        for (int i = num_params; i < callee_num_locals; i++) {
+            callee_stack[i] = 0;
+        }
+
+        uint64_t* callee_pc = target_ctx->code + callee_entry;
+        uint64_t* callee_fp = callee_stack;
+        uint64_t* callee_sp = callee_stack + callee_num_locals;
+
+        int trap = run(crt, callee_pc, callee_sp, callee_fp);
+
+        for (int i = 0; i < num_results; i++) {
+            args_ptr[i] = callee_stack[i];
+        }
+
+        free(callee_stack);
+        load_context(&g_saved_contexts[--g_context_depth], crt);
+
+        if (trap != TRAP_NONE) {
+            return trap;
+        }
+
+        sp = args_ptr + num_results;
+        pc = caller_pc;
+        NEXT();
+    }
 
     // Check if it's an imported function
     if (func_idx < g_num_imported_funcs) {

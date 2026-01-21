@@ -48,6 +48,7 @@ pub struct CRuntime {
   elem_segment_offsets : FixedArray[Int]
   elem_segment_sizes : FixedArray[Int]
   elem_segment_dropped : FixedArray[Int]
+  external_funcref_count : Int
   mut context_ptr : Int64
   resolved_imports : Map[Int, ResolvedImport]
 }
@@ -61,6 +62,7 @@ pub fn CRuntime::get_output(Self) -> Array[String]
 pub fn CRuntime::load(@core.Module) -> Self
 pub fn CRuntime::load_with_imports(@core.Module, Map[Int, ResolvedImport]) -> Self
 pub fn CRuntime::load_with_imports_and_globals(@core.Module, Map[Int, ResolvedImport], Map[Int, UInt64]) -> Self
+pub fn CRuntime::load_with_imports_globals_and_funcrefs(@core.Module, Map[Int, ResolvedImport], Map[Int, UInt64], Array[ResolvedImport]) -> Self
 pub fn CRuntime::run_start(Self) -> Unit raise @runtime.RuntimeError
 
 pub struct CompiledModule {

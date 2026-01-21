@@ -203,13 +203,16 @@ async fn parse_and_compile(ctx : TestContext, file_name : String) -> &Executor {
       @wasm5_validate.validate_module(module_)
       // Resolve imports from registered CRuntime modules
       let resolved_imports = resolve_imports_for_cruntime(ctx, module_)
-      let resolved_globals = resolve_globals_for_cruntime(ctx, module_)
+      let (resolved_globals, external_funcrefs) = resolve_globals_for_cruntime(
+        ctx, module_,
+      )
       let cruntime = if resolved_imports.is_empty() &&
-        resolved_globals.is_empty() {
+        resolved_globals.is_empty() &&
+        external_funcrefs.is_empty() {
         @wasm5_cruntime.CRuntime::load(module_)
       } else {
-        @wasm5_cruntime.CRuntime::load_with_imports_and_globals(
-          module_, resolved_imports, resolved_globals,
+        @wasm5_cruntime.CRuntime::load_with_imports_globals_and_funcrefs(
+          module_, resolved_imports, resolved_globals, external_funcrefs,
         )
       }
       cruntime.run_start()
@@ -471,17 +474,28 @@ fn resolve_imports_for_cruntime(
 }
 
 ///|
+fn is_funcref_val_type(ty : @wasm5_core.ValType) -> Bool {
+  match ty {
+    FuncRef | NullFuncRef | Ref(@wasm5_core.RefType::Func, _) => true
+    _ => false
+  }
+}
+
+///|
 /// Resolve imported globals for a module being loaded with CRuntime.
-/// Returns a map from import global index to encoded UInt64 value.
+/// Returns (globals map, external funcref targets).
 fn resolve_globals_for_cruntime(
   ctx : TestContext,
   module_ : @wasm5_core.Module,
-) -> Map[Int, UInt64] {
+) -> (Map[Int, UInt64], Array[@wasm5_cruntime.ResolvedImport]) {
   let resolved : Map[Int, UInt64] = {}
+  let external_funcrefs : Array[@wasm5_cruntime.ResolvedImport] = []
+  let num_imported_funcs = count_imported_funcs(module_)
+  let external_base = num_imported_funcs + module_.funcs.length()
   let mut import_global_idx = 0
   for imp in module_.imports {
     match imp.desc {
-      @wasm5_core.ImportDesc::Global(_) => {
+      @wasm5_core.ImportDesc::Global(gt) => {
         let module_name = @utf8.decode(imp.module_) catch { _ => "" }
         let field_name = @utf8.decode(imp.name) catch { _ => "" }
         match ctx.registry.0.get(module_name) {
@@ -496,9 +510,36 @@ fn resolve_globals_for_cruntime(
                   Some(global_idx) => {
                     let globals = target_crt.get_globals()
                     if global_idx >= 0 && global_idx < globals.length() {
-                      resolved[import_global_idx] = cruntime_value_to_u64(
-                        globals[global_idx],
-                      )
+                      let value = globals[global_idx]
+                      if is_funcref_val_type(gt.val_type) {
+                        match value {
+                          @wasm5_runtime.Value::Ref(Some(func_idx)) => {
+                            let (num_params, num_results) = get_func_type_info(
+                              registered.module_,
+                              func_idx,
+                            )
+                            let ext_idx = external_funcrefs.length()
+                            external_funcrefs.push({
+                              target_context_ptr: target_crt.get_context_ptr(),
+                              target_func_idx: func_idx,
+                              num_params,
+                              num_results,
+                            })
+                            resolved[import_global_idx] = (external_base +
+                            ext_idx).to_uint64()
+                          }
+                          @wasm5_runtime.Value::Ref(None) =>
+                            resolved[import_global_idx] = 0xFFFFFFFF_FFFFFFFFUL
+                          _ =>
+                            resolved[import_global_idx] = cruntime_value_to_u64(
+                              value,
+                            )
+                        }
+                      } else {
+                        resolved[import_global_idx] = cruntime_value_to_u64(
+                          value,
+                        )
+                      }
                     }
                   }
                   None => ()
@@ -513,7 +554,7 @@ fn resolve_globals_for_cruntime(
       _ => ()
     }
   }
-  resolved
+  (resolved, external_funcrefs)
 }
 
 ///|
@@ -1865,7 +1906,7 @@ pub async fn process_wast_file_cruntime(
 /// memory_grow.wast: cross-module memory imports not fully supported
 let cruntime_whitelisted_tests : Array[(String, Set[Int])] = [
   ("memory_grow.wast", Set::from_array([330, 336])),
-  ("elem.wast", Set::from_array([716, 959, 960, 972, 973, 974, 1029, 1053])),
+  ("elem.wast", Set::from_array([959, 960, 972, 973, 974, 1029])),
 ]
 
 ///|

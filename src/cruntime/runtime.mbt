@@ -36,6 +36,8 @@ pub struct CRuntime {
   elem_segment_offsets : FixedArray[Int] // Offset of each segment in elem_segments_flat
   elem_segment_sizes : FixedArray[Int] // Size of each segment
   elem_segment_dropped : FixedArray[Int] // Whether each segment has been dropped (0 or 1)
+  // External funcref imports (encoded after local functions)
+  external_funcref_count : Int
   // Cross-module call support: pointer to C-allocated CRuntimeContext
   mut context_ptr : Int64
   // Resolved imports for exported-import calls
@@ -120,12 +122,68 @@ fn build_import_context_arrays(
 }
 
 ///|
+/// Extend import metadata arrays with external funcref entries.
+fn extend_import_metadata(
+  num_imported : Int,
+  import_num_params : FixedArray[Int],
+  import_num_results : FixedArray[Int],
+  import_handler_ids : FixedArray[Int],
+  import_context_ptrs : FixedArray[Int64],
+  import_target_func_idxs : FixedArray[Int],
+  external_funcrefs : Array[ResolvedImport],
+) -> (
+  FixedArray[Int],
+  FixedArray[Int],
+  FixedArray[Int],
+  FixedArray[Int64],
+  FixedArray[Int],
+  Int,
+) {
+  let num_external = external_funcrefs.length()
+  if num_external == 0 {
+    return (
+      import_num_params, import_num_results, import_handler_ids, import_context_ptrs,
+      import_target_func_idxs, 0,
+    )
+  }
+  let total = num_imported + num_external
+  let size = if total > 0 { total } else { 1 }
+  let new_num_params = FixedArray::make(size, 0)
+  let new_num_results = FixedArray::make(size, 0)
+  let new_handler_ids = FixedArray::make(size, -1)
+  let new_context_ptrs = FixedArray::make(size, -1L)
+  let new_target_func_idxs = FixedArray::make(size, -1)
+  for i in 0..<num_imported {
+    if i < import_num_params.length() {
+      new_num_params[i] = import_num_params[i]
+      new_num_results[i] = import_num_results[i]
+      new_handler_ids[i] = import_handler_ids[i]
+      new_context_ptrs[i] = import_context_ptrs[i]
+      new_target_func_idxs[i] = import_target_func_idxs[i]
+    }
+  }
+  for i, ext in external_funcrefs {
+    let idx = num_imported + i
+    new_num_params[idx] = ext.num_params
+    new_num_results[idx] = ext.num_results
+    new_handler_ids[idx] = -1
+    new_context_ptrs[idx] = ext.target_context_ptr
+    new_target_func_idxs[idx] = ext.target_func_idx
+  }
+  (
+    new_num_params, new_num_results, new_handler_ids, new_context_ptrs, new_target_func_idxs,
+    num_external,
+  )
+}
+
+///|
 /// Build a CRuntime instance from a compiled module.
 fn build_runtime(
   module_ : @core.Module,
   compiled : CompiledModule,
   resolved_imports : Map[Int, ResolvedImport],
   resolved_imported_globals : Map[Int, UInt64],
+  external_funcrefs : Array[ResolvedImport],
 ) -> CRuntime {
   // Initialize globals from module
   let globals = init_globals(module_, resolved_imported_globals)
@@ -159,10 +217,21 @@ fn build_runtime(
     elem_segment_offsets,
     elem_segment_sizes,
     elem_segment_dropped,
-  ) = flatten_elem_segments(module_)
+  ) = flatten_elem_segments(module_, globals)
   let num_imported = count_imported_funcs(module_)
   let (import_context_ptrs, import_target_func_idxs) = build_import_context_arrays(
     num_imported, resolved_imports,
+  )
+  let (
+    import_num_params_ext,
+    import_num_results_ext,
+    import_handler_ids_ext,
+    import_context_ptrs_ext,
+    import_target_func_idxs_ext,
+    external_funcref_count,
+  ) = extend_import_metadata(
+    num_imported, import_num_params, import_num_results, import_handler_ids, import_context_ptrs,
+    import_target_func_idxs, external_funcrefs,
   )
   {
     module_,
@@ -182,11 +251,11 @@ fn build_runtime(
     func_type_idxs,
     type_param_counts,
     type_result_counts,
-    import_num_params,
-    import_num_results,
-    import_handler_ids,
-    import_context_ptrs,
-    import_target_func_idxs,
+    import_num_params: import_num_params_ext,
+    import_num_results: import_num_results_ext,
+    import_handler_ids: import_handler_ids_ext,
+    import_context_ptrs: import_context_ptrs_ext,
+    import_target_func_idxs: import_target_func_idxs_ext,
     data_segments_flat,
     data_segment_offsets,
     data_segment_sizes,
@@ -194,6 +263,7 @@ fn build_runtime(
     elem_segment_offsets,
     elem_segment_sizes,
     elem_segment_dropped,
+    external_funcref_count,
     context_ptr: 0L, // Will be lazily created when needed for cross-module calls
     resolved_imports,
   }
@@ -203,7 +273,7 @@ fn build_runtime(
 /// Load a module and compile it for C runtime execution.
 pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
   let compiled = compile(module_)
-  build_runtime(module_, compiled, {}, {})
+  build_runtime(module_, compiled, {}, {}, [])
 }
 
 ///|
@@ -213,7 +283,7 @@ pub fn CRuntime::load_with_imports(
   resolved_imports : Map[Int, ResolvedImport],
 ) -> CRuntime {
   let compiled = compile_with_imports(module_, resolved_imports)
-  build_runtime(module_, compiled, resolved_imports, {})
+  build_runtime(module_, compiled, resolved_imports, {}, [])
 }
 
 ///|
@@ -224,7 +294,27 @@ pub fn CRuntime::load_with_imports_and_globals(
   resolved_imported_globals : Map[Int, UInt64],
 ) -> CRuntime {
   let compiled = compile_with_imports(module_, resolved_imports)
-  build_runtime(module_, compiled, resolved_imports, resolved_imported_globals)
+  build_runtime(
+    module_,
+    compiled,
+    resolved_imports,
+    resolved_imported_globals,
+    [],
+  )
+}
+
+///|
+/// Load a module with resolved imports, imported globals, and external funcrefs.
+pub fn CRuntime::load_with_imports_globals_and_funcrefs(
+  module_ : @core.Module,
+  resolved_imports : Map[Int, ResolvedImport],
+  resolved_imported_globals : Map[Int, UInt64],
+  external_funcrefs : Array[ResolvedImport],
+) -> CRuntime {
+  let compiled = compile_with_imports(module_, resolved_imports)
+  build_runtime(
+    module_, compiled, resolved_imports, resolved_imported_globals, external_funcrefs,
+  )
 }
 
 ///|
@@ -275,6 +365,7 @@ pub fn CRuntime::get_context_ptr(self : CRuntime) -> Int64 {
       self.elem_segment_sizes,
       self.elem_segment_dropped,
       self.elem_segment_sizes.length(),
+      self.external_funcref_count,
     )
   }
   self.context_ptr
@@ -448,6 +539,7 @@ fn flatten_data_segments(
 /// and dropped tracks whether each segment has been dropped (0 or 1)
 fn flatten_elem_segments(
   module_ : @core.Module,
+  globals : FixedArray[UInt64],
 ) -> (FixedArray[Int], FixedArray[Int], FixedArray[Int], FixedArray[Int]) {
   let num_segments = module_.elems.length()
   if num_segments == 0 {
@@ -463,8 +555,14 @@ fn flatten_elem_segments(
     segment_offsets.push(total_size)
     let size = elem.init.length()
     segment_sizes.push(size)
-    // Active element segments are automatically dropped after instantiation
-    segment_dropped.push(if elem.is_active { 1 } else { 0 })
+    // Active and declarative element segments are dropped after instantiation
+    segment_dropped.push(
+      if elem.is_active || elem.is_declarative {
+        1
+      } else {
+        0
+      },
+    )
     total_size += size
   }
   // Flatten into single int array
@@ -480,7 +578,7 @@ fn flatten_elem_segments(
     let offset = segment_offsets[i]
     for j, init_expr in elem.init {
       // Evaluate the init expression to get the function index
-      elem_flat[offset + j] = eval_elem_expr(init_expr)
+      elem_flat[offset + j] = eval_elem_expr_with_globals(init_expr, globals)
     }
   }
   (
@@ -1299,7 +1397,7 @@ fn init_tables(
         for i, init_expr in elem.init {
           if offset + i < logical_size {
             // Evaluate the init expression to get the function index
-            let func_idx = eval_elem_expr(init_expr)
+            let func_idx = eval_elem_expr_with_globals(init_expr, globals)
             table[offset + i] = func_idx
           }
         }
@@ -1315,15 +1413,16 @@ fn init_tables(
 
 ///|
 /// Evaluate an element init expression to get function index
-fn eval_elem_expr(expr : @core.Expr) -> Int {
-  for instr in expr.instrs {
-    match instr {
-      RefFunc(idx) => return idx.reinterpret_as_int()
-      RefNull(_) => return -1 // null function reference
-      _ => continue
-    }
+fn eval_elem_expr_with_globals(
+  expr : @core.Expr,
+  globals : FixedArray[UInt64],
+) -> Int {
+  let raw = eval_const_expr_with_globals(expr, globals)
+  if raw == 0xFFFFFFFF_FFFFFFFFUL {
+    -1
+  } else {
+    raw.to_uint().reinterpret_as_int()
   }
-  -1
 }
 
 ///|
@@ -1454,6 +1553,7 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
           self.elem_segment_sizes,
           self.elem_segment_dropped,
           self.module_.elems.length(),
+          self.external_funcref_count,
         )
         let trap = trap_code_from_int(trap_code)
         if trap != TrapCode::None {
@@ -1610,6 +1710,7 @@ pub fn CRuntime::call_compiled(
           self.elem_segment_sizes,
           self.elem_segment_dropped,
           self.module_.elems.length(),
+          self.external_funcref_count,
         )
         // Check for trap
         let trap = trap_code_from_int(trap_code)

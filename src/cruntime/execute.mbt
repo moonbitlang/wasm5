@@ -45,6 +45,7 @@ extern "C" fn c_execute_ffi(
   elem_segment_sizes : FixedArray[Int], // Size of each segment
   elem_segment_dropped : FixedArray[Int], // Whether each segment has been dropped
   num_elem_segments : Int, // Number of element segments
+  num_external_funcrefs : Int, // Number of external funcref entries
 ) -> Int = "execute"
 
 ///|

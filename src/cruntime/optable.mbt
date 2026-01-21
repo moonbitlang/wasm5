@@ -749,6 +749,7 @@ extern "C" fn c_create_runtime_context(
   elem_segment_sizes : FixedArray[Int],
   elem_segment_dropped : FixedArray[Int],
   num_elem_segments : Int,
+  num_external_funcrefs : Int,
 ) -> Int64 = "create_runtime_context"
 
 ///|
