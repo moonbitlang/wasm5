@@ -630,10 +630,8 @@ DEFINE_OP(call)
 // The import_idx identifies which imported function to call
 // For spectest: print functions are no-ops, they just consume args and return nothing
 int op_call_import(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt;
     int import_idx = (int)*pc++;
     int frame_offset = (int)*pc++;
-    (void)frame_offset;  // Not used for imports since they don't have local frames
 
     // Get import function signature
     int num_params = 0;
@@ -643,18 +641,146 @@ int op_call_import(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
         num_results = g_import_num_results[import_idx];
     }
 
-    // Pop arguments (spectest functions don't actually use them, just consume)
-    sp -= num_params;
+    // Resolved import: cross-module call
+    if (g_import_context_ptrs && import_idx >= 0 && import_idx < g_num_imported_funcs) {
+        int64_t target_ctx_ptr = g_import_context_ptrs[import_idx];
+        if (target_ctx_ptr >= 0) {
+            CRuntimeContext* target_ctx = (CRuntimeContext*)(uintptr_t)target_ctx_ptr;
+            int target_func_idx = g_import_target_func_idxs[import_idx];
 
-    // For spectest print functions: they return void (num_results = 0)
-    // For other potential imports: push dummy results if needed
-    for (int i = 0; i < num_results; i++) {
-        *sp++ = 0;  // Push zero as dummy result
+            // Save caller pc for return
+            uint64_t* caller_pc = pc;
+
+            if (g_context_depth >= MAX_CONTEXT_DEPTH) {
+                TRAP(TRAP_STACK_OVERFLOW);
+            }
+
+            save_context(&g_saved_contexts[g_context_depth++], crt);
+            load_context(target_ctx, crt);
+
+            int local_idx = target_func_idx - target_ctx->num_imported_funcs;
+            if (local_idx < 0 || local_idx >= target_ctx->num_funcs) {
+                load_context(&g_saved_contexts[--g_context_depth], crt);
+                TRAP(TRAP_OUT_OF_BOUNDS_TABLE);
+            }
+
+            int callee_pc = g_func_entries[local_idx];
+            int callee_num_locals = g_func_num_locals[local_idx];
+
+            // Args are located at fp + frame_offset
+            uint64_t* args_ptr = fp + frame_offset;
+            uint64_t* new_fp = args_ptr;
+            uint64_t* callee_sp = args_ptr + num_params;
+            int extra_locals = callee_num_locals - num_params;
+
+            for (int i = 0; i < extra_locals; i++) {
+                *callee_sp++ = 0;
+            }
+
+            int trap = run(crt, crt->code + callee_pc, callee_sp, new_fp);
+
+            uint64_t results[16];
+            int actual_results = num_results < 16 ? num_results : 16;
+            for (int i = 0; i < actual_results; i++) {
+                results[i] = new_fp[i];
+            }
+
+            load_context(&g_saved_contexts[--g_context_depth], crt);
+
+            if (trap != TRAP_NONE) {
+                return trap;
+            }
+
+            uint64_t* result_dst = fp + frame_offset;
+            for (int i = 0; i < actual_results; i++) {
+                result_dst[i] = results[i];
+            }
+            sp = result_dst + actual_results;
+            pc = caller_pc;
+            NEXT();
+        }
     }
 
+    // Unresolved import (spectest) - consume args and push dummy results
+    sp = fp + frame_offset;
+    for (int i = 0; i < num_results; i++) {
+        *sp++ = 0;
+    }
     NEXT();
 }
 DEFINE_OP(call_import)
+
+// Tail-call an imported function
+// Immediate: import_idx
+int op_return_call_import(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    int import_idx = (int)*pc++;
+
+    int num_params = 0;
+    int num_results = 0;
+    if (g_import_num_params && import_idx >= 0 && import_idx < g_num_imported_funcs) {
+        num_params = g_import_num_params[import_idx];
+        num_results = g_import_num_results[import_idx];
+    }
+
+    if (g_import_context_ptrs && import_idx >= 0 && import_idx < g_num_imported_funcs) {
+        int64_t target_ctx_ptr = g_import_context_ptrs[import_idx];
+        if (target_ctx_ptr >= 0) {
+            CRuntimeContext* target_ctx = (CRuntimeContext*)(uintptr_t)target_ctx_ptr;
+            int target_func_idx = g_import_target_func_idxs[import_idx];
+
+            if (g_context_depth >= MAX_CONTEXT_DEPTH) {
+                TRAP(TRAP_STACK_OVERFLOW);
+            }
+
+            save_context(&g_saved_contexts[g_context_depth++], crt);
+            load_context(target_ctx, crt);
+
+            int local_idx = target_func_idx - target_ctx->num_imported_funcs;
+            if (local_idx < 0 || local_idx >= target_ctx->num_funcs) {
+                load_context(&g_saved_contexts[--g_context_depth], crt);
+                TRAP(TRAP_OUT_OF_BOUNDS_TABLE);
+            }
+
+            int callee_pc = g_func_entries[local_idx];
+            int callee_num_locals = g_func_num_locals[local_idx];
+
+            uint64_t* args_ptr = sp - num_params;
+            uint64_t* new_fp = args_ptr;
+            uint64_t* callee_sp = args_ptr + num_params;
+            int extra_locals = callee_num_locals - num_params;
+
+            for (int i = 0; i < extra_locals; i++) {
+                *callee_sp++ = 0;
+            }
+
+            int trap = run(crt, crt->code + callee_pc, callee_sp, new_fp);
+
+            uint64_t results[16];
+            int actual_results = num_results < 16 ? num_results : 16;
+            for (int i = 0; i < actual_results; i++) {
+                results[i] = new_fp[i];
+            }
+
+            load_context(&g_saved_contexts[--g_context_depth], crt);
+
+            if (trap != TRAP_NONE) {
+                return trap;
+            }
+
+            for (int i = 0; i < actual_results; i++) {
+                fp[i] = results[i];
+            }
+            return TRAP_NONE;
+        }
+    }
+
+    // Unresolved import (spectest) - push dummy results to fp
+    for (int i = 0; i < num_results; i++) {
+        fp[i] = 0;
+    }
+    return TRAP_NONE;
+}
+DEFINE_OP(return_call_import)
 
 // Call a function in another module (cross-module call with context switching)
 // Immediates: target_context_ptr (2 words for 64-bit pointer), func_idx, num_args, num_results

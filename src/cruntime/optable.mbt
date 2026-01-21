@@ -53,6 +53,9 @@ extern "C" fn call() -> UInt64 = "call"
 extern "C" fn call_import() -> UInt64 = "call_import"
 
 ///|
+extern "C" fn return_call_import() -> UInt64 = "return_call_import"
+
+///|
 extern "C" fn call_external() -> UInt64 = "call_external"
 
 ///|
