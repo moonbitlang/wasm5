@@ -437,9 +437,3 @@ fn value_to_stack(v : Value) -> UInt64 {
     Externref(Some(idx)) => idx.to_uint64() | 0x2000000000000000UL
   } // tag bit 61
 }
-
-///|
-extern "C" fn unsafe_function_to_uint64(f : (Runtime) -> ReturnCode) -> UInt64 = "unsafe_function_to_uint64"
-
-///|
-extern "C" fn unsafe_uint64_to_function(u : UInt64) -> (Runtime) -> ReturnCode = "unsafe_uint64_to_function"

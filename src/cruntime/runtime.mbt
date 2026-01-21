@@ -44,6 +44,26 @@ pub struct CRuntime {
 using @core {type Value}
 
 ///|
+fn count_imported_funcs(module_ : @core.Module) -> Int {
+  let mut count = 0
+  for imp in module_.imports {
+    match imp.desc {
+      Func(_) => count += 1
+      _ => ()
+    }
+  }
+  count
+}
+
+///|
+fn get_func_type(module_ : @core.Module, type_idx : Int) -> @core.FuncType {
+  match module_.types[type_idx] {
+    Func(ft) => ft
+    _ => { params: [], results: [] }
+  }
+}
+
+///|
 /// Convert TrapCode to RuntimeError using the error detail string approach
 fn trap_to_error(trap : TrapCode) -> @runtime.RuntimeError {
   let detail = match trap {

@@ -44,13 +44,8 @@ test "runtime compile start function" {
 
 ///|
 test "runtime execute error branches" {
-  // Test that Trap return code causes RuntimeError
-  fn trap_func(rt : Runtime) -> ReturnCode {
-    rt.ctx.error_detail = "bad"
-    Trap
-  }
-
-  let rt_err = make_runtime([], [unsafe_function_to_uint64(trap_func)], 0)
+  // Use the unreachable opcode to force a trap in the dispatcher.
+  let rt_err = make_runtime([], [0UL], 0)
   let mut saw_invalid = false
   let _ = execute(rt_err) catch {
     _ => {

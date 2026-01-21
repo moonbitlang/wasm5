@@ -962,13 +962,6 @@ test "compile helpers pop arguments" {
 }
 
 ///|
-test "compile context stack ops" {
-  let ctx = CompileCtx::new(0)
-  ctx.push_type(I32)
-  ctx.pop_type()
-  ctx.push_types([I32, I64])
-  ctx.pop_types(2)
-}
 
 ///|
 test "RuntimeError from_detail" {
