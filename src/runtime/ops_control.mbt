@@ -241,38 +241,6 @@ fn op_call(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-/// Legacy call for the old compiler (function-pointer IR).
-/// Immediates: callee_pc, num_params, num_locals, max_stack_height.
-fn op_call_local(rt : Runtime) -> ReturnCode {
-  let callee_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  let num_params = rt.ops.unsafe_get(rt.pc + 2).to_int()
-  let num_locals = rt.ops.unsafe_get(rt.pc + 3).to_int()
-  let max_stack_height = rt.ops.unsafe_get(rt.pc + 4).to_int()
-  let new_bp = rt.sp - num_params
-  if new_bp + max_stack_height > rt.stack.length() {
-    rt.ctx.error_detail = "Stack overflow: need \{max_stack_height} slots"
-    return Trap
-  }
-  let caller_bp = rt.bp
-  let caller_num_locals = rt.num_locals
-  let return_pc = rt.pc + 5
-  rt.sp = new_bp + num_params
-  rt.bp = new_bp
-  rt.num_locals = num_locals
-  rt.pc = callee_pc
-  let rt = execute(rt) catch {
-    err => {
-      rt.ctx.error_detail = err.to_string()
-      return Trap
-    }
-  }
-  rt.bp = caller_bp
-  rt.num_locals = caller_num_locals
-  rt.pc = return_pc
-  Running
-}
-
-///|
 /// Call an imported function. Immediates: import_idx, frame_offset.
 fn op_call_import(rt : Runtime) -> ReturnCode {
   let func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
@@ -887,72 +855,8 @@ fn op_nop(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-/// Batch initialize locals with zeros (for i32/i64/f32/f64).
-/// Immediate: count of zeros to push.
-fn op_init_zeros(rt : Runtime) -> ReturnCode {
-  let count = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  let mut sp = rt.sp
-  for i = 0; i < count; i = i + 1 {
-    rt.stack.unsafe_set(sp, 0UL)
-    sp += 1
-  }
-  rt.sp = sp
-  rt.pc = rt.pc + 2
-  Running
-}
-
-///|
-/// Batch initialize locals with null refs (for reference types).
-/// Immediate: count of null refs to push.
-fn op_init_null_refs(rt : Runtime) -> ReturnCode {
-  let count = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  let null_ref = (-1L).reinterpret_as_uint64()
-  let mut sp = rt.sp
-  for i = 0; i < count; i = i + 1 {
-    rt.stack.unsafe_set(sp, null_ref)
-    sp += 1
-  }
-  rt.sp = sp
-  rt.pc = rt.pc + 2
-  Running
-}
-
-///|
-/// Trap for unsupported local type (V128, etc.)
-fn op_local_init_unsupported(rt : Runtime) -> ReturnCode {
-  rt.ctx.error_detail = "Unsupported local type"
-  Trap
-}
-
-///|
 fn op_unreachable(rt : Runtime) -> ReturnCode {
   rt.ctx.error_detail = "unreachable"
-  Trap
-}
-
-///|
-fn op_throw(rt : Runtime) -> ReturnCode {
-  let tag_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  rt.ctx.error_detail = "throw not implemented for tag \{tag_idx}"
-  Trap
-}
-
-///|
-fn op_rethrow(rt : Runtime) -> ReturnCode {
-  let label_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  rt.ctx.error_detail = "rethrow not implemented for label \{label_idx}"
-  Trap
-}
-
-///|
-fn op_simd_unimplemented(rt : Runtime) -> ReturnCode {
-  rt.ctx.error_detail = "simd instruction not implemented"
-  Trap
-}
-
-///|
-fn op_atomic_unimplemented(rt : Runtime) -> ReturnCode {
-  rt.ctx.error_detail = "atomic instruction not implemented"
   Trap
 }
 

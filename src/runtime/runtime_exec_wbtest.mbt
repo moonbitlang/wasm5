@@ -114,13 +114,12 @@ test "runtime call compiled non func export" {
 
 ///|
 test "runtime call compiled local errors" {
-  // Test that unsupported local type (V128) causes error during call
-  // The error is now detected at compile time and emitted as a trap instruction
+  // Test that unsupported local type (V128) causes error during call.
   let func_type : @core.FuncType = { params: [], results: [] }
   let code_bad : @core.Code = {
     locals: [V128],
     body: @core.Expr::{ instrs: [] },
-    compiled: None, // Let it be compiled - will emit op_local_init_unsupported
+    compiled: None,
     max_stack_height: 0,
   }
   let module_bad = module_with(
