@@ -2,9 +2,9 @@
 package "moonbitlang/wasm5/test"
 
 // Values
-pub async fn process_wast_file(String, String, runtime_type? : RuntimeType) -> (Array[TestFailure], Int)
+pub async fn process_wast_file(String, String, runtime_type? : RuntimeType) -> (Array[TestFailure], Int, Array[String])
 
-pub async fn process_wast_file_cruntime(String, String) -> (Array[TestFailure], Int)
+pub async fn process_wast_file_cruntime(String, String) -> (Array[TestFailure], Int, Array[String])
 
 // Errors
 
@@ -26,6 +26,7 @@ pub struct TestFailure {
 pub impl Show for TestFailure
 
 // Type aliases
+pub using @moonbitlang/core/test {type Test}
 
 // Traits
 

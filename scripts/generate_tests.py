@@ -10,6 +10,7 @@ Or to preview changes:
 """
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -31,6 +32,11 @@ def generate_test_name(test: dict, cruntime: bool = False) -> str:
     return name
 
 
+def snapshot_filename(name: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "_", name)
+    return f"test/snapshots/spectest_output/{slug}.snap"
+
+
 def generate_test_function(test: dict, cruntime: bool = False) -> str:
     """Generate a single test function"""
     name = generate_test_name(test, cruntime)
@@ -38,10 +44,16 @@ def generate_test_function(test: dict, cruntime: bool = False) -> str:
     filename = test["file"]
 
     runtime_arg = ", runtime_type=CRuntime" if cruntime else ""
+    snapshot_file = snapshot_filename(name)
 
     return f'''///|
-async test "{name}" {{
-  run_test_harness("{subdir}", "{filename}"{runtime_arg})
+async test "{name}" (t : @test.Test) {{
+  let output_lines = run_test_harness("{subdir}", "{filename}"{runtime_arg})
+  ensure_output_snapshot_dir()
+  for line in output_lines {{
+    t.writeln(line)
+  }}
+  t.snapshot(filename="{snapshot_file}")
 }}
 '''
 
@@ -101,7 +113,7 @@ async fn run_test_harness(
   subdir : String,
   filename : String,
   runtime_type? : RuntimeType = MoonBit,
-) -> Unit {
+) -> Array[String] {
   let path = "test/reference_tests/\\{subdir}"
   let runtime_suffix = match runtime_type {
     MoonBit => ""
@@ -112,7 +124,7 @@ async fn run_test_harness(
   } else {
     "\\{filename}\\{runtime_suffix}"
   }
-  let (file_failures, file_skipped) = process_wast_file(
+  let (file_failures, file_skipped, output_lines) = process_wast_file(
     path,
     filename,
     runtime_type~,
@@ -151,6 +163,16 @@ async fn run_test_harness(
   if file_skipped > 0 {
     println("Skipped \\{file_skipped} tests in \\{display_name}")
   }
+  output_lines
+}
+
+///|
+async fn ensure_output_snapshot_dir() -> Unit {
+  let base = "test/snapshots"
+  let output_dir = base + "/spectest_output"
+  let _ = @fs.mkdir("test", permission=0o755) catch { _ => () }
+  let _ = @fs.mkdir(base, permission=0o755) catch { _ => () }
+  let _ = @fs.mkdir(output_dir, permission=0o755) catch { _ => () }
 }
 
 '''

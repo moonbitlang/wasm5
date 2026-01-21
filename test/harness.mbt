@@ -118,6 +118,7 @@ priv struct TestContext {
   registry : ModuleRegistry
   resolver : @wasm5_runtime.ImportResolver
   mut skipped_count : Int
+  output_lines : Array[String]
 }
 
 ///|
@@ -139,6 +140,47 @@ fn TestContext::fail(
     }
   }
   self.failures.push({ line, test_type, message, source_file: self.source_file })
+}
+
+///|
+fn collect_output_from_cruntime(
+  ctx : TestContext,
+  runtime : @wasm5_cruntime.CRuntime,
+) -> Unit {
+  let lines = runtime.get_output()
+  for line in lines {
+    ctx.output_lines.push(line)
+  }
+  runtime.clear_output()
+}
+
+///|
+fn collect_output(ctx : TestContext) -> Unit {
+  match ctx.runtime_type {
+    MoonBit => {
+      let lines = @wasm5_runtime.get_spectest_output()
+      for line in lines {
+        ctx.output_lines.push(line)
+      }
+      @wasm5_runtime.clear_spectest_output()
+    }
+    CRuntime => {
+      match ctx.executor {
+        Some(executor) =>
+          match executor.as_cruntime() {
+            Some(crt) => collect_output_from_cruntime(ctx, crt)
+            None => ()
+          }
+        None => ()
+      }
+      for _, registered in ctx.registry.0 {
+        match registered.cruntime {
+          Some(crt) => collect_output_from_cruntime(ctx, crt)
+          None => ()
+        }
+      }
+    }
+  }
 }
 
 ///|
@@ -1718,7 +1760,7 @@ async fn process_meta(
   failures : Array[TestFailure],
   source_file : String,
   runtime_type? : RuntimeType = MoonBit,
-) -> Int {
+) -> (Int, Array[String]) {
   let file = @fs.open(dir + json_file, mode=ReadOnly)
   defer file.close()
   let meta = file.read_all().json()
@@ -1735,14 +1777,17 @@ async fn process_meta(
         registry,
         resolver,
         skipped_count: 0,
+        output_lines: [],
       }
       for cmd in commands {
         process_command(ctx, cmd)
+        collect_output(ctx)
         // HACK: avoid the problem of deep nested continutations caused
         // by running many sync code in an async loop
         @async.pause()
       }
-      ctx.skipped_count
+      collect_output(ctx)
+      (ctx.skipped_count, ctx.output_lines)
     }
     _ => {
       failures.push({
@@ -1751,7 +1796,7 @@ async fn process_meta(
         message: "cannot find commands in meta file",
         source_file,
       })
-      0
+      (0, [])
     }
   }
 }
@@ -1762,15 +1807,13 @@ pub async fn process_wast_file(
   wast_dir : String,
   wast_file : String,
   runtime_type? : RuntimeType = MoonBit,
-) -> (Array[TestFailure], Int) {
+) -> (Array[TestFailure], Int, Array[String]) {
   guard wast_file.strip_suffix(".wast") is Some(base_name) else {
     abort("Invalid wast file name: \{wast_file}")
   }
   let json_file = (base_name + ".json").to_string()
   let target_dir = wast_dir + base_name.to_string() + "/"
-  if not(@fs.exists(target_dir)) {
-    @fs.mkdir(target_dir, permission=0o755)
-  }
+  let _ = @fs.mkdir(target_dir, permission=0o755) catch { _ => () }
   // execute: wasm-tools wast2json xxx.wast -o xxx/xxx.json --wasm-dir xxx/
   let test_result : Array[TestFailure] = []
   let exit_code = @process.run("wasm-tools", [
@@ -1792,9 +1835,9 @@ pub async fn process_wast_file(
     if @fs.exists(target_dir) {
       @fs.rmdir(target_dir, recursive=true)
     }
-    return (test_result, 0)
+    return (test_result, 0, [])
   }
-  let skipped = process_meta(
+  let (skipped, output_lines) = process_meta(
     target_dir,
     json_file,
     test_result,
@@ -1802,7 +1845,7 @@ pub async fn process_wast_file(
     runtime_type~,
   )
   @fs.rmdir(target_dir, recursive=true)
-  (test_result, skipped)
+  (test_result, skipped, output_lines)
 }
 
 ///|
@@ -1810,7 +1853,7 @@ pub async fn process_wast_file(
 pub async fn process_wast_file_cruntime(
   wast_dir : String,
   wast_file : String,
-) -> (Array[TestFailure], Int) {
+) -> (Array[TestFailure], Int, Array[String]) {
   process_wast_file(wast_dir, wast_file, runtime_type=CRuntime)
 }
 
