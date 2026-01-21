@@ -61,7 +61,7 @@
     {"file": "memory_grow.wast", "subdir": "", "moonbit": true, "cruntime": true},
     {"file": "memory_redundancy.wast", "subdir": "", "moonbit": true, "cruntime": true},
     {"file": "memory_size.wast", "subdir": "", "moonbit": true, "cruntime": true},
-    {"file": "memory_trap.wast", "subdir": "", "moonbit": true, "cruntime": false, "disabled_reason": "SIGSEGV trap handling"},
+    {"file": "memory_trap.wast", "subdir": "", "moonbit": true, "cruntime": true},
     {"file": "names.wast", "subdir": "", "moonbit": true, "cruntime": true},
     {"file": "nop.wast", "subdir": "", "moonbit": true, "cruntime": true},
     {"file": "obsolete-keywords.wast", "subdir": "", "moonbit": true, "cruntime": true},

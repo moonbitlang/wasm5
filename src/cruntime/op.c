@@ -28,6 +28,12 @@
 #define TRAP_TABLE_BOUNDS_ACCESS        11 // "out of bounds table access" - for bulk table ops
 #define TRAP_NULL_REFERENCE             12 // "null reference" - for ref.as_non_null
 
+// Memory bounds check helper - use 64-bit arithmetic to avoid overflow
+#define CHECK_MEMORY(addr, size) \
+    if ((uint64_t)(addr) + (uint64_t)(size) > (uint64_t)g_memory_size) { \
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY); \
+    }
+
 // Macro to define getter function that returns op handler pointer
 #define DEFINE_OP(name) uint64_t name(void) { return (uint64_t)op_##name; }
 
@@ -2283,11 +2289,9 @@ int op_i32_load(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
-    uint32_t addr = (uint32_t)sp[-1] + offset;
-    if (addr + 4 > g_memory_size) {
-        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
-    }
-    uint32_t value = *(uint32_t*)(crt->mem + addr);
+    uint64_t addr = (uint64_t)(uint32_t)sp[-1] + (uint64_t)offset;
+    CHECK_MEMORY(addr, 4);
+    uint32_t value = *(uint32_t*)(crt->mem + (size_t)addr);
     sp[-1] = (uint64_t)value;
     NEXT();
 }
@@ -2298,12 +2302,10 @@ int op_i32_store(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint32_t value = (uint32_t)sp[-1];
-    uint32_t addr = (uint32_t)sp[-2] + offset;
+    uint64_t addr = (uint64_t)(uint32_t)sp[-2] + (uint64_t)offset;
     sp -= 2;
-    if (addr + 4 > g_memory_size) {
-        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
-    }
-    *(uint32_t*)(crt->mem + addr) = value;
+    CHECK_MEMORY(addr, 4);
+    *(uint32_t*)(crt->mem + (size_t)addr) = value;
     NEXT();
 }
 DEFINE_OP(i32_store)
@@ -2313,11 +2315,9 @@ int op_i32_load8_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
-    uint32_t addr = (uint32_t)sp[-1] + offset;
-    if (addr + 1 > g_memory_size) {
-        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
-    }
-    int8_t value = *(int8_t*)(crt->mem + addr);
+    uint64_t addr = (uint64_t)(uint32_t)sp[-1] + (uint64_t)offset;
+    CHECK_MEMORY(addr, 1);
+    int8_t value = *(int8_t*)(crt->mem + (size_t)addr);
     sp[-1] = (uint64_t)(int32_t)value;  // Sign extend
     NEXT();
 }
@@ -2327,11 +2327,9 @@ int op_i32_load8_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
-    uint32_t addr = (uint32_t)sp[-1] + offset;
-    if (addr + 1 > g_memory_size) {
-        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
-    }
-    uint8_t value = *(uint8_t*)(crt->mem + addr);
+    uint64_t addr = (uint64_t)(uint32_t)sp[-1] + (uint64_t)offset;
+    CHECK_MEMORY(addr, 1);
+    uint8_t value = *(uint8_t*)(crt->mem + (size_t)addr);
     sp[-1] = (uint64_t)value;  // Zero extend
     NEXT();
 }
@@ -2341,11 +2339,9 @@ int op_i32_load16_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
-    uint32_t addr = (uint32_t)sp[-1] + offset;
-    if (addr + 2 > g_memory_size) {
-        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
-    }
-    int16_t value = *(int16_t*)(crt->mem + addr);
+    uint64_t addr = (uint64_t)(uint32_t)sp[-1] + (uint64_t)offset;
+    CHECK_MEMORY(addr, 2);
+    int16_t value = *(int16_t*)(crt->mem + (size_t)addr);
     sp[-1] = (uint64_t)(int32_t)value;  // Sign extend
     NEXT();
 }
@@ -2355,11 +2351,9 @@ int op_i32_load16_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
-    uint32_t addr = (uint32_t)sp[-1] + offset;
-    if (addr + 2 > g_memory_size) {
-        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
-    }
-    uint16_t value = *(uint16_t*)(crt->mem + addr);
+    uint64_t addr = (uint64_t)(uint32_t)sp[-1] + (uint64_t)offset;
+    CHECK_MEMORY(addr, 2);
+    uint16_t value = *(uint16_t*)(crt->mem + (size_t)addr);
     sp[-1] = (uint64_t)value;  // Zero extend
     NEXT();
 }
@@ -2371,12 +2365,10 @@ int op_i32_store8(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint8_t value = (uint8_t)sp[-1];
-    uint32_t addr = (uint32_t)sp[-2] + offset;
+    uint64_t addr = (uint64_t)(uint32_t)sp[-2] + (uint64_t)offset;
     sp -= 2;
-    if (addr + 1 > g_memory_size) {
-        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
-    }
-    *(uint8_t*)(crt->mem + addr) = value;
+    CHECK_MEMORY(addr, 1);
+    *(uint8_t*)(crt->mem + (size_t)addr) = value;
     NEXT();
 }
 DEFINE_OP(i32_store8)
@@ -2386,12 +2378,10 @@ int op_i32_store16(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint16_t value = (uint16_t)sp[-1];
-    uint32_t addr = (uint32_t)sp[-2] + offset;
+    uint64_t addr = (uint64_t)(uint32_t)sp[-2] + (uint64_t)offset;
     sp -= 2;
-    if (addr + 2 > g_memory_size) {
-        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
-    }
-    *(uint16_t*)(crt->mem + addr) = value;
+    CHECK_MEMORY(addr, 2);
+    *(uint16_t*)(crt->mem + (size_t)addr) = value;
     NEXT();
 }
 DEFINE_OP(i32_store16)
@@ -2401,11 +2391,9 @@ int op_i64_load(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
-    uint32_t addr = (uint32_t)sp[-1] + offset;
-    if (addr + 8 > g_memory_size) {
-        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
-    }
-    uint64_t value = *(uint64_t*)(crt->mem + addr);
+    uint64_t addr = (uint64_t)(uint32_t)sp[-1] + (uint64_t)offset;
+    CHECK_MEMORY(addr, 8);
+    uint64_t value = *(uint64_t*)(crt->mem + (size_t)addr);
     sp[-1] = value;
     NEXT();
 }
@@ -2415,11 +2403,9 @@ int op_i64_load8_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
-    uint32_t addr = (uint32_t)sp[-1] + offset;
-    if (addr + 1 > g_memory_size) {
-        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
-    }
-    int8_t value = *(int8_t*)(crt->mem + addr);
+    uint64_t addr = (uint64_t)(uint32_t)sp[-1] + (uint64_t)offset;
+    CHECK_MEMORY(addr, 1);
+    int8_t value = *(int8_t*)(crt->mem + (size_t)addr);
     sp[-1] = (uint64_t)(int64_t)value;  // Sign extend to i64
     NEXT();
 }
@@ -2429,11 +2415,9 @@ int op_i64_load8_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
-    uint32_t addr = (uint32_t)sp[-1] + offset;
-    if (addr + 1 > g_memory_size) {
-        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
-    }
-    uint8_t value = *(uint8_t*)(crt->mem + addr);
+    uint64_t addr = (uint64_t)(uint32_t)sp[-1] + (uint64_t)offset;
+    CHECK_MEMORY(addr, 1);
+    uint8_t value = *(uint8_t*)(crt->mem + (size_t)addr);
     sp[-1] = (uint64_t)value;  // Zero extend
     NEXT();
 }
@@ -2443,11 +2427,9 @@ int op_i64_load16_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
-    uint32_t addr = (uint32_t)sp[-1] + offset;
-    if (addr + 2 > g_memory_size) {
-        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
-    }
-    int16_t value = *(int16_t*)(crt->mem + addr);
+    uint64_t addr = (uint64_t)(uint32_t)sp[-1] + (uint64_t)offset;
+    CHECK_MEMORY(addr, 2);
+    int16_t value = *(int16_t*)(crt->mem + (size_t)addr);
     sp[-1] = (uint64_t)(int64_t)value;  // Sign extend to i64
     NEXT();
 }
@@ -2457,11 +2439,9 @@ int op_i64_load16_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
-    uint32_t addr = (uint32_t)sp[-1] + offset;
-    if (addr + 2 > g_memory_size) {
-        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
-    }
-    uint16_t value = *(uint16_t*)(crt->mem + addr);
+    uint64_t addr = (uint64_t)(uint32_t)sp[-1] + (uint64_t)offset;
+    CHECK_MEMORY(addr, 2);
+    uint16_t value = *(uint16_t*)(crt->mem + (size_t)addr);
     sp[-1] = (uint64_t)value;  // Zero extend
     NEXT();
 }
@@ -2471,11 +2451,9 @@ int op_i64_load32_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
-    uint32_t addr = (uint32_t)sp[-1] + offset;
-    if (addr + 4 > g_memory_size) {
-        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
-    }
-    int32_t value = *(int32_t*)(crt->mem + addr);
+    uint64_t addr = (uint64_t)(uint32_t)sp[-1] + (uint64_t)offset;
+    CHECK_MEMORY(addr, 4);
+    int32_t value = *(int32_t*)(crt->mem + (size_t)addr);
     sp[-1] = (uint64_t)(int64_t)value;  // Sign extend to i64
     NEXT();
 }
@@ -2485,11 +2463,9 @@ int op_i64_load32_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
-    uint32_t addr = (uint32_t)sp[-1] + offset;
-    if (addr + 4 > g_memory_size) {
-        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
-    }
-    uint32_t value = *(uint32_t*)(crt->mem + addr);
+    uint64_t addr = (uint64_t)(uint32_t)sp[-1] + (uint64_t)offset;
+    CHECK_MEMORY(addr, 4);
+    uint32_t value = *(uint32_t*)(crt->mem + (size_t)addr);
     sp[-1] = (uint64_t)value;  // Zero extend
     NEXT();
 }
@@ -2501,12 +2477,10 @@ int op_i64_store(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint64_t value = sp[-1];
-    uint32_t addr = (uint32_t)sp[-2] + offset;
+    uint64_t addr = (uint64_t)(uint32_t)sp[-2] + (uint64_t)offset;
     sp -= 2;
-    if (addr + 8 > g_memory_size) {
-        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
-    }
-    *(uint64_t*)(crt->mem + addr) = value;
+    CHECK_MEMORY(addr, 8);
+    *(uint64_t*)(crt->mem + (size_t)addr) = value;
     NEXT();
 }
 DEFINE_OP(i64_store)
@@ -2516,12 +2490,10 @@ int op_i64_store8(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint8_t value = (uint8_t)sp[-1];
-    uint32_t addr = (uint32_t)sp[-2] + offset;
+    uint64_t addr = (uint64_t)(uint32_t)sp[-2] + (uint64_t)offset;
     sp -= 2;
-    if (addr + 1 > g_memory_size) {
-        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
-    }
-    *(uint8_t*)(crt->mem + addr) = value;
+    CHECK_MEMORY(addr, 1);
+    *(uint8_t*)(crt->mem + (size_t)addr) = value;
     NEXT();
 }
 DEFINE_OP(i64_store8)
@@ -2531,12 +2503,10 @@ int op_i64_store16(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint16_t value = (uint16_t)sp[-1];
-    uint32_t addr = (uint32_t)sp[-2] + offset;
+    uint64_t addr = (uint64_t)(uint32_t)sp[-2] + (uint64_t)offset;
     sp -= 2;
-    if (addr + 2 > g_memory_size) {
-        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
-    }
-    *(uint16_t*)(crt->mem + addr) = value;
+    CHECK_MEMORY(addr, 2);
+    *(uint16_t*)(crt->mem + (size_t)addr) = value;
     NEXT();
 }
 DEFINE_OP(i64_store16)
@@ -2546,12 +2516,10 @@ int op_i64_store32(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint32_t value = (uint32_t)sp[-1];
-    uint32_t addr = (uint32_t)sp[-2] + offset;
+    uint64_t addr = (uint64_t)(uint32_t)sp[-2] + (uint64_t)offset;
     sp -= 2;
-    if (addr + 4 > g_memory_size) {
-        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
-    }
-    *(uint32_t*)(crt->mem + addr) = value;
+    CHECK_MEMORY(addr, 4);
+    *(uint32_t*)(crt->mem + (size_t)addr) = value;
     NEXT();
 }
 DEFINE_OP(i64_store32)
@@ -2561,11 +2529,9 @@ int op_f32_load(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
-    uint32_t addr = (uint32_t)sp[-1] + offset;
-    if (addr + 4 > g_memory_size) {
-        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
-    }
-    uint32_t value = *(uint32_t*)(crt->mem + addr);
+    uint64_t addr = (uint64_t)(uint32_t)sp[-1] + (uint64_t)offset;
+    CHECK_MEMORY(addr, 4);
+    uint32_t value = *(uint32_t*)(crt->mem + (size_t)addr);
     sp[-1] = (uint64_t)value;  // Store f32 bits in lower 32 bits
     NEXT();
 }
@@ -2576,12 +2542,10 @@ int op_f32_store(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint32_t value = (uint32_t)sp[-1];  // f32 bits in lower 32 bits
-    uint32_t addr = (uint32_t)sp[-2] + offset;
+    uint64_t addr = (uint64_t)(uint32_t)sp[-2] + (uint64_t)offset;
     sp -= 2;
-    if (addr + 4 > g_memory_size) {
-        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
-    }
-    *(uint32_t*)(crt->mem + addr) = value;
+    CHECK_MEMORY(addr, 4);
+    *(uint32_t*)(crt->mem + (size_t)addr) = value;
     NEXT();
 }
 DEFINE_OP(f32_store)
@@ -2591,11 +2555,9 @@ int op_f64_load(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)fp;
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
-    uint32_t addr = (uint32_t)sp[-1] + offset;
-    if (addr + 8 > g_memory_size) {
-        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
-    }
-    uint64_t value = *(uint64_t*)(crt->mem + addr);
+    uint64_t addr = (uint64_t)(uint32_t)sp[-1] + (uint64_t)offset;
+    CHECK_MEMORY(addr, 8);
+    uint64_t value = *(uint64_t*)(crt->mem + (size_t)addr);
     sp[-1] = value;  // f64 bits
     NEXT();
 }
@@ -2606,12 +2568,10 @@ int op_f64_store(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     uint32_t offset = (uint32_t)*pc++;
     ++pc;  // Skip mem_idx
     uint64_t value = sp[-1];  // f64 bits
-    uint32_t addr = (uint32_t)sp[-2] + offset;
+    uint64_t addr = (uint64_t)(uint32_t)sp[-2] + (uint64_t)offset;
     sp -= 2;
-    if (addr + 8 > g_memory_size) {
-        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
-    }
-    *(uint64_t*)(crt->mem + addr) = value;
+    CHECK_MEMORY(addr, 8);
+    *(uint64_t*)(crt->mem + (size_t)addr) = value;
     NEXT();
 }
 DEFINE_OP(f64_store)
