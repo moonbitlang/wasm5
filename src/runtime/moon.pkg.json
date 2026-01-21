@@ -3,7 +3,8 @@
     {
       "path": "moonbitlang/wasm5/src/core",
       "alias": "core"
-    }
+    },
+    "moonbitlang/wasm5/src/compile"
   ],
   "test-import": [
     "moonbitlang/async",

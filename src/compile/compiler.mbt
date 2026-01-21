@@ -26,6 +26,7 @@ pub fn compile(mod_ : @core.Module) -> @core.CompiledModule {
     mod_,
     func_entries,
     func_num_params,
+    func_num_locals,
     func_num_results,
     num_imported_funcs,
   }
@@ -61,6 +62,18 @@ pub fn compile(mod_ : @core.Module) -> @core.CompiledModule {
       slot_stack_len_at_entry: 0,
       pending_patches: [],
     })
+
+    // Initialize ref locals to null; op_entry only zeroes numeric locals.
+    for j, local_type in code.locals {
+      if local_type.is_ref_type() {
+        compile_instr(ctx, mod_info, RefNull(Any))
+        compile_instr(
+          ctx,
+          mod_info,
+          LocalSet((num_params + j).reinterpret_as_uint()),
+        )
+      }
+    }
 
     // Compile function body
     compile_expr(ctx, mod_info, code.body)
@@ -806,6 +819,180 @@ fn compile_instr(
       ignore(ctx.pop_slot())
     }
     RefAsNonNull => ctx.emit_op(@core.OpTag::RefAsNonNull)
+    RefTest(ref_type, nullable) => {
+      ctx.emit_op(@core.OpTag::RefTest)
+      ctx.emit_idx(encode_heap_type(ref_type))
+      ctx.emit_idx(if nullable { 1 } else { 0 })
+    }
+    RefCast(ref_type, nullable) => {
+      ctx.emit_op(@core.OpTag::RefCast)
+      ctx.emit_idx(encode_heap_type(ref_type))
+      ctx.emit_idx(if nullable { 1 } else { 0 })
+    }
+    AnyConvertExtern => ctx.emit_op(@core.OpTag::AnyConvertExtern)
+    ExternConvertAny => ctx.emit_op(@core.OpTag::ExternConvertAny)
+    RefI31 => ctx.emit_op(@core.OpTag::RefI31)
+    I31GetS => ctx.emit_op(@core.OpTag::I31GetS)
+    I31GetU => ctx.emit_op(@core.OpTag::I31GetU)
+    StructNew(type_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let struct_type = get_struct_type(mod_info.mod_, type_idx_int)
+      let num_fields = struct_type.fields.length()
+      ctx.emit_op(@core.OpTag::StructNew)
+      ctx.emit_idx(type_idx_int)
+      ctx.emit_idx(num_fields)
+      if num_fields == 0 {
+        ignore(ctx.push_slot())
+      } else {
+        for _ in 0..<(num_fields - 1) {
+          ignore(ctx.pop_slot())
+        }
+      }
+    }
+    StructNewDefault(type_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let struct_type = get_struct_type(mod_info.mod_, type_idx_int)
+      ctx.emit_op(@core.OpTag::StructNewDefault)
+      ctx.emit_idx(type_idx_int)
+      ctx.emit_idx(struct_type.fields.length())
+      ignore(ctx.push_slot())
+    }
+    StructGet(_type_idx, field_idx) => {
+      ctx.emit_op(@core.OpTag::StructGet)
+      ctx.emit_idx(field_idx.reinterpret_as_int())
+    }
+    StructGetS(type_idx, field_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let field_idx_int = field_idx.reinterpret_as_int()
+      let struct_type = get_struct_type(mod_info.mod_, type_idx_int)
+      let storage = if field_idx_int >= 0 &&
+        field_idx_int < struct_type.fields.length() {
+        struct_type.fields[field_idx_int].storage
+      } else {
+        Val(I32)
+      }
+      ctx.emit_op(@core.OpTag::StructGetS)
+      ctx.emit_idx(field_idx_int)
+      ctx.emit_idx(storage_type_code(storage))
+    }
+    StructGetU(type_idx, field_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let field_idx_int = field_idx.reinterpret_as_int()
+      let struct_type = get_struct_type(mod_info.mod_, type_idx_int)
+      let storage = if field_idx_int >= 0 &&
+        field_idx_int < struct_type.fields.length() {
+        struct_type.fields[field_idx_int].storage
+      } else {
+        Val(I32)
+      }
+      ctx.emit_op(@core.OpTag::StructGetU)
+      ctx.emit_idx(field_idx_int)
+      ctx.emit_idx(storage_type_code(storage))
+    }
+    StructSet(_type_idx, field_idx) => {
+      ctx.emit_op(@core.OpTag::StructSet)
+      ctx.emit_idx(field_idx.reinterpret_as_int())
+      ignore(ctx.pop_slot())
+      ignore(ctx.pop_slot())
+    }
+    ArrayNew(type_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      ctx.emit_op(@core.OpTag::ArrayNew)
+      ctx.emit_idx(type_idx_int)
+      ignore(ctx.pop_slot())
+    }
+    ArrayNewDefault(type_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      ctx.emit_op(@core.OpTag::ArrayNewDefault)
+      ctx.emit_idx(type_idx_int)
+    }
+    ArrayNewFixed(type_idx, len) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let len_int = len.reinterpret_as_int()
+      ctx.emit_op(@core.OpTag::ArrayNewFixed)
+      ctx.emit_idx(type_idx_int)
+      ctx.emit_idx(len_int)
+      if len_int == 0 {
+        ignore(ctx.push_slot())
+      } else {
+        for _ in 0..<(len_int - 1) {
+          ignore(ctx.pop_slot())
+        }
+      }
+    }
+    ArrayNewData(type_idx, data_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let array_type = get_array_type(mod_info.mod_, type_idx_int)
+      let elem_size = storage_byte_size(array_type.element.storage)
+      ctx.emit_op(@core.OpTag::ArrayNewData)
+      ctx.emit_idx(type_idx_int)
+      ctx.emit_idx(data_idx.reinterpret_as_int())
+      ctx.emit_idx(elem_size)
+      ignore(ctx.pop_slot())
+    }
+    ArrayNewElem(type_idx, elem_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      ctx.emit_op(@core.OpTag::ArrayNewElem)
+      ctx.emit_idx(type_idx_int)
+      ctx.emit_idx(elem_idx.reinterpret_as_int())
+      ignore(ctx.pop_slot())
+    }
+    ArrayGet(_type_idx) => ctx.emit_binary_op(@core.OpTag::ArrayGet)
+    ArrayGetS(type_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let array_type = get_array_type(mod_info.mod_, type_idx_int)
+      ctx.emit_op(@core.OpTag::ArrayGetS)
+      ctx.emit_idx(storage_type_code(array_type.element.storage))
+      ignore(ctx.pop_slot())
+    }
+    ArrayGetU(type_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let array_type = get_array_type(mod_info.mod_, type_idx_int)
+      ctx.emit_op(@core.OpTag::ArrayGetU)
+      ctx.emit_idx(storage_type_code(array_type.element.storage))
+      ignore(ctx.pop_slot())
+    }
+    ArraySet(_type_idx) => {
+      ctx.emit_op(@core.OpTag::ArraySet)
+      ignore(ctx.pop_slot())
+      ignore(ctx.pop_slot())
+      ignore(ctx.pop_slot())
+    }
+    ArrayLen => ctx.emit_op(@core.OpTag::ArrayLen)
+    ArrayFill(_type_idx) => {
+      ctx.emit_op(@core.OpTag::ArrayFill)
+      ignore(ctx.pop_slot())
+      ignore(ctx.pop_slot())
+      ignore(ctx.pop_slot())
+      ignore(ctx.pop_slot())
+    }
+    ArrayCopy(_dst_type, _src_type) => {
+      ctx.emit_op(@core.OpTag::ArrayCopy)
+      for _ in 0..<5 {
+        ignore(ctx.pop_slot())
+      }
+    }
+    ArrayInitData(type_idx, data_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      let array_type = get_array_type(mod_info.mod_, type_idx_int)
+      let elem_size = storage_byte_size(array_type.element.storage)
+      ctx.emit_op(@core.OpTag::ArrayInitData)
+      ctx.emit_idx(type_idx_int)
+      ctx.emit_idx(data_idx.reinterpret_as_int())
+      ctx.emit_idx(elem_size)
+      for _ in 0..<4 {
+        ignore(ctx.pop_slot())
+      }
+    }
+    ArrayInitElem(type_idx, elem_idx) => {
+      let type_idx_int = type_idx.reinterpret_as_int()
+      ctx.emit_op(@core.OpTag::ArrayInitElem)
+      ctx.emit_idx(type_idx_int)
+      ctx.emit_idx(elem_idx.reinterpret_as_int())
+      for _ in 0..<4 {
+        ignore(ctx.pop_slot())
+      }
+    }
     BrOnNull(label) => {
       let label_int = label.reinterpret_as_int()
       let (target_pc, result_slots, target_sp) = ctx.get_branch_target(
@@ -854,6 +1041,60 @@ fn compile_instr(
       )
       ignore(ctx.pop_slot())
     }
+    BrOnCast(label, target_ref, target_nullable, _source_ref, _source_nullable) => {
+      let label_int = label.reinterpret_as_int()
+      let (target_pc, result_slots, target_sp) = ctx.get_branch_target(
+        label_int,
+      )
+      let arity = result_slots.length()
+      let src_slots = ctx.capture_result_slots(arity)
+      ctx.emit_op(@core.OpTag::BrOnCast)
+      let taken_patch = ctx.code.length()
+      ctx.emit_idx(0)
+      let not_taken_pc = ctx.code.length() + 3
+      ctx.emit_idx(not_taken_pc)
+      ctx.emit_idx(encode_heap_type(target_ref))
+      ctx.emit_idx(if target_nullable { 1 } else { 0 })
+      ctx.defer_resolution(
+        taken_patch,
+        src_slots,
+        result_slots,
+        target_sp,
+        label_int,
+        ctx.is_loop_target(label_int),
+        target_pc,
+      )
+    }
+    BrOnCastFail(
+      label,
+      target_ref,
+      target_nullable,
+      _source_ref,
+      _source_nullable
+    ) => {
+      let label_int = label.reinterpret_as_int()
+      let (target_pc, result_slots, target_sp) = ctx.get_branch_target(
+        label_int,
+      )
+      let arity = result_slots.length()
+      let src_slots = ctx.capture_result_slots(arity)
+      ctx.emit_op(@core.OpTag::BrOnCastFail)
+      let taken_patch = ctx.code.length()
+      ctx.emit_idx(0)
+      let not_taken_pc = ctx.code.length() + 3
+      ctx.emit_idx(not_taken_pc)
+      ctx.emit_idx(encode_heap_type(target_ref))
+      ctx.emit_idx(if target_nullable { 1 } else { 0 })
+      ctx.defer_resolution(
+        taken_patch,
+        src_slots,
+        result_slots,
+        target_sp,
+        label_int,
+        ctx.is_loop_target(label_int),
+        target_pc,
+      )
+    }
     CallRef(type_idx) => {
       let type_int = type_idx.reinterpret_as_int()
       let func_type = get_func_type(mod_info.mod_, type_int)
@@ -880,6 +1121,58 @@ fn compile_instr(
         ctx.emit_op(@core.OpTag::SetSp)
         ctx.emit_idx(ctx.current_sp())
       }
+    }
+    ReturnCall(func_idx_uint) => {
+      let func_idx = func_idx_uint.reinterpret_as_int()
+      let local_idx = func_idx - mod_info.num_imported_funcs
+      if local_idx >= 0 && local_idx < mod_info.func_entries.length() {
+        let num_params = mod_info.func_num_params[local_idx]
+        let num_locals = mod_info.func_num_locals[local_idx]
+        for _ in 0..<num_params {
+          ignore(ctx.pop_slot())
+        }
+        ctx.emit_op(@core.OpTag::ReturnCall)
+        let patch_pos = ctx.code.length()
+        ctx.emit_idx(0) // callee_pc placeholder
+        ctx.emit_idx(num_params)
+        ctx.emit_idx(num_locals)
+        ctx.call_patches.push({ patch_pos, func_idx: local_idx })
+      } else if func_idx >= 0 && func_idx < mod_info.num_imported_funcs {
+        let type_idx = get_imported_func_type_idx(mod_info.mod_, func_idx)
+        let func_type = get_func_type(mod_info.mod_, type_idx)
+        let num_params = func_type.params.length()
+        for _ in 0..<num_params {
+          ignore(ctx.pop_slot())
+        }
+        ctx.emit_op(@core.OpTag::ReturnCallImport)
+        ctx.emit_idx(func_idx)
+      }
+      ctx.is_unreachable = true
+    }
+    ReturnCallIndirect(type_idx, table_idx) => {
+      let type_int = type_idx.reinterpret_as_int()
+      let func_type = get_func_type(mod_info.mod_, type_int)
+      let num_params = func_type.params.length()
+      ignore(ctx.pop_slot()) // table index
+      for _ in 0..<num_params {
+        ignore(ctx.pop_slot())
+      }
+      ctx.emit_op(@core.OpTag::ReturnCallIndirect)
+      ctx.emit_idx(type_int)
+      ctx.emit_idx(table_idx.reinterpret_as_int())
+      ctx.is_unreachable = true
+    }
+    ReturnCallRef(type_idx) => {
+      let type_int = type_idx.reinterpret_as_int()
+      let func_type = get_func_type(mod_info.mod_, type_int)
+      let num_params = func_type.params.length()
+      ignore(ctx.pop_slot()) // func ref
+      for _ in 0..<num_params {
+        ignore(ctx.pop_slot())
+      }
+      ctx.emit_op(@core.OpTag::ReturnCallRef)
+      ctx.emit_idx(type_int)
+      ctx.is_unreachable = true
     }
 
     // Unimplemented

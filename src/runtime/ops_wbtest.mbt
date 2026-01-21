@@ -31,6 +31,12 @@ fn imm(value : UInt) -> UInt64 {
 }
 
 ///|
+/// Convert UInt64 to UInt64 for immediate i64 values in tests
+fn imm64(value : UInt64) -> UInt64 {
+  value
+}
+
+///|
 fn make_runtime(
   stack : Array[Value],
   ops : Array[UInt64],
@@ -315,7 +321,7 @@ test "ops i32 compare and unary" {
 
 ///|
 test "ops i64 const and arithmetic" {
-  let rt_const = make_runtime([], [imm(0U), imm(3U), imm(2U)], 0)
+  let rt_const = make_runtime([], [imm(0U), imm64(0x0000000200000003UL)], 0)
   let rc = op_i64_const(rt_const)
   assert_ok(rc, rt_const)
   assert_stack_elem_eq(rt_const.stack[0], Value::I64(0x0000000200000003UL))
@@ -440,11 +446,7 @@ test "ops float const and arithmetic" {
   let rc = op_f32_const(rt_f32_const)
   assert_ok(rc, rt_f32_const)
   assert_stack_elem_eq(rt_f32_const.stack[0], Value::F32(1.0))
-  let rt_f64_const = make_runtime(
-    [],
-    [imm(0U), imm(0x00000000U), imm(0x3FF00000U)],
-    0,
-  )
+  let rt_f64_const = make_runtime([], [imm(0U), imm64(0x3FF0000000000000UL)], 0)
   let rc = op_f64_const(rt_f64_const)
   assert_ok(rc, rt_f64_const)
   assert_stack_elem_eq(rt_f64_const.stack[0], Value::F64(1.0))

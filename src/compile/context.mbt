@@ -44,6 +44,7 @@ priv struct ModuleInfo {
   mod_ : @core.Module
   func_entries : Array[Int] // Entry points for compiled functions
   func_num_params : Array[Int] // Number of params per function
+  func_num_locals : Array[Int] // Number of locals per function
   func_num_results : Array[Int] // Number of results per function
   num_imported_funcs : Int
 }
@@ -473,5 +474,71 @@ fn encode_ref_type(ref_type : @core.RefType) -> Int {
     NoExtern => 0x72
     NoExn => 0x74
     TypeIndex(idx) => idx
+  }
+}
+
+///|
+/// Encode a heap type to the runtime type code used by ref.test/ref.cast.
+fn encode_heap_type(ref_type : @core.RefType) -> Int {
+  match ref_type {
+    Func => -7
+    Extern => -8
+    Any => -2
+    Eq => -3
+    I31 => -4
+    Struct => -5
+    Array => -6
+    Exn => -9
+    None => -10
+    NoFunc => -11
+    NoExtern => -12
+    NoExn => -13
+    TypeIndex(idx) => idx
+  }
+}
+
+///|
+/// Get struct type by index (returns empty struct on invalid index).
+fn get_struct_type(mod_ : @core.Module, type_idx : Int) -> @core.StructType {
+  if type_idx < 0 || type_idx >= mod_.types.length() {
+    return { fields: [] }
+  }
+  match mod_.types[type_idx] {
+    Struct(struct_type) => struct_type
+    _ => { fields: [] }
+  }
+}
+
+///|
+/// Get array type by index (returns default element type on invalid index).
+fn get_array_type(mod_ : @core.Module, type_idx : Int) -> @core.ArrayType {
+  if type_idx < 0 || type_idx >= mod_.types.length() {
+    return { element: { storage: Val(I32), mutable: false } }
+  }
+  match mod_.types[type_idx] {
+    Array(array_type) => array_type
+    _ => { element: { storage: Val(I32), mutable: false } }
+  }
+}
+
+///|
+/// Encode packed storage type for struct/array get_s/get_u.
+fn storage_type_code(storage : @core.StorageType) -> Int {
+  match storage {
+    I8 => 0
+    I16 => 1
+    _ => 0
+  }
+}
+
+///|
+/// Get the byte size of a storage type.
+fn storage_byte_size(storage : @core.StorageType) -> Int {
+  match storage {
+    I8 => 1
+    I16 => 2
+    Val(I32) | Val(F32) => 4
+    Val(I64) | Val(F64) => 8
+    _ => 8
   }
 }

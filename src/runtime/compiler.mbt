@@ -37,6 +37,12 @@ fn Compiler::emit_i32(self : Compiler, value : UInt) -> Unit {
 }
 
 ///|
+/// Emit an immediate i64 value as UInt64
+fn Compiler::emit_i64(self : Compiler, value : UInt64) -> Unit {
+  self.ops.push(value)
+}
+
+///|
 /// Emit an immediate index value as UInt64
 fn Compiler::emit_idx(self : Compiler, value : Int) -> Unit {
   self.ops.push(value.to_int64().reinterpret_as_uint64())

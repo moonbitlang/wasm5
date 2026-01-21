@@ -294,6 +294,47 @@ pub(all) enum OpTag {
   RefIsNull // 206
   RefEq // 207
   RefAsNonNull // 208
+
+  // ============================================================
+  // GC operations (209-237)
+  // ============================================================
+  StructNew // 209
+  StructNewDefault // 210
+  StructGet // 211
+  StructGetS // 212
+  StructGetU // 213
+  StructSet // 214
+  ArrayNew // 215
+  ArrayNewDefault // 216
+  ArrayNewFixed // 217
+  ArrayNewData // 218
+  ArrayNewElem // 219
+  ArrayGet // 220
+  ArrayGetS // 221
+  ArrayGetU // 222
+  ArraySet // 223
+  ArrayLen // 224
+  ArrayFill // 225
+  ArrayCopy // 226
+  ArrayInitData // 227
+  ArrayInitElem // 228
+  RefI31 // 229
+  I31GetS // 230
+  I31GetU // 231
+  AnyConvertExtern // 232
+  ExternConvertAny // 233
+  RefTest // 234
+  RefCast // 235
+  BrOnCast // 236
+  BrOnCastFail // 237
+
+  // ============================================================
+  // Tail calls (238-241)
+  // ============================================================
+  ReturnCall // 238
+  ReturnCallImport // 239
+  ReturnCallIndirect // 240
+  ReturnCallRef // 241
 } derive(Eq, Show)
 
 ///|
@@ -529,6 +570,39 @@ pub fn OpTag::to_int64(self : OpTag) -> Int64 {
     RefIsNull => 206L
     RefEq => 207L
     RefAsNonNull => 208L
+    StructNew => 209L
+    StructNewDefault => 210L
+    StructGet => 211L
+    StructGetS => 212L
+    StructGetU => 213L
+    StructSet => 214L
+    ArrayNew => 215L
+    ArrayNewDefault => 216L
+    ArrayNewFixed => 217L
+    ArrayNewData => 218L
+    ArrayNewElem => 219L
+    ArrayGet => 220L
+    ArrayGetS => 221L
+    ArrayGetU => 222L
+    ArraySet => 223L
+    ArrayLen => 224L
+    ArrayFill => 225L
+    ArrayCopy => 226L
+    ArrayInitData => 227L
+    ArrayInitElem => 228L
+    RefI31 => 229L
+    I31GetS => 230L
+    I31GetU => 231L
+    AnyConvertExtern => 232L
+    ExternConvertAny => 233L
+    RefTest => 234L
+    RefCast => 235L
+    BrOnCast => 236L
+    BrOnCastFail => 237L
+    ReturnCall => 238L
+    ReturnCallImport => 239L
+    ReturnCallIndirect => 240L
+    ReturnCallRef => 241L
   }
 }
 
@@ -766,13 +840,46 @@ pub fn OpTag::from_int64(v : Int64) -> OpTag? {
     206L => Some(RefIsNull)
     207L => Some(RefEq)
     208L => Some(RefAsNonNull)
+    209L => Some(StructNew)
+    210L => Some(StructNewDefault)
+    211L => Some(StructGet)
+    212L => Some(StructGetS)
+    213L => Some(StructGetU)
+    214L => Some(StructSet)
+    215L => Some(ArrayNew)
+    216L => Some(ArrayNewDefault)
+    217L => Some(ArrayNewFixed)
+    218L => Some(ArrayNewData)
+    219L => Some(ArrayNewElem)
+    220L => Some(ArrayGet)
+    221L => Some(ArrayGetS)
+    222L => Some(ArrayGetU)
+    223L => Some(ArraySet)
+    224L => Some(ArrayLen)
+    225L => Some(ArrayFill)
+    226L => Some(ArrayCopy)
+    227L => Some(ArrayInitData)
+    228L => Some(ArrayInitElem)
+    229L => Some(RefI31)
+    230L => Some(I31GetS)
+    231L => Some(I31GetU)
+    232L => Some(AnyConvertExtern)
+    233L => Some(ExternConvertAny)
+    234L => Some(RefTest)
+    235L => Some(RefCast)
+    236L => Some(BrOnCast)
+    237L => Some(BrOnCastFail)
+    238L => Some(ReturnCall)
+    239L => Some(ReturnCallImport)
+    240L => Some(ReturnCallIndirect)
+    241L => Some(ReturnCallRef)
     _ => None
   }
 }
 
 ///|
 /// Maximum valid opcode value.
-pub let max_opcode : Int64 = 208L
+pub let max_opcode : Int64 = 241L
 
 ///|
 /// Returns the number of Int64 immediates that follow this opcode in the code array.
@@ -870,6 +977,40 @@ pub fn get_immediate_count(opcode : Int64) -> Int {
     206L => 0 // RefIsNull
     207L => 0 // RefEq
     208L => 0 // RefAsNonNull
+    // GC operations
+    209L => 2 // StructNew: type_idx, num_fields
+    210L => 2 // StructNewDefault: type_idx, num_fields
+    211L => 1 // StructGet: field_idx
+    212L => 2 // StructGetS: field_idx, storage_type
+    213L => 2 // StructGetU: field_idx, storage_type
+    214L => 1 // StructSet: field_idx
+    215L => 1 // ArrayNew: type_idx
+    216L => 1 // ArrayNewDefault: type_idx
+    217L => 2 // ArrayNewFixed: type_idx, length
+    218L => 3 // ArrayNewData: type_idx, data_idx, elem_size
+    219L => 2 // ArrayNewElem: type_idx, elem_idx
+    220L => 0 // ArrayGet
+    221L => 1 // ArrayGetS: storage_type
+    222L => 1 // ArrayGetU: storage_type
+    223L => 0 // ArraySet
+    224L => 0 // ArrayLen
+    225L => 0 // ArrayFill
+    226L => 0 // ArrayCopy
+    227L => 3 // ArrayInitData: type_idx, data_idx, elem_size
+    228L => 2 // ArrayInitElem: type_idx, elem_idx
+    229L => 0 // RefI31
+    230L => 0 // I31GetS
+    231L => 0 // I31GetU
+    232L => 0 // AnyConvertExtern
+    233L => 0 // ExternConvertAny
+    234L => 2 // RefTest: target_type, target_nullable
+    235L => 2 // RefCast: target_type, target_nullable
+    236L => 4 // BrOnCast: taken_pc, not_taken_pc, target_type, target_nullable
+    237L => 4 // BrOnCastFail: taken_pc, not_taken_pc, target_type, target_nullable
+    238L => 3 // ReturnCall: callee_pc, num_params, num_locals
+    239L => 1 // ReturnCallImport: import_idx
+    240L => 2 // ReturnCallIndirect: type_idx, table_idx
+    241L => 1 // ReturnCallRef: type_idx
     _ => 0 // Unknown opcode, assume no immediates
   }
 }

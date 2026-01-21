@@ -681,6 +681,39 @@ pub(all) enum OpTag {
   RefIsNull
   RefEq
   RefAsNonNull
+  StructNew
+  StructNewDefault
+  StructGet
+  StructGetS
+  StructGetU
+  StructSet
+  ArrayNew
+  ArrayNewDefault
+  ArrayNewFixed
+  ArrayNewData
+  ArrayNewElem
+  ArrayGet
+  ArrayGetS
+  ArrayGetU
+  ArraySet
+  ArrayLen
+  ArrayFill
+  ArrayCopy
+  ArrayInitData
+  ArrayInitElem
+  RefI31
+  I31GetS
+  I31GetU
+  AnyConvertExtern
+  ExternConvertAny
+  RefTest
+  RefCast
+  BrOnCast
+  BrOnCastFail
+  ReturnCall
+  ReturnCallImport
+  ReturnCallIndirect
+  ReturnCallRef
 }
 pub fn OpTag::from_int64(Int64) -> Self?
 pub fn OpTag::to_int64(Self) -> Int64

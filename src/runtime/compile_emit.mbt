@@ -133,9 +133,7 @@ fn Compiler::compile_wasm_instr(
     // i64 Constants
     I64Const(value) => {
       self.emit_fn(op_i64_const)
-      // Split i64 into two i32 immediates
-      self.emit_i32((value & 0xFFFFFFFFUL).to_uint())
-      self.emit_i32((value >> 32).to_uint())
+      self.emit_i64(value)
       ctx.push_type(I64)
     }
     // f32/f64 Constants
@@ -147,8 +145,7 @@ fn Compiler::compile_wasm_instr(
     F64Const(value) => {
       self.emit_fn(op_f64_const)
       let bits = value.reinterpret_as_uint64()
-      self.emit_i32((bits & 0xFFFFFFFFUL).to_uint())
-      self.emit_i32((bits >> 32).to_uint())
+      self.emit_i64(bits)
       ctx.push_type(F64)
     }
     // i64 Arithmetic (binary: pop 2, push 1)
