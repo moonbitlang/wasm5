@@ -223,6 +223,7 @@ static int g_num_types = 0;
 // Import function metadata (for op_call_import)
 static int* g_import_num_params = NULL;    // Number of params for each imported function
 static int* g_import_num_results = NULL;   // Number of results for each imported function
+static int* g_import_handler_ids = NULL;   // Host handler id for each imported function
 // Cross-module resolved imports (for call_indirect with imported functions)
 static int64_t* g_import_context_ptrs = NULL;  // Target context pointer for each import (-1 if not resolved)
 static int* g_import_target_func_idxs = NULL;  // Function index in target module for each import
@@ -239,6 +240,16 @@ static int* g_elem_segment_offsets = NULL;     // Offset of each segment in elem
 static int* g_elem_segment_sizes = NULL;       // Size of each segment (mutable for elem.drop)
 static int* g_elem_segment_dropped = NULL;     // Whether each segment has been dropped
 static int g_num_elem_segments = 0;
+
+// Host import handler ids (kept in sync with runtime.mbt)
+#define HOST_IMPORT_SPECTEST_PRINT 0
+#define HOST_IMPORT_SPECTEST_PRINT_I32 1
+#define HOST_IMPORT_SPECTEST_PRINT_I64 2
+#define HOST_IMPORT_SPECTEST_PRINT_F32 3
+#define HOST_IMPORT_SPECTEST_PRINT_F64 4
+#define HOST_IMPORT_SPECTEST_PRINT_I32_F32 5
+#define HOST_IMPORT_SPECTEST_PRINT_F64_F64 6
+#define HOST_IMPORT_SPECTEST_PRINT_CHAR 7
 
 // Stack base for result extraction after execution
 static uint64_t* g_stack_base = NULL;
@@ -270,6 +281,7 @@ typedef struct CRuntimeContext {
     int num_types;
     int* import_num_params;
     int* import_num_results;
+    int* import_handler_ids;
     int64_t* import_context_ptrs;
     int* import_target_func_idxs;
     uint8_t* data_segments_flat;
@@ -311,6 +323,7 @@ static void save_context(CRuntimeContext* ctx, CRuntime* crt) {
     ctx->num_types = g_num_types;
     ctx->import_num_params = g_import_num_params;
     ctx->import_num_results = g_import_num_results;
+    ctx->import_handler_ids = g_import_handler_ids;
     ctx->import_context_ptrs = g_import_context_ptrs;
     ctx->import_target_func_idxs = g_import_target_func_idxs;
     ctx->data_segments_flat = g_data_segments_flat;
@@ -347,6 +360,7 @@ static void load_context(const CRuntimeContext* ctx, CRuntime* crt) {
     g_num_types = ctx->num_types;
     g_import_num_params = ctx->import_num_params;
     g_import_num_results = ctx->import_num_results;
+    g_import_handler_ids = ctx->import_handler_ids;
     g_import_context_ptrs = ctx->import_context_ptrs;
     g_import_target_func_idxs = ctx->import_target_func_idxs;
     g_data_segments_flat = ctx->data_segments_flat;
@@ -368,7 +382,7 @@ CRuntimeContext* create_runtime_context(
     int* table_max_sizes, int num_tables, int* func_entries, int* func_num_locals,
     int num_funcs, int num_imported_funcs, int* func_type_idxs,
     int* type_sig_hash1, int* type_sig_hash2, int num_types,
-    int* import_num_params, int* import_num_results,
+    int* import_num_params, int* import_num_results, int* import_handler_ids,
     int64_t* import_context_ptrs, int* import_target_func_idxs,
     uint8_t* data_segments_flat, int* data_segment_offsets, int* data_segment_sizes, int num_data_segments,
     int* elem_segments_flat, int* elem_segment_offsets, int* elem_segment_sizes,
@@ -398,6 +412,7 @@ CRuntimeContext* create_runtime_context(
     ctx->num_types = num_types;
     ctx->import_num_params = import_num_params;
     ctx->import_num_results = import_num_results;
+    ctx->import_handler_ids = import_handler_ids;
     ctx->import_context_ptrs = import_context_ptrs;
     ctx->import_target_func_idxs = import_target_func_idxs;
     ctx->data_segments_flat = data_segments_flat;
@@ -430,6 +445,29 @@ static int run(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     return first(crt, pc, sp, fp);
 }
 
+// Host import handlers (spectest is a no-op for now)
+static void call_host_import(int handler_id, uint64_t* args, int num_params,
+                             uint64_t* results, int num_results) {
+    (void)args;
+    (void)num_params;
+    switch (handler_id) {
+        case HOST_IMPORT_SPECTEST_PRINT:
+        case HOST_IMPORT_SPECTEST_PRINT_I32:
+        case HOST_IMPORT_SPECTEST_PRINT_I64:
+        case HOST_IMPORT_SPECTEST_PRINT_F32:
+        case HOST_IMPORT_SPECTEST_PRINT_F64:
+        case HOST_IMPORT_SPECTEST_PRINT_I32_F32:
+        case HOST_IMPORT_SPECTEST_PRINT_F64_F64:
+        case HOST_IMPORT_SPECTEST_PRINT_CHAR:
+            break;
+        default:
+            break;
+    }
+    for (int i = 0; i < num_results; i++) {
+        results[i] = 0;
+    }
+}
+
 // Execute threaded code starting at entry point
 // Returns trap code (0 = success), stores results in result_out[0..num_results-1]
 int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_args,
@@ -437,7 +475,7 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
             int mem_max_size, int* memory_pages, int* tables_flat, int* table_offsets, int* table_sizes, int* table_max_sizes, int num_tables,
             int* func_entries, int* func_num_locals, int num_funcs, int num_imported_funcs,
             int* func_type_idxs, int* type_sig_hash1, int* type_sig_hash2, int num_types,
-            int* import_num_params, int* import_num_results,
+            int* import_num_params, int* import_num_results, int* import_handler_ids,
             int64_t* import_context_ptrs, int* import_target_func_idxs,
             uint8_t* data_segments_flat, int* data_segment_offsets, int* data_segment_sizes, int num_data_segments,
             int* elem_segments_flat, int* elem_segment_offsets, int* elem_segment_sizes, int* elem_segment_dropped, int num_elem_segments) {
@@ -483,6 +521,7 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     // Store import function metadata for op_call_import and call_indirect
     g_import_num_params = import_num_params;
     g_import_num_results = import_num_results;
+    g_import_handler_ids = import_handler_ids;
     g_import_context_ptrs = import_context_ptrs;
     g_import_target_func_idxs = import_target_func_idxs;
 
@@ -549,6 +588,7 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     g_num_types = 0;
     g_import_num_params = NULL;
     g_import_num_results = NULL;
+    g_import_handler_ids = NULL;
     g_import_context_ptrs = NULL;
     g_import_target_func_idxs = NULL;
     g_data_segments_flat = NULL;
@@ -701,6 +741,23 @@ int op_call_import(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
         }
     }
 
+    int handler_id = -1;
+    if (g_import_handler_ids && import_idx >= 0 && import_idx < g_num_imported_funcs) {
+        handler_id = g_import_handler_ids[import_idx];
+    }
+    if (handler_id >= 0) {
+        uint64_t* args_ptr = fp + frame_offset;
+        uint64_t results[16];
+        int actual_results = num_results < 16 ? num_results : 16;
+        call_host_import(handler_id, args_ptr, num_params, results, actual_results);
+        uint64_t* result_dst = fp + frame_offset;
+        for (int i = 0; i < actual_results; i++) {
+            result_dst[i] = results[i];
+        }
+        sp = result_dst + actual_results;
+        NEXT();
+    }
+
     // Unresolved import (spectest) - consume args and push dummy results
     sp = fp + frame_offset;
     for (int i = 0; i < num_results; i++) {
@@ -772,6 +829,21 @@ int op_return_call_import(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* f
             }
             return TRAP_NONE;
         }
+    }
+
+    int handler_id = -1;
+    if (g_import_handler_ids && import_idx >= 0 && import_idx < g_num_imported_funcs) {
+        handler_id = g_import_handler_ids[import_idx];
+    }
+    if (handler_id >= 0) {
+        uint64_t* args_ptr = sp - num_params;
+        uint64_t results[16];
+        int actual_results = num_results < 16 ? num_results : 16;
+        call_host_import(handler_id, args_ptr, num_params, results, actual_results);
+        for (int i = 0; i < actual_results; i++) {
+            fp[i] = results[i];
+        }
+        return TRAP_NONE;
     }
 
     // Unresolved import (spectest) - push dummy results to fp

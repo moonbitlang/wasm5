@@ -20,6 +20,7 @@ pub struct CRuntime {
   // Import function metadata for op_call_import
   import_num_params : FixedArray[Int] // Number of params for each imported function
   import_num_results : FixedArray[Int] // Number of results for each imported function
+  import_handler_ids : FixedArray[Int] // Host handler id for each imported function
   // Cross-module import resolution for call_indirect
   import_context_ptrs : FixedArray[Int64] // Target context pointer for each import (-1 if not resolved)
   import_target_func_idxs : FixedArray[Int] // Target function index for each import
@@ -141,6 +142,7 @@ fn build_runtime(
   )
   // Build import function metadata for op_call_import
   let (import_num_params, import_num_results) = build_import_info(module_)
+  let import_handler_ids = build_import_handlers(module_)
   // Flatten data segments for bulk memory operations
   let (data_segments_flat, data_segment_offsets, data_segment_sizes) = flatten_data_segments(
     module_,
@@ -173,6 +175,7 @@ fn build_runtime(
     type_result_counts,
     import_num_params,
     import_num_results,
+    import_handler_ids,
     import_context_ptrs,
     import_target_func_idxs,
     data_segments_flat,
@@ -248,6 +251,7 @@ pub fn CRuntime::get_context_ptr(self : CRuntime) -> Int64 {
       self.module_.types.length(),
       self.import_num_params,
       self.import_num_results,
+      self.import_handler_ids,
       self.import_context_ptrs,
       self.import_target_func_idxs,
       self.data_segments_flat,
@@ -574,6 +578,72 @@ fn build_import_info(
     FixedArray::from_array(import_num_params),
     FixedArray::from_array(import_num_results),
   )
+}
+
+///|
+/// Host import handler ids for C runtime
+let host_import_none : Int = -1
+
+///|
+let host_import_spectest_print : Int = 0
+
+///|
+let host_import_spectest_print_i32 : Int = 1
+
+///|
+let host_import_spectest_print_i64 : Int = 2
+
+///|
+let host_import_spectest_print_f32 : Int = 3
+
+///|
+let host_import_spectest_print_f64 : Int = 4
+
+///|
+let host_import_spectest_print_i32_f32 : Int = 5
+
+///|
+let host_import_spectest_print_f64_f64 : Int = 6
+
+///|
+let host_import_spectest_print_char : Int = 7
+
+///|
+/// Build host import handler ids for imported functions
+fn build_import_handlers(module_ : @core.Module) -> FixedArray[Int] {
+  let handlers : Array[Int] = []
+  for imp in module_.imports {
+    match imp.desc {
+      Func(_) => {
+        let mut handler = host_import_none
+        if imp.module_ == b"spectest" {
+          if imp.name == b"print" {
+            handler = host_import_spectest_print
+          } else if imp.name == b"print_i32" {
+            handler = host_import_spectest_print_i32
+          } else if imp.name == b"print_i64" {
+            handler = host_import_spectest_print_i64
+          } else if imp.name == b"print_f32" {
+            handler = host_import_spectest_print_f32
+          } else if imp.name == b"print_f64" {
+            handler = host_import_spectest_print_f64
+          } else if imp.name == b"print_i32_f32" {
+            handler = host_import_spectest_print_i32_f32
+          } else if imp.name == b"print_f64_f64" {
+            handler = host_import_spectest_print_f64_f64
+          } else if imp.name == b"print_char" {
+            handler = host_import_spectest_print_char
+          }
+        }
+        handlers.push(handler)
+      }
+      _ => ()
+    }
+  }
+  if handlers.length() == 0 {
+    handlers.push(host_import_none)
+  }
+  FixedArray::from_array(handlers)
 }
 
 ///|
@@ -927,6 +997,7 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
           self.module_.types.length(),
           self.import_num_params,
           self.import_num_results,
+          self.import_handler_ids,
           self.import_context_ptrs,
           self.import_target_func_idxs,
           self.data_segments_flat,
@@ -1079,6 +1150,7 @@ pub fn CRuntime::call_compiled(
           self.module_.types.length(),
           self.import_num_params,
           self.import_num_results,
+          self.import_handler_ids,
           self.import_context_ptrs,
           self.import_target_func_idxs,
           self.data_segments_flat,

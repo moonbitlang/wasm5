@@ -6,7 +6,11 @@ import {
 }
 
 // Values
+pub fn clear_spectest_output() -> Unit
+
 pub fn default_import_resolver() -> ImportResolver
+
+pub fn get_spectest_output() -> Array[String]
 
 // Errors
 pub suberror RuntimeError {
@@ -80,8 +84,10 @@ pub struct Runtime {
 }
 pub fn Runtime::call_by_index(Self, Int, Array[@core.Value]) -> Array[@core.Value] raise RuntimeError
 pub fn Runtime::call_compiled(Self, Bytes, Array[@core.Value]) -> Array[@core.Value] raise RuntimeError
+pub fn Runtime::clear_output(Self) -> Unit
 pub fn Runtime::get_globals(Self) -> Array[@core.Value]
 pub fn Runtime::get_module(Self) -> @core.Module
+pub fn Runtime::get_output(Self) -> Array[String]
 pub fn Runtime::get_tables(Self) -> Array[RuntimeTable]
 pub fn Runtime::load(@core.Module) -> Self raise RuntimeError
 pub fn Runtime::load_with_resolver(@core.Module, ImportResolver) -> Self raise RuntimeError
@@ -97,11 +103,15 @@ pub struct RuntimeContext {
   imported_funcs : Array[ImportedFunc]
   data_segments : Array[Array[Byte]]
   gc_heap : Array[GcObject]
+  output : Array[String]
   external_funcrefs : Array[ImportedFunc]
   dropped_elems : Array[Bool]
   num_imported_funcs : Int
   mut error_detail : String
 }
+pub fn RuntimeContext::clear_output(Self) -> Unit
+pub fn RuntimeContext::get_output(Self) -> Array[String]
+pub fn RuntimeContext::push_output(Self, String) -> Unit
 
 #alias(ReturnCode)
 pub enum RuntimeStatus {
