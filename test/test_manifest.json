@@ -43,7 +43,7 @@
     {"file": "i64.wast", "subdir": "", "moonbit": true, "cruntime": true},
     {"file": "id.wast", "subdir": "", "moonbit": true, "cruntime": true},
     {"file": "if.wast", "subdir": "", "moonbit": true, "cruntime": true},
-    {"file": "imports.wast", "subdir": "", "moonbit": true, "cruntime": false},
+    {"file": "imports.wast", "subdir": "", "moonbit": true, "cruntime": true},
     {"file": "inline-module.wast", "subdir": "", "moonbit": true, "cruntime": true},
     {"file": "instance.wast", "subdir": "", "disabled": true, "reason": "Requires module instances (linking)"},
     {"file": "int_exprs.wast", "subdir": "", "moonbit": true, "cruntime": true},

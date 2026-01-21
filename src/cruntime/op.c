@@ -2666,8 +2666,26 @@ int op_call_indirect(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
         }
     }
 
-    // Check if this is an imported function (requires cross-module call)
+    // Check if this is an imported function (host or cross-module)
     if (func_idx < g_num_imported_funcs) {
+        int handler_id = -1;
+        if (g_import_handler_ids && func_idx >= 0 && func_idx < g_num_imported_funcs) {
+            handler_id = g_import_handler_ids[func_idx];
+        }
+        if (handler_id >= 0) {
+            int num_params = g_import_num_params ? g_import_num_params[func_idx] : 0;
+            int num_results = g_import_num_results ? g_import_num_results[func_idx] : 0;
+            uint64_t* args_ptr = fp + frame_offset;
+            uint64_t results[16];
+            int actual_results = num_results < 16 ? num_results : 16;
+            call_host_import(handler_id, args_ptr, num_params, results, actual_results);
+            for (int i = 0; i < actual_results; i++) {
+                args_ptr[i] = results[i];
+            }
+            sp = args_ptr + actual_results;
+            NEXT();
+        }
+
         // This is an imported function - need to do cross-module call
         // Check if we have resolved import info
         if (g_import_context_ptrs == NULL || g_import_target_func_idxs == NULL) {

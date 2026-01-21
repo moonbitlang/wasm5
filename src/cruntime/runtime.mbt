@@ -710,19 +710,46 @@ fn init_memory(
   module_ : @core.Module,
   globals : FixedArray[UInt64],
 ) -> (FixedArray[Byte], FixedArray[Int], Int) {
-  // Get initial and max memory size from first memory (if any)
-  let initial_pages = if module_.mems.length() > 0 {
-    module_.mems[0].limits.min.to_int()
-  } else {
-    0
-  }
-  let max_pages = if module_.mems.length() > 0 {
-    match module_.mems[0].limits.max {
-      Some(max) => max.to_int()
-      None => default_memory_max_pages
+  // Check for imported memory (first import only)
+  let mut import_mem_type : @core.MemType? = None
+  let mut import_module : Bytes? = None
+  let mut import_name : Bytes? = None
+  for imp in module_.imports {
+    match imp.desc {
+      Mem(mem_type) => {
+        import_mem_type = Some(mem_type)
+        import_module = Some(imp.module_)
+        import_name = Some(imp.name)
+      }
+      _ => ()
     }
-  } else {
-    default_memory_max_pages
+  }
+
+  // Get initial and max memory size from imported memory or local memory
+  let (initial_pages, max_pages) = match import_mem_type {
+    Some(mem_type) =>
+      if import_module == Some(b"spectest") && import_name == Some(b"memory") {
+        // spectest memory has min 1, max 2
+        (1, 2)
+      } else {
+        let min_pages = mem_type.limits.min.to_int()
+        let max_pages = match mem_type.limits.max {
+          Some(max) => max.to_int()
+          None => default_memory_max_pages
+        }
+        (min_pages, if max_pages >= min_pages { max_pages } else { min_pages })
+      }
+    None =>
+      if module_.mems.length() > 0 {
+        let min_pages = module_.mems[0].limits.min.to_int()
+        let max_pages = match module_.mems[0].limits.max {
+          Some(max) => max.to_int()
+          None => default_memory_max_pages
+        }
+        (min_pages, if max_pages >= min_pages { max_pages } else { min_pages })
+      } else {
+        (0, default_memory_max_pages)
+      }
   }
   // Pre-allocate memory to max size (at least 1 byte to avoid empty array)
   let max_size = max_pages * page_size
