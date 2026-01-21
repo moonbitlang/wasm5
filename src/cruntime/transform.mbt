@@ -312,7 +312,10 @@ fn get_c_handler(opcode : Int64) -> UInt64 {
     208L => ref_as_non_null()
 
     // Tail calls
+    238L => return_call()
     239L => return_call_import()
+    240L => return_call_indirect()
+    241L => return_call_ref()
 
     // Unknown opcode - return nop as fallback
     _ => nop()
