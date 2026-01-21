@@ -343,6 +343,15 @@ pub struct Runtime {
 }
 
 ///|
+fn code_to_ops(code : Array[Int64]) -> FixedArray[UInt64] {
+  let ops = FixedArray::make(code.length(), 0UL)
+  for i in 0..<code.length() {
+    ops[i] = code[i].reinterpret_as_uint64()
+  }
+  ops
+}
+
+///|
 /// Get the module from the runtime
 pub fn Runtime::get_module(self : Runtime) -> @core.Module {
   self.ctx.module_
@@ -695,9 +704,8 @@ pub fn Runtime::load_with_resolver(
     data_segments.push(segment)
   }
 
-  // Compile all functions before creating Runtime
-  let compiler = Compiler::new(m)
-  compiler.compile()
+  // Compile module to universal IR
+  let compiled = @compile.compile(m)
 
   // Create RuntimeContext with cold data (including gc_heap from const expr evaluation)
   let ctx = RuntimeContext::new_with_gc_heap(
@@ -709,11 +717,12 @@ pub fn Runtime::load_with_resolver(
     imported_funcs,
     data_segments,
     gc_heap,
+    compiled~,
     external_funcrefs~,
     dropped_elems~,
   )
   Runtime::{
-    ops: compiler.finish(),
+    ops: code_to_ops(compiled.code),
     stack: FixedArray::make(initial_stack_capacity, 0UL),
     sp: 0,
     bp: 0,

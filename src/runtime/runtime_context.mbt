@@ -3,6 +3,7 @@
 /// during instruction execution. This is a reference type.
 pub struct RuntimeContext {
   module_ : @core.Module
+  compiled : @core.CompiledModule
   memory : Array[Byte]
   memory_max : UInt64?
   globals : Array[Value]
@@ -46,11 +47,13 @@ fn RuntimeContext::new_with_gc_heap(
   imported_funcs : Array[ImportedFunc],
   data_segments : Array[Array[Byte]],
   gc_heap : Array[GcObject],
+  compiled? : @core.CompiledModule = @core.CompiledModule::new(),
   external_funcrefs? : Array[ImportedFunc] = [],
   dropped_elems? : Array[Bool] = [],
 ) -> RuntimeContext {
   {
     module_,
+    compiled,
     memory,
     memory_max,
     globals,

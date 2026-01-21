@@ -418,13 +418,10 @@ fn op_i32_wrap_i64(rt : Runtime) -> ReturnCode {
 
 ///|
 fn op_i64_const(rt : Runtime) -> ReturnCode {
-  // Read two i32 immediates to form i64
-  let low = rt.ops.unsafe_get(rt.pc + 1).to_uint()
-  let high = rt.ops.unsafe_get(rt.pc + 2).to_uint()
-  let value = low.to_uint64() | (high.to_uint64() << 32)
+  let value = rt.ops.unsafe_get(rt.pc + 1)
   rt.stack.unsafe_set(rt.sp, value)
   rt.sp = rt.sp + 1
-  rt.pc = rt.pc + 3
+  rt.pc = rt.pc + 2
   Running
 }
 
@@ -439,12 +436,10 @@ fn op_f32_const(rt : Runtime) -> ReturnCode {
 
 ///|
 fn op_f64_const(rt : Runtime) -> ReturnCode {
-  let low = rt.ops.unsafe_get(rt.pc + 1).to_uint()
-  let high = rt.ops.unsafe_get(rt.pc + 2).to_uint()
-  let bits = low.to_uint64() | (high.to_uint64() << 32)
+  let bits = rt.ops.unsafe_get(rt.pc + 1)
   rt.stack.unsafe_set(rt.sp, bits)
   rt.sp = rt.sp + 1
-  rt.pc = rt.pc + 3
+  rt.pc = rt.pc + 2
   Running
 }
 

@@ -11,6 +11,10 @@ pub fn compile(@core.Module) -> CompiledModule
 
 pub fn compile_with_imports(@core.Module, Map[Int, ResolvedImport]) -> CompiledModule
 
+pub fn get_entry_fnptr() -> UInt64
+
+pub fn transform_to_c_runtime(Array[Int64]) -> FixedArray[UInt64]
+
 // Errors
 
 // Types and methods

@@ -89,6 +89,7 @@ pub fn Runtime::run_start(Self) -> Unit raise RuntimeError
 
 pub struct RuntimeContext {
   module_ : @core.Module
+  compiled : @core.CompiledModule
   memory : Array[Byte]
   memory_max : UInt64?
   globals : Array[@core.Value]

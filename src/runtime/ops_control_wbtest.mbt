@@ -99,37 +99,40 @@ test "ops control branching" {
   let rc = op_if(rt_if_false)
   assert_ok(rc, rt_if_false)
   assert_eq(rt_if_false.pc, 9)
-  let rt_br = base_runtime(
-    base_module([], [], [], []),
-    [idx(0), idx(10), idx(1), idx(1)],
-    [Value::I32(1U), Value::I32(2U), Value::I32(3U)],
-  )
+  let rt_br = base_runtime(base_module([], [], [], []), [idx(0), idx(10)], [
+    Value::I32(1U),
+    Value::I32(2U),
+    Value::I32(3U),
+  ])
   let rc = op_br(rt_br)
   assert_ok(rc, rt_br)
   assert_eq(rt_br.pc, 10)
-  assert_eq(rt_br.sp, 2)
+  assert_eq(rt_br.sp, 3)
   assert_eq(rt_br.stack.unsafe_get(0), 1UL)
-  assert_eq(rt_br.stack.unsafe_get(1), 3UL)
+  assert_eq(rt_br.stack.unsafe_get(1), 2UL)
+  assert_eq(rt_br.stack.unsafe_get(2), 3UL)
   let rt_br_if = base_runtime(
     base_module([], [], [], []),
-    [idx(0), idx(5), idx(1), idx(0)],
+    [idx(0), idx(5), idx(4)],
     [Value::I32(9U), Value::I32(1U)],
   )
   let rc = op_br_if(rt_br_if)
   assert_ok(rc, rt_br_if)
   assert_eq(rt_br_if.pc, 5)
+  assert_eq(rt_br_if.sp, 1)
   assert_ctrl_stack_eq(rt_br_if.stack[0], Value::I32(9U))
   let rt_br_if_false = base_runtime(
     base_module([], [], [], []),
-    [idx(0), idx(5), idx(1), idx(0)],
+    [idx(0), idx(5), idx(4)],
     [Value::I32(9U), Value::I32(0U)],
   )
   let rc = op_br_if(rt_br_if_false)
   assert_ok(rc, rt_br_if_false)
   assert_eq(rt_br_if_false.pc, 4)
+  assert_eq(rt_br_if_false.sp, 1)
   let rt_br_table = base_runtime(
     base_module([], [], [], []),
-    [idx(0), idx(2), idx(1), idx(10), idx(0), idx(20), idx(0), idx(30), idx(0)],
+    [idx(0), idx(2), idx(10), idx(20), idx(30)],
     [Value::I32(7U), Value::I32(1U)],
   )
   let rc = op_br_table(rt_br_table)
@@ -137,7 +140,7 @@ test "ops control branching" {
   assert_eq(rt_br_table.pc, 20)
   let rt_br_table_default = base_runtime(
     base_module([], [], [], []),
-    [idx(0), idx(2), idx(1), idx(10), idx(0), idx(20), idx(0), idx(30), idx(0)],
+    [idx(0), idx(2), idx(10), idx(20), idx(30)],
     [Value::I32(7U), Value::I32(5U)],
   )
   let rc = op_br_table(rt_br_table_default)
@@ -145,20 +148,22 @@ test "ops control branching" {
   assert_eq(rt_br_table_default.pc, 30)
   let rt_br_on_null = base_runtime(
     base_module([], [], [], []),
-    [idx(0), idx(8), idx(0), idx(0)],
+    [idx(0), idx(8), idx(4)],
     [Value::Ref(None)],
   )
   let rc = op_br_on_null(rt_br_on_null)
   assert_ok(rc, rt_br_on_null)
   assert_eq(rt_br_on_null.pc, 8)
+  assert_eq(rt_br_on_null.sp, 0)
   let rt_br_on_non_null = base_runtime(
     base_module([], [], [], []),
-    [idx(0), idx(4), idx(0), idx(0)],
+    [idx(0), idx(4), idx(8)],
     [Value::Ref(Some(1))],
   )
   let rc = op_br_on_non_null(rt_br_on_non_null)
   assert_ok(rc, rt_br_on_non_null)
   assert_eq(rt_br_on_non_null.pc, 4)
+  assert_eq(rt_br_on_non_null.sp, 1)
 }
 
 ///|

@@ -44,13 +44,8 @@ test "runtime compile start function" {
 
 ///|
 test "runtime execute error branches" {
-  // Test that Trap return code causes RuntimeError
-  fn trap_func(rt : Runtime) -> ReturnCode {
-    rt.ctx.error_detail = "bad"
-    Trap
-  }
-
-  let rt_err = make_runtime([], [unsafe_function_to_uint64(trap_func)], 0)
+  // Use the unreachable opcode to force a trap in the dispatcher.
+  let rt_err = make_runtime([], [0UL], 0)
   let mut saw_invalid = false
   let _ = execute(rt_err) catch {
     _ => {
@@ -119,13 +114,12 @@ test "runtime call compiled non func export" {
 
 ///|
 test "runtime call compiled local errors" {
-  // Test that unsupported local type (V128) causes error during call
-  // The error is now detected at compile time and emitted as a trap instruction
+  // V128 locals are valid even if SIMD ops are unimplemented.
   let func_type : @core.FuncType = { params: [], results: [] }
   let code_bad : @core.Code = {
     locals: [V128],
     body: @core.Expr::{ instrs: [] },
-    compiled: None, // Let it be compiled - will emit op_local_init_unsupported
+    compiled: None,
     max_stack_height: 0,
   }
   let module_bad = module_with(
@@ -137,12 +131,6 @@ test "runtime call compiled local errors" {
     None,
   )
   let rt_bad = Runtime::load_with_resolver(module_bad, ImportResolver::new())
-  let mut saw_bad = false
-  let _ = rt_bad.call_compiled(b"bad", []) catch {
-    _ => {
-      saw_bad = true
-      []
-    }
-  }
-  assert_eq(saw_bad, true)
+  let results = rt_bad.call_compiled(b"bad", [])
+  assert_eq(results.length(), 0)
 }

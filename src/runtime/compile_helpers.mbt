@@ -81,19 +81,6 @@ fn count_imported_funcs(module_ : @core.Module) -> Int {
 }
 
 ///|
-/// Count the number of imported tags in a module
-fn count_imported_tags(module_ : @core.Module) -> Int {
-  let mut count = 0
-  for imp in module_.imports {
-    match imp.desc {
-      Tag(_) => count += 1
-      _ => ()
-    }
-  }
-  count
-}
-
-///|
 fn require_func_type(
   module_ : @core.Module,
   type_idx : Int,
@@ -111,58 +98,6 @@ fn require_func_type(
 }
 
 ///|
-fn require_struct_type(
-  module_ : @core.Module,
-  type_idx : Int,
-  context : String,
-) -> @core.StructType raise RuntimeError {
-  if type_idx < 0 || type_idx >= module_.types.length() {
-    raise RuntimeError::InvalidType(
-      "\{context}: invalid type index \{type_idx}",
-    )
-  }
-  match module_.types[type_idx] {
-    Struct(struct_type) => struct_type
-    _ => raise RuntimeError::InvalidType("\{context}: expected struct type")
-  }
-}
-
-///|
-fn require_array_type(
-  module_ : @core.Module,
-  type_idx : Int,
-  context : String,
-) -> @core.ArrayType raise RuntimeError {
-  if type_idx < 0 || type_idx >= module_.types.length() {
-    raise RuntimeError::InvalidType(
-      "\{context}: invalid type index \{type_idx}",
-    )
-  }
-  match module_.types[type_idx] {
-    Array(array_type) => array_type
-    _ => raise RuntimeError::InvalidType("\{context}: expected array type")
-  }
-}
-
-///|
-fn storage_value_type(storage : @core.StorageType) -> @core.ValType {
-  match storage {
-    Val(val_type) => val_type
-    I8 | I16 => I32
-  }
-}
-
-///|
-/// Get the byte size of a storage type
-fn storage_byte_size(storage : @core.StorageType) -> Int {
-  match storage {
-    I8 => 1
-    I16 => 2
-    Val(I32) | Val(F32) => 4
-    Val(I64) | Val(F64) => 8
-    _ => 8 // Default for reference types
-  }
-}
 
 ///|
 /// Get the type index for a function (imported or local)
@@ -194,40 +129,6 @@ fn get_func_type_idx(
     let local_idx = func_idx - num_imported
     if local_idx >= 0 && local_idx < module_.funcs.length() {
       module_.funcs[local_idx].reinterpret_as_int()
-    } else {
-      -1
-    }
-  }
-}
-
-///|
-/// Get the type index for a tag (imported or local)
-/// Returns -1 if the tag index is invalid
-fn get_tag_type_idx(
-  module_ : @core.Module,
-  tag_idx : Int,
-  num_imported : Int,
-) -> Int {
-  if tag_idx < num_imported {
-    let mut import_idx = 0
-    let mut type_idx = -1
-    for imp in module_.imports {
-      match imp.desc {
-        Tag(tidx) => {
-          if import_idx == tag_idx {
-            type_idx = tidx.reinterpret_as_int()
-            break
-          }
-          import_idx += 1
-        }
-        _ => ()
-      }
-    }
-    type_idx
-  } else {
-    let local_idx = tag_idx - num_imported
-    if local_idx >= 0 && local_idx < module_.tags.length() {
-      module_.tags[local_idx].type_idx.reinterpret_as_int()
     } else {
       -1
     }
@@ -437,9 +338,3 @@ fn value_to_stack(v : Value) -> UInt64 {
     Externref(Some(idx)) => idx.to_uint64() | 0x2000000000000000UL
   } // tag bit 61
 }
-
-///|
-extern "C" fn unsafe_function_to_uint64(f : (Runtime) -> ReturnCode) -> UInt64 = "unsafe_function_to_uint64"
-
-///|
-extern "C" fn unsafe_uint64_to_function(u : UInt64) -> (Runtime) -> ReturnCode = "unsafe_uint64_to_function"

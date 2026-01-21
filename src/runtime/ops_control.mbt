@@ -52,6 +52,52 @@ fn op_select(rt : Runtime) -> ReturnCode {
   Running
 }
 
+// ============================================================================
+// Slot-based control helpers (unified IR)
+// ============================================================================
+
+///|
+fn op_entry(rt : Runtime) -> ReturnCode {
+  let num_locals = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let first_local = rt.ops.unsafe_get(rt.pc + 2).to_int()
+  let num_to_zero = rt.ops.unsafe_get(rt.pc + 3).to_int()
+  let new_sp = rt.bp + num_locals
+  if new_sp > rt.stack.length() {
+    rt.ctx.error_detail = "stack overflow"
+    return Trap
+  }
+  for i = 0; i < num_to_zero; i = i + 1 {
+    rt.stack.unsafe_set(rt.bp + first_local + i, 0UL)
+  }
+  rt.sp = new_sp
+  rt.num_locals = num_locals
+  rt.pc = rt.pc + 4
+  Running
+}
+
+///|
+fn op_copy_slot(rt : Runtime) -> ReturnCode {
+  let src_slot = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let dst_slot = rt.ops.unsafe_get(rt.pc + 2).to_int()
+  let value = rt.stack.unsafe_get(rt.bp + src_slot)
+  rt.stack.unsafe_set(rt.bp + dst_slot, value)
+  rt.pc = rt.pc + 3
+  Running
+}
+
+///|
+fn op_set_sp(rt : Runtime) -> ReturnCode {
+  let slot = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let new_sp = rt.bp + slot
+  if new_sp > rt.stack.length() {
+    rt.ctx.error_detail = "stack overflow"
+    return Trap
+  }
+  rt.sp = new_sp
+  rt.pc = rt.pc + 2
+  Running
+}
+
 ///|
 fn get_func_type_or_error(
   rt : Runtime,
@@ -95,64 +141,33 @@ fn op_if(rt : Runtime) -> ReturnCode {
 // Branch targets are now computed at compile time and embedded directly in branch instructions
 
 ///|
-/// In-place stack shuffle for branch operations: move arity values down by drop_count positions
-/// Stack: [..., drop_values (drop_count), result_values (arity)]
-/// Want:  [..., result_values (arity)]
-fn shuffle_stack_for_branch(
-  rt : Runtime,
-  stack_top : Int,
-  arity : Int,
-  drop_count : Int,
-) -> Unit {
-  if drop_count > 0 && arity > 0 {
-    let result_start = stack_top - arity
-    let target_start = result_start - drop_count
-    // Copy forward is safe since target_start < result_start
-    for i = 0; i < arity; i = i + 1 {
-      rt.stack.unsafe_set(
-        target_start + i,
-        rt.stack.unsafe_get(result_start + i),
-      )
-    }
-  }
-}
-
-///|
 fn op_br(rt : Runtime) -> ReturnCode {
   let target_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  let arity = rt.ops.unsafe_get(rt.pc + 2).to_int()
-  let drop_count = rt.ops.unsafe_get(rt.pc + 3).to_int()
-  shuffle_stack_for_branch(rt, rt.sp, arity, drop_count)
-  rt.sp = rt.sp - drop_count
   rt.pc = target_pc
   Running
 }
 
 ///|
 fn op_br_if(rt : Runtime) -> ReturnCode {
-  let target_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  let arity = rt.ops.unsafe_get(rt.pc + 2).to_int()
-  let drop_count = rt.ops.unsafe_get(rt.pc + 3).to_int()
+  let taken_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let not_taken_pc = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let stack_top = rt.sp - 1
   let cond = rt.stack.unsafe_get(stack_top).to_uint()
+  rt.sp = stack_top
   if cond != 0U {
-    shuffle_stack_for_branch(rt, stack_top, arity, drop_count)
-    rt.sp = stack_top - drop_count
-    rt.pc = target_pc
-    Running
+    rt.pc = taken_pc
   } else {
-    rt.sp = stack_top
-    rt.pc = rt.pc + 4
-    Running
+    rt.pc = not_taken_pc
   }
+  Running
 }
 
 ///|
 fn op_br_table(rt : Runtime) -> ReturnCode {
   let num_labels = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  let arity = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let stack_top = rt.sp - 1
   let index = rt.stack.unsafe_get(stack_top).to_uint().reinterpret_as_int()
+  rt.sp = stack_top
 
   // Select target: use index if in range, otherwise use default (last entry)
   let selected = if index >= 0 && index < num_labels {
@@ -160,16 +175,7 @@ fn op_br_table(rt : Runtime) -> ReturnCode {
   } else {
     num_labels
   }
-  // Each label entry is 2 immediates: (target_pc, drop_count)
-  // Labels start at pc + 3
-  let label_base = rt.pc + 3 + selected * 2
-  let target_pc = rt.ops.unsafe_get(label_base).to_int()
-  let drop_count = rt.ops
-    .unsafe_get(label_base + 1)
-    .reinterpret_as_int64()
-    .to_int()
-  shuffle_stack_for_branch(rt, stack_top, arity, drop_count)
-  rt.sp = stack_top - drop_count
+  let target_pc = rt.ops.unsafe_get(rt.pc + 2 + selected).to_int()
   rt.pc = target_pc
   Running
 }
@@ -177,86 +183,55 @@ fn op_br_table(rt : Runtime) -> ReturnCode {
 ///|
 fn op_br_on_null(rt : Runtime) -> ReturnCode {
   let target_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  let arity = rt.ops.unsafe_get(rt.pc + 2).to_int()
-  let drop_count = rt.ops.unsafe_get(rt.pc + 3).to_int()
-  // Pop reference value (refs are stored as Int64, -1 = null)
+  let not_taken_pc = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let stack_top = rt.sp - 1
   let ref_val = rt.stack.unsafe_get(stack_top)
-  let ref_idx = ref_val.to_int()
-  if ref_idx == -1 {
-    // Ref is consumed (not passed to branch target), just shuffle remaining values
-    shuffle_stack_for_branch(rt, stack_top, arity, drop_count)
-    rt.sp = stack_top - drop_count
+  if ref_val.reinterpret_as_int64() == -1L {
+    rt.sp = stack_top
     rt.pc = target_pc
-    Running
   } else {
-    // Not null - push back the value and continue
-    rt.stack.unsafe_set(stack_top, ref_val)
-    rt.pc = rt.pc + 4
-    Running
+    rt.pc = not_taken_pc
   }
+  Running
 }
 
 ///|
 fn op_br_on_non_null(rt : Runtime) -> ReturnCode {
   let target_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  let arity = rt.ops.unsafe_get(rt.pc + 2).to_int()
-  let drop_count = rt.ops.unsafe_get(rt.pc + 3).to_int()
-  // Pop reference value (refs are stored as Int64, -1 = null)
+  let not_taken_pc = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let stack_top = rt.sp - 1
   let ref_val = rt.stack.unsafe_get(stack_top)
-  let ref_idx = ref_val.to_int()
-  if ref_idx != -1 {
-    // Push ref back first - arity values include the ref we just pushed
-    rt.stack.unsafe_set(stack_top, ref_val)
-    let stack_top = stack_top + 1
-    shuffle_stack_for_branch(rt, stack_top, arity, drop_count)
-    rt.sp = stack_top - drop_count
+  if ref_val.reinterpret_as_int64() != -1L {
     rt.pc = target_pc
-    Running
   } else {
-    // Null - don't push anything, continue
     rt.sp = stack_top
-    rt.pc = rt.pc + 4
-    Running
+    rt.pc = not_taken_pc
   }
+  Running
 }
 
 ///|
 /// Call a local (module-defined) function.
-/// Immediates (all computed at compile time):
+/// Immediates:
 ///   pc+1: callee_pc
-///   pc+2: num_params
-///   pc+3: num_locals
-///   pc+4: max_stack_height
+///   pc+2: frame_offset (relative to bp, args already in place)
 /// Uses native stack: recursively calls execute() for the callee.
-fn op_call_local(rt : Runtime) -> ReturnCode {
+fn op_call(rt : Runtime) -> ReturnCode {
   let callee_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  let num_params = rt.ops.unsafe_get(rt.pc + 2).to_int()
-  let num_locals = rt.ops.unsafe_get(rt.pc + 3).to_int()
-  let max_stack_height = rt.ops.unsafe_get(rt.pc + 4).to_int()
-
-  // Unified stack: arguments are already on stack, they become callee's first locals
-  let new_bp = rt.sp - num_params
-
-  // Check stack capacity for the callee
-  if new_bp + max_stack_height > rt.stack.length() {
-    rt.ctx.error_detail = "Stack overflow: need \{max_stack_height} slots"
-    return Trap
-  }
-
-  // Save caller state on native stack
+  let frame_offset = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let caller_bp = rt.bp
   let caller_num_locals = rt.num_locals
-  let return_pc = rt.pc + 5 // Next instruction after call (op + 4 immediates)
+  let caller_sp = rt.sp
+  let return_pc = rt.pc + 3
 
   // Set up callee frame (locals will be initialized by compiled code)
-  rt.sp = new_bp + num_params
+  let new_bp = caller_bp + frame_offset
   rt.bp = new_bp
-  rt.num_locals = num_locals
 
   // Recursively execute callee using native stack
-  let _ = execute_call(rt, callee_pc, caller_bp, caller_num_locals, return_pc) catch {
+  let _ = execute_call(
+    rt, callee_pc, caller_bp, caller_num_locals, caller_sp, return_pc,
+  ) catch {
     err => {
       rt.ctx.error_detail = err.to_string()
       return Trap
@@ -266,9 +241,10 @@ fn op_call_local(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-/// Call an imported function. Immediate is the original func_idx.
+/// Call an imported function. Immediates: import_idx, frame_offset.
 fn op_call_import(rt : Runtime) -> ReturnCode {
   let func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let _frame_offset = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let num_imported_funcs = rt.ctx.num_imported_funcs
   let type_idx = get_func_type_idx(rt.ctx.module_, func_idx, num_imported_funcs)
   if type_idx < 0 {
@@ -286,43 +262,53 @@ fn op_call_import(rt : Runtime) -> ReturnCode {
     args,
     func_type.results.length(),
   )
-  rt.pc = rt.pc + 2
+  rt.pc = rt.pc + 3
   Running
+}
+
+///|
+/// Call a function in another module (not supported in MoonBit runtime).
+fn op_call_external(rt : Runtime) -> ReturnCode {
+  rt.ctx.error_detail = "call_external not implemented"
+  Trap
+}
+
+///|
+/// Copy results to bp and return a return code.
+fn finish_function_return(rt : Runtime, num_results : Int) -> ReturnCode {
+  let return_start = rt.sp - num_results
+  for i = 0; i < num_results; i = i + 1 {
+    rt.stack.unsafe_set(rt.bp + i, rt.stack.unsafe_get(return_start + i))
+  }
+  rt.sp = rt.bp + num_results
+  if rt.bp == 0 {
+    Terminated
+  } else {
+    Returned
+  }
 }
 
 ///|
 /// Return from a function. Uses native stack approach.
 /// Copies return values to bp position and returns Returned for non-entry calls.
-/// The caller's execute_call will restore caller state.
 fn op_return(rt : Runtime) -> ReturnCode {
-  // Read result count from immediate (emitted at compile time)
-  let num_return_values = rt.ops
-    .unsafe_get(rt.pc + 1)
-    .reinterpret_as_int64()
-    .to_int()
+  let num_return_values = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  finish_function_return(rt, num_return_values)
+}
 
-  // Unified stack return:
-  // Return values are the top num_return_values values on the stack
-  // Copy them in-place to: stack[bp .. bp + num_return_values)
-  let return_start = rt.sp - num_return_values
+///|
+/// End of function (implicit return).
+fn op_end(rt : Runtime) -> ReturnCode {
+  let num_results = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  finish_function_return(rt, num_results)
+}
 
-  // Copy return values to start of frame
-  for i = 0; i < num_return_values; i = i + 1 {
-    rt.stack.unsafe_set(rt.bp + i, rt.stack.unsafe_get(return_start + i))
-  }
-
-  // Trim stack to keep only return values at frame position
-  let stack_top = rt.bp + num_return_values
-
-  // Check if this is the entry function (bp == 0) or a nested call
+///|
+/// Function exit without copying (results already placed at bp).
+fn op_func_exit(rt : Runtime) -> ReturnCode {
   if rt.bp == 0 {
-    // Entry function returning - results are now at stack[0..num_return_values)
-    rt.sp = stack_top
     Terminated
   } else {
-    // Nested call returning - let native stack unwind
-    // Caller's execute_call will restore bp, num_locals, pc
-    rt.sp = stack_top
     Returned
   }
 }
@@ -332,11 +318,13 @@ fn op_return(rt : Runtime) -> ReturnCode {
 fn op_call_indirect(rt : Runtime) -> ReturnCode {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let table_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
+  let frame_offset = rt.ops.unsafe_get(rt.pc + 3).to_int()
 
   // Pop the function index from the stack
   let stack_top = rt.sp - 1
   let elem_idx = rt.stack.unsafe_get(stack_top).to_uint().reinterpret_as_int()
   rt.sp = stack_top
+  let caller_sp = rt.sp
 
   // Check table bounds
   if table_idx < 0 || table_idx >= rt.ctx.tables.length() {
@@ -391,7 +379,7 @@ fn op_call_indirect(rt : Runtime) -> ReturnCode {
     let results = (ext_func.func)(args)
     // Push results back onto the stack
     let rt = push_results(rt, results)
-    rt.pc = rt.pc + 3
+    rt.pc = rt.pc + 4
     return Running
   }
   let num_imported_funcs = rt.ctx.num_imported_funcs
@@ -426,7 +414,7 @@ fn op_call_indirect(rt : Runtime) -> ReturnCode {
       args,
       expected_type.results.length(),
     )
-    rt.pc = rt.pc + 3
+    rt.pc = rt.pc + 4
     return Running
   }
 
@@ -434,14 +422,15 @@ fn op_call_indirect(rt : Runtime) -> ReturnCode {
   let local_func_idx = func_idx - num_imported_funcs
 
   // Check function index bounds
-  if local_func_idx < 0 || local_func_idx >= rt.ctx.module_.codes.length() {
+  if local_func_idx < 0 ||
+    local_func_idx >= rt.ctx.compiled.func_entries.length() {
     rt.ctx.error_detail = "call_indirect: invalid function index"
     return Trap
   }
 
   // Get the actual function type
   let actual_type_idx = rt.ctx.module_.funcs[local_func_idx].reinterpret_as_int()
-  let actual_type = match
+  let _actual_type = match
     get_func_type_or_error(rt, actual_type_idx, "call_indirect") {
     Some(found) => found
     None => return Trap
@@ -453,34 +442,20 @@ fn op_call_indirect(rt : Runtime) -> ReturnCode {
     rt.ctx.error_detail = "indirect call type mismatch"
     return Trap
   }
-  let code = rt.ctx.module_.codes[local_func_idx]
-  guard code.compiled is Some(callee_pc) else {
-    rt.ctx.error_detail = "Function not compiled: \{func_idx}"
-    return Trap
-  }
-
-  // Unified stack: arguments are already on stack, they become callee's first locals
-  let num_params = actual_type.params.length()
-  let new_bp = rt.sp - num_params
-
-  // Check stack capacity for the callee
-  if new_bp + code.max_stack_height > rt.stack.length() {
-    rt.ctx.error_detail = "Stack overflow: need \{code.max_stack_height} slots"
-    return Trap
-  }
+  let callee_pc = rt.ctx.compiled.func_entries[local_func_idx]
 
   // Save caller state on native stack
   let caller_bp = rt.bp
   let caller_num_locals = rt.num_locals
-  let return_pc = rt.pc + 3 // Next instruction after call_indirect
+  let return_pc = rt.pc + 4 // Next instruction after call_indirect
 
   // Set up callee frame (locals will be initialized by compiled code)
-  rt.sp = new_bp + num_params
-  rt.bp = new_bp
-  rt.num_locals = num_params + code.locals.length()
+  rt.bp = caller_bp + frame_offset
 
   // Recursively execute callee using native stack
-  let _ = execute_call(rt, callee_pc, caller_bp, caller_num_locals, return_pc) catch {
+  let _ = execute_call(
+    rt, callee_pc, caller_bp, caller_num_locals, caller_sp, return_pc,
+  ) catch {
     err => {
       rt.ctx.error_detail = err.to_string()
       return Trap
@@ -642,11 +617,8 @@ fn op_return_call_indirect(rt : Runtime) -> ReturnCode {
   if check_code == Trap {
     return Trap
   }
-  let code = rt.ctx.module_.codes[local_func_idx]
-  guard code.compiled is Some(callee_pc) else {
-    rt.ctx.error_detail = "Function not compiled: \{func_idx}"
-    return Trap
-  }
+  let callee_pc = rt.ctx.compiled.func_entries[local_func_idx]
+  let num_locals = rt.ctx.compiled.func_num_locals[local_func_idx]
 
   // Tail call: reuse current frame
   // Move arguments in-place from stack top to sp position
@@ -662,7 +634,7 @@ fn op_return_call_indirect(rt : Runtime) -> ReturnCode {
 
   // Trim stack to bp + num_params (locals will be initialized by compiled code)
   rt.sp = rt.bp + num_params
-  rt.num_locals = num_params + code.locals.length()
+  rt.num_locals = num_locals
   rt.pc = callee_pc
   Running
 }
@@ -671,6 +643,7 @@ fn op_return_call_indirect(rt : Runtime) -> ReturnCode {
 /// Call a function via reference. Uses native stack approach.
 fn op_call_ref(rt : Runtime) -> ReturnCode {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let frame_offset = rt.ops.unsafe_get(rt.pc + 2).to_int()
 
   // Pop the function reference from the stack (stored as Int64, -1 = null)
   let stack_top = rt.sp - 1
@@ -679,6 +652,7 @@ fn op_call_ref(rt : Runtime) -> ReturnCode {
     .reinterpret_as_int64()
     .to_int()
   rt.sp = stack_top
+  let caller_sp = rt.sp
   if func_ref_raw == -1 {
     rt.ctx.error_detail = "call_ref: null function reference"
     return Trap
@@ -724,13 +698,14 @@ fn op_call_ref(rt : Runtime) -> ReturnCode {
       args,
       func_type.results.length(),
     )
-    rt.pc = rt.pc + 2
+    rt.pc = rt.pc + 3
     return Running
   }
 
   // Adjust index for local functions
   let local_func_idx = func_idx - num_imported_funcs
-  if local_func_idx < 0 || local_func_idx >= rt.ctx.module_.codes.length() {
+  if local_func_idx < 0 ||
+    local_func_idx >= rt.ctx.compiled.func_entries.length() {
     rt.ctx.error_detail = "call_ref: invalid function index"
     return Trap
   }
@@ -748,39 +723,26 @@ fn op_call_ref(rt : Runtime) -> ReturnCode {
   if check_code == Trap {
     return Trap
   }
-  let code = rt.ctx.module_.codes[local_func_idx]
-  guard code.compiled is Some(callee_pc) else {
-    rt.ctx.error_detail = "Function not compiled: \{func_idx}"
-    return Trap
-  }
-
-  // Unified stack: arguments are already on stack, they become callee's first locals
-  let num_params = func_type.params.length()
-  let new_bp = rt.sp - num_params
-
-  // Check stack capacity for the callee
-  if new_bp + code.max_stack_height > rt.stack.length() {
-    rt.ctx.error_detail = "Stack overflow: need \{code.max_stack_height} slots"
-    return Trap
-  }
+  let callee_pc = rt.ctx.compiled.func_entries[local_func_idx]
 
   // Save caller state on native stack
   let caller_bp = rt.bp
   let caller_num_locals = rt.num_locals
-  let return_pc = rt.pc + 2 // Next instruction after call_ref
+  let return_pc = rt.pc + 3 // Next instruction after call_ref
 
   // Set up callee frame (locals will be initialized by compiled code)
-  rt.sp = new_bp + num_params
-  rt.bp = new_bp
-  rt.num_locals = num_params + code.locals.length()
+  rt.bp = caller_bp + frame_offset
 
   // Recursively execute callee using native stack
-  let _ = execute_call(rt, callee_pc, caller_bp, caller_num_locals, return_pc) catch {
+  let _ = execute_call(
+    rt, callee_pc, caller_bp, caller_num_locals, caller_sp, return_pc,
+  ) catch {
     err => {
       rt.ctx.error_detail = err.to_string()
       return Trap
     }
   }
+  rt.sp = caller_bp + frame_offset + func_type.results.length()
   Running
 }
 
@@ -864,11 +826,8 @@ fn op_return_call_ref(rt : Runtime) -> ReturnCode {
   if check_code == Trap {
     return Trap
   }
-  let code = rt.ctx.module_.codes[local_func_idx]
-  guard code.compiled is Some(callee_pc) else {
-    rt.ctx.error_detail = "Function not compiled: \{func_idx}"
-    return Trap
-  }
+  let callee_pc = rt.ctx.compiled.func_entries[local_func_idx]
+  let num_locals = rt.ctx.compiled.func_num_locals[local_func_idx]
 
   // Tail call: reuse current frame
   // Move arguments in-place from stack top to sp position
@@ -884,7 +843,7 @@ fn op_return_call_ref(rt : Runtime) -> ReturnCode {
 
   // Trim stack to bp + num_params (locals will be initialized by compiled code)
   rt.sp = rt.bp + num_params
-  rt.num_locals = num_params + code.locals.length()
+  rt.num_locals = num_locals
   rt.pc = callee_pc
   Running
 }
@@ -896,72 +855,8 @@ fn op_nop(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-/// Batch initialize locals with zeros (for i32/i64/f32/f64).
-/// Immediate: count of zeros to push.
-fn op_init_zeros(rt : Runtime) -> ReturnCode {
-  let count = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  let mut sp = rt.sp
-  for i = 0; i < count; i = i + 1 {
-    rt.stack.unsafe_set(sp, 0UL)
-    sp += 1
-  }
-  rt.sp = sp
-  rt.pc = rt.pc + 2
-  Running
-}
-
-///|
-/// Batch initialize locals with null refs (for reference types).
-/// Immediate: count of null refs to push.
-fn op_init_null_refs(rt : Runtime) -> ReturnCode {
-  let count = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  let null_ref = (-1L).reinterpret_as_uint64()
-  let mut sp = rt.sp
-  for i = 0; i < count; i = i + 1 {
-    rt.stack.unsafe_set(sp, null_ref)
-    sp += 1
-  }
-  rt.sp = sp
-  rt.pc = rt.pc + 2
-  Running
-}
-
-///|
-/// Trap for unsupported local type (V128, etc.)
-fn op_local_init_unsupported(rt : Runtime) -> ReturnCode {
-  rt.ctx.error_detail = "Unsupported local type"
-  Trap
-}
-
-///|
 fn op_unreachable(rt : Runtime) -> ReturnCode {
   rt.ctx.error_detail = "unreachable"
-  Trap
-}
-
-///|
-fn op_throw(rt : Runtime) -> ReturnCode {
-  let tag_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  rt.ctx.error_detail = "throw not implemented for tag \{tag_idx}"
-  Trap
-}
-
-///|
-fn op_rethrow(rt : Runtime) -> ReturnCode {
-  let label_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  rt.ctx.error_detail = "rethrow not implemented for label \{label_idx}"
-  Trap
-}
-
-///|
-fn op_simd_unimplemented(rt : Runtime) -> ReturnCode {
-  rt.ctx.error_detail = "simd instruction not implemented"
-  Trap
-}
-
-///|
-fn op_atomic_unimplemented(rt : Runtime) -> ReturnCode {
-  rt.ctx.error_detail = "atomic instruction not implemented"
   Trap
 }
 
@@ -971,8 +866,8 @@ fn op_atomic_unimplemented(rt : Runtime) -> ReturnCode {
 
 ///|
 fn op_table_init(rt : Runtime) -> ReturnCode {
-  let table_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  let elem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
+  let elem_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
+  let table_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let stack_top = rt.sp - 3
   let n = rt.stack.unsafe_get(rt.sp - 1).to_uint().reinterpret_as_int()
   let src = rt.stack.unsafe_get(rt.sp - 2).to_uint().reinterpret_as_int()

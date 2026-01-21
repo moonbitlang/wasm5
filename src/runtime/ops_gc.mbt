@@ -1352,76 +1352,42 @@ fn op_ref_cast(rt : Runtime) -> ReturnCode {
 /// br_on_cast label target_type target_nullable
 fn op_br_on_cast(rt : Runtime) -> ReturnCode {
   let target_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  let arity = rt.ops.unsafe_get(rt.pc + 2).to_int()
-  let drop_count = rt.ops.unsafe_get(rt.pc + 3).to_int()
-  let target_type = rt.ops.unsafe_get(rt.pc + 4).to_int()
-  let target_nullable = rt.ops.unsafe_get(rt.pc + 5).to_int() != 0
-  let sp = rt.sp - 1
-  let ref_value = rt.stack.unsafe_get(sp)
+  let not_taken_pc = rt.ops.unsafe_get(rt.pc + 2).to_int()
+  let target_type = rt.ops.unsafe_get(rt.pc + 3).to_int()
+  let target_nullable = rt.ops.unsafe_get(rt.pc + 4).to_int() != 0
+  let ref_value = rt.stack.unsafe_get(rt.sp - 1)
 
   // Check if cast succeeds using proper type checking
   let cast_succeeds = gc_ref_matches_type(
     rt, ref_value, target_type, target_nullable,
   )
   if cast_succeeds {
-    // Branch - copy result values and jump
-    if drop_count > 0 && arity > 0 {
-      let result_start = rt.sp - arity
-      let target_start = result_start - drop_count
-      for i = 0; i < arity; i = i + 1 {
-        rt.stack.unsafe_set(
-          target_start + i,
-          rt.stack.unsafe_get(result_start + i),
-        )
-      }
-    }
-    rt.sp = rt.sp - drop_count
     rt.pc = target_pc
-    Running
   } else {
-    // Continue - leave reference on stack
-    rt.sp = sp + 1
-    rt.pc = rt.pc + 6
-    Running
+    rt.pc = not_taken_pc
   }
+  Running
 }
 
 ///|
 /// br_on_cast_fail label target_type target_nullable
 fn op_br_on_cast_fail(rt : Runtime) -> ReturnCode {
   let target_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
-  let arity = rt.ops.unsafe_get(rt.pc + 2).to_int()
-  let drop_count = rt.ops.unsafe_get(rt.pc + 3).to_int()
-  let target_type = rt.ops.unsafe_get(rt.pc + 4).to_int()
-  let target_nullable = rt.ops.unsafe_get(rt.pc + 5).to_int() != 0
-  let sp = rt.sp - 1
-  let ref_value = rt.stack.unsafe_get(sp)
+  let not_taken_pc = rt.ops.unsafe_get(rt.pc + 2).to_int()
+  let target_type = rt.ops.unsafe_get(rt.pc + 3).to_int()
+  let target_nullable = rt.ops.unsafe_get(rt.pc + 4).to_int() != 0
+  let ref_value = rt.stack.unsafe_get(rt.sp - 1)
 
   // Check if cast fails using proper type checking
   let cast_fails = not(
     gc_ref_matches_type(rt, ref_value, target_type, target_nullable),
   )
   if cast_fails {
-    // Branch
-    if drop_count > 0 && arity > 0 {
-      let result_start = rt.sp - arity
-      let target_start = result_start - drop_count
-      for i = 0; i < arity; i = i + 1 {
-        rt.stack.unsafe_set(
-          target_start + i,
-          rt.stack.unsafe_get(result_start + i),
-        )
-      }
-    }
-    rt.sp = rt.sp - drop_count
     rt.pc = target_pc
-    Running
   } else {
-    // Continue - leave reference on stack
-    rt.sp = sp + 1
-    rt.pc = rt.pc + 6
-    Running
+    rt.pc = not_taken_pc
   }
+  Running
 }
 
 // =============================================================================
