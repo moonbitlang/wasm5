@@ -1,0 +1,169 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/wasm5/src/validate_component"
+
+import(
+  "moonbitlang/wasm5/src/core"
+)
+
+// Values
+pub fn has_dot_character(String) -> Bool
+
+pub fn is_kebab_case(String) -> Bool
+
+pub fn is_valid_export_name(Bytes) -> Bool
+
+pub fn is_valid_extern_name(Bytes) -> Bool
+
+pub fn is_valid_import_name(Bytes) -> Bool
+
+pub fn to_lowercase(String) -> String
+
+pub fn validate_component(@core.Component) -> ComponentValidationError?
+
+pub fn validate_interface_name_detailed(String) -> String?
+
+// Errors
+pub(all) suberror ComponentValidationError {
+  TypeIndexOutOfBounds(UInt)
+  FuncIndexOutOfBounds(UInt)
+  InstanceIndexOutOfBounds(UInt)
+  ComponentIndexOutOfBounds(UInt)
+  ModuleIndexOutOfBounds(UInt)
+  CoreTypeIndexOutOfBounds(UInt)
+  CoreFuncIndexOutOfBounds(UInt)
+  CoreInstanceIndexOutOfBounds(UInt)
+  CoreModuleIndexOutOfBounds(UInt)
+  CoreTableIndexOutOfBounds(UInt)
+  CoreMemoryIndexOutOfBounds(UInt)
+  CoreGlobalIndexOutOfBounds(UInt)
+  CoreTagIndexOutOfBounds(UInt)
+  ValueIndexOutOfBounds(UInt)
+  IndexOutOfBounds(String)
+  NotAFunctionType(UInt)
+  NotAnInstanceType(UInt)
+  NotAComponentType(UInt)
+  NotAModuleType(UInt)
+  NotADefinedType(UInt)
+  NotAResourceType(UInt)
+  NotALocalResource(UInt)
+  ResourceTypeMismatch(String)
+  TypeMismatch(String)
+  TypeNotValidAsExport(String)
+  TypeNotValidAsImport(String)
+  FuncNotValidAsExport(String)
+  FuncNotValidAsImport(String)
+  InvalidExternName(String)
+  InvalidExportName(String)
+  InvalidImportName(String)
+  MissingImport(String)
+  MissingExport(String)
+  ExportTypeMismatch(String)
+  DuplicateExportName(String)
+  DuplicateName(String)
+  NotKebabCase(String)
+  NameCannotBeEmpty
+  FailedToFindDotCharacter(String)
+  InvalidBase64(String)
+  UnexpectedCharacter(Char)
+  CanonicalOptionMemoryRequired
+  CanonicalOptionReallocRequired
+  CanonicalOptionEncodingRequired
+  ResourceNotDefinedInComponent(String)
+  ResourceNameNotInContext(String)
+  FunctionResourceNameMismatch(String, String)
+  BorrowInResult(String)
+  InvalidOuterAliasCount(UInt)
+  UnknownModule(String)
+  LimitsMismatch(String)
+  InvalidRepresentation(String)
+  WrongDestructorSignature(String)
+  TypeSizeExceedsLimit
+}
+pub impl Show for ComponentValidationError
+
+// Types and methods
+pub(all) struct ComponentValidationContext {
+  mut types : Array[@core.ComponentTypeDef]
+  mut core_types : Array[@core.CoreType]
+  mut funcs : Array[UInt]
+  mut instances : Array[UInt]
+  mut components : Array[UInt]
+  mut nested_components : Array[@core.Component]
+  mut modules : Array[UInt]
+  mut values : Array[@core.ComponentValType]
+  mut core_funcs : Array[UInt]
+  mut core_instances : Array[UInt]
+  mut core_modules : Array[UInt]
+  mut core_module_exports : Array[Array[CoreExportInfo]]
+  mut core_module_imports : Array[Array[CoreImportInfo]]
+  mut core_tables : Array[UInt]
+  mut core_memories : Array[UInt]
+  mut core_globals : Array[UInt]
+  mut core_tags : Array[UInt]
+  mut core_instance_exports : Array[Array[CoreExportInfo]]
+  mut instance_exports : Array[Array[ExportInfo]]
+  mut resources : Array[ResourceInfo]
+  mut export_names : Array[String]
+  mut import_names : Array[String]
+  mut named_types : Array[UInt]
+  mut nesting_depth : UInt
+  mut type_sizes : Array[UInt64]
+  mut component_sizes : Array[UInt64]
+  mut instance_sizes : Array[UInt64]
+  mut errors : Array[ComponentValidationError]
+}
+pub fn ComponentValidationContext::add_error(Self, ComponentValidationError) -> Unit
+pub fn ComponentValidationContext::get_errors(Self) -> Array[ComponentValidationError]
+pub fn ComponentValidationContext::is_valid(Self) -> Bool
+pub fn ComponentValidationContext::new() -> Self
+
+pub(all) struct CoreExportInfo {
+  name : String
+  kind : CoreExportKind
+  memory64 : Bool?
+}
+
+pub(all) enum CoreExportKind {
+  Func
+  Table
+  Memory
+  Global
+  Tag
+}
+pub impl Eq for CoreExportKind
+pub impl Show for CoreExportKind
+
+pub(all) struct CoreImportInfo {
+  module_ : String
+  name : String
+  kind : CoreExportKind
+  memory64 : Bool?
+}
+
+pub(all) struct ExportInfo {
+  name : String
+  kind : ExportKind
+  type_idx : UInt?
+}
+
+pub(all) enum ExportKind {
+  Func
+  Type
+  Instance
+  Component
+  Module
+  Value
+}
+pub impl Eq for ExportKind
+pub impl Show for ExportKind
+
+pub(all) struct ResourceInfo {
+  type_idx : UInt
+  is_local : Bool
+  name : String?
+}
+
+// Type aliases
+
+// Traits
+

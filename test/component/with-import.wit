@@ -1,0 +1,10 @@
+package test:imports;
+
+interface logger {
+  log: func(message: string);
+}
+
+world imports-world {
+  import logger;
+  export run: func();
+}
