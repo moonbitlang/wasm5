@@ -2,7 +2,7 @@
   "description": "Test manifest for WebAssembly spec tests",
   "version": "1.0.0",
   "tests": [
-    {"file": "address.wast", "subdir": "", "moonbit": true, "cruntime": false, "disabled_reason": "cruntime SIGSEGV"},
+    {"file": "address.wast", "subdir": "", "moonbit": true, "cruntime": true},
     {"file": "align.wast", "subdir": "", "moonbit": true, "cruntime": true},
     {"file": "annotations.wast", "subdir": "", "disabled": true, "reason": "WAT text format test"},
     {"file": "binary-leb128.wast", "subdir": "", "moonbit": true, "cruntime": true},
