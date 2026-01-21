@@ -272,7 +272,7 @@ node --stack-size=8192 test/selfhost/test_wasm_gc_recursive.mjs
 
 - `src/validate/validate_helpers.mbt` - Validation-time subtype checking
 - `src/runtime/ops_gc.mbt` - GC instruction runtime implementation
-- `src/runtime/compile_emit.mbt` - GC instruction compilation
+- `src/compile/compiler.mbt` - Unified compiler (GC instruction compilation)
 - `test/selfhost/` - Self-hosting test scripts
 
 ## Type Encoding

@@ -114,7 +114,7 @@ test "runtime call compiled non func export" {
 
 ///|
 test "runtime call compiled local errors" {
-  // Test that unsupported local type (V128) causes error during call.
+  // V128 locals are valid even if SIMD ops are unimplemented.
   let func_type : @core.FuncType = { params: [], results: [] }
   let code_bad : @core.Code = {
     locals: [V128],
@@ -131,12 +131,6 @@ test "runtime call compiled local errors" {
     None,
   )
   let rt_bad = Runtime::load_with_resolver(module_bad, ImportResolver::new())
-  let mut saw_bad = false
-  let _ = rt_bad.call_compiled(b"bad", []) catch {
-    _ => {
-      saw_bad = true
-      []
-    }
-  }
-  assert_eq(saw_bad, true)
+  let results = rt_bad.call_compiled(b"bad", [])
+  assert_eq(results.length(), 0)
 }
