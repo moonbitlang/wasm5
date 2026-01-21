@@ -7,6 +7,9 @@ pub struct CRuntime {
   memory : FixedArray[Byte] // Linear memory (pre-allocated to max size)
   memory_pages : FixedArray[Int] // Current size in pages (single element array for FFI mutability)
   memory_max_size : Int // Maximum memory size in bytes (for memory.grow bounds)
+  output_buffer : FixedArray[Byte] // Collected spectest output bytes
+  output_length : FixedArray[Int] // Current output length (single element array for FFI mutability)
+  output_capacity : Int // Output buffer capacity in bytes
   tables : FixedArray[FixedArray[Int]] // Tables of function indices
   // Flattened table data for C FFI
   tables_flat : FixedArray[Int] // All tables concatenated
@@ -20,6 +23,7 @@ pub struct CRuntime {
   // Import function metadata for op_call_import
   import_num_params : FixedArray[Int] // Number of params for each imported function
   import_num_results : FixedArray[Int] // Number of results for each imported function
+  import_handler_ids : FixedArray[Int] // Host handler id for each imported function
   // Cross-module import resolution for call_indirect
   import_context_ptrs : FixedArray[Int64] // Target context pointer for each import (-1 if not resolved)
   import_target_func_idxs : FixedArray[Int] // Target function index for each import
@@ -121,11 +125,15 @@ fn build_runtime(
   module_ : @core.Module,
   compiled : CompiledModule,
   resolved_imports : Map[Int, ResolvedImport],
+  resolved_imported_globals : Map[Int, UInt64],
 ) -> CRuntime {
   // Initialize globals from module
-  let globals = init_globals(module_)
+  let globals = init_globals(module_, resolved_imported_globals)
   // Initialize memory from module (pre-allocated to max size)
-  let (memory, memory_pages, memory_max_size) = init_memory(module_)
+  let (memory, memory_pages, memory_max_size) = init_memory(module_, globals)
+  let output_buffer = FixedArray::make(default_output_capacity, b'\x00')
+  let output_length : FixedArray[Int] = [0]
+  let output_capacity = default_output_capacity
   // Initialize tables from module (needs globals for element offset evaluation)
   let (tables, table_logical_sizes, table_max_sizes) = init_tables(
     module_, globals,
@@ -140,6 +148,7 @@ fn build_runtime(
   )
   // Build import function metadata for op_call_import
   let (import_num_params, import_num_results) = build_import_info(module_)
+  let import_handler_ids = build_import_handlers(module_)
   // Flatten data segments for bulk memory operations
   let (data_segments_flat, data_segment_offsets, data_segment_sizes) = flatten_data_segments(
     module_,
@@ -162,6 +171,9 @@ fn build_runtime(
     memory,
     memory_pages,
     memory_max_size,
+    output_buffer,
+    output_length,
+    output_capacity,
     tables,
     tables_flat,
     table_offsets,
@@ -172,6 +184,7 @@ fn build_runtime(
     type_result_counts,
     import_num_params,
     import_num_results,
+    import_handler_ids,
     import_context_ptrs,
     import_target_func_idxs,
     data_segments_flat,
@@ -190,7 +203,7 @@ fn build_runtime(
 /// Load a module and compile it for C runtime execution.
 pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
   let compiled = compile(module_)
-  build_runtime(module_, compiled, {})
+  build_runtime(module_, compiled, {}, {})
 }
 
 ///|
@@ -200,7 +213,18 @@ pub fn CRuntime::load_with_imports(
   resolved_imports : Map[Int, ResolvedImport],
 ) -> CRuntime {
   let compiled = compile_with_imports(module_, resolved_imports)
-  build_runtime(module_, compiled, resolved_imports)
+  build_runtime(module_, compiled, resolved_imports, {})
+}
+
+///|
+/// Load a module with resolved imports and imported globals.
+pub fn CRuntime::load_with_imports_and_globals(
+  module_ : @core.Module,
+  resolved_imports : Map[Int, ResolvedImport],
+  resolved_imported_globals : Map[Int, UInt64],
+) -> CRuntime {
+  let compiled = compile_with_imports(module_, resolved_imports)
+  build_runtime(module_, compiled, resolved_imports, resolved_imported_globals)
 }
 
 ///|
@@ -236,6 +260,10 @@ pub fn CRuntime::get_context_ptr(self : CRuntime) -> Int64 {
       self.module_.types.length(),
       self.import_num_params,
       self.import_num_results,
+      self.import_handler_ids,
+      self.output_buffer,
+      self.output_length,
+      self.output_capacity,
       self.import_context_ptrs,
       self.import_target_func_idxs,
       self.data_segments_flat,
@@ -265,6 +293,62 @@ pub fn CRuntime::free_context(self : CRuntime) -> Unit {
 /// Get the underlying module.
 pub fn CRuntime::get_module(self : CRuntime) -> @core.Module {
   self.module_
+}
+
+///|
+/// Get the globals array from the runtime (decoded to Value).
+pub fn CRuntime::get_globals(self : CRuntime) -> Array[Value] {
+  let globals : Array[Value] = []
+  let mut idx = 0
+  for imp in self.module_.imports {
+    match imp.desc {
+      Global(gt) => {
+        if idx >= 0 && idx < self.globals.length() {
+          globals.push(u64_to_value(self.globals[idx], gt.val_type))
+        }
+        idx += 1
+      }
+      _ => ()
+    }
+  }
+  for g in self.module_.globals {
+    if idx >= 0 && idx < self.globals.length() {
+      globals.push(u64_to_value(self.globals[idx], g.type_.val_type))
+    }
+    idx += 1
+  }
+  globals
+}
+
+///|
+/// Get collected spectest output as lines
+pub fn CRuntime::get_output(self : CRuntime) -> Array[String] {
+  let len = self.output_length[0]
+  if len <= 0 {
+    return []
+  }
+  let safe_len = if len > self.output_capacity {
+    self.output_capacity
+  } else {
+    len
+  }
+  let bytes : Array[Byte] = Array::make(safe_len, b'\x00')
+  for i in 0..<safe_len {
+    bytes[i] = self.output_buffer[i]
+  }
+  let text = @utf8.decode(Bytes::from_array(bytes)) catch { _ => "" }
+  let lines = text.split("\n").map(fn(view) { view.to_string() }).to_array()
+  if lines.length() > 0 && lines[lines.length() - 1] == "" {
+    let _ = lines.pop()
+
+  }
+  lines
+}
+
+///|
+/// Clear collected spectest output
+pub fn CRuntime::clear_output(self : CRuntime) -> Unit {
+  self.output_length[0] = 0
 }
 
 ///|
@@ -540,6 +624,76 @@ fn build_import_info(
 }
 
 ///|
+/// Host import handler ids for C runtime
+let host_import_none : Int = -1
+
+///|
+let host_import_spectest_print : Int = 0
+
+///|
+let host_import_spectest_print_i32 : Int = 1
+
+///|
+let host_import_spectest_print_i64 : Int = 2
+
+///|
+let host_import_spectest_print_f32 : Int = 3
+
+///|
+let host_import_spectest_print_f64 : Int = 4
+
+///|
+let host_import_spectest_print_i32_f32 : Int = 5
+
+///|
+let host_import_spectest_print_f64_f64 : Int = 6
+
+///|
+let host_import_spectest_print_char : Int = 7
+
+///|
+/// Build host import handler ids for imported functions
+fn build_import_handlers(module_ : @core.Module) -> FixedArray[Int] {
+  let handlers : Array[Int] = []
+  for imp in module_.imports {
+    match imp.desc {
+      Func(_) => {
+        let mut handler = host_import_none
+        if imp.module_ == b"spectest" {
+          if imp.name == b"print" {
+            handler = host_import_spectest_print
+          } else if imp.name == b"print_i32" {
+            handler = host_import_spectest_print_i32
+          } else if imp.name == b"print_i64" {
+            handler = host_import_spectest_print_i64
+          } else if imp.name == b"print_f32" {
+            handler = host_import_spectest_print_f32
+          } else if imp.name == b"print_f64" {
+            handler = host_import_spectest_print_f64
+          } else if imp.name == b"print_i32_f32" {
+            handler = host_import_spectest_print_i32_f32
+          } else if imp.name == b"print_f64_f64" {
+            handler = host_import_spectest_print_f64_f64
+          } else if imp.name == b"print_char" {
+            handler = host_import_spectest_print_char
+          }
+        }
+        handlers.push(handler)
+      }
+      _ => ()
+    }
+  }
+  if handlers.length() == 0 {
+    handlers.push(host_import_none)
+  }
+  FixedArray::from_array(handlers)
+}
+
+///|
+/// Default spectest output buffer capacity in bytes
+let default_output_capacity : Int = 65536
+
+///|
 /// Page size in bytes (64KB)
 let page_size : Int = 65536
 
@@ -554,6 +708,7 @@ let default_memory_max_pages : Int = 1024
 /// Returns (memory, memory_pages, max_size) where memory is pre-allocated to max size
 fn init_memory(
   module_ : @core.Module,
+  globals : FixedArray[UInt64],
 ) -> (FixedArray[Byte], FixedArray[Int], Int) {
   // Get initial and max memory size from first memory (if any)
   let initial_pages = if module_.mems.length() > 0 {
@@ -582,7 +737,7 @@ fn init_memory(
   // Initialize active data segments (write to initial region only)
   for data in module_.datas {
     if data.is_active {
-      let offset = eval_const_expr(data.offset).to_int()
+      let offset = eval_const_expr_with_globals(data.offset, globals).to_int()
       for i, b in data.init {
         let pos = offset + i
         let initial_size = initial_pages * page_size
@@ -612,7 +767,10 @@ fn count_imported_globals(module_ : @core.Module) -> Int {
 
 ///|
 /// Initialize globals from module's global section
-fn init_globals(module_ : @core.Module) -> FixedArray[UInt64] {
+fn init_globals(
+  module_ : @core.Module,
+  resolved_imported_globals : Map[Int, UInt64],
+) -> FixedArray[UInt64] {
   let num_imported = count_imported_globals(module_)
   let num_local = module_.globals.length()
   let total = num_imported + num_local
@@ -622,21 +780,25 @@ fn init_globals(module_ : @core.Module) -> FixedArray[UInt64] {
   for imp in module_.imports {
     match imp.desc {
       Global(gt) => {
-        // Default values for spectest globals
-        let value : UInt64 = match gt.val_type {
-          I32 => 666UL // spectest global_i32 = 666
-          I64 => 666UL // spectest global_i64 = 666
-          F32 => {
-            let f : Float = 666.6
-            f.reinterpret_as_uint().to_uint64()
-          }
-          F64 => {
-            let d : Double = 666.6
-            d.reinterpret_as_uint64()
-          }
-          FuncRef => 0xFFFFFFFF_FFFFFFFFUL // null funcref
-          ExternRef => 0xFFFFFFFF_FFFFFFFFUL // null externref
-          _ => 0UL
+        let value = match resolved_imported_globals.get(idx) {
+          Some(import_value) => import_value
+          None =>
+            // Default values for spectest globals
+            match gt.val_type {
+              I32 => 666UL // spectest global_i32 = 666
+              I64 => 666UL // spectest global_i64 = 666
+              F32 => {
+                let f : Float = 666.6
+                f.reinterpret_as_uint().to_uint64()
+              }
+              F64 => {
+                let d : Double = 666.6
+                d.reinterpret_as_uint64()
+              }
+              FuncRef => 0xFFFFFFFF_FFFFFFFFUL // null funcref
+              ExternRef => 0xFFFFFFFF_FFFFFFFFUL // null externref
+              _ => 0UL
+            }
         }
         globals[idx] = value
         idx += 1
@@ -770,12 +932,6 @@ fn eval_elem_expr(expr : @core.Expr) -> Int {
 }
 
 ///|
-/// Evaluate a constant expression to get initial value (simple version without globals)
-fn eval_const_expr(expr : @core.Expr) -> UInt64 {
-  eval_const_expr_with_globals(expr, FixedArray::make(1, 0UL))
-}
-
-///|
 /// Evaluate a constant expression with access to globals array
 fn eval_const_expr_with_globals(
   expr : @core.Expr,
@@ -888,6 +1044,10 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
           self.module_.types.length(),
           self.import_num_params,
           self.import_num_results,
+          self.import_handler_ids,
+          self.output_buffer,
+          self.output_length,
+          self.output_capacity,
           self.import_context_ptrs,
           self.import_target_func_idxs,
           self.data_segments_flat,
@@ -1040,6 +1200,10 @@ pub fn CRuntime::call_compiled(
           self.module_.types.length(),
           self.import_num_params,
           self.import_num_results,
+          self.import_handler_ids,
+          self.output_buffer,
+          self.output_length,
+          self.output_capacity,
           self.import_context_ptrs,
           self.import_target_func_idxs,
           self.data_segments_flat,

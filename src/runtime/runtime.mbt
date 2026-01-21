@@ -370,6 +370,18 @@ pub fn Runtime::get_tables(self : Runtime) -> Array[RuntimeTable] {
 }
 
 ///|
+/// Get collected spectest output
+pub fn Runtime::get_output(self : Runtime) -> Array[String] {
+  self.ctx.output
+}
+
+///|
+/// Clear collected spectest output
+pub fn Runtime::clear_output(self : Runtime) -> Unit {
+  self.ctx.output.clear()
+}
+
+///|
 /// Create a default import resolver with spectest module
 pub fn default_import_resolver() -> ImportResolver {
   let resolver = ImportResolver::new()
@@ -703,6 +715,8 @@ pub fn Runtime::load_with_resolver(
     }
     data_segments.push(segment)
   }
+  clear_spectest_output()
+  let output = get_spectest_output()
 
   // Compile module to universal IR
   let compiled = @compile.compile(m)
@@ -717,6 +731,7 @@ pub fn Runtime::load_with_resolver(
     imported_funcs,
     data_segments,
     gc_heap,
+    output~,
     compiled~,
     external_funcrefs~,
     dropped_elems~,

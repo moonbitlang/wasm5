@@ -11,6 +11,7 @@ pub struct RuntimeContext {
   imported_funcs : Array[ImportedFunc]
   data_segments : Array[Array[Byte]]
   gc_heap : Array[GcObject] // GC heap for struct/array instances
+  output : Array[String] // Collected spectest output
   // External function references from other modules.
   // Used for cross-module funcref globals and table entries.
   // Accessed via negative indices: index -1 = external_funcrefs[0], -2 = [1], etc.
@@ -47,6 +48,7 @@ fn RuntimeContext::new_with_gc_heap(
   imported_funcs : Array[ImportedFunc],
   data_segments : Array[Array[Byte]],
   gc_heap : Array[GcObject],
+  output? : Array[String] = [],
   compiled? : @core.CompiledModule = @core.CompiledModule::new(),
   external_funcrefs? : Array[ImportedFunc] = [],
   dropped_elems? : Array[Bool] = [],
@@ -61,9 +63,25 @@ fn RuntimeContext::new_with_gc_heap(
     imported_funcs,
     data_segments,
     gc_heap,
+    output,
     external_funcrefs,
     dropped_elems,
     num_imported_funcs: count_module_imported_funcs(module_),
     error_detail: "",
   }
+}
+
+///|
+pub fn RuntimeContext::push_output(self : RuntimeContext, s : String) -> Unit {
+  self.output.push(s)
+}
+
+///|
+pub fn RuntimeContext::get_output(self : RuntimeContext) -> Array[String] {
+  self.output
+}
+
+///|
+pub fn RuntimeContext::clear_output(self : RuntimeContext) -> Unit {
+  self.output.clear()
 }

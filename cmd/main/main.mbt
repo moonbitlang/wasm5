@@ -130,6 +130,10 @@ async fn run_wasm(
         }
       }
       let results = runtime.call_compiled(@utf8.encode(func_name), args)
+      for line in @wasm5_runtime.get_spectest_output() {
+        println(line)
+      }
+      @wasm5_runtime.clear_spectest_output()
       // Print results (one per line, just the value)
       for result in results {
         println(format_value(result))

@@ -5,6 +5,10 @@
     "moonbitlang/async/process",
     "moonbitlang/async",
     "moonbitlang/core/encoding/utf8",
+    {
+      "path": "moonbitlang/core/test",
+      "alias": "mbtest"
+    },
     "moonbitlang/core/strconv",
     {
       "path": "moonbitlang/wasm5/src/runtime",
