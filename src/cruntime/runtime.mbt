@@ -7,6 +7,9 @@ pub struct CRuntime {
   memory : FixedArray[Byte] // Linear memory (pre-allocated to max size)
   memory_pages : FixedArray[Int] // Current size in pages (single element array for FFI mutability)
   memory_max_size : Int // Maximum memory size in bytes (for memory.grow bounds)
+  output_buffer : FixedArray[Byte] // Collected spectest output bytes
+  output_length : FixedArray[Int] // Current output length (single element array for FFI mutability)
+  output_capacity : Int // Output buffer capacity in bytes
   tables : FixedArray[FixedArray[Int]] // Tables of function indices
   // Flattened table data for C FFI
   tables_flat : FixedArray[Int] // All tables concatenated
@@ -128,6 +131,9 @@ fn build_runtime(
   let globals = init_globals(module_, resolved_imported_globals)
   // Initialize memory from module (pre-allocated to max size)
   let (memory, memory_pages, memory_max_size) = init_memory(module_, globals)
+  let output_buffer = FixedArray::make(default_output_capacity, b'\x00')
+  let output_length : FixedArray[Int] = [0]
+  let output_capacity = default_output_capacity
   // Initialize tables from module (needs globals for element offset evaluation)
   let (tables, table_logical_sizes, table_max_sizes) = init_tables(
     module_, globals,
@@ -165,6 +171,9 @@ fn build_runtime(
     memory,
     memory_pages,
     memory_max_size,
+    output_buffer,
+    output_length,
+    output_capacity,
     tables,
     tables_flat,
     table_offsets,
@@ -252,6 +261,9 @@ pub fn CRuntime::get_context_ptr(self : CRuntime) -> Int64 {
       self.import_num_params,
       self.import_num_results,
       self.import_handler_ids,
+      self.output_buffer,
+      self.output_length,
+      self.output_capacity,
       self.import_context_ptrs,
       self.import_target_func_idxs,
       self.data_segments_flat,
@@ -306,6 +318,37 @@ pub fn CRuntime::get_globals(self : CRuntime) -> Array[Value] {
     idx += 1
   }
   globals
+}
+
+///|
+/// Get collected spectest output as lines
+pub fn CRuntime::get_output(self : CRuntime) -> Array[String] {
+  let len = self.output_length[0]
+  if len <= 0 {
+    return []
+  }
+  let safe_len = if len > self.output_capacity {
+    self.output_capacity
+  } else {
+    len
+  }
+  let bytes : Array[Byte] = Array::make(safe_len, b'\x00')
+  for i in 0..<safe_len {
+    bytes[i] = self.output_buffer[i]
+  }
+  let text = @utf8.decode(Bytes::from_array(bytes)) catch { _ => "" }
+  let lines = text.split("\n").map(fn(view) { view.to_string() }).to_array()
+  if lines.length() > 0 && lines[lines.length() - 1] == "" {
+    let _ = lines.pop()
+
+  }
+  lines
+}
+
+///|
+/// Clear collected spectest output
+pub fn CRuntime::clear_output(self : CRuntime) -> Unit {
+  self.output_length[0] = 0
 }
 
 ///|
@@ -645,6 +688,10 @@ fn build_import_handlers(module_ : @core.Module) -> FixedArray[Int] {
   }
   FixedArray::from_array(handlers)
 }
+
+///|
+/// Default spectest output buffer capacity in bytes
+let default_output_capacity : Int = 65536
 
 ///|
 /// Page size in bytes (64KB)
@@ -998,6 +1045,9 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
           self.import_num_params,
           self.import_num_results,
           self.import_handler_ids,
+          self.output_buffer,
+          self.output_length,
+          self.output_capacity,
           self.import_context_ptrs,
           self.import_target_func_idxs,
           self.data_segments_flat,
@@ -1151,6 +1201,9 @@ pub fn CRuntime::call_compiled(
           self.import_num_params,
           self.import_num_results,
           self.import_handler_ids,
+          self.output_buffer,
+          self.output_length,
+          self.output_capacity,
           self.import_context_ptrs,
           self.import_target_func_idxs,
           self.data_segments_flat,

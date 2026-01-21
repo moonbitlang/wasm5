@@ -25,6 +25,9 @@ pub struct CRuntime {
   memory : FixedArray[Byte]
   memory_pages : FixedArray[Int]
   memory_max_size : Int
+  output_buffer : FixedArray[Byte]
+  output_length : FixedArray[Int]
+  output_capacity : Int
   tables : FixedArray[FixedArray[Int]]
   tables_flat : FixedArray[Int]
   table_offsets : FixedArray[Int]
@@ -49,10 +52,12 @@ pub struct CRuntime {
   resolved_imports : Map[Int, ResolvedImport]
 }
 pub fn CRuntime::call_compiled(Self, Bytes, Array[@core.Value]) -> Array[@core.Value] raise @runtime.RuntimeError
+pub fn CRuntime::clear_output(Self) -> Unit
 pub fn CRuntime::free_context(Self) -> Unit
 pub fn CRuntime::get_context_ptr(Self) -> Int64
 pub fn CRuntime::get_globals(Self) -> Array[@core.Value]
 pub fn CRuntime::get_module(Self) -> @core.Module
+pub fn CRuntime::get_output(Self) -> Array[String]
 pub fn CRuntime::load(@core.Module) -> Self
 pub fn CRuntime::load_with_imports(@core.Module, Map[Int, ResolvedImport]) -> Self
 pub fn CRuntime::load_with_imports_and_globals(@core.Module, Map[Int, ResolvedImport], Map[Int, UInt64]) -> Self

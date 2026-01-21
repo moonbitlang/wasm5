@@ -224,6 +224,9 @@ static int g_num_types = 0;
 static int* g_import_num_params = NULL;    // Number of params for each imported function
 static int* g_import_num_results = NULL;   // Number of results for each imported function
 static int* g_import_handler_ids = NULL;   // Host handler id for each imported function
+static uint8_t* g_output_buffer = NULL;    // Output buffer for spectest handlers
+static int* g_output_length = NULL;        // Current output length
+static int g_output_capacity = 0;          // Output buffer capacity
 // Cross-module resolved imports (for call_indirect with imported functions)
 static int64_t* g_import_context_ptrs = NULL;  // Target context pointer for each import (-1 if not resolved)
 static int* g_import_target_func_idxs = NULL;  // Function index in target module for each import
@@ -282,6 +285,9 @@ typedef struct CRuntimeContext {
     int* import_num_params;
     int* import_num_results;
     int* import_handler_ids;
+    uint8_t* output_buffer;
+    int* output_length;
+    int output_capacity;
     int64_t* import_context_ptrs;
     int* import_target_func_idxs;
     uint8_t* data_segments_flat;
@@ -324,6 +330,9 @@ static void save_context(CRuntimeContext* ctx, CRuntime* crt) {
     ctx->import_num_params = g_import_num_params;
     ctx->import_num_results = g_import_num_results;
     ctx->import_handler_ids = g_import_handler_ids;
+    ctx->output_buffer = g_output_buffer;
+    ctx->output_length = g_output_length;
+    ctx->output_capacity = g_output_capacity;
     ctx->import_context_ptrs = g_import_context_ptrs;
     ctx->import_target_func_idxs = g_import_target_func_idxs;
     ctx->data_segments_flat = g_data_segments_flat;
@@ -361,6 +370,9 @@ static void load_context(const CRuntimeContext* ctx, CRuntime* crt) {
     g_import_num_params = ctx->import_num_params;
     g_import_num_results = ctx->import_num_results;
     g_import_handler_ids = ctx->import_handler_ids;
+    g_output_buffer = ctx->output_buffer;
+    g_output_length = ctx->output_length;
+    g_output_capacity = ctx->output_capacity;
     g_import_context_ptrs = ctx->import_context_ptrs;
     g_import_target_func_idxs = ctx->import_target_func_idxs;
     g_data_segments_flat = ctx->data_segments_flat;
@@ -383,6 +395,7 @@ CRuntimeContext* create_runtime_context(
     int num_funcs, int num_imported_funcs, int* func_type_idxs,
     int* type_sig_hash1, int* type_sig_hash2, int num_types,
     int* import_num_params, int* import_num_results, int* import_handler_ids,
+    uint8_t* output_buffer, int* output_length, int output_capacity,
     int64_t* import_context_ptrs, int* import_target_func_idxs,
     uint8_t* data_segments_flat, int* data_segment_offsets, int* data_segment_sizes, int num_data_segments,
     int* elem_segments_flat, int* elem_segment_offsets, int* elem_segment_sizes,
@@ -413,6 +426,9 @@ CRuntimeContext* create_runtime_context(
     ctx->import_num_params = import_num_params;
     ctx->import_num_results = import_num_results;
     ctx->import_handler_ids = import_handler_ids;
+    ctx->output_buffer = output_buffer;
+    ctx->output_length = output_length;
+    ctx->output_capacity = output_capacity;
     ctx->import_context_ptrs = import_context_ptrs;
     ctx->import_target_func_idxs = import_target_func_idxs;
     ctx->data_segments_flat = data_segments_flat;
@@ -445,23 +461,93 @@ static int run(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     return first(crt, pc, sp, fp);
 }
 
-// Host import handlers (spectest is a no-op for now)
+static void output_append(const char* data, int len) {
+    if (!g_output_buffer || !g_output_length || g_output_capacity <= 0 || len <= 0) {
+        return;
+    }
+    int out_len = *g_output_length;
+    if (out_len < 0) {
+        out_len = 0;
+    }
+    if (out_len >= g_output_capacity) {
+        return;
+    }
+    int remaining = g_output_capacity - out_len;
+    if (len > remaining) {
+        len = remaining;
+    }
+    memcpy(g_output_buffer + out_len, data, (size_t)len);
+    *g_output_length = out_len + len;
+}
+
+static float f32_from_u64(uint64_t v) {
+    uint32_t u = (uint32_t)v;
+    float f = 0.0f;
+    memcpy(&f, &u, sizeof(f));
+    return f;
+}
+
+static double f64_from_u64(uint64_t v) {
+    double d = 0.0;
+    memcpy(&d, &v, sizeof(d));
+    return d;
+}
+
+// Host import handlers (spectest formatting)
 static void call_host_import(int handler_id, uint64_t* args, int num_params,
                              uint64_t* results, int num_results) {
-    (void)args;
-    (void)num_params;
+    char buf[128];
+    int n = -1;
     switch (handler_id) {
         case HOST_IMPORT_SPECTEST_PRINT:
-        case HOST_IMPORT_SPECTEST_PRINT_I32:
-        case HOST_IMPORT_SPECTEST_PRINT_I64:
-        case HOST_IMPORT_SPECTEST_PRINT_F32:
-        case HOST_IMPORT_SPECTEST_PRINT_F64:
-        case HOST_IMPORT_SPECTEST_PRINT_I32_F32:
-        case HOST_IMPORT_SPECTEST_PRINT_F64_F64:
-        case HOST_IMPORT_SPECTEST_PRINT_CHAR:
             break;
+        case HOST_IMPORT_SPECTEST_PRINT_I32: {
+            int32_t val = (int32_t)(uint32_t)(num_params > 0 ? args[0] : 0);
+            n = snprintf(buf, sizeof(buf), "%d : i32", val);
+            break;
+        }
+        case HOST_IMPORT_SPECTEST_PRINT_I64: {
+            int64_t val = (int64_t)(num_params > 0 ? args[0] : 0);
+            n = snprintf(buf, sizeof(buf), "%lld : i64", (long long)val);
+            break;
+        }
+        case HOST_IMPORT_SPECTEST_PRINT_F32: {
+            float f = f32_from_u64(num_params > 0 ? args[0] : 0);
+            n = snprintf(buf, sizeof(buf), "%.9g : f32", (double)f);
+            break;
+        }
+        case HOST_IMPORT_SPECTEST_PRINT_F64: {
+            double d = f64_from_u64(num_params > 0 ? args[0] : 0);
+            n = snprintf(buf, sizeof(buf), "%.17g : f64", d);
+            break;
+        }
+        case HOST_IMPORT_SPECTEST_PRINT_I32_F32: {
+            int32_t val = (int32_t)(uint32_t)(num_params > 0 ? args[0] : 0);
+            float f = f32_from_u64(num_params > 1 ? args[1] : 0);
+            n = snprintf(buf, sizeof(buf), "%d : i32, %.9g : f32", val, (double)f);
+            break;
+        }
+        case HOST_IMPORT_SPECTEST_PRINT_F64_F64: {
+            double d0 = f64_from_u64(num_params > 0 ? args[0] : 0);
+            double d1 = f64_from_u64(num_params > 1 ? args[1] : 0);
+            n = snprintf(buf, sizeof(buf), "%.17g : f64, %.17g : f64", d0, d1);
+            break;
+        }
+        case HOST_IMPORT_SPECTEST_PRINT_CHAR: {
+            char c = (char)(uint8_t)(num_params > 0 ? args[0] : 0);
+            output_append(&c, 1);
+            output_append("\n", 1);
+            break;
+        }
         default:
             break;
+    }
+    if (n > 0) {
+        if (n >= (int)sizeof(buf)) {
+            n = (int)sizeof(buf) - 1;
+        }
+        output_append(buf, n);
+        output_append("\n", 1);
     }
     for (int i = 0; i < num_results; i++) {
         results[i] = 0;
@@ -476,6 +562,7 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
             int* func_entries, int* func_num_locals, int num_funcs, int num_imported_funcs,
             int* func_type_idxs, int* type_sig_hash1, int* type_sig_hash2, int num_types,
             int* import_num_params, int* import_num_results, int* import_handler_ids,
+            uint8_t* output_buffer, int* output_length, int output_capacity,
             int64_t* import_context_ptrs, int* import_target_func_idxs,
             uint8_t* data_segments_flat, int* data_segment_offsets, int* data_segment_sizes, int num_data_segments,
             int* elem_segments_flat, int* elem_segment_offsets, int* elem_segment_sizes, int* elem_segment_dropped, int num_elem_segments) {
@@ -522,6 +609,9 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     g_import_num_params = import_num_params;
     g_import_num_results = import_num_results;
     g_import_handler_ids = import_handler_ids;
+    g_output_buffer = output_buffer;
+    g_output_length = output_length;
+    g_output_capacity = output_capacity;
     g_import_context_ptrs = import_context_ptrs;
     g_import_target_func_idxs = import_target_func_idxs;
 
@@ -589,6 +679,9 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     g_import_num_params = NULL;
     g_import_num_results = NULL;
     g_import_handler_ids = NULL;
+    g_output_buffer = NULL;
+    g_output_length = NULL;
+    g_output_capacity = 0;
     g_import_context_ptrs = NULL;
     g_import_target_func_idxs = NULL;
     g_data_segments_flat = NULL;
