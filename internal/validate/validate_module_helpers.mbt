@@ -458,34 +458,70 @@ fn validate_module_global_initializers(
 }
 
 ///|
+/// Validate table limits for a single table type.
+/// Checks min/max relationship and 32-bit size limits for non-table64 tables.
+fn validate_table_type_limits(
+  table_type : @core.TableType,
+) -> Unit raise ValidationError {
+  match table_type.limits.max {
+    Some(max_val) => {
+      if table_type.limits.min > max_val {
+        raise ValidationError::InvalidTableSize(
+          "size minimum must not be greater than maximum",
+        )
+      }
+      if not(table_type.table64) && max_val > 0xFFFF_FFFFUL {
+        raise ValidationError::InvalidTableSize(
+          "table size must fit in 32-bit limits",
+        )
+      }
+    }
+    None => ()
+  }
+  if not(table_type.table64) && table_type.limits.min > 0xFFFF_FFFFUL {
+    raise ValidationError::InvalidTableSize(
+      "table size must fit in 32-bit limits",
+    )
+  }
+}
+
+///|
+/// Validate memory limits for a single memory type.
+/// Checks shared memory requirements, min/max relationship, and size limits.
+fn validate_mem_type_limits(
+  mem_type : @core.MemType,
+) -> Unit raise ValidationError {
+  if mem_type.shared && mem_type.limits.max is None {
+    raise ValidationError::InvalidMemorySize("shared memory requires maximum")
+  }
+  match mem_type.limits.max {
+    Some(max_val) => {
+      if mem_type.limits.min > max_val {
+        raise ValidationError::InvalidMemorySize(
+          "size minimum must not be greater than maximum",
+        )
+      }
+      if not(mem_type.memory64) && max_val > 65536UL {
+        raise ValidationError::InvalidMemorySize(
+          "memory size must be at most 65536 pages (4GiB)",
+        )
+      }
+    }
+    None =>
+      if not(mem_type.memory64) && mem_type.limits.min > 65536UL {
+        raise ValidationError::InvalidMemorySize(
+          "memory size must be at most 65536 pages (4GiB)",
+        )
+      }
+  }
+}
+
+///|
 fn validate_module_memory_limits(
   m : @core.Module,
 ) -> Unit raise ValidationError {
-  // Validate memory limits
   for mem in m.mems {
-    if mem.shared && mem.limits.max is None {
-      raise ValidationError::InvalidMemorySize("shared memory requires maximum")
-    }
-    match mem.limits.max {
-      Some(max_val) => {
-        if mem.limits.min > max_val {
-          raise ValidationError::InvalidMemorySize(
-            "size minimum must not be greater than maximum",
-          )
-        }
-        if not(mem.memory64) && max_val > 65536UL {
-          raise ValidationError::InvalidMemorySize(
-            "memory size must be at most 65536 pages (4GiB)",
-          )
-        }
-      }
-      None =>
-        if not(mem.memory64) && mem.limits.min > 65536UL {
-          raise ValidationError::InvalidMemorySize(
-            "memory size must be at most 65536 pages (4GiB)",
-          )
-        }
-    }
+    validate_mem_type_limits(mem)
   }
 }
 
@@ -493,36 +529,9 @@ fn validate_module_memory_limits(
 fn validate_module_imported_memory_limits(
   m : @core.Module,
 ) -> Unit raise ValidationError {
-  // Validate memory limits for imported memories
   for imp in m.imports {
     match imp.desc {
-      Mem(mem_type) => {
-        if mem_type.shared && mem_type.limits.max is None {
-          raise ValidationError::InvalidMemorySize(
-            "shared memory requires maximum",
-          )
-        }
-        match mem_type.limits.max {
-          Some(max_val) => {
-            if mem_type.limits.min > max_val {
-              raise ValidationError::InvalidMemorySize(
-                "size minimum must not be greater than maximum",
-              )
-            }
-            if not(mem_type.memory64) && max_val > 65536UL {
-              raise ValidationError::InvalidMemorySize(
-                "memory size must be at most 65536 pages (4GiB)",
-              )
-            }
-          }
-          None =>
-            if not(mem_type.memory64) && mem_type.limits.min > 65536UL {
-              raise ValidationError::InvalidMemorySize(
-                "memory size must be at most 65536 pages (4GiB)",
-              )
-            }
-        }
-      }
+      Mem(mem_type) => validate_mem_type_limits(mem_type)
       _ => ()
     }
   }
@@ -538,27 +547,7 @@ fn validate_module_tables(
 
   // Validate table limits and initializers
   for table in m.tables {
-    match table.limits.max {
-      Some(max_val) => {
-        // Use unsigned comparison - compare UInt values directly
-        if table.limits.min > max_val {
-          raise ValidationError::InvalidTableSize(
-            "size minimum must not be greater than maximum",
-          )
-        }
-        if not(table.table64) && max_val > 0xFFFF_FFFFUL {
-          raise ValidationError::InvalidTableSize(
-            "table size must fit in 32-bit limits",
-          )
-        }
-      }
-      None => ()
-    }
-    if not(table.table64) && table.limits.min > 0xFFFF_FFFFUL {
-      raise ValidationError::InvalidTableSize(
-        "table size must fit in 32-bit limits",
-      )
-    }
+    validate_table_type_limits(table)
     // Validate table initializer
     // If the table element type is non-nullable, it must have an initializer
     if not(table.nullable) {
@@ -690,61 +679,24 @@ fn validate_module_tables(
   // Validate table limits for imported tables
   for imp in m.imports {
     match imp.desc {
-      Table(table_type) => {
-        match table_type.limits.max {
-          Some(max_val) => {
-            // Use unsigned comparison - compare UInt values directly
-            if table_type.limits.min > max_val {
-              raise ValidationError::InvalidTableSize(
-                "size minimum must not be greater than maximum",
-              )
-            }
-            if not(table_type.table64) && max_val > 0xFFFF_FFFFUL {
-              raise ValidationError::InvalidTableSize(
-                "table size must fit in 32-bit limits",
-              )
-            }
-          }
-          None => ()
-        }
-        if not(table_type.table64) && table_type.limits.min > 0xFFFF_FFFFUL {
-          raise ValidationError::InvalidTableSize(
-            "table size must fit in 32-bit limits",
-          )
-        }
-      }
+      Table(table_type) => validate_table_type_limits(table_type)
       _ => ()
     }
   }
 }
 
 ///|
+/// Get global type and mutability. Delegates to core implementation.
+/// Raises ValidationError for invalid global indices.
 fn get_global_type_and_mutable(
   m : @core.Module,
   global_idx : Int,
   import_counts : ImportCounts,
 ) -> (@core.ValType, Bool) raise ValidationError {
-  if global_idx < import_counts.globals {
-    let mut import_global_idx = 0
-    for imp in m.imports {
-      match imp.desc {
-        Global(gt) => {
-          if import_global_idx == global_idx {
-            return (gt.val_type, gt.mutable)
-          }
-          import_global_idx += 1
-        }
-        _ => ()
-      }
-    }
-    raise ValidationError::UnknownGlobal(global_idx)
+  match @core.get_global_type(m, global_idx, import_counts.globals) {
+    Some(gt) => (gt.val_type, gt.mutable)
+    None => raise ValidationError::UnknownGlobal(global_idx)
   }
-  let local_idx = global_idx - import_counts.globals
-  if local_idx < 0 || local_idx >= m.globals.length() {
-    raise ValidationError::UnknownGlobal(global_idx)
-  }
-  let gt = m.globals[local_idx].type_
-  (gt.val_type, gt.mutable)
 }
 
 ///|

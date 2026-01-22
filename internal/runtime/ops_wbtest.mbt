@@ -929,9 +929,9 @@ test "compile helpers canonicalize and counts" {
     exports: [],
     codes: [],
   }
-  assert_eq(count_imported_funcs(module_), 1)
-  assert_eq(get_func_type_idx(module_, 0, 1), 0)
-  assert_eq(get_func_type_idx(module_, 2, 1), -1)
+  assert_eq(@core.count_imported_funcs(module_), 1)
+  assert_eq(@core.get_func_type_idx(module_, 0, 1), 0)
+  assert_eq(@core.get_func_type_idx(module_, 2, 1), -1)
   let module_funcs : @core.Module = {
     types: [],
     type_groups: [],
@@ -948,7 +948,7 @@ test "compile helpers canonicalize and counts" {
     exports: [],
     codes: [],
   }
-  assert_eq(get_func_type_idx(module_funcs, 1, 0), 1)
+  assert_eq(@core.get_func_type_idx(module_funcs, 1, 0), 1)
 }
 
 ///|

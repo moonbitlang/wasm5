@@ -25,19 +25,6 @@ pub struct RuntimeContext {
 }
 
 ///|
-/// Count the number of imported functions in a module
-fn count_module_imported_funcs(module_ : @core.Module) -> Int {
-  let mut count = 0
-  for imp in module_.imports {
-    match imp.desc {
-      Func(_) => count += 1
-      _ => ()
-    }
-  }
-  count
-}
-
-///|
 /// Create a new RuntimeContext with a pre-initialized gc_heap
 fn RuntimeContext::new_with_gc_heap(
   module_ : @core.Module,
@@ -66,7 +53,7 @@ fn RuntimeContext::new_with_gc_heap(
     output,
     external_funcrefs,
     dropped_elems,
-    num_imported_funcs: count_module_imported_funcs(module_),
+    num_imported_funcs: @core.count_imported_funcs(module_),
     error_detail: "",
   }
 }

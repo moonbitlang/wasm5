@@ -23,68 +23,29 @@ fn reftype_to_valtype(ref_type : @core.RefType) -> @core.ValType {
 }
 
 ///|
-/// Cached counts of imported resources
-priv struct ImportCounts {
-  funcs : Int
-  tables : Int
-  mems : Int
-  globals : Int
-  tags : Int
-}
+/// Use ImportCounts from core module
+type ImportCounts = @core.ImportCounts
 
 ///|
-/// Compute import counts in a single pass through imports
-/// This is more efficient than counting each type separately
+/// Compute import counts in a single pass through imports.
+/// Delegates to core implementation.
 fn get_import_counts(module_ : @core.Module) -> ImportCounts {
-  let mut funcs = 0
-  let mut tables = 0
-  let mut mems = 0
-  let mut globals = 0
-  let mut tags = 0
-  for imp in module_.imports {
-    match imp.desc {
-      Func(_) => funcs += 1
-      Table(_) => tables += 1
-      Mem(_) => mems += 1
-      Global(_) => globals += 1
-      Tag(_) => tags += 1
-    }
-  }
-  { funcs, tables, mems, globals, tags }
+  @core.get_import_counts(module_)
 }
 
 ///|
-/// Get the type index for a function (imported or local)
+/// Get the type index for a function (imported or local).
+/// Raises ValidationError for invalid function indices.
 fn get_func_type_index(
   module_ : @core.Module,
   func_idx : Int,
   import_counts : ImportCounts,
 ) -> Int raise ValidationError {
-  if func_idx < import_counts.funcs {
-    // Imported function - find type index from imports
-    let mut current_import = 0
-    let mut found_type_idx = 0
-    for imp in module_.imports {
-      match imp.desc {
-        Func(tidx) => {
-          if current_import == func_idx {
-            found_type_idx = tidx.reinterpret_as_int()
-            break
-          }
-          current_import += 1
-        }
-        _ => ()
-      }
-    }
-    found_type_idx
-  } else {
-    // Local function - get type index from funcs array
-    let local_idx = func_idx - import_counts.funcs
-    if local_idx < 0 || local_idx >= module_.funcs.length() {
-      raise ValidationError::InvalidFunctionIndex(func_idx)
-    }
-    module_.funcs[local_idx].reinterpret_as_int()
+  let type_idx = @core.get_func_type_idx(module_, func_idx, import_counts.funcs)
+  if type_idx < 0 {
+    raise ValidationError::InvalidFunctionIndex(func_idx)
   }
+  type_idx
 }
 
 ///|
@@ -219,34 +180,18 @@ fn validate_memory_index(
 }
 
 ///|
+/// Get memory type for index. Delegates to core implementation.
+/// Raises ValidationError for invalid memory indices.
 fn get_memtype(
   module_ : @core.Module,
   import_counts : ImportCounts,
   mem_idx : UInt,
 ) -> @core.MemType raise ValidationError {
-  let total_mems = import_counts.mems + module_.mems.length()
   let idx = mem_idx.reinterpret_as_int()
-  if idx < 0 || idx >= total_mems {
-    raise ValidationError::UnknownMemory(idx)
+  match @core.get_mem_type(module_, idx, import_counts.mems) {
+    Some(mem_type) => mem_type
+    None => raise ValidationError::UnknownMemory(idx)
   }
-  if idx < import_counts.mems {
-    let mut import_mem_idx = 0
-    for imp in module_.imports {
-      match imp.desc {
-        Mem(mem_type) => {
-          if import_mem_idx == idx {
-            return mem_type
-          }
-          import_mem_idx = import_mem_idx + 1
-        }
-        _ => ()
-      }
-    }
-  } else {
-    let local_idx = idx - import_counts.mems
-    return module_.mems[local_idx]
-  }
-  raise ValidationError::UnknownMemory(idx)
 }
 
 ///|
@@ -297,34 +242,18 @@ fn validate_store_mem(
 }
 
 ///|
+/// Get table type for index. Delegates to core implementation.
+/// Raises ValidationError for invalid table indices.
 fn get_table_type(
   module_ : @core.Module,
   import_counts : ImportCounts,
   table_idx : UInt,
 ) -> @core.TableType raise ValidationError {
-  let total_tables = import_counts.tables + module_.tables.length()
   let idx = table_idx.reinterpret_as_int()
-  if idx < 0 || idx >= total_tables {
-    raise ValidationError::UnknownTable(idx)
+  match @core.get_table_type(module_, idx, import_counts.tables) {
+    Some(table_type) => table_type
+    None => raise ValidationError::UnknownTable(idx)
   }
-  if idx < import_counts.tables {
-    let mut import_table_idx = 0
-    for imp in module_.imports {
-      match imp.desc {
-        Table(table_type) => {
-          if import_table_idx == idx {
-            return table_type
-          }
-          import_table_idx = import_table_idx + 1
-        }
-        _ => ()
-      }
-    }
-  } else {
-    let local_idx = idx - import_counts.tables
-    return module_.tables[local_idx]
-  }
-  raise ValidationError::UnknownTable(idx)
 }
 
 ///|
@@ -601,37 +530,24 @@ fn validate_const_expr_type(
 }
 
 ///|
-/// Check if a type index refers to a function type in the module
+/// Check if a type index refers to a function type in the module.
+/// Delegates to core implementation.
 fn is_func_type_index(module_ : @core.Module, type_idx : Int) -> Bool {
-  if type_idx < 0 || type_idx >= module_.types.length() {
-    return false
-  }
-  match module_.types[type_idx] {
-    Func(_) => true
-    _ => false
-  }
+  @core.is_func_type_index(module_, type_idx)
 }
 
 ///|
+/// Check if a type index refers to a struct type in the module.
+/// Delegates to core implementation.
 fn is_struct_type_index(module_ : @core.Module, type_idx : Int) -> Bool {
-  if type_idx < 0 || type_idx >= module_.types.length() {
-    return false
-  }
-  match module_.types[type_idx] {
-    Struct(_) => true
-    _ => false
-  }
+  @core.is_struct_type_index(module_, type_idx)
 }
 
 ///|
+/// Check if a type index refers to an array type in the module.
+/// Delegates to core implementation.
 fn is_array_type_index(module_ : @core.Module, type_idx : Int) -> Bool {
-  if type_idx < 0 || type_idx >= module_.types.length() {
-    return false
-  }
-  match module_.types[type_idx] {
-    Array(_) => true
-    _ => false
-  }
+  @core.is_array_type_index(module_, type_idx)
 }
 
 ///|
@@ -663,7 +579,7 @@ fn is_type_index_subtype(
   }
 
   // Check if types are equivalent using rec group-aware equivalence
-  if gc_types_equivalent_validate(module_, type_idx1, type_idx2) {
+  if @core.gc_types_equivalent(module_, type_idx1, type_idx2) {
     return true
   }
 
@@ -677,7 +593,7 @@ fn is_type_index_subtype(
         for supertype in subtype_def.supertypes {
           let super_idx = supertype.reinterpret_as_int()
           if super_idx == type_idx2 ||
-            gc_types_equivalent_validate(module_, super_idx, type_idx2) {
+            @core.gc_types_equivalent(module_, super_idx, type_idx2) {
             return true
           }
           // Recursively check if the supertype is a subtype of type_idx2
@@ -1116,389 +1032,4 @@ fn validate_elem_init_const_expr(
     )
   }
   stack[0]
-}
-
-///|
-/// Get rec group info for a type index: returns (group_index, position_in_group)
-fn get_rec_group_info_validate(
-  module_ : @core.Module,
-  type_idx : Int,
-) -> (Int, Int) {
-  for i, group in module_.type_groups {
-    for j, subtype_def in group.subtypes {
-      if subtype_def.type_idx.reinterpret_as_int() == type_idx {
-        return (i, j)
-      }
-    }
-  }
-  (-1, -1)
-}
-
-///|
-/// Get all type indices in a rec group
-fn get_rec_group_types_validate(
-  module_ : @core.Module,
-  group_idx : Int,
-) -> Array[Int] {
-  let result : Array[Int] = []
-  if group_idx >= 0 && group_idx < module_.type_groups.length() {
-    let group = module_.type_groups[group_idx]
-    for subtype_def in group.subtypes {
-      result.push(subtype_def.type_idx.reinterpret_as_int())
-    }
-  }
-  result
-}
-
-///|
-/// Check if a type index is within a given rec group
-fn is_in_rec_group_validate(types : Array[Int], type_idx : Int) -> Bool {
-  for t in types {
-    if t == type_idx {
-      return true
-    }
-  }
-  false
-}
-
-///|
-/// Get the position of a type within its rec group
-fn get_position_in_group_validate(types : Array[Int], type_idx : Int) -> Int {
-  for i, t in types {
-    if t == type_idx {
-      return i
-    }
-  }
-  -1
-}
-
-///|
-/// Check if a type index is final (cannot be extended)
-fn is_type_final_validate(module_ : @core.Module, type_idx : Int) -> Bool {
-  for group in module_.type_groups {
-    for subtype_def in group.subtypes {
-      if subtype_def.type_idx.reinterpret_as_int() == type_idx {
-        return subtype_def.is_final
-      }
-    }
-  }
-  true // Default to final
-}
-
-///|
-/// Get the list of supertypes for a type index
-fn get_supertypes_validate(
-  module_ : @core.Module,
-  type_idx : Int,
-) -> Array[Int] {
-  let result : Array[Int] = []
-  for group in module_.type_groups {
-    for subtype_def in group.subtypes {
-      if subtype_def.type_idx.reinterpret_as_int() == type_idx {
-        for sup in subtype_def.supertypes {
-          result.push(sup.reinterpret_as_int())
-        }
-        return result
-      }
-    }
-  }
-  result
-}
-
-///|
-/// Check if two rec groups are structurally equivalent
-fn rec_groups_equivalent_validate(
-  module_ : @core.Module,
-  group1_idx : Int,
-  group2_idx : Int,
-  visited : Array[(Int, Int)],
-) -> Bool {
-  // Same group is equivalent
-  if group1_idx == group2_idx {
-    return true
-  }
-  // Check if we've already determined these groups are equivalent (cycle detection)
-  for v in visited {
-    if (v.0 == group1_idx && v.1 == group2_idx) ||
-      (v.0 == group2_idx && v.1 == group1_idx) {
-      return true
-    }
-  }
-  let types1 = get_rec_group_types_validate(module_, group1_idx)
-  let types2 = get_rec_group_types_validate(module_, group2_idx)
-  // Groups must have same number of types
-  if types1.length() != types2.length() {
-    return false
-  }
-  // Mark as being compared to handle cycles
-  visited.push((group1_idx, group2_idx))
-  // Check each corresponding type
-  for i in 0..<types1.length() {
-    let t1 = types1[i]
-    let t2 = types2[i]
-    if not(
-        types_equivalent_in_context_validate(
-          module_, t1, t2, types1, types2, visited,
-        ),
-      ) {
-      return false
-    }
-  }
-  true
-}
-
-///|
-/// Check if two types are equivalent in the context of their rec groups
-fn types_equivalent_in_context_validate(
-  module_ : @core.Module,
-  type_idx1 : Int,
-  type_idx2 : Int,
-  group1_types : Array[Int],
-  group2_types : Array[Int],
-  visited : Array[(Int, Int)],
-) -> Bool {
-  if type_idx1 < 0 ||
-    type_idx1 >= module_.types.length() ||
-    type_idx2 < 0 ||
-    type_idx2 >= module_.types.length() {
-    return false
-  }
-  // Check structural type match
-  match (module_.types[type_idx1], module_.types[type_idx2]) {
-    (Func(f1), Func(f2)) => {
-      // Check finality
-      if is_type_final_validate(module_, type_idx1) !=
-        is_type_final_validate(module_, type_idx2) {
-        return false
-      }
-      // Check params and results, handling recursive references
-      if f1.params.length() != f2.params.length() ||
-        f1.results.length() != f2.results.length() {
-        return false
-      }
-      for i in 0..<f1.params.length() {
-        if not(
-            valtypes_equivalent_in_context_validate(
-              module_,
-              f1.params[i],
-              f2.params[i],
-              group1_types,
-              group2_types,
-              visited,
-            ),
-          ) {
-          return false
-        }
-      }
-      for i in 0..<f1.results.length() {
-        if not(
-            valtypes_equivalent_in_context_validate(
-              module_,
-              f1.results[i],
-              f2.results[i],
-              group1_types,
-              group2_types,
-              visited,
-            ),
-          ) {
-          return false
-        }
-      }
-      // Check supertypes are equivalent
-      let supers1 = get_supertypes_validate(module_, type_idx1)
-      let supers2 = get_supertypes_validate(module_, type_idx2)
-      if supers1.length() != supers2.length() {
-        return false
-      }
-      for i in 0..<supers1.length() {
-        if not(
-            type_refs_equivalent_in_context_validate(
-              module_,
-              supers1[i],
-              supers2[i],
-              group1_types,
-              group2_types,
-              visited,
-            ),
-          ) {
-          return false
-        }
-      }
-      true
-    }
-    (Struct(s1), Struct(s2)) => {
-      if is_type_final_validate(module_, type_idx1) !=
-        is_type_final_validate(module_, type_idx2) {
-        return false
-      }
-      if s1.fields.length() != s2.fields.length() {
-        return false
-      }
-      for i in 0..<s1.fields.length() {
-        if s1.fields[i].mutable != s2.fields[i].mutable {
-          return false
-        }
-        if not(
-            storage_types_equivalent_in_context_validate(
-              module_,
-              s1.fields[i].storage,
-              s2.fields[i].storage,
-              group1_types,
-              group2_types,
-              visited,
-            ),
-          ) {
-          return false
-        }
-      }
-      let supers1 = get_supertypes_validate(module_, type_idx1)
-      let supers2 = get_supertypes_validate(module_, type_idx2)
-      if supers1.length() != supers2.length() {
-        return false
-      }
-      for i in 0..<supers1.length() {
-        if not(
-            type_refs_equivalent_in_context_validate(
-              module_,
-              supers1[i],
-              supers2[i],
-              group1_types,
-              group2_types,
-              visited,
-            ),
-          ) {
-          return false
-        }
-      }
-      true
-    }
-    (Array(a1), Array(a2)) => {
-      if is_type_final_validate(module_, type_idx1) !=
-        is_type_final_validate(module_, type_idx2) {
-        return false
-      }
-      if a1.element.mutable != a2.element.mutable {
-        return false
-      }
-      if not(
-          storage_types_equivalent_in_context_validate(
-            module_,
-            a1.element.storage,
-            a2.element.storage,
-            group1_types,
-            group2_types,
-            visited,
-          ),
-        ) {
-        return false
-      }
-      let supers1 = get_supertypes_validate(module_, type_idx1)
-      let supers2 = get_supertypes_validate(module_, type_idx2)
-      if supers1.length() != supers2.length() {
-        return false
-      }
-      for i in 0..<supers1.length() {
-        if not(
-            type_refs_equivalent_in_context_validate(
-              module_,
-              supers1[i],
-              supers2[i],
-              group1_types,
-              group2_types,
-              visited,
-            ),
-          ) {
-          return false
-        }
-      }
-      true
-    }
-    _ => false
-  }
-}
-
-///|
-/// Check if two type references are equivalent considering rec group context
-fn type_refs_equivalent_in_context_validate(
-  module_ : @core.Module,
-  ref1 : Int,
-  ref2 : Int,
-  group1_types : Array[Int],
-  group2_types : Array[Int],
-  visited : Array[(Int, Int)],
-) -> Bool {
-  let in_group1 = is_in_rec_group_validate(group1_types, ref1)
-  let in_group2 = is_in_rec_group_validate(group2_types, ref2)
-  if in_group1 && in_group2 {
-    // Both are internal references - must be at same position
-    let pos1 = get_position_in_group_validate(group1_types, ref1)
-    let pos2 = get_position_in_group_validate(group2_types, ref2)
-    pos1 == pos2
-  } else if not(in_group1) && not(in_group2) {
-    // Both are external references - must point to equivalent types
-    if ref1 == ref2 {
-      return true
-    }
-    let (g1, _) = get_rec_group_info_validate(module_, ref1)
-    let (g2, _) = get_rec_group_info_validate(module_, ref2)
-    rec_groups_equivalent_validate(module_, g1, g2, visited)
-  } else {
-    // One internal, one external - not equivalent
-    false
-  }
-}
-
-///|
-/// Check if two value types are equivalent in rec group context
-fn valtypes_equivalent_in_context_validate(
-  module_ : @core.Module,
-  vt1 : @core.ValType,
-  vt2 : @core.ValType,
-  group1_types : Array[Int],
-  group2_types : Array[Int],
-  visited : Array[(Int, Int)],
-) -> Bool {
-  match (vt1, vt2) {
-    (Ref(TypeIndex(idx1), n1), Ref(TypeIndex(idx2), n2)) =>
-      n1 == n2 &&
-      type_refs_equivalent_in_context_validate(
-        module_, idx1, idx2, group1_types, group2_types, visited,
-      )
-    _ => vt1 == vt2
-  }
-}
-
-///|
-/// Check if two storage types are equivalent in rec group context
-fn storage_types_equivalent_in_context_validate(
-  module_ : @core.Module,
-  st1 : @core.StorageType,
-  st2 : @core.StorageType,
-  group1_types : Array[Int],
-  group2_types : Array[Int],
-  visited : Array[(Int, Int)],
-) -> Bool {
-  match (st1, st2) {
-    (Val(vt1), Val(vt2)) =>
-      valtypes_equivalent_in_context_validate(
-        module_, vt1, vt2, group1_types, group2_types, visited,
-      )
-    _ => st1 == st2
-  }
-}
-
-///|
-/// Check if two GC types are equivalent considering rec group membership
-fn gc_types_equivalent_validate(
-  module_ : @core.Module,
-  type_idx1 : Int,
-  type_idx2 : Int,
-) -> Bool {
-  if type_idx1 == type_idx2 {
-    return true
-  }
-  let (group1_idx, _) = get_rec_group_info_validate(module_, type_idx1)
-  let (group2_idx, _) = get_rec_group_info_validate(module_, type_idx2)
-  let visited : Array[(Int, Int)] = []
-  rec_groups_equivalent_validate(module_, group1_idx, group2_idx, visited)
 }

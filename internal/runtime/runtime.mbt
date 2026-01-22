@@ -625,7 +625,7 @@ fn get_func_type_for_index(
   func_idx : Int,
   num_imported_funcs : Int,
 ) -> @core.FuncType? {
-  let type_idx = get_func_type_idx(module_, func_idx, num_imported_funcs)
+  let type_idx = @core.get_func_type_idx(module_, func_idx, num_imported_funcs)
   if type_idx < 0 || type_idx >= module_.types.length() {
     return None
   }
@@ -636,65 +636,23 @@ fn get_func_type_for_index(
 }
 
 ///|
+/// Get table type for index. Delegates to core implementation.
 fn get_table_type_for_index(
   module_ : @core.Module,
   table_idx : Int,
 ) -> @core.TableType? {
-  let mut import_idx = 0
-  for imp in module_.imports {
-    match imp.desc {
-      Table(table_type) => {
-        if import_idx == table_idx {
-          return Some(table_type)
-        }
-        import_idx += 1
-      }
-      _ => ()
-    }
-  }
-  let local_idx = table_idx - import_idx
-  if local_idx >= 0 && local_idx < module_.tables.length() {
-    Some(module_.tables[local_idx])
-  } else {
-    None
-  }
+  let num_imported = @core.count_imported_tables(module_)
+  @core.get_table_type(module_, table_idx, num_imported)
 }
 
 ///|
+/// Get global type for index. Delegates to core implementation.
 fn get_global_type_for_index(
   module_ : @core.Module,
   global_idx : Int,
 ) -> @core.GlobalType? {
-  let mut import_idx = 0
-  for imp in module_.imports {
-    match imp.desc {
-      Global(global_type) => {
-        if import_idx == global_idx {
-          return Some(global_type)
-        }
-        import_idx += 1
-      }
-      _ => ()
-    }
-  }
-  let local_idx = global_idx - import_idx
-  if local_idx >= 0 && local_idx < module_.globals.length() {
-    Some(module_.globals[local_idx].type_)
-  } else {
-    None
-  }
-}
-
-///|
-fn count_imported_mems(module_ : @core.Module) -> Int {
-  let mut count = 0
-  for imp in module_.imports {
-    match imp.desc {
-      Mem(_) => count += 1
-      _ => ()
-    }
-  }
-  count
+  let num_imported = @core.count_imported_globals(module_)
+  @core.get_global_type(module_, global_idx, num_imported)
 }
 
 ///|
@@ -798,7 +756,7 @@ pub fn Instance::get_memory(self : Instance, name : String) -> Memory? {
       match exp.desc {
         Mem(idx) => {
           let mem_idx = idx.reinterpret_as_int()
-          let total_mems = count_imported_mems(self.ctx.module_) +
+          let total_mems = @core.count_imported_mems(self.ctx.module_) +
             self.ctx.module_.mems.length()
           if mem_idx < 0 || mem_idx >= total_mems || mem_idx != 0 {
             return None

@@ -2,7 +2,7 @@
 /// Compile a module to universal IR.
 pub fn compile(mod_ : @core.Module) -> @core.CompiledModule {
   let ctx = CompileCtx::new()
-  let num_imported_funcs = count_imported_funcs(mod_)
+  let num_imported_funcs = @core.count_imported_funcs(mod_)
 
   // Pre-compute function info
   let func_entries : Array[Int] = []
@@ -12,7 +12,7 @@ pub fn compile(mod_ : @core.Module) -> @core.CompiledModule {
   let func_max_stack : Array[Int] = []
   for i, code in mod_.codes {
     let type_idx = mod_.funcs[i].reinterpret_as_int()
-    let func_type = get_func_type(mod_, type_idx)
+    let func_type = @core.get_func_type(mod_, type_idx)
     let num_params = func_type.params.length()
     let num_results = func_type.results.length()
     let num_locals = num_params + code.locals.length()
@@ -748,8 +748,12 @@ fn compile_instr(
         ctx.emit_op(@core.OpTag::SetSp)
         ctx.emit_idx(ctx.current_sp())
       } else if func_idx >= 0 && func_idx < mod_info.num_imported_funcs {
-        let type_idx = get_imported_func_type_idx(mod_info.mod_, func_idx)
-        let func_type = get_func_type(mod_info.mod_, type_idx)
+        let type_idx = @core.get_func_type_idx(
+          mod_info.mod_,
+          func_idx,
+          mod_info.num_imported_funcs,
+        )
+        let func_type = @core.get_func_type(mod_info.mod_, type_idx)
         let num_params = func_type.params.length()
         let num_results = func_type.results.length()
         let frame_offset = if num_params > 0 {
@@ -776,7 +780,7 @@ fn compile_instr(
     }
     CallIndirect(type_idx, table_idx) => {
       let type_int = type_idx.reinterpret_as_int()
-      let func_type = get_func_type(mod_info.mod_, type_int)
+      let func_type = @core.get_func_type(mod_info.mod_, type_int)
       let num_params = func_type.params.length()
       let num_results = func_type.results.length()
       ignore(ctx.pop_slot())
@@ -1097,7 +1101,7 @@ fn compile_instr(
     }
     CallRef(type_idx) => {
       let type_int = type_idx.reinterpret_as_int()
-      let func_type = get_func_type(mod_info.mod_, type_int)
+      let func_type = @core.get_func_type(mod_info.mod_, type_int)
       let num_params = func_type.params.length()
       let num_results = func_type.results.length()
       ignore(ctx.pop_slot())
@@ -1138,8 +1142,12 @@ fn compile_instr(
         ctx.emit_idx(num_locals)
         ctx.call_patches.push({ patch_pos, func_idx: local_idx })
       } else if func_idx >= 0 && func_idx < mod_info.num_imported_funcs {
-        let type_idx = get_imported_func_type_idx(mod_info.mod_, func_idx)
-        let func_type = get_func_type(mod_info.mod_, type_idx)
+        let type_idx = @core.get_func_type_idx(
+          mod_info.mod_,
+          func_idx,
+          mod_info.num_imported_funcs,
+        )
+        let func_type = @core.get_func_type(mod_info.mod_, type_idx)
         let num_params = func_type.params.length()
         for _ in 0..<num_params {
           ignore(ctx.pop_slot())
@@ -1151,7 +1159,7 @@ fn compile_instr(
     }
     ReturnCallIndirect(type_idx, table_idx) => {
       let type_int = type_idx.reinterpret_as_int()
-      let func_type = get_func_type(mod_info.mod_, type_int)
+      let func_type = @core.get_func_type(mod_info.mod_, type_int)
       let num_params = func_type.params.length()
       ignore(ctx.pop_slot()) // table index
       for _ in 0..<num_params {
@@ -1164,7 +1172,7 @@ fn compile_instr(
     }
     ReturnCallRef(type_idx) => {
       let type_int = type_idx.reinterpret_as_int()
-      let func_type = get_func_type(mod_info.mod_, type_int)
+      let func_type = @core.get_func_type(mod_info.mod_, type_int)
       let num_params = func_type.params.length()
       ignore(ctx.pop_slot()) // func ref
       for _ in 0..<num_params {

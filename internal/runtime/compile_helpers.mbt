@@ -160,19 +160,6 @@ fn f32_to_uint64(x : Float) -> UInt64 {
 }
 
 ///|
-/// Count the number of imported functions in a module
-fn count_imported_funcs(module_ : @core.Module) -> Int {
-  let mut count = 0
-  for imp in module_.imports {
-    match imp.desc {
-      Func(_) => count += 1
-      _ => ()
-    }
-  }
-  count
-}
-
-///|
 fn require_func_type(
   module_ : @core.Module,
   type_idx : Int,
@@ -186,44 +173,6 @@ fn require_func_type(
   match module_.types[type_idx] {
     Func(func_type) => func_type
     _ => raise RuntimeError::InvalidType("\{context}: expected func type")
-  }
-}
-
-///|
-
-///|
-/// Get the type index for a function (imported or local)
-/// Returns -1 if the function index is invalid
-fn get_func_type_idx(
-  module_ : @core.Module,
-  func_idx : Int,
-  num_imported : Int,
-) -> Int {
-  if func_idx < num_imported {
-    // Imported function - find type index from imports
-    let mut import_idx = 0
-    let mut type_idx = -1
-    for imp in module_.imports {
-      match imp.desc {
-        Func(tidx) => {
-          if import_idx == func_idx {
-            type_idx = tidx.reinterpret_as_int()
-            break
-          }
-          import_idx += 1
-        }
-        _ => ()
-      }
-    }
-    type_idx
-  } else {
-    // Local function - look up in module funcs
-    let local_idx = func_idx - num_imported
-    if local_idx >= 0 && local_idx < module_.funcs.length() {
-      module_.funcs[local_idx].reinterpret_as_int()
-    } else {
-      -1
-    }
   }
 }
 

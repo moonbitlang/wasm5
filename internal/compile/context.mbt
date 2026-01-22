@@ -415,49 +415,6 @@ fn get_block_arities(mod_ : @core.Module, bt : @core.BlockType) -> (Int, Int) {
 }
 
 ///|
-/// Count imported functions
-fn count_imported_funcs(mod_ : @core.Module) -> Int {
-  let mut count = 0
-  for imp in mod_.imports {
-    match imp.desc {
-      Func(_) => count += 1
-      _ => ()
-    }
-  }
-  count
-}
-
-///|
-/// Get function type by index
-fn get_func_type(mod_ : @core.Module, type_idx : Int) -> @core.FuncType {
-  match mod_.types[type_idx] {
-    Func(ft) => ft
-    _ => { params: [], results: [] }
-  }
-}
-
-///|
-/// Get the type index for an imported function by its import index
-fn get_imported_func_type_idx(
-  mod_ : @core.Module,
-  import_func_idx : Int,
-) -> Int {
-  let mut func_import_count = 0
-  for imp in mod_.imports {
-    match imp.desc {
-      Func(type_idx) => {
-        if func_import_count == import_func_idx {
-          return type_idx.reinterpret_as_int()
-        }
-        func_import_count += 1
-      }
-      _ => ()
-    }
-  }
-  0
-}
-
-///|
 /// Encode a reference type to an integer for the ref.null immediate
 fn encode_ref_type(ref_type : @core.RefType) -> Int {
   match ref_type {
