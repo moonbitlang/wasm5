@@ -10,6 +10,5 @@
     "moonbitlang/async",
     "moonbitlang/async/fs",
     "moonbitlang/wasm5/src/parse"
-  ],
-  "native-stub": ["print.c", "op.c"]
+  ]
 }
