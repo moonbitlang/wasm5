@@ -719,32 +719,17 @@ fn validate_module_tables(
 }
 
 ///|
+/// Get global type and mutability. Delegates to core implementation.
+/// Raises ValidationError for invalid global indices.
 fn get_global_type_and_mutable(
   m : @core.Module,
   global_idx : Int,
   import_counts : ImportCounts,
 ) -> (@core.ValType, Bool) raise ValidationError {
-  if global_idx < import_counts.globals {
-    let mut import_global_idx = 0
-    for imp in m.imports {
-      match imp.desc {
-        Global(gt) => {
-          if import_global_idx == global_idx {
-            return (gt.val_type, gt.mutable)
-          }
-          import_global_idx += 1
-        }
-        _ => ()
-      }
-    }
-    raise ValidationError::UnknownGlobal(global_idx)
+  match @core.get_global_type(m, global_idx, import_counts.globals) {
+    Some(gt) => (gt.val_type, gt.mutable)
+    None => raise ValidationError::UnknownGlobal(global_idx)
   }
-  let local_idx = global_idx - import_counts.globals
-  if local_idx < 0 || local_idx >= m.globals.length() {
-    raise ValidationError::UnknownGlobal(global_idx)
-  }
-  let gt = m.globals[local_idx].type_
-  (gt.val_type, gt.mutable)
 }
 
 ///|

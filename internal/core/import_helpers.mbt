@@ -165,3 +165,71 @@ pub fn is_array_type_index(module_ : Module, type_idx : Int) -> Bool {
     _ => false
   }
 }
+
+///|
+/// Get the table type for a table index (imported or local).
+/// Returns None if the table index is invalid.
+pub fn get_table_type(
+  module_ : Module,
+  table_idx : Int,
+  num_imported_tables : Int,
+) -> TableType? {
+  if table_idx < num_imported_tables {
+    // Imported table - find type from imports
+    let mut import_idx = 0
+    for imp in module_.imports {
+      match imp.desc {
+        Table(table_type) => {
+          if import_idx == table_idx {
+            return Some(table_type)
+          }
+          import_idx += 1
+        }
+        _ => ()
+      }
+    }
+    None
+  } else {
+    // Local table - look up in module tables
+    let local_idx = table_idx - num_imported_tables
+    if local_idx >= 0 && local_idx < module_.tables.length() {
+      Some(module_.tables[local_idx])
+    } else {
+      None
+    }
+  }
+}
+
+///|
+/// Get the global type for a global index (imported or local).
+/// Returns None if the global index is invalid.
+pub fn get_global_type(
+  module_ : Module,
+  global_idx : Int,
+  num_imported_globals : Int,
+) -> GlobalType? {
+  if global_idx < num_imported_globals {
+    // Imported global - find type from imports
+    let mut import_idx = 0
+    for imp in module_.imports {
+      match imp.desc {
+        Global(global_type) => {
+          if import_idx == global_idx {
+            return Some(global_type)
+          }
+          import_idx += 1
+        }
+        _ => ()
+      }
+    }
+    None
+  } else {
+    // Local global - look up in module globals
+    let local_idx = global_idx - num_imported_globals
+    if local_idx >= 0 && local_idx < module_.globals.length() {
+      Some(module_.globals[local_idx].type_)
+    } else {
+      None
+    }
+  }
+}

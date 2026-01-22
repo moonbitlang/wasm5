@@ -636,53 +636,23 @@ fn get_func_type_for_index(
 }
 
 ///|
+/// Get table type for index. Delegates to core implementation.
 fn get_table_type_for_index(
   module_ : @core.Module,
   table_idx : Int,
 ) -> @core.TableType? {
-  let mut import_idx = 0
-  for imp in module_.imports {
-    match imp.desc {
-      Table(table_type) => {
-        if import_idx == table_idx {
-          return Some(table_type)
-        }
-        import_idx += 1
-      }
-      _ => ()
-    }
-  }
-  let local_idx = table_idx - import_idx
-  if local_idx >= 0 && local_idx < module_.tables.length() {
-    Some(module_.tables[local_idx])
-  } else {
-    None
-  }
+  let num_imported = @core.count_imported_tables(module_)
+  @core.get_table_type(module_, table_idx, num_imported)
 }
 
 ///|
+/// Get global type for index. Delegates to core implementation.
 fn get_global_type_for_index(
   module_ : @core.Module,
   global_idx : Int,
 ) -> @core.GlobalType? {
-  let mut import_idx = 0
-  for imp in module_.imports {
-    match imp.desc {
-      Global(global_type) => {
-        if import_idx == global_idx {
-          return Some(global_type)
-        }
-        import_idx += 1
-      }
-      _ => ()
-    }
-  }
-  let local_idx = global_idx - import_idx
-  if local_idx >= 0 && local_idx < module_.globals.length() {
-    Some(module_.globals[local_idx].type_)
-  } else {
-    None
-  }
+  let num_imported = @core.count_imported_globals(module_)
+  @core.get_global_type(module_, global_idx, num_imported)
 }
 
 ///|

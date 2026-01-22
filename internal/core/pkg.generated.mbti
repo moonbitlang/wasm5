@@ -24,6 +24,8 @@ pub fn get_func_type(Module, Int) -> FuncType
 
 pub fn get_func_type_idx(Module, Int, Int) -> Int
 
+pub fn get_global_type(Module, Int, Int) -> GlobalType?
+
 pub fn get_immediate_count(Int64) -> Int
 
 pub fn get_import_counts(Module) -> ImportCounts
@@ -35,6 +37,8 @@ pub fn get_rec_group_info(Module, Int) -> (Int, Int)
 pub fn get_rec_group_types(Module, Int) -> Array[Int]
 
 pub fn get_supertypes(Module, Int) -> Array[Int]
+
+pub fn get_table_type(Module, Int, Int) -> TableType?
 
 pub fn is_array_type_index(Module, Int) -> Bool
 

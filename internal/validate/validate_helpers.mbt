@@ -258,34 +258,18 @@ fn validate_store_mem(
 }
 
 ///|
+/// Get table type for index. Delegates to core implementation.
+/// Raises ValidationError for invalid table indices.
 fn get_table_type(
   module_ : @core.Module,
   import_counts : ImportCounts,
   table_idx : UInt,
 ) -> @core.TableType raise ValidationError {
-  let total_tables = import_counts.tables + module_.tables.length()
   let idx = table_idx.reinterpret_as_int()
-  if idx < 0 || idx >= total_tables {
-    raise ValidationError::UnknownTable(idx)
+  match @core.get_table_type(module_, idx, import_counts.tables) {
+    Some(table_type) => table_type
+    None => raise ValidationError::UnknownTable(idx)
   }
-  if idx < import_counts.tables {
-    let mut import_table_idx = 0
-    for imp in module_.imports {
-      match imp.desc {
-        Table(table_type) => {
-          if import_table_idx == idx {
-            return table_type
-          }
-          import_table_idx = import_table_idx + 1
-        }
-        _ => ()
-      }
-    }
-  } else {
-    let local_idx = idx - import_counts.tables
-    return module_.tables[local_idx]
-  }
-  raise ValidationError::UnknownTable(idx)
 }
 
 ///|
