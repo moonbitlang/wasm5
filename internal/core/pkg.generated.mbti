@@ -20,7 +20,13 @@ pub fn count_imported_tables(Module) -> Int
 
 pub fn gc_types_equivalent(Module, Int, Int) -> Bool
 
+pub fn get_func_type(Module, Int) -> FuncType
+
+pub fn get_func_type_idx(Module, Int, Int) -> Int
+
 pub fn get_immediate_count(Int64) -> Int
+
+pub fn get_import_counts(Module) -> ImportCounts
 
 pub fn get_position_in_group(Array[Int], Int) -> Int
 
@@ -30,7 +36,13 @@ pub fn get_rec_group_types(Module, Int) -> Array[Int]
 
 pub fn get_supertypes(Module, Int) -> Array[Int]
 
+pub fn is_array_type_index(Module, Int) -> Bool
+
+pub fn is_func_type_index(Module, Int) -> Bool
+
 pub fn is_in_rec_group(Array[Int], Int) -> Bool
+
+pub fn is_struct_type_index(Module, Int) -> Bool
 
 pub fn is_type_final(Module, Int) -> Bool
 
@@ -221,6 +233,14 @@ pub(all) struct Import {
   module_ : Bytes
   name : Bytes
   desc : ImportDesc
+}
+
+pub struct ImportCounts {
+  funcs : Int
+  tables : Int
+  mems : Int
+  globals : Int
+  tags : Int
 }
 
 pub(all) enum ImportDesc {

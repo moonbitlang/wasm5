@@ -58,7 +58,7 @@ test "compile helpers func type lookup with non func imports" {
     exports: [],
     codes: [],
   }
-  assert_eq(get_func_type_idx(module_, 0, 1), 0)
+  assert_eq(@core.get_func_type_idx(module_, 0, 1), 0)
 }
 
 ///|

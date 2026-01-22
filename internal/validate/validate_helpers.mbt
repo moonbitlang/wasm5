@@ -23,68 +23,29 @@ fn reftype_to_valtype(ref_type : @core.RefType) -> @core.ValType {
 }
 
 ///|
-/// Cached counts of imported resources
-priv struct ImportCounts {
-  funcs : Int
-  tables : Int
-  mems : Int
-  globals : Int
-  tags : Int
-}
+/// Use ImportCounts from core module
+type ImportCounts = @core.ImportCounts
 
 ///|
-/// Compute import counts in a single pass through imports
-/// This is more efficient than counting each type separately
+/// Compute import counts in a single pass through imports.
+/// Delegates to core implementation.
 fn get_import_counts(module_ : @core.Module) -> ImportCounts {
-  let mut funcs = 0
-  let mut tables = 0
-  let mut mems = 0
-  let mut globals = 0
-  let mut tags = 0
-  for imp in module_.imports {
-    match imp.desc {
-      Func(_) => funcs += 1
-      Table(_) => tables += 1
-      Mem(_) => mems += 1
-      Global(_) => globals += 1
-      Tag(_) => tags += 1
-    }
-  }
-  { funcs, tables, mems, globals, tags }
+  @core.get_import_counts(module_)
 }
 
 ///|
-/// Get the type index for a function (imported or local)
+/// Get the type index for a function (imported or local).
+/// Raises ValidationError for invalid function indices.
 fn get_func_type_index(
   module_ : @core.Module,
   func_idx : Int,
   import_counts : ImportCounts,
 ) -> Int raise ValidationError {
-  if func_idx < import_counts.funcs {
-    // Imported function - find type index from imports
-    let mut current_import = 0
-    let mut found_type_idx = 0
-    for imp in module_.imports {
-      match imp.desc {
-        Func(tidx) => {
-          if current_import == func_idx {
-            found_type_idx = tidx.reinterpret_as_int()
-            break
-          }
-          current_import += 1
-        }
-        _ => ()
-      }
-    }
-    found_type_idx
-  } else {
-    // Local function - get type index from funcs array
-    let local_idx = func_idx - import_counts.funcs
-    if local_idx < 0 || local_idx >= module_.funcs.length() {
-      raise ValidationError::InvalidFunctionIndex(func_idx)
-    }
-    module_.funcs[local_idx].reinterpret_as_int()
+  let type_idx = @core.get_func_type_idx(module_, func_idx, import_counts.funcs)
+  if type_idx < 0 {
+    raise ValidationError::InvalidFunctionIndex(func_idx)
   }
+  type_idx
 }
 
 ///|
@@ -601,37 +562,24 @@ fn validate_const_expr_type(
 }
 
 ///|
-/// Check if a type index refers to a function type in the module
+/// Check if a type index refers to a function type in the module.
+/// Delegates to core implementation.
 fn is_func_type_index(module_ : @core.Module, type_idx : Int) -> Bool {
-  if type_idx < 0 || type_idx >= module_.types.length() {
-    return false
-  }
-  match module_.types[type_idx] {
-    Func(_) => true
-    _ => false
-  }
+  @core.is_func_type_index(module_, type_idx)
 }
 
 ///|
+/// Check if a type index refers to a struct type in the module.
+/// Delegates to core implementation.
 fn is_struct_type_index(module_ : @core.Module, type_idx : Int) -> Bool {
-  if type_idx < 0 || type_idx >= module_.types.length() {
-    return false
-  }
-  match module_.types[type_idx] {
-    Struct(_) => true
-    _ => false
-  }
+  @core.is_struct_type_index(module_, type_idx)
 }
 
 ///|
+/// Check if a type index refers to an array type in the module.
+/// Delegates to core implementation.
 fn is_array_type_index(module_ : @core.Module, type_idx : Int) -> Bool {
-  if type_idx < 0 || type_idx >= module_.types.length() {
-    return false
-  }
-  match module_.types[type_idx] {
-    Array(_) => true
-    _ => false
-  }
+  @core.is_array_type_index(module_, type_idx)
 }
 
 ///|

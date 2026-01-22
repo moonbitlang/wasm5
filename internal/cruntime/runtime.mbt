@@ -51,14 +51,6 @@ pub struct CRuntime {
 using @core {type Value}
 
 ///|
-fn get_func_type(module_ : @core.Module, type_idx : Int) -> @core.FuncType {
-  match module_.types[type_idx] {
-    Func(ft) => ft
-    _ => { params: [], results: [] }
-  }
-}
-
-///|
 /// Convert TrapCode to RuntimeError using the error detail string approach
 fn trap_to_error(trap : TrapCode) -> @runtime.RuntimeError {
   let detail = match trap {
@@ -1266,7 +1258,7 @@ pub fn CRuntime::call_compiled(
         let func_idx = export_idx
         // Get function type for result conversion
         let type_idx = self.module_.funcs[func_idx].reinterpret_as_int()
-        let func_type = get_func_type(self.module_, type_idx)
+        let func_type = @core.get_func_type(self.module_, type_idx)
         let num_results = func_type.results.length()
 
         // Convert args to UInt64

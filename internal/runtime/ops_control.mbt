@@ -246,7 +246,11 @@ fn op_call_import(rt : Instance) -> ReturnCode {
   let func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let _frame_offset = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let num_imported_funcs = rt.ctx.num_imported_funcs
-  let type_idx = get_func_type_idx(rt.ctx.module_, func_idx, num_imported_funcs)
+  let type_idx = @core.get_func_type_idx(
+    rt.ctx.module_,
+    func_idx,
+    num_imported_funcs,
+  )
   if type_idx < 0 {
     rt.ctx.error_detail = "call: invalid imported function index"
     return Trap
@@ -387,7 +391,7 @@ fn op_call_indirect(rt : Instance) -> ReturnCode {
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
     // Get the imported function's type from the import descriptor
-    let actual_type_idx = get_func_type_idx(
+    let actual_type_idx = @core.get_func_type_idx(
       rt.ctx.module_,
       func_idx,
       num_imported_funcs,
@@ -498,7 +502,11 @@ fn op_return_call_local(rt : Instance) -> ReturnCode {
 fn op_return_call_import(rt : Instance) -> ReturnCode {
   let func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let num_imported_funcs = rt.ctx.num_imported_funcs
-  let type_idx = get_func_type_idx(rt.ctx.module_, func_idx, num_imported_funcs)
+  let type_idx = @core.get_func_type_idx(
+    rt.ctx.module_,
+    func_idx,
+    num_imported_funcs,
+  )
   if type_idx < 0 {
     rt.ctx.error_detail = "return_call: invalid imported function index"
     return Trap
@@ -561,7 +569,7 @@ fn op_return_call_indirect(rt : Instance) -> ReturnCode {
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
     // Get the imported function's type from the import descriptor
-    let actual_type_idx = get_func_type_idx(
+    let actual_type_idx = @core.get_func_type_idx(
       rt.ctx.module_,
       func_idx,
       num_imported_funcs,
@@ -669,7 +677,7 @@ fn op_call_ref(rt : Instance) -> ReturnCode {
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
     // Get the imported function's type from the import descriptor
-    let actual_type_idx = get_func_type_idx(
+    let actual_type_idx = @core.get_func_type_idx(
       rt.ctx.module_,
       func_idx,
       num_imported_funcs,
@@ -774,7 +782,7 @@ fn op_return_call_ref(rt : Instance) -> ReturnCode {
   // Check if calling an imported function
   if func_idx < num_imported_funcs {
     // Get the imported function's type from the import descriptor
-    let actual_type_idx = get_func_type_idx(
+    let actual_type_idx = @core.get_func_type_idx(
       rt.ctx.module_,
       func_idx,
       num_imported_funcs,

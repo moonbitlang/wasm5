@@ -625,7 +625,7 @@ fn get_func_type_for_index(
   func_idx : Int,
   num_imported_funcs : Int,
 ) -> @core.FuncType? {
-  let type_idx = get_func_type_idx(module_, func_idx, num_imported_funcs)
+  let type_idx = @core.get_func_type_idx(module_, func_idx, num_imported_funcs)
   if type_idx < 0 || type_idx >= module_.types.length() {
     return None
   }
