@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "moonbitlang/wasm5/src/core"
+package "moonbitlang/wasm5/internal/core"
 
 // Values
 pub fn atomic_spec_by_name(Bytes) -> AtomicSpec?

@@ -1,0 +1,53 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/wasm5"
+
+import {
+  "moonbitlang/wasm5/internal/core",
+  "moonbitlang/wasm5/internal/parse",
+  "moonbitlang/wasm5/internal/runtime",
+}
+
+// Values
+pub fn parse(Bytes) -> @core.Module raise
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+pub using @core {type Export}
+
+pub using @core {type ExportDesc}
+
+pub using @core {type FuncType}
+
+pub using @core {type GlobalType}
+
+pub using @core {type Import}
+
+pub using @core {type ImportDesc}
+
+pub using @core {type Limits}
+
+pub using @core {type MemType}
+
+pub using @core {type Module}
+
+pub using @parse {type ParseError}
+
+pub using @core {type RefType}
+
+pub using @runtime {type Runtime}
+
+pub using @runtime {type RuntimeError}
+
+pub using @core {type TableType}
+
+pub using @core {type TypeDef}
+
+pub using @core {type ValType}
+
+pub using @core {type Value}
+
+// Traits
+

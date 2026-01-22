@@ -1,6 +1,6 @@
 ///|
 /// Parse error types
-pub(all) suberror ParseError {
+pub suberror ParseError {
   UnexpectedEof // Unexpected end of file
   InvalidMagic // Invalid magic number
   UnsupportedVersion // Unsupported version

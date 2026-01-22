@@ -4,15 +4,15 @@
     "moonbitlang/core/math",
     "moonbitlang/core/strconv",
     {
-      "path": "moonbitlang/wasm5/src/core",
+      "path": "moonbitlang/wasm5/internal/core",
       "alias": "core"
     },
     {
-      "path": "moonbitlang/wasm5/src/encode",
+      "path": "moonbitlang/wasm5/internal/encode",
       "alias": "encode"
     },
     {
-      "path": "moonbitlang/wasm5/src/parse",
+      "path": "moonbitlang/wasm5/internal/parse",
       "alias": "parse"
     }
   ],

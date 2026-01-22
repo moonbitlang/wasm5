@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "moonbitlang/wasm5/src/cruntime"
+package "moonbitlang/wasm5/internal/cruntime"
 
 import {
-  "moonbitlang/wasm5/src/core",
-  "moonbitlang/wasm5/src/runtime",
+  "moonbitlang/wasm5/internal/core",
+  "moonbitlang/wasm5/internal/runtime",
 }
 
 // Values

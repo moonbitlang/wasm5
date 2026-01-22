@@ -1,7 +1,7 @@
 {
   "import": [
     {
-      "path": "moonbitlang/wasm5/src/core",
+      "path": "moonbitlang/wasm5/internal/core",
       "alias": "core"
     }
   ]

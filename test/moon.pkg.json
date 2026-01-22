@@ -11,23 +11,23 @@
     },
     "moonbitlang/core/strconv",
     {
-      "path": "moonbitlang/wasm5/src/runtime",
+      "path": "moonbitlang/wasm5/internal/runtime",
       "alias": "wasm5_runtime"
     },
     {
-      "path": "moonbitlang/wasm5/src/cruntime",
+      "path": "moonbitlang/wasm5/internal/cruntime",
       "alias": "wasm5_cruntime"
     },
     {
-      "path": "moonbitlang/wasm5/src/core",
+      "path": "moonbitlang/wasm5/internal/core",
       "alias": "wasm5_core"
     },
     {
-      "path": "moonbitlang/wasm5/src/parse",
+      "path": "moonbitlang/wasm5/internal/parse",
       "alias": "wasm5_parse"
     },
     {
-      "path": "moonbitlang/wasm5/src/validate",
+      "path": "moonbitlang/wasm5/internal/validate",
       "alias": "wasm5_validate"
     }
   ],
