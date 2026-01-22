@@ -468,6 +468,88 @@ void free_runtime_context(CRuntimeContext* ctx) {
 // ============================================================================
 
 // Internal execution helper - starts the tail-call chain
+static int run(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp);
+
+// ============================================================================
+// Cross-module call helper
+// ============================================================================
+//
+// Executes a function in another module's context, handling:
+// - Context save/restore
+// - Stack allocation for callee
+// - Argument copying
+// - Result copying
+//
+// Returns trap code (TRAP_NONE on success).
+// Results are written to result_dst[0..num_results-1].
+//
+static int call_cross_module_with_stack(
+    CRuntime* crt,
+    CRuntimeContext* target_ctx,
+    int target_func_idx,
+    uint64_t* args,
+    int num_params,
+    int num_results,
+    uint64_t* result_dst
+) {
+    // Check context depth limit
+    if (g_context_depth >= MAX_CONTEXT_DEPTH) {
+        return TRAP_STACK_OVERFLOW;
+    }
+
+    // Save current context and load target
+    save_context(&g_saved_contexts[g_context_depth++], crt);
+    load_context(target_ctx, crt);
+
+    // Validate target function index
+    int local_idx = target_func_idx - target_ctx->num_imported_funcs;
+    if (local_idx < 0 || local_idx >= target_ctx->num_funcs) {
+        load_context(&g_saved_contexts[--g_context_depth], crt);
+        return TRAP_OUT_OF_BOUNDS_TABLE;
+    }
+
+    // Get callee info from target context's global state (now loaded)
+    int callee_entry = g_func_entries[local_idx];
+    int callee_num_locals = g_func_num_locals[local_idx];
+
+    // Allocate stack for callee
+    uint64_t* callee_stack = (uint64_t*)malloc(STACK_SIZE * sizeof(uint64_t));
+    if (!callee_stack) {
+        load_context(&g_saved_contexts[--g_context_depth], crt);
+        return TRAP_STACK_OVERFLOW;
+    }
+
+    // Copy arguments to callee stack
+    for (int i = 0; i < num_params; i++) {
+        callee_stack[i] = args[i];
+    }
+    // Zero remaining locals
+    for (int i = num_params; i < callee_num_locals; i++) {
+        callee_stack[i] = 0;
+    }
+
+    // Execute callee
+    uint64_t* callee_pc = crt->code + callee_entry;
+    uint64_t* callee_fp = callee_stack;
+    uint64_t* callee_sp = callee_stack + callee_num_locals;
+
+    int trap = run(crt, callee_pc, callee_sp, callee_fp);
+
+    // Copy results (results are at callee_stack[0..num_results-1])
+    for (int i = 0; i < num_results; i++) {
+        result_dst[i] = callee_stack[i];
+    }
+
+    free(callee_stack);
+
+    // Restore caller's context
+    load_context(&g_saved_contexts[--g_context_depth], crt);
+
+    return trap;
+}
+
+// ============================================================================
+
 static int run(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     if (g_validate_code && (uintptr_t)*pc < 4096) {
         fprintf(stderr, "wasm5: invalid opcode pointer %llu at pc=%p index=%lld\n", (unsigned long long)*pc, (void*)pc, (long long)(pc - crt->code));
@@ -2908,54 +2990,15 @@ int op_call_indirect(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
 
         int target_func_idx = g_import_target_func_idxs[import_idx];
         uint64_t* args_ptr = fp + frame_offset;
-
         CRuntimeContext* target_ctx = (CRuntimeContext*)(uintptr_t)target_ctx_ptr;
-        if (g_context_depth >= MAX_CONTEXT_DEPTH) {
-            TRAP(TRAP_STACK_OVERFLOW);
-        }
-        save_context(&g_saved_contexts[g_context_depth++], crt);
-        load_context(target_ctx, crt);
 
-        int local_target_idx = target_func_idx - target_ctx->num_imported_funcs;
-        if (local_target_idx < 0 || local_target_idx >= target_ctx->num_funcs) {
-            load_context(&g_saved_contexts[--g_context_depth], crt);
-            TRAP(TRAP_OUT_OF_BOUNDS_TABLE);
-        }
-
-        int callee_entry = target_ctx->func_entries[local_target_idx];
-        int callee_num_locals = target_ctx->func_num_locals[local_target_idx];
-
-        uint64_t* callee_stack = (uint64_t*)malloc(STACK_SIZE * sizeof(uint64_t));
-        if (!callee_stack) {
-            load_context(&g_saved_contexts[--g_context_depth], crt);
-            TRAP(TRAP_STACK_OVERFLOW);
-        }
-
-        for (int i = 0; i < num_params; i++) {
-            callee_stack[i] = args_ptr[i];
-        }
-        for (int i = num_params; i < callee_num_locals; i++) {
-            callee_stack[i] = 0;
-        }
-
-        uint64_t* callee_pc = target_ctx->code + callee_entry;
-        uint64_t* callee_fp = callee_stack;
-        uint64_t* callee_sp = callee_stack + callee_num_locals;
-
-        int trap = run(crt, callee_pc, callee_sp, callee_fp);
-
-        for (int i = 0; i < num_results; i++) {
-            args_ptr[i] = callee_stack[i];
-        }
-
-        free(callee_stack);
-
-        load_context(&g_saved_contexts[--g_context_depth], crt);
-
+        int trap = call_cross_module_with_stack(
+            crt, target_ctx, target_func_idx,
+            args_ptr, num_params, num_results, args_ptr
+        );
         if (trap != TRAP_NONE) {
             return trap;
         }
-
         NEXT();
     }
 
@@ -3015,67 +3058,15 @@ int op_call_indirect(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
 
         // Args are at fp + frame_offset
         uint64_t* args_ptr = fp + frame_offset;
-
-        // Call the external function using context switching
         CRuntimeContext* target_ctx = (CRuntimeContext*)(uintptr_t)target_ctx_ptr;
 
-        // Save current context
-        if (g_context_depth >= MAX_CONTEXT_DEPTH) {
-            TRAP(TRAP_STACK_OVERFLOW);
-        }
-        save_context(&g_saved_contexts[g_context_depth++], crt);
-
-        // Load target context
-        load_context(target_ctx, crt);
-
-        // Get target function info
-        int local_target_idx = target_func_idx - target_ctx->num_imported_funcs;
-        if (local_target_idx < 0 || local_target_idx >= target_ctx->num_funcs) {
-            // Restore context before trap
-            load_context(&g_saved_contexts[--g_context_depth], crt);
-            TRAP(TRAP_OUT_OF_BOUNDS_TABLE);
-        }
-
-        int callee_entry = target_ctx->func_entries[local_target_idx];
-        int callee_num_locals = target_ctx->func_num_locals[local_target_idx];
-
-        // Allocate frame for callee
-        uint64_t* callee_stack = (uint64_t*)malloc(STACK_SIZE * sizeof(uint64_t));
-        if (!callee_stack) {
-            load_context(&g_saved_contexts[--g_context_depth], crt);
-            TRAP(TRAP_STACK_OVERFLOW);
-        }
-
-        // Copy args to callee stack
-        for (int i = 0; i < num_params; i++) {
-            callee_stack[i] = args_ptr[i];
-        }
-        // Zero remaining locals
-        for (int i = num_params; i < callee_num_locals; i++) {
-            callee_stack[i] = 0;
-        }
-
-        // Execute callee
-        uint64_t* callee_pc = target_ctx->code + callee_entry;
-        uint64_t* callee_fp = callee_stack;
-        uint64_t* callee_sp = callee_stack + callee_num_locals;
-
-        int trap = run(crt, callee_pc, callee_sp, callee_fp);
-
-        // Copy results back to our args location (results at callee_stack[0..num_results-1])
-        for (int i = 0; i < num_results; i++) {
-            args_ptr[i] = callee_stack[i];
-        }
-
-        free(callee_stack);
-
-        // Restore our context
-        load_context(&g_saved_contexts[--g_context_depth], crt);
-
+        int trap = call_cross_module_with_stack(
+            crt, target_ctx, target_func_idx,
+            args_ptr, num_params, num_results, args_ptr
+        );
         if (trap != TRAP_NONE) {
             return trap;
         }
-
         NEXT();
     }
 
@@ -3517,55 +3508,15 @@ int op_call_ref(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
         CRuntimeContext* target_ctx = (CRuntimeContext*)(uintptr_t)target_ctx_ptr;
         int target_func_idx = g_import_target_func_idxs[import_idx];
         uint64_t* args_ptr = fp + frame_offset;
-        uint64_t* caller_pc = pc;
 
-        if (g_context_depth >= MAX_CONTEXT_DEPTH) {
-            TRAP(TRAP_STACK_OVERFLOW);
-        }
-        save_context(&g_saved_contexts[g_context_depth++], crt);
-        load_context(target_ctx, crt);
-
-        int local_target_idx = target_func_idx - target_ctx->num_imported_funcs;
-        if (local_target_idx < 0 || local_target_idx >= target_ctx->num_funcs) {
-            load_context(&g_saved_contexts[--g_context_depth], crt);
-            TRAP(TRAP_OUT_OF_BOUNDS_TABLE);
-        }
-
-        int callee_entry = target_ctx->func_entries[local_target_idx];
-        int callee_num_locals = target_ctx->func_num_locals[local_target_idx];
-
-        uint64_t* callee_stack = (uint64_t*)malloc(STACK_SIZE * sizeof(uint64_t));
-        if (!callee_stack) {
-            load_context(&g_saved_contexts[--g_context_depth], crt);
-            TRAP(TRAP_STACK_OVERFLOW);
-        }
-
-        for (int i = 0; i < num_params; i++) {
-            callee_stack[i] = args_ptr[i];
-        }
-        for (int i = num_params; i < callee_num_locals; i++) {
-            callee_stack[i] = 0;
-        }
-
-        uint64_t* callee_pc = target_ctx->code + callee_entry;
-        uint64_t* callee_fp = callee_stack;
-        uint64_t* callee_sp = callee_stack + callee_num_locals;
-
-        int trap = run(crt, callee_pc, callee_sp, callee_fp);
-
-        for (int i = 0; i < num_results; i++) {
-            args_ptr[i] = callee_stack[i];
-        }
-
-        free(callee_stack);
-        load_context(&g_saved_contexts[--g_context_depth], crt);
-
+        int trap = call_cross_module_with_stack(
+            crt, target_ctx, target_func_idx,
+            args_ptr, num_params, num_results, args_ptr
+        );
         if (trap != TRAP_NONE) {
             return trap;
         }
-
         sp = args_ptr + num_results;
-        pc = caller_pc;
         NEXT();
     }
 
