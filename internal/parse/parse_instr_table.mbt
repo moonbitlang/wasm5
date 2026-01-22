@@ -1,5 +1,8 @@
 ///|
-fn parse_instr_table(parser : Parser, opcode : Byte) -> @core.Instr? raise {
+fn parse_instr_table(
+  parser : Parser,
+  opcode : Byte,
+) -> @core.Instr? raise ParseError {
   match opcode {
     0x25 => {
       let table_idx = parser.read_u32_leb128()

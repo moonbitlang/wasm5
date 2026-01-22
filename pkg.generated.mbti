@@ -8,7 +8,7 @@ import {
 }
 
 // Values
-pub fn parse(Bytes) -> @core.Module raise
+pub fn parse(Bytes) -> @core.Module raise @parse.ParseError
 
 // Errors
 
@@ -23,9 +23,17 @@ pub using @core {type FuncType}
 
 pub using @core {type GlobalType}
 
+pub using @runtime {type HostFunc}
+
 pub using @core {type Import}
 
 pub using @core {type ImportDesc}
+
+pub using @runtime {type ImportedMemory}
+
+pub using @runtime {type Imports}
+
+pub using @runtime {type Instance}
 
 pub using @core {type Limits}
 
@@ -37,9 +45,9 @@ pub using @parse {type ParseError}
 
 pub using @core {type RefType}
 
-pub using @runtime {type Runtime}
-
 pub using @runtime {type RuntimeError}
+
+pub using @runtime {type RuntimeTable}
 
 pub using @core {type TableType}
 

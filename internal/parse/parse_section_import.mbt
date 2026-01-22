@@ -1,7 +1,9 @@
 // Section parsers: import section
 
 ///|
-fn parse_import_section(parser : Parser) -> Array[@core.Import] raise {
+fn parse_import_section(
+  parser : Parser,
+) -> Array[@core.Import] raise ParseError {
   let count = parser.read_u32_leb128()
   let imports = []
   for i in 0U..<count {
@@ -31,7 +33,7 @@ fn parse_import_section(parser : Parser) -> Array[@core.Import] raise {
       0x04 => {
         let attr = parser.read_byte()
         if attr != 0x00U.to_byte() {
-          raise @validate.ValidationError::TypeMismatch(
+          raise ParseError::InvalidFormat(
             "invalid tag attribute: 0x\{attr.to_string()}",
           )
         }
@@ -39,7 +41,7 @@ fn parse_import_section(parser : Parser) -> Array[@core.Import] raise {
         Tag(type_idx)
       }
       _ =>
-        raise @validate.ValidationError::TypeMismatch(
+        raise ParseError::InvalidFormat(
           "invalid import descriptor tag: 0x\{desc_tag.to_string()}",
         )
     }

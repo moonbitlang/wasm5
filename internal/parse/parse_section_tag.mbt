@@ -1,13 +1,13 @@
 // Section parsers: tag section (exception handling)
 
 ///|
-fn parse_tag_section(parser : Parser) -> Array[@core.Tag] raise {
+fn parse_tag_section(parser : Parser) -> Array[@core.Tag] raise ParseError {
   let count = parser.read_u32_leb128()
   let tags : Array[@core.Tag] = []
   for _ in 0U..<count {
     let attr = parser.read_byte()
     guard attr == 0x00 else {
-      raise @validate.ValidationError::TypeMismatch(
+      raise ParseError::InvalidFormat(
         "invalid tag attribute: 0x\{attr.to_string()}",
       )
     }

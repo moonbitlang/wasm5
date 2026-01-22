@@ -8,8 +8,6 @@ import {
 // Values
 pub fn clear_spectest_output() -> Unit
 
-pub fn default_import_resolver() -> ImportResolver
-
 pub fn get_spectest_output() -> Array[String]
 
 // Errors
@@ -45,35 +43,42 @@ pub(all) struct GcStruct {
   fields : Array[UInt64]
 }
 
-pub struct ImportResolver {
-  modules : Map[Bytes, ImportResolverEntry]
-}
-pub fn ImportResolver::add_func(Self, Bytes, Bytes, ImportedFunc) -> Unit
-pub fn ImportResolver::add_funcref_wrapper(Self, Bytes, Bytes, ImportedFunc) -> Unit
-pub fn ImportResolver::add_global(Self, Bytes, Bytes, @core.Value) -> Unit
-pub fn ImportResolver::add_memory(Self, Bytes, Bytes, ImportedMemory) -> Unit
-pub fn ImportResolver::add_table(Self, Bytes, Bytes, RuntimeTable) -> Unit
-pub fn ImportResolver::get_func(Self, Bytes, Bytes) -> ImportedFunc?
-pub fn ImportResolver::get_funcref_wrapper(Self, Bytes, Bytes) -> ImportedFunc?
-pub fn ImportResolver::get_global(Self, Bytes, Bytes) -> @core.Value?
-pub fn ImportResolver::get_memory(Self, Bytes, Bytes) -> ImportedMemory?
-pub fn ImportResolver::get_table(Self, Bytes, Bytes) -> RuntimeTable?
-pub fn ImportResolver::new() -> Self
-
-type ImportResolverEntry
-
-pub struct ImportedFunc {
+pub struct HostFunc {
   arity : UInt
   func : (Array[@core.Value]) -> Array[@core.Value]
 }
-pub fn ImportedFunc::new(UInt, (Array[@core.Value]) -> Array[@core.Value]) -> Self
+pub fn HostFunc::new((Array[@core.Value]) -> Array[@core.Value], arity? : UInt) -> Self
 
 pub struct ImportedMemory {
   data : Array[Byte]
   max : UInt64?
 }
+pub fn ImportedMemory::new(Array[Byte], max? : UInt64?) -> Self
 
-pub struct Runtime {
+pub struct Imports {
+  modules : Map[Bytes, ImportsEntry]
+}
+pub fn Imports::add_func(Self, Bytes, Bytes, HostFunc) -> Unit
+pub fn Imports::add_funcref_wrapper(Self, Bytes, Bytes, HostFunc) -> Unit
+pub fn Imports::add_global(Self, Bytes, Bytes, @core.Value) -> Unit
+pub fn Imports::add_memory(Self, Bytes, Bytes, ImportedMemory) -> Unit
+pub fn Imports::add_table(Self, Bytes, Bytes, RuntimeTable) -> Unit
+pub fn Imports::func(Self, String, String, HostFunc) -> Self
+pub fn Imports::funcref_wrapper(Self, String, String, HostFunc) -> Self
+pub fn Imports::get_func(Self, Bytes, Bytes) -> HostFunc?
+pub fn Imports::get_funcref_wrapper(Self, Bytes, Bytes) -> HostFunc?
+pub fn Imports::get_global(Self, Bytes, Bytes) -> @core.Value?
+pub fn Imports::get_memory(Self, Bytes, Bytes) -> ImportedMemory?
+pub fn Imports::get_table(Self, Bytes, Bytes) -> RuntimeTable?
+pub fn Imports::global(Self, String, String, @core.Value) -> Self
+pub fn Imports::memory(Self, String, String, ImportedMemory) -> Self
+pub fn Imports::new() -> Self
+pub fn Imports::spectest() -> Self
+pub fn Imports::table(Self, String, String, RuntimeTable) -> Self
+
+type ImportsEntry
+
+pub struct Instance {
   ops : FixedArray[UInt64]
   stack : FixedArray[UInt64]
   mut sp : Int
@@ -82,16 +87,15 @@ pub struct Runtime {
   mut pc : Int
   ctx : RuntimeContext
 }
-pub fn Runtime::call_by_index(Self, Int, Array[@core.Value]) -> Array[@core.Value] raise RuntimeError
-pub fn Runtime::call_compiled(Self, Bytes, Array[@core.Value]) -> Array[@core.Value] raise RuntimeError
-pub fn Runtime::clear_output(Self) -> Unit
-pub fn Runtime::get_globals(Self) -> Array[@core.Value]
-pub fn Runtime::get_module(Self) -> @core.Module
-pub fn Runtime::get_output(Self) -> Array[String]
-pub fn Runtime::get_tables(Self) -> Array[RuntimeTable]
-pub fn Runtime::load(@core.Module) -> Self raise RuntimeError
-pub fn Runtime::load_with_resolver(@core.Module, ImportResolver) -> Self raise RuntimeError
-pub fn Runtime::run_start(Self) -> Unit raise RuntimeError
+pub fn Instance::call_by_index(Self, Int, Array[@core.Value]) -> Array[@core.Value] raise RuntimeError
+pub fn Instance::call_compiled(Self, Bytes, Array[@core.Value]) -> Array[@core.Value] raise RuntimeError
+pub fn Instance::clear_output(Self) -> Unit
+pub fn Instance::get_globals(Self) -> Array[@core.Value]
+pub fn Instance::get_module(Self) -> @core.Module
+pub fn Instance::get_output(Self) -> Array[String]
+pub fn Instance::get_tables(Self) -> Array[RuntimeTable]
+pub fn Instance::new(@core.Module, Imports) -> Self raise RuntimeError
+pub fn Instance::run_start(Self) -> Unit raise RuntimeError
 
 pub struct RuntimeContext {
   module_ : @core.Module
@@ -100,11 +104,11 @@ pub struct RuntimeContext {
   memory_max : UInt64?
   globals : Array[@core.Value]
   tables : Array[RuntimeTable]
-  imported_funcs : Array[ImportedFunc]
+  imported_funcs : Array[HostFunc]
   data_segments : Array[Array[Byte]]
   gc_heap : Array[GcObject]
   output : Array[String]
-  external_funcrefs : Array[ImportedFunc]
+  external_funcrefs : Array[HostFunc]
   dropped_elems : Array[Bool]
   num_imported_funcs : Int
   mut error_detail : String
@@ -124,10 +128,11 @@ pub impl Eq for RuntimeStatus
 pub impl Show for RuntimeStatus
 
 type RuntimeTable
-pub fn RuntimeTable::add_external_funcref(Self, ImportedFunc) -> Int
+pub fn RuntimeTable::add_external_funcref(Self, HostFunc) -> Int
 pub fn RuntimeTable::data_length(Self) -> Int
 pub fn RuntimeTable::external_funcrefs_length(Self) -> Int
 pub fn RuntimeTable::get_data(Self, Int) -> UInt64
+pub fn RuntimeTable::new(Array[UInt64], max? : UInt64?) -> Self
 pub fn RuntimeTable::set_data(Self, Int, UInt64) -> Unit
 
 // Type aliases

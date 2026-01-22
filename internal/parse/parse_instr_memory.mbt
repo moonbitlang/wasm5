@@ -1,5 +1,8 @@
 ///|
-fn parse_instr_memory(parser : Parser, opcode : Byte) -> @core.Instr? raise {
+fn parse_instr_memory(
+  parser : Parser,
+  opcode : Byte,
+) -> @core.Instr? raise ParseError {
   match opcode {
     0x28 => {
       let (align, offset, memory_idx) = parser.read_memarg()

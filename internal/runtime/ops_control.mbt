@@ -1,6 +1,6 @@
 ///|
 /// Local access uses unified stack: stack[bp + idx]
-fn op_local_get(rt : Runtime) -> ReturnCode {
+fn op_local_get(rt : Instance) -> ReturnCode {
   let idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let value = rt.stack.unsafe_get(rt.bp + idx)
   rt.stack.unsafe_set(rt.sp, value)
@@ -10,7 +10,7 @@ fn op_local_get(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_local_set(rt : Runtime) -> ReturnCode {
+fn op_local_set(rt : Instance) -> ReturnCode {
   let idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let stack_top = rt.sp - 1
   let value = rt.stack.unsafe_get(stack_top)
@@ -21,7 +21,7 @@ fn op_local_set(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_local_tee(rt : Runtime) -> ReturnCode {
+fn op_local_tee(rt : Instance) -> ReturnCode {
   let idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let value = rt.stack.unsafe_get(rt.sp - 1)
   rt.stack.unsafe_set(rt.bp + idx, value)
@@ -34,14 +34,14 @@ fn op_local_tee(rt : Runtime) -> ReturnCode {
 // ============================================================================
 
 ///|
-fn op_drop(rt : Runtime) -> ReturnCode {
+fn op_drop(rt : Instance) -> ReturnCode {
   rt.sp = rt.sp - 1
   rt.pc = rt.pc + 1
   Running
 }
 
 ///|
-fn op_select(rt : Runtime) -> ReturnCode {
+fn op_select(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 3
   let cond = rt.stack.unsafe_get(rt.sp - 1).to_uint()
   let val2 = rt.stack.unsafe_get(rt.sp - 2)
@@ -57,7 +57,7 @@ fn op_select(rt : Runtime) -> ReturnCode {
 // ============================================================================
 
 ///|
-fn op_entry(rt : Runtime) -> ReturnCode {
+fn op_entry(rt : Instance) -> ReturnCode {
   let num_locals = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let first_local = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let num_to_zero = rt.ops.unsafe_get(rt.pc + 3).to_int()
@@ -76,7 +76,7 @@ fn op_entry(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_copy_slot(rt : Runtime) -> ReturnCode {
+fn op_copy_slot(rt : Instance) -> ReturnCode {
   let src_slot = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let dst_slot = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let value = rt.stack.unsafe_get(rt.bp + src_slot)
@@ -86,7 +86,7 @@ fn op_copy_slot(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_set_sp(rt : Runtime) -> ReturnCode {
+fn op_set_sp(rt : Instance) -> ReturnCode {
   let slot = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let new_sp = rt.bp + slot
   if new_sp > rt.stack.length() {
@@ -100,7 +100,7 @@ fn op_set_sp(rt : Runtime) -> ReturnCode {
 
 ///|
 fn get_func_type_or_error(
-  rt : Runtime,
+  rt : Instance,
   type_idx : Int,
   context : String,
 ) -> @core.FuncType? {
@@ -122,7 +122,7 @@ fn get_func_type_or_error(
 // ============================================================================
 
 ///|
-fn op_if(rt : Runtime) -> ReturnCode {
+fn op_if(rt : Instance) -> ReturnCode {
   let else_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let stack_top = rt.sp - 1
   let cond = rt.stack.unsafe_get(stack_top).to_uint()
@@ -141,14 +141,14 @@ fn op_if(rt : Runtime) -> ReturnCode {
 // Branch targets are now computed at compile time and embedded directly in branch instructions
 
 ///|
-fn op_br(rt : Runtime) -> ReturnCode {
+fn op_br(rt : Instance) -> ReturnCode {
   let target_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
   rt.pc = target_pc
   Running
 }
 
 ///|
-fn op_br_if(rt : Runtime) -> ReturnCode {
+fn op_br_if(rt : Instance) -> ReturnCode {
   let taken_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let not_taken_pc = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let stack_top = rt.sp - 1
@@ -163,7 +163,7 @@ fn op_br_if(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_br_table(rt : Runtime) -> ReturnCode {
+fn op_br_table(rt : Instance) -> ReturnCode {
   let num_labels = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let stack_top = rt.sp - 1
   let index = rt.stack.unsafe_get(stack_top).to_uint().reinterpret_as_int()
@@ -181,7 +181,7 @@ fn op_br_table(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_br_on_null(rt : Runtime) -> ReturnCode {
+fn op_br_on_null(rt : Instance) -> ReturnCode {
   let target_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let not_taken_pc = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let stack_top = rt.sp - 1
@@ -196,7 +196,7 @@ fn op_br_on_null(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_br_on_non_null(rt : Runtime) -> ReturnCode {
+fn op_br_on_non_null(rt : Instance) -> ReturnCode {
   let target_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let not_taken_pc = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let stack_top = rt.sp - 1
@@ -216,7 +216,7 @@ fn op_br_on_non_null(rt : Runtime) -> ReturnCode {
 ///   pc+1: callee_pc
 ///   pc+2: frame_offset (relative to bp, args already in place)
 /// Uses native stack: recursively calls execute() for the callee.
-fn op_call(rt : Runtime) -> ReturnCode {
+fn op_call(rt : Instance) -> ReturnCode {
   let callee_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let frame_offset = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let caller_bp = rt.bp
@@ -242,7 +242,7 @@ fn op_call(rt : Runtime) -> ReturnCode {
 
 ///|
 /// Call an imported function. Immediates: import_idx, frame_offset.
-fn op_call_import(rt : Runtime) -> ReturnCode {
+fn op_call_import(rt : Instance) -> ReturnCode {
   let func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let _frame_offset = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let num_imported_funcs = rt.ctx.num_imported_funcs
@@ -268,14 +268,14 @@ fn op_call_import(rt : Runtime) -> ReturnCode {
 
 ///|
 /// Call a function in another module (not supported in MoonBit runtime).
-fn op_call_external(rt : Runtime) -> ReturnCode {
+fn op_call_external(rt : Instance) -> ReturnCode {
   rt.ctx.error_detail = "call_external not implemented"
   Trap
 }
 
 ///|
 /// Copy results to bp and return a return code.
-fn finish_function_return(rt : Runtime, num_results : Int) -> ReturnCode {
+fn finish_function_return(rt : Instance, num_results : Int) -> ReturnCode {
   let return_start = rt.sp - num_results
   for i = 0; i < num_results; i = i + 1 {
     rt.stack.unsafe_set(rt.bp + i, rt.stack.unsafe_get(return_start + i))
@@ -291,21 +291,21 @@ fn finish_function_return(rt : Runtime, num_results : Int) -> ReturnCode {
 ///|
 /// Return from a function. Uses native stack approach.
 /// Copies return values to bp position and returns Returned for non-entry calls.
-fn op_return(rt : Runtime) -> ReturnCode {
+fn op_return(rt : Instance) -> ReturnCode {
   let num_return_values = rt.ops.unsafe_get(rt.pc + 1).to_int()
   finish_function_return(rt, num_return_values)
 }
 
 ///|
 /// End of function (implicit return).
-fn op_end(rt : Runtime) -> ReturnCode {
+fn op_end(rt : Instance) -> ReturnCode {
   let num_results = rt.ops.unsafe_get(rt.pc + 1).to_int()
   finish_function_return(rt, num_results)
 }
 
 ///|
 /// Function exit without copying (results already placed at bp).
-fn op_func_exit(rt : Runtime) -> ReturnCode {
+fn op_func_exit(rt : Instance) -> ReturnCode {
   if rt.bp == 0 {
     Terminated
   } else {
@@ -315,7 +315,7 @@ fn op_func_exit(rt : Runtime) -> ReturnCode {
 
 ///|
 /// Call a function indirectly via table. Uses native stack approach.
-fn op_call_indirect(rt : Runtime) -> ReturnCode {
+fn op_call_indirect(rt : Instance) -> ReturnCode {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let table_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let frame_offset = rt.ops.unsafe_get(rt.pc + 3).to_int()
@@ -470,7 +470,7 @@ fn op_call_indirect(rt : Runtime) -> ReturnCode {
 ///   pc+1: callee_pc
 ///   pc+2: num_params
 ///   pc+3: num_locals
-fn op_return_call_local(rt : Runtime) -> ReturnCode {
+fn op_return_call_local(rt : Instance) -> ReturnCode {
   let callee_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let num_params = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let num_locals = rt.ops.unsafe_get(rt.pc + 3).to_int()
@@ -495,7 +495,7 @@ fn op_return_call_local(rt : Runtime) -> ReturnCode {
 
 ///|
 /// Tail call an imported function. Immediate is the original func_idx.
-fn op_return_call_import(rt : Runtime) -> ReturnCode {
+fn op_return_call_import(rt : Instance) -> ReturnCode {
   let func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let num_imported_funcs = rt.ctx.num_imported_funcs
   let type_idx = get_func_type_idx(rt.ctx.module_, func_idx, num_imported_funcs)
@@ -518,7 +518,7 @@ fn op_return_call_import(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_return_call_indirect(rt : Runtime) -> ReturnCode {
+fn op_return_call_indirect(rt : Instance) -> ReturnCode {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let table_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
 
@@ -641,7 +641,7 @@ fn op_return_call_indirect(rt : Runtime) -> ReturnCode {
 
 ///|
 /// Call a function via reference. Uses native stack approach.
-fn op_call_ref(rt : Runtime) -> ReturnCode {
+fn op_call_ref(rt : Instance) -> ReturnCode {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let frame_offset = rt.ops.unsafe_get(rt.pc + 2).to_int()
 
@@ -747,7 +747,7 @@ fn op_call_ref(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_return_call_ref(rt : Runtime) -> ReturnCode {
+fn op_return_call_ref(rt : Instance) -> ReturnCode {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
 
   // Pop the function reference from the stack (stored as Int64, -1 = null)
@@ -849,13 +849,13 @@ fn op_return_call_ref(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_nop(rt : Runtime) -> ReturnCode {
+fn op_nop(rt : Instance) -> ReturnCode {
   rt.pc = rt.pc + 1
   Running
 }
 
 ///|
-fn op_unreachable(rt : Runtime) -> ReturnCode {
+fn op_unreachable(rt : Instance) -> ReturnCode {
   rt.ctx.error_detail = "unreachable"
   Trap
 }
@@ -865,7 +865,7 @@ fn op_unreachable(rt : Runtime) -> ReturnCode {
 // =============================================================================
 
 ///|
-fn op_table_init(rt : Runtime) -> ReturnCode {
+fn op_table_init(rt : Instance) -> ReturnCode {
   let elem_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let table_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let stack_top = rt.sp - 3
@@ -937,7 +937,7 @@ fn op_table_init(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_table_copy(rt : Runtime) -> ReturnCode {
+fn op_table_copy(rt : Instance) -> ReturnCode {
   let dst_table_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let src_table_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let stack_top = rt.sp - 3
@@ -987,7 +987,7 @@ fn op_table_copy(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_table_fill(rt : Runtime) -> ReturnCode {
+fn op_table_fill(rt : Instance) -> ReturnCode {
   // Table index is validated at compile time by the validator
   let table_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let stack_top = rt.sp - 3
@@ -1010,7 +1010,7 @@ fn op_table_fill(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_elem_drop(rt : Runtime) -> ReturnCode {
+fn op_elem_drop(rt : Instance) -> ReturnCode {
   let elem_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   // Mark the element segment as dropped
   if elem_idx >= 0 && elem_idx < rt.ctx.dropped_elems.length() {
@@ -1025,7 +1025,7 @@ fn op_elem_drop(rt : Runtime) -> ReturnCode {
 // =============================================================================
 
 ///|
-fn op_table_size(rt : Runtime) -> ReturnCode {
+fn op_table_size(rt : Instance) -> ReturnCode {
   let table_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   if table_idx < 0 || table_idx >= rt.ctx.tables.length() {
     rt.ctx.error_detail = "table index out of bounds"
@@ -1039,7 +1039,7 @@ fn op_table_size(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_table_get(rt : Runtime) -> ReturnCode {
+fn op_table_get(rt : Instance) -> ReturnCode {
   let table_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   if table_idx < 0 || table_idx >= rt.ctx.tables.length() {
     rt.ctx.error_detail = "table index out of bounds"
@@ -1061,7 +1061,7 @@ fn op_table_get(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_table_set(rt : Runtime) -> ReturnCode {
+fn op_table_set(rt : Instance) -> ReturnCode {
   let table_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   if table_idx < 0 || table_idx >= rt.ctx.tables.length() {
     rt.ctx.error_detail = "table index out of bounds"
@@ -1084,7 +1084,7 @@ fn op_table_set(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_table_grow(rt : Runtime) -> ReturnCode {
+fn op_table_grow(rt : Instance) -> ReturnCode {
   let table_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   if table_idx < 0 || table_idx >= rt.ctx.tables.length() {
     rt.stack.unsafe_set(rt.sp, 0xFFFFFFFFUL) // -1 indicates failure
@@ -1135,7 +1135,7 @@ fn op_table_grow(rt : Runtime) -> ReturnCode {
 // =============================================================================
 
 ///|
-fn op_ref_null(rt : Runtime) -> ReturnCode {
+fn op_ref_null(rt : Instance) -> ReturnCode {
   // ref.null pushes a null reference onto the stack
   // The heap type is encoded in the immediate but we don't need it at runtime
   let _ = rt.ops.unsafe_get(rt.pc + 1).to_int() // Skip the heap type encoding
@@ -1147,7 +1147,7 @@ fn op_ref_null(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_ref_func(rt : Runtime) -> ReturnCode {
+fn op_ref_func(rt : Instance) -> ReturnCode {
   // ref.func pushes a reference to the given function onto the stack
   let func_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   // Push func ref tagged with bit 62 (0x4000000000000000)
@@ -1159,7 +1159,7 @@ fn op_ref_func(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_ref_is_null(rt : Runtime) -> ReturnCode {
+fn op_ref_is_null(rt : Instance) -> ReturnCode {
   // ref.is_null tests whether a reference is null
   // Refs are stored as Int64, -1 = null
   let stack_top = rt.sp - 1
@@ -1171,7 +1171,7 @@ fn op_ref_is_null(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_ref_eq(rt : Runtime) -> ReturnCode {
+fn op_ref_eq(rt : Instance) -> ReturnCode {
   // ref.eq compares two references for identity equality
   // Refs are stored as Int64, -1 = null
   let stack_top = rt.sp - 2
@@ -1185,7 +1185,7 @@ fn op_ref_eq(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_ref_as_non_null(rt : Runtime) -> ReturnCode {
+fn op_ref_as_non_null(rt : Instance) -> ReturnCode {
   // ref.as_non_null traps on null references
   // Refs are stored as Int64, -1 = null
   let value = rt.stack.unsafe_get(rt.sp - 1)
@@ -1200,7 +1200,7 @@ fn op_ref_as_non_null(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_global_get(rt : Runtime) -> ReturnCode {
+fn op_global_get(rt : Instance) -> ReturnCode {
   let idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   // Convert Value to UInt64 for stack
   rt.stack.unsafe_set(rt.sp, value_to_stack(rt.ctx.globals[idx]))
@@ -1210,7 +1210,7 @@ fn op_global_get(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_global_set(rt : Runtime) -> ReturnCode {
+fn op_global_set(rt : Instance) -> ReturnCode {
   let idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let stack_top = rt.sp - 1
   let raw = rt.stack.unsafe_get(stack_top)

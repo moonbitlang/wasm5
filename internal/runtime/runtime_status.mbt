@@ -1,5 +1,5 @@
 ///|
-/// Runtime execution return code
+/// Instance execution return code
 pub enum RuntimeStatus {
   Running
   Terminated

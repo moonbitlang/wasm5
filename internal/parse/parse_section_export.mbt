@@ -1,7 +1,9 @@
 // Section parsers: export section
 
 ///|
-fn parse_export_section(parser : Parser) -> Array[@core.Export] raise {
+fn parse_export_section(
+  parser : Parser,
+) -> Array[@core.Export] raise ParseError {
   let count = parser.read_u32_leb128()
   let exports = []
   for i in 0U..<count {
@@ -15,7 +17,7 @@ fn parse_export_section(parser : Parser) -> Array[@core.Export] raise {
       // Exception handling: tag export
       0x04 => Tag(parser.read_u32_leb128())
       _ =>
-        raise @validate.ValidationError::TypeMismatch(
+        raise ParseError::InvalidFormat(
           "invalid export descriptor tag: 0x\{desc_tag.to_string()}",
         )
     }

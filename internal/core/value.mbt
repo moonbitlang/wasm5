@@ -1,5 +1,5 @@
 ///|
-/// Runtime value types for WebAssembly execution.
+/// Instance value types for WebAssembly execution.
 pub(all) enum Value {
   I32(UInt)
   I64(UInt64)

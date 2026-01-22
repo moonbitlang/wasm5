@@ -1,5 +1,5 @@
 ///|
-fn op_f32_eq(rt : Runtime) -> ReturnCode {
+fn op_f32_eq(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = Float::reinterpret_from_uint(rt.stack.unsafe_get(stack_top).to_uint())
   let a = Float::reinterpret_from_uint(
@@ -12,7 +12,7 @@ fn op_f32_eq(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f32_ne(rt : Runtime) -> ReturnCode {
+fn op_f32_ne(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = Float::reinterpret_from_uint(rt.stack.unsafe_get(stack_top).to_uint())
   let a = Float::reinterpret_from_uint(
@@ -25,7 +25,7 @@ fn op_f32_ne(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f32_lt(rt : Runtime) -> ReturnCode {
+fn op_f32_lt(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = Float::reinterpret_from_uint(rt.stack.unsafe_get(stack_top).to_uint())
   let a = Float::reinterpret_from_uint(
@@ -38,7 +38,7 @@ fn op_f32_lt(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f32_gt(rt : Runtime) -> ReturnCode {
+fn op_f32_gt(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = Float::reinterpret_from_uint(rt.stack.unsafe_get(stack_top).to_uint())
   let a = Float::reinterpret_from_uint(
@@ -51,7 +51,7 @@ fn op_f32_gt(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f32_le(rt : Runtime) -> ReturnCode {
+fn op_f32_le(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = Float::reinterpret_from_uint(rt.stack.unsafe_get(stack_top).to_uint())
   let a = Float::reinterpret_from_uint(
@@ -64,7 +64,7 @@ fn op_f32_le(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f32_ge(rt : Runtime) -> ReturnCode {
+fn op_f32_ge(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = Float::reinterpret_from_uint(rt.stack.unsafe_get(stack_top).to_uint())
   let a = Float::reinterpret_from_uint(
@@ -77,7 +77,7 @@ fn op_f32_ge(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_eq(rt : Runtime) -> ReturnCode {
+fn op_f64_eq(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).reinterpret_as_double()
   let a = rt.stack.unsafe_get(stack_top - 1).reinterpret_as_double()
@@ -88,7 +88,7 @@ fn op_f64_eq(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_ne(rt : Runtime) -> ReturnCode {
+fn op_f64_ne(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).reinterpret_as_double()
   let a = rt.stack.unsafe_get(stack_top - 1).reinterpret_as_double()
@@ -99,7 +99,7 @@ fn op_f64_ne(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_lt(rt : Runtime) -> ReturnCode {
+fn op_f64_lt(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).reinterpret_as_double()
   let a = rt.stack.unsafe_get(stack_top - 1).reinterpret_as_double()
@@ -110,7 +110,7 @@ fn op_f64_lt(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_gt(rt : Runtime) -> ReturnCode {
+fn op_f64_gt(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).reinterpret_as_double()
   let a = rt.stack.unsafe_get(stack_top - 1).reinterpret_as_double()
@@ -121,7 +121,7 @@ fn op_f64_gt(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_le(rt : Runtime) -> ReturnCode {
+fn op_f64_le(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).reinterpret_as_double()
   let a = rt.stack.unsafe_get(stack_top - 1).reinterpret_as_double()
@@ -132,7 +132,7 @@ fn op_f64_le(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_ge(rt : Runtime) -> ReturnCode {
+fn op_f64_ge(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).reinterpret_as_double()
   let a = rt.stack.unsafe_get(stack_top - 1).reinterpret_as_double()
@@ -145,7 +145,7 @@ fn op_f64_ge(rt : Runtime) -> ReturnCode {
 // Float unary operations
 
 ///|
-fn op_f32_neg(rt : Runtime) -> ReturnCode {
+fn op_f32_neg(rt : Instance) -> ReturnCode {
   let a = Float::reinterpret_from_uint(rt.stack.unsafe_get(rt.sp - 1).to_uint())
   rt.stack.unsafe_set(rt.sp - 1, (-a).reinterpret_as_uint().to_uint64())
   rt.pc = rt.pc + 1
@@ -153,7 +153,7 @@ fn op_f32_neg(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f32_abs(rt : Runtime) -> ReturnCode {
+fn op_f32_abs(rt : Instance) -> ReturnCode {
   let a = Float::reinterpret_from_uint(rt.stack.unsafe_get(rt.sp - 1).to_uint())
   rt.stack.unsafe_set(rt.sp - 1, a.abs().reinterpret_as_uint().to_uint64())
   rt.pc = rt.pc + 1
@@ -161,7 +161,7 @@ fn op_f32_abs(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f32_sqrt(rt : Runtime) -> ReturnCode {
+fn op_f32_sqrt(rt : Instance) -> ReturnCode {
   let a = Float::reinterpret_from_uint(rt.stack.unsafe_get(rt.sp - 1).to_uint())
   rt.stack.unsafe_set(
     rt.sp - 1,
@@ -172,7 +172,7 @@ fn op_f32_sqrt(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f32_ceil(rt : Runtime) -> ReturnCode {
+fn op_f32_ceil(rt : Instance) -> ReturnCode {
   let a = Float::reinterpret_from_uint(rt.stack.unsafe_get(rt.sp - 1).to_uint())
   rt.stack.unsafe_set(
     rt.sp - 1,
@@ -183,7 +183,7 @@ fn op_f32_ceil(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f32_floor(rt : Runtime) -> ReturnCode {
+fn op_f32_floor(rt : Instance) -> ReturnCode {
   let a = Float::reinterpret_from_uint(rt.stack.unsafe_get(rt.sp - 1).to_uint())
   rt.stack.unsafe_set(
     rt.sp - 1,
@@ -194,7 +194,7 @@ fn op_f32_floor(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f32_trunc(rt : Runtime) -> ReturnCode {
+fn op_f32_trunc(rt : Instance) -> ReturnCode {
   let a = Float::reinterpret_from_uint(rt.stack.unsafe_get(rt.sp - 1).to_uint())
   rt.stack.unsafe_set(
     rt.sp - 1,
@@ -205,7 +205,7 @@ fn op_f32_trunc(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f32_nearest(rt : Runtime) -> ReturnCode {
+fn op_f32_nearest(rt : Instance) -> ReturnCode {
   let a = Float::reinterpret_from_uint(rt.stack.unsafe_get(rt.sp - 1).to_uint())
   rt.stack.unsafe_set(
     rt.sp - 1,
@@ -218,7 +218,7 @@ fn op_f32_nearest(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_neg(rt : Runtime) -> ReturnCode {
+fn op_f64_neg(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_double()
   rt.stack.unsafe_set(rt.sp - 1, (-a).reinterpret_as_uint64())
   rt.pc = rt.pc + 1
@@ -228,7 +228,7 @@ fn op_f64_neg(rt : Runtime) -> ReturnCode {
 // Float binary operations
 
 ///|
-fn op_f32_add(rt : Runtime) -> ReturnCode {
+fn op_f32_add(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = Float::reinterpret_from_uint(rt.stack.unsafe_get(stack_top).to_uint())
   let a = Float::reinterpret_from_uint(
@@ -244,7 +244,7 @@ fn op_f32_add(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f32_sub(rt : Runtime) -> ReturnCode {
+fn op_f32_sub(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = Float::reinterpret_from_uint(rt.stack.unsafe_get(stack_top).to_uint())
   let a = Float::reinterpret_from_uint(
@@ -260,7 +260,7 @@ fn op_f32_sub(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f32_mul(rt : Runtime) -> ReturnCode {
+fn op_f32_mul(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = Float::reinterpret_from_uint(rt.stack.unsafe_get(stack_top).to_uint())
   let a = Float::reinterpret_from_uint(
@@ -276,7 +276,7 @@ fn op_f32_mul(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f32_div(rt : Runtime) -> ReturnCode {
+fn op_f32_div(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = Float::reinterpret_from_uint(rt.stack.unsafe_get(stack_top).to_uint())
   let a = Float::reinterpret_from_uint(
@@ -292,7 +292,7 @@ fn op_f32_div(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f32_min(rt : Runtime) -> ReturnCode {
+fn op_f32_min(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = Float::reinterpret_from_uint(rt.stack.unsafe_get(stack_top).to_uint())
   let a = Float::reinterpret_from_uint(
@@ -329,7 +329,7 @@ fn op_f32_min(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f32_max(rt : Runtime) -> ReturnCode {
+fn op_f32_max(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = Float::reinterpret_from_uint(rt.stack.unsafe_get(stack_top).to_uint())
   let a = Float::reinterpret_from_uint(
@@ -366,7 +366,7 @@ fn op_f32_max(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f32_copysign(rt : Runtime) -> ReturnCode {
+fn op_f32_copysign(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = Float::reinterpret_from_uint(rt.stack.unsafe_get(stack_top).to_uint())
   let a = Float::reinterpret_from_uint(
@@ -383,7 +383,7 @@ fn op_f32_copysign(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_add(rt : Runtime) -> ReturnCode {
+fn op_f64_add(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).reinterpret_as_double()
   let a = rt.stack.unsafe_get(stack_top - 1).reinterpret_as_double()
@@ -397,7 +397,7 @@ fn op_f64_add(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_sub(rt : Runtime) -> ReturnCode {
+fn op_f64_sub(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).reinterpret_as_double()
   let a = rt.stack.unsafe_get(stack_top - 1).reinterpret_as_double()
@@ -411,7 +411,7 @@ fn op_f64_sub(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_mul(rt : Runtime) -> ReturnCode {
+fn op_f64_mul(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).reinterpret_as_double()
   let a = rt.stack.unsafe_get(stack_top - 1).reinterpret_as_double()
@@ -425,7 +425,7 @@ fn op_f64_mul(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_div(rt : Runtime) -> ReturnCode {
+fn op_f64_div(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).reinterpret_as_double()
   let a = rt.stack.unsafe_get(stack_top - 1).reinterpret_as_double()
@@ -439,7 +439,7 @@ fn op_f64_div(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_min(rt : Runtime) -> ReturnCode {
+fn op_f64_min(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).reinterpret_as_double()
   let a = rt.stack.unsafe_get(stack_top - 1).reinterpret_as_double()
@@ -474,7 +474,7 @@ fn op_f64_min(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_max(rt : Runtime) -> ReturnCode {
+fn op_f64_max(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).reinterpret_as_double()
   let a = rt.stack.unsafe_get(stack_top - 1).reinterpret_as_double()
@@ -509,7 +509,7 @@ fn op_f64_max(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_copysign(rt : Runtime) -> ReturnCode {
+fn op_f64_copysign(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).reinterpret_as_double()
   let a = rt.stack.unsafe_get(stack_top - 1).reinterpret_as_double()
@@ -526,7 +526,7 @@ fn op_f64_copysign(rt : Runtime) -> ReturnCode {
 // Float unary operations
 
 ///|
-fn op_f64_abs(rt : Runtime) -> ReturnCode {
+fn op_f64_abs(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_double()
   rt.stack.unsafe_set(rt.sp - 1, a.abs().reinterpret_as_uint64())
   rt.pc = rt.pc + 1
@@ -534,7 +534,7 @@ fn op_f64_abs(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_sqrt(rt : Runtime) -> ReturnCode {
+fn op_f64_sqrt(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_double()
   rt.stack.unsafe_set(
     rt.sp - 1,
@@ -545,7 +545,7 @@ fn op_f64_sqrt(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_ceil(rt : Runtime) -> ReturnCode {
+fn op_f64_ceil(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_double()
   rt.stack.unsafe_set(
     rt.sp - 1,
@@ -556,7 +556,7 @@ fn op_f64_ceil(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_floor(rt : Runtime) -> ReturnCode {
+fn op_f64_floor(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_double()
   rt.stack.unsafe_set(
     rt.sp - 1,
@@ -567,7 +567,7 @@ fn op_f64_floor(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_trunc(rt : Runtime) -> ReturnCode {
+fn op_f64_trunc(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_double()
   rt.stack.unsafe_set(
     rt.sp - 1,
@@ -578,7 +578,7 @@ fn op_f64_trunc(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_nearest(rt : Runtime) -> ReturnCode {
+fn op_f64_nearest(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_double()
   rt.stack.unsafe_set(
     rt.sp - 1,
@@ -591,7 +591,7 @@ fn op_f64_nearest(rt : Runtime) -> ReturnCode {
 // Float conversion operations
 
 ///|
-fn op_f64_convert_i64_u(rt : Runtime) -> ReturnCode {
+fn op_f64_convert_i64_u(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1)
   rt.stack.unsafe_set(rt.sp - 1, a.to_double().reinterpret_as_uint64())
   rt.pc = rt.pc + 1
@@ -599,7 +599,7 @@ fn op_f64_convert_i64_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_convert_i64_s(rt : Runtime) -> ReturnCode {
+fn op_f64_convert_i64_s(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_int64()
   rt.stack.unsafe_set(rt.sp - 1, a.to_double().reinterpret_as_uint64())
   rt.pc = rt.pc + 1
@@ -607,7 +607,7 @@ fn op_f64_convert_i64_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_convert_i32_u(rt : Runtime) -> ReturnCode {
+fn op_f64_convert_i32_u(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).to_uint()
   rt.stack.unsafe_set(rt.sp - 1, a.to_double().reinterpret_as_uint64())
   rt.pc = rt.pc + 1
@@ -615,7 +615,7 @@ fn op_f64_convert_i32_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_convert_i32_s(rt : Runtime) -> ReturnCode {
+fn op_f64_convert_i32_s(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).to_uint().reinterpret_as_int()
   rt.stack.unsafe_set(rt.sp - 1, a.to_double().reinterpret_as_uint64())
   rt.pc = rt.pc + 1
@@ -623,7 +623,7 @@ fn op_f64_convert_i32_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_promote_f32(rt : Runtime) -> ReturnCode {
+fn op_f64_promote_f32(rt : Instance) -> ReturnCode {
   let a = Float::reinterpret_from_uint(rt.stack.unsafe_get(rt.sp - 1).to_uint())
   let result = a.to_double()
   // Canonicalize NaN to ensure positive canonical NaN
@@ -636,7 +636,7 @@ fn op_f64_promote_f32(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f32_demote_f64(rt : Runtime) -> ReturnCode {
+fn op_f32_demote_f64(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_double()
   let result = Float::from_double(a)
   // Canonicalize NaN to ensure positive canonical NaN
@@ -649,7 +649,7 @@ fn op_f32_demote_f64(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f32_convert_i32_s(rt : Runtime) -> ReturnCode {
+fn op_f32_convert_i32_s(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).to_uint().reinterpret_as_int()
   rt.stack.unsafe_set(
     rt.sp - 1,
@@ -660,7 +660,7 @@ fn op_f32_convert_i32_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f32_convert_i32_u(rt : Runtime) -> ReturnCode {
+fn op_f32_convert_i32_u(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).to_uint()
   rt.stack.unsafe_set(
     rt.sp - 1,
@@ -671,7 +671,7 @@ fn op_f32_convert_i32_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f32_convert_i64_s(rt : Runtime) -> ReturnCode {
+fn op_f32_convert_i64_s(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_int64()
   rt.stack.unsafe_set(
     rt.sp - 1,
@@ -682,7 +682,7 @@ fn op_f32_convert_i64_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f32_convert_i64_u(rt : Runtime) -> ReturnCode {
+fn op_f32_convert_i64_u(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1)
   rt.stack.unsafe_set(
     rt.sp - 1,
@@ -695,7 +695,7 @@ fn op_f32_convert_i64_u(rt : Runtime) -> ReturnCode {
 // Truncation operations (with trapping on overflow/NaN)
 
 ///|
-fn op_i64_trunc_f64_s(rt : Runtime) -> ReturnCode {
+fn op_i64_trunc_f64_s(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_double()
   // Trap on NaN or out of range
   if a.is_nan() {
@@ -712,7 +712,7 @@ fn op_i64_trunc_f64_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_trunc_f64_u(rt : Runtime) -> ReturnCode {
+fn op_i64_trunc_f64_u(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_double()
   // Trap on NaN or out of range
   if a.is_nan() {
@@ -729,7 +729,7 @@ fn op_i64_trunc_f64_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_trunc_f32_s(rt : Runtime) -> ReturnCode {
+fn op_i32_trunc_f32_s(rt : Instance) -> ReturnCode {
   let a = Float::reinterpret_from_uint(rt.stack.unsafe_get(rt.sp - 1).to_uint())
   // Trap on NaN or out of range
   if a.is_nan() {
@@ -746,7 +746,7 @@ fn op_i32_trunc_f32_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_trunc_f32_u(rt : Runtime) -> ReturnCode {
+fn op_i32_trunc_f32_u(rt : Instance) -> ReturnCode {
   let a = Float::reinterpret_from_uint(rt.stack.unsafe_get(rt.sp - 1).to_uint())
   // Trap on NaN or out of range
   if a.is_nan() {
@@ -763,7 +763,7 @@ fn op_i32_trunc_f32_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_trunc_f64_s(rt : Runtime) -> ReturnCode {
+fn op_i32_trunc_f64_s(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_double()
   // Trap on NaN or out of range
   if a.is_nan() {
@@ -780,7 +780,7 @@ fn op_i32_trunc_f64_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_trunc_f64_u(rt : Runtime) -> ReturnCode {
+fn op_i32_trunc_f64_u(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_double()
   // Trap on NaN or out of range
   if a.is_nan() {
@@ -797,7 +797,7 @@ fn op_i32_trunc_f64_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_trunc_f32_s(rt : Runtime) -> ReturnCode {
+fn op_i64_trunc_f32_s(rt : Instance) -> ReturnCode {
   let a = Float::reinterpret_from_uint(rt.stack.unsafe_get(rt.sp - 1).to_uint()).to_double()
   // Trap on NaN or out of range
   if a.is_nan() {
@@ -814,7 +814,7 @@ fn op_i64_trunc_f32_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_trunc_f32_u(rt : Runtime) -> ReturnCode {
+fn op_i64_trunc_f32_u(rt : Instance) -> ReturnCode {
   let a = Float::reinterpret_from_uint(rt.stack.unsafe_get(rt.sp - 1).to_uint())
   // Trap on NaN or out of range
   if a.is_nan() {
@@ -838,7 +838,7 @@ fn op_i64_trunc_f32_u(rt : Runtime) -> ReturnCode {
 // overflow/NaN, they "saturate" to the min/max value or return 0 for NaN.
 
 ///|
-fn op_i32_trunc_sat_f32_s(rt : Runtime) -> ReturnCode {
+fn op_i32_trunc_sat_f32_s(rt : Instance) -> ReturnCode {
   let a = Float::reinterpret_from_uint(rt.stack.unsafe_get(rt.sp - 1).to_uint())
   let result = if a.is_nan() {
     0UL
@@ -857,7 +857,7 @@ fn op_i32_trunc_sat_f32_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_trunc_sat_f32_u(rt : Runtime) -> ReturnCode {
+fn op_i32_trunc_sat_f32_u(rt : Instance) -> ReturnCode {
   let a = Float::reinterpret_from_uint(rt.stack.unsafe_get(rt.sp - 1).to_uint())
   let result = if a.is_nan() {
     0UL
@@ -876,7 +876,7 @@ fn op_i32_trunc_sat_f32_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_trunc_sat_f64_s(rt : Runtime) -> ReturnCode {
+fn op_i32_trunc_sat_f64_s(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_double()
   let result = if a.is_nan() {
     0UL
@@ -895,7 +895,7 @@ fn op_i32_trunc_sat_f64_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_trunc_sat_f64_u(rt : Runtime) -> ReturnCode {
+fn op_i32_trunc_sat_f64_u(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_double()
   let result = if a.is_nan() {
     0UL
@@ -914,7 +914,7 @@ fn op_i32_trunc_sat_f64_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_trunc_sat_f32_s(rt : Runtime) -> ReturnCode {
+fn op_i64_trunc_sat_f32_s(rt : Instance) -> ReturnCode {
   let a = Float::reinterpret_from_uint(rt.stack.unsafe_get(rt.sp - 1).to_uint()).to_double()
   let result = if a.is_nan() {
     0UL
@@ -933,7 +933,7 @@ fn op_i64_trunc_sat_f32_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_trunc_sat_f32_u(rt : Runtime) -> ReturnCode {
+fn op_i64_trunc_sat_f32_u(rt : Instance) -> ReturnCode {
   let a = Float::reinterpret_from_uint(rt.stack.unsafe_get(rt.sp - 1).to_uint())
   let a_double = a.to_double()
   let result = if a.is_nan() {
@@ -953,7 +953,7 @@ fn op_i64_trunc_sat_f32_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_trunc_sat_f64_s(rt : Runtime) -> ReturnCode {
+fn op_i64_trunc_sat_f64_s(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_double()
   let result = if a.is_nan() {
     0UL
@@ -972,7 +972,7 @@ fn op_i64_trunc_sat_f64_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_trunc_sat_f64_u(rt : Runtime) -> ReturnCode {
+fn op_i64_trunc_sat_f64_u(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_double()
   let result = if a.is_nan() {
     0UL
@@ -993,7 +993,7 @@ fn op_i64_trunc_sat_f64_u(rt : Runtime) -> ReturnCode {
 // Reinterpret operations
 
 ///|
-fn op_i32_reinterpret_f32(rt : Runtime) -> ReturnCode {
+fn op_i32_reinterpret_f32(rt : Instance) -> ReturnCode {
   // Already stored as bits, just mask to i32 range
   let v = rt.stack.unsafe_get(rt.sp - 1)
   rt.stack.unsafe_set(rt.sp - 1, v & 0xFFFFFFFFUL)
@@ -1002,21 +1002,21 @@ fn op_i32_reinterpret_f32(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_reinterpret_f64(rt : Runtime) -> ReturnCode {
+fn op_i64_reinterpret_f64(rt : Instance) -> ReturnCode {
   // Already stored as bits, no change needed
   rt.pc = rt.pc + 1
   Running
 }
 
 ///|
-fn op_f32_reinterpret_i32(rt : Runtime) -> ReturnCode {
+fn op_f32_reinterpret_i32(rt : Instance) -> ReturnCode {
   // Already stored as bits, no change needed
   rt.pc = rt.pc + 1
   Running
 }
 
 ///|
-fn op_f64_reinterpret_i64(rt : Runtime) -> ReturnCode {
+fn op_f64_reinterpret_i64(rt : Instance) -> ReturnCode {
   // Already stored as bits, no change needed
   rt.pc = rt.pc + 1
   Running

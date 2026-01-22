@@ -49,7 +49,11 @@ pub(all) enum GcObject {
 
 ///|
 /// Allocate a new struct on the GC heap
-fn gc_alloc_struct(rt : Runtime, type_idx : Int, fields : Array[UInt64]) -> Int {
+fn gc_alloc_struct(
+  rt : Instance,
+  type_idx : Int,
+  fields : Array[UInt64],
+) -> Int {
   let obj = GcObject::Struct({ type_idx, fields })
   rt.ctx.gc_heap.push(obj)
   // Encode as (index << 1) to distinguish from i31refs which have low bit set
@@ -59,7 +63,7 @@ fn gc_alloc_struct(rt : Runtime, type_idx : Int, fields : Array[UInt64]) -> Int 
 ///|
 /// Allocate a new array on the GC heap
 fn gc_alloc_array(
-  rt : Runtime,
+  rt : Instance,
   type_idx : Int,
   elements : Array[UInt64],
 ) -> Int {
@@ -71,7 +75,7 @@ fn gc_alloc_array(
 
 ///|
 /// Get the element storage type of an array type
-fn get_array_element_type(rt : Runtime, type_idx : Int) -> @core.StorageType? {
+fn get_array_element_type(rt : Instance, type_idx : Int) -> @core.StorageType? {
   if type_idx < 0 || type_idx >= rt.ctx.module_.types.length() {
     return None
   }
@@ -96,7 +100,7 @@ fn storage_default_value(storage : @core.StorageType) -> UInt64 {
 ///|
 /// Get a GC object by reference
 /// GC refs are encoded as (1-based-index << 1), so we decode by right-shifting
-fn gc_get_object(rt : Runtime, ref_value : Int) -> GcObject? {
+fn gc_get_object(rt : Instance, ref_value : Int) -> GcObject? {
   // Decode: right shift to get 1-based index
   let index = ref_value >> 1
   if index <= 0 {
@@ -115,7 +119,7 @@ fn gc_get_object(rt : Runtime, ref_value : Int) -> GcObject? {
 ///|
 /// struct.new type_idx
 /// Pops field values from stack, creates new struct
-fn op_struct_new(rt : Runtime) -> ReturnCode {
+fn op_struct_new(rt : Instance) -> ReturnCode {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let num_fields = rt.ops.unsafe_get(rt.pc + 2).to_int()
 
@@ -140,7 +144,7 @@ fn op_struct_new(rt : Runtime) -> ReturnCode {
 ///|
 /// struct.new_default type_idx
 /// Creates a new struct with default (zero) values
-fn op_struct_new_default(rt : Runtime) -> ReturnCode {
+fn op_struct_new_default(rt : Instance) -> ReturnCode {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let num_fields = rt.ops.unsafe_get(rt.pc + 2).to_int()
 
@@ -160,7 +164,7 @@ fn op_struct_new_default(rt : Runtime) -> ReturnCode {
 ///|
 /// struct.get type_idx field_idx
 /// Pops struct ref, pushes field value
-fn op_struct_get(rt : Runtime) -> ReturnCode {
+fn op_struct_get(rt : Instance) -> ReturnCode {
   let field_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let sp = rt.sp - 1
   let ref_raw = rt.stack.unsafe_get(sp)
@@ -188,7 +192,7 @@ fn op_struct_get(rt : Runtime) -> ReturnCode {
 
 ///|
 /// struct.get_s type_idx field_idx (sign-extend packed field)
-fn op_struct_get_s(rt : Runtime) -> ReturnCode {
+fn op_struct_get_s(rt : Instance) -> ReturnCode {
   let field_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let storage_type = rt.ops.unsafe_get(rt.pc + 2).to_int() // 0=i8, 1=i16
   let sp = rt.sp - 1
@@ -234,7 +238,7 @@ fn op_struct_get_s(rt : Runtime) -> ReturnCode {
 
 ///|
 /// struct.get_u type_idx field_idx (zero-extend packed field)
-fn op_struct_get_u(rt : Runtime) -> ReturnCode {
+fn op_struct_get_u(rt : Instance) -> ReturnCode {
   let field_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let storage_type = rt.ops.unsafe_get(rt.pc + 2).to_int() // 0=i8, 1=i16
   let sp = rt.sp - 1
@@ -269,7 +273,7 @@ fn op_struct_get_u(rt : Runtime) -> ReturnCode {
 ///|
 /// struct.set type_idx field_idx
 /// Pops struct ref and value, sets field
-fn op_struct_set(rt : Runtime) -> ReturnCode {
+fn op_struct_set(rt : Instance) -> ReturnCode {
   let field_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let sp = rt.sp - 2
   let ref_raw = rt.stack.unsafe_get(sp)
@@ -301,7 +305,7 @@ fn op_struct_set(rt : Runtime) -> ReturnCode {
 ///|
 /// array.new type_idx
 /// Pops value and length, creates new array filled with value
-fn op_array_new(rt : Runtime) -> ReturnCode {
+fn op_array_new(rt : Instance) -> ReturnCode {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let sp = rt.sp - 2
   let init_value = rt.stack.unsafe_get(sp)
@@ -317,7 +321,7 @@ fn op_array_new(rt : Runtime) -> ReturnCode {
 ///|
 /// array.new_default type_idx
 /// Pops length, creates new array with default values
-fn op_array_new_default(rt : Runtime) -> ReturnCode {
+fn op_array_new_default(rt : Instance) -> ReturnCode {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let sp = rt.sp - 1
   let length = rt.stack.unsafe_get(sp).to_int()
@@ -339,7 +343,7 @@ fn op_array_new_default(rt : Runtime) -> ReturnCode {
 ///|
 /// array.new_fixed type_idx length
 /// Pops length values from stack, creates array
-fn op_array_new_fixed(rt : Runtime) -> ReturnCode {
+fn op_array_new_fixed(rt : Instance) -> ReturnCode {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let length = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let elements : Array[UInt64] = Array::make(length, 0UL)
@@ -358,7 +362,7 @@ fn op_array_new_fixed(rt : Runtime) -> ReturnCode {
 ///|
 /// array.new_data type_idx data_idx
 /// Pops offset and length, creates array from data segment
-fn op_array_new_data(rt : Runtime) -> ReturnCode {
+fn op_array_new_data(rt : Instance) -> ReturnCode {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let data_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let elem_size = rt.ops.unsafe_get(rt.pc + 3).to_int() // 1, 2, 4, or 8 bytes
@@ -399,7 +403,7 @@ fn op_array_new_data(rt : Runtime) -> ReturnCode {
 ///|
 /// array.get type_idx
 /// Pops array ref and index, pushes element
-fn op_array_get(rt : Runtime) -> ReturnCode {
+fn op_array_get(rt : Instance) -> ReturnCode {
   let sp = rt.sp - 2
   let ref_raw = rt.stack.unsafe_get(sp)
   let index = rt.stack.unsafe_get(sp + 1).to_int()
@@ -431,7 +435,7 @@ fn op_array_get(rt : Runtime) -> ReturnCode {
 
 ///|
 /// array.get_s type_idx (sign-extend packed element)
-fn op_array_get_s(rt : Runtime) -> ReturnCode {
+fn op_array_get_s(rt : Instance) -> ReturnCode {
   let storage_type = rt.ops.unsafe_get(rt.pc + 1).to_int() // 0=i8, 1=i16
   let sp = rt.sp - 2
   let ref_raw = rt.stack.unsafe_get(sp)
@@ -479,7 +483,7 @@ fn op_array_get_s(rt : Runtime) -> ReturnCode {
 
 ///|
 /// array.get_u type_idx (zero-extend packed element)
-fn op_array_get_u(rt : Runtime) -> ReturnCode {
+fn op_array_get_u(rt : Instance) -> ReturnCode {
   let storage_type = rt.ops.unsafe_get(rt.pc + 1).to_int() // 0=i8, 1=i16
   let sp = rt.sp - 2
   let ref_raw = rt.stack.unsafe_get(sp)
@@ -518,7 +522,7 @@ fn op_array_get_u(rt : Runtime) -> ReturnCode {
 ///|
 /// array.set type_idx
 /// Pops array ref, index, and value, sets element
-fn op_array_set(rt : Runtime) -> ReturnCode {
+fn op_array_set(rt : Instance) -> ReturnCode {
   let sp = rt.sp - 3
   let ref_raw = rt.stack.unsafe_get(sp)
   let index = rt.stack.unsafe_get(sp + 1).to_int()
@@ -550,7 +554,7 @@ fn op_array_set(rt : Runtime) -> ReturnCode {
 ///|
 /// array.len
 /// Pops array ref, pushes length
-fn op_array_len(rt : Runtime) -> ReturnCode {
+fn op_array_len(rt : Instance) -> ReturnCode {
   let sp = rt.sp - 1
   let ref_raw = rt.stack.unsafe_get(sp)
 
@@ -578,7 +582,7 @@ fn op_array_len(rt : Runtime) -> ReturnCode {
 ///|
 /// array.fill type_idx
 /// Pops array, offset, value, length and fills the array
-fn op_array_fill(rt : Runtime) -> ReturnCode {
+fn op_array_fill(rt : Instance) -> ReturnCode {
   let sp = rt.sp - 4
   let ref_raw = rt.stack.unsafe_get(sp)
   let offset = rt.stack.unsafe_get(sp + 1).to_int()
@@ -613,7 +617,7 @@ fn op_array_fill(rt : Runtime) -> ReturnCode {
 ///|
 /// array.copy dst_type src_type
 /// Copies elements from src array to dst array
-fn op_array_copy(rt : Runtime) -> ReturnCode {
+fn op_array_copy(rt : Instance) -> ReturnCode {
   let sp = rt.sp - 5
   let dst_ref_raw = rt.stack.unsafe_get(sp)
   let dst_offset = rt.stack.unsafe_get(sp + 1).to_int()
@@ -664,7 +668,7 @@ fn op_array_copy(rt : Runtime) -> ReturnCode {
 ///|
 /// ref.i31
 /// Pops i32, pushes i31ref (31-bit signed integer as reference)
-fn op_ref_i31(rt : Runtime) -> ReturnCode {
+fn op_ref_i31(rt : Instance) -> ReturnCode {
   let sp = rt.sp - 1
   let value = rt.stack.unsafe_get(sp).to_uint()
 
@@ -681,7 +685,7 @@ fn op_ref_i31(rt : Runtime) -> ReturnCode {
 ///|
 /// i31.get_s
 /// Pops i31ref, pushes sign-extended i32
-fn op_i31_get_s(rt : Runtime) -> ReturnCode {
+fn op_i31_get_s(rt : Instance) -> ReturnCode {
   let sp = rt.sp - 1
   let encoded = rt.stack.unsafe_get(sp)
 
@@ -713,7 +717,7 @@ fn op_i31_get_s(rt : Runtime) -> ReturnCode {
 ///|
 /// i31.get_u
 /// Pops i31ref, pushes zero-extended i32
-fn op_i31_get_u(rt : Runtime) -> ReturnCode {
+fn op_i31_get_u(rt : Instance) -> ReturnCode {
   let sp = rt.sp - 1
   let encoded = rt.stack.unsafe_get(sp)
 
@@ -746,7 +750,7 @@ fn op_i31_get_u(rt : Runtime) -> ReturnCode {
 /// Converts externref to anyref
 /// The value keeps its externref tag so it can still be identified as an
 /// "internalized externref" - it matches any/eq but not i31/struct/array
-fn op_any_convert_extern(rt : Runtime) -> ReturnCode {
+fn op_any_convert_extern(rt : Instance) -> ReturnCode {
   // Value stays unchanged - an internalized externref still has the externref tag
   // but is now typed as anyref. The tag allows gc_ref_matches_type to correctly
   // identify it as matching "any" but not more specific types like i31/struct/array.
@@ -757,7 +761,7 @@ fn op_any_convert_extern(rt : Runtime) -> ReturnCode {
 ///|
 /// extern.convert_any
 /// Converts anyref to externref by adding externref tag
-fn op_extern_convert_any(rt : Runtime) -> ReturnCode {
+fn op_extern_convert_any(rt : Instance) -> ReturnCode {
   let ref_value = rt.stack.unsafe_get(rt.sp - 1)
   // Null stays as null
   if ref_value == ref_null {
@@ -779,14 +783,14 @@ fn op_extern_convert_any(rt : Runtime) -> ReturnCode {
 // are already defined in ops_control.mbt
 
 // =============================================================================
-// Runtime type checking helpers
+// Instance type checking helpers
 // =============================================================================
 
 ///|
 /// Check if a GC object reference matches or is a subtype of a target heap type
 /// Returns true if the reference can be cast to the target type
 fn gc_ref_matches_type(
-  rt : Runtime,
+  rt : Instance,
   ref_value : UInt64,
   target_type : Int,
   target_nullable : Bool,
@@ -879,7 +883,7 @@ fn gc_ref_matches_type(
 /// Check if type_idx is a subtype of target_type_idx at runtime
 /// This mirrors the validation-time is_type_index_subtype function
 fn gc_is_type_subtype(
-  rt : Runtime,
+  rt : Instance,
   type_idx : Int,
   target_type_idx : Int,
 ) -> Bool {
@@ -933,7 +937,7 @@ fn gc_is_type_subtype(
 
 ///|
 /// Check if two types (by index) are equivalent
-fn gc_types_equivalent(rt : Runtime, type_idx1 : Int, type_idx2 : Int) -> Bool {
+fn gc_types_equivalent(rt : Instance, type_idx1 : Int, type_idx2 : Int) -> Bool {
   // Same index = same type
   if type_idx1 == type_idx2 {
     return true
@@ -948,7 +952,7 @@ fn gc_types_equivalent(rt : Runtime, type_idx1 : Int, type_idx2 : Int) -> Bool {
 ///|
 /// Get the rec group index and position within group for a type index
 /// Returns (group_index, position_in_group) or (-1, -1) if not found
-fn get_rec_group_info(rt : Runtime, type_idx : Int) -> (Int, Int) {
+fn get_rec_group_info(rt : Instance, type_idx : Int) -> (Int, Int) {
   for group_idx, group in rt.ctx.module_.type_groups {
     for pos, subtype_def in group.subtypes {
       if subtype_def.type_idx.reinterpret_as_int() == type_idx {
@@ -961,7 +965,7 @@ fn get_rec_group_info(rt : Runtime, type_idx : Int) -> (Int, Int) {
 
 ///|
 /// Get all type indices in a rec group
-fn get_rec_group_types(rt : Runtime, group_idx : Int) -> Array[Int] {
+fn get_rec_group_types(rt : Instance, group_idx : Int) -> Array[Int] {
   let result : Array[Int] = []
   if group_idx >= 0 && group_idx < rt.ctx.module_.type_groups.length() {
     let group = rt.ctx.module_.type_groups[group_idx]
@@ -998,7 +1002,7 @@ fn get_position_in_group(types : Array[Int], type_idx : Int) -> Int {
 /// Check if two rec groups are structurally equivalent
 /// This handles the recursive type equivalence rules in WebAssembly GC
 fn rec_groups_equivalent(
-  rt : Runtime,
+  rt : Instance,
   group1_idx : Int,
   group2_idx : Int,
   visited : Array[(Int, Int)],
@@ -1036,7 +1040,7 @@ fn rec_groups_equivalent(
 ///|
 /// Check if two types are equivalent in the context of their rec groups
 fn types_equivalent_in_context(
-  rt : Runtime,
+  rt : Instance,
   type_idx1 : Int,
   type_idx2 : Int,
   group1_types : Array[Int],
@@ -1207,7 +1211,7 @@ fn types_equivalent_in_context(
 ///|
 /// Check if two type references are equivalent considering rec group context
 fn type_refs_equivalent_in_context(
-  rt : Runtime,
+  rt : Instance,
   ref1 : Int,
   ref2 : Int,
   group1_types : Array[Int],
@@ -1238,7 +1242,7 @@ fn type_refs_equivalent_in_context(
 ///|
 /// Check if two value types are equivalent in rec group context
 fn valtypes_equivalent_in_context(
-  rt : Runtime,
+  rt : Instance,
   vt1 : @core.ValType,
   vt2 : @core.ValType,
   group1_types : Array[Int],
@@ -1258,7 +1262,7 @@ fn valtypes_equivalent_in_context(
 ///|
 /// Check if two storage types are equivalent in rec group context
 fn storage_types_equivalent_in_context(
-  rt : Runtime,
+  rt : Instance,
   st1 : @core.StorageType,
   st2 : @core.StorageType,
   group1_types : Array[Int],
@@ -1276,7 +1280,7 @@ fn storage_types_equivalent_in_context(
 
 ///|
 /// Get the list of supertypes for a type index
-fn get_supertypes(rt : Runtime, type_idx : Int) -> Array[Int] {
+fn get_supertypes(rt : Instance, type_idx : Int) -> Array[Int] {
   let result : Array[Int] = []
   for group in rt.ctx.module_.type_groups {
     for subtype_def in group.subtypes {
@@ -1293,7 +1297,7 @@ fn get_supertypes(rt : Runtime, type_idx : Int) -> Array[Int] {
 
 ///|
 /// Check if a type at the given index is final at runtime
-fn is_type_final_runtime(rt : Runtime, type_idx : Int) -> Bool {
+fn is_type_final_runtime(rt : Instance, type_idx : Int) -> Bool {
   for group in rt.ctx.module_.type_groups {
     for subtype_def in group.subtypes {
       if subtype_def.type_idx.reinterpret_as_int() == type_idx {
@@ -1312,7 +1316,7 @@ fn is_type_final_runtime(rt : Runtime, type_idx : Int) -> Bool {
 ///|
 /// ref.test heap_type nullable
 /// Tests if a reference is of the given type, pushes i32 result
-fn op_ref_test(rt : Runtime) -> ReturnCode {
+fn op_ref_test(rt : Instance) -> ReturnCode {
   let target_type = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let target_nullable = rt.ops.unsafe_get(rt.pc + 2).to_int() != 0
   let sp = rt.sp - 1
@@ -1328,7 +1332,7 @@ fn op_ref_test(rt : Runtime) -> ReturnCode {
 ///|
 /// ref.cast heap_type nullable
 /// Casts a reference to the given type, traps on failure
-fn op_ref_cast(rt : Runtime) -> ReturnCode {
+fn op_ref_cast(rt : Instance) -> ReturnCode {
   let target_type = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let target_nullable = rt.ops.unsafe_get(rt.pc + 2).to_int() != 0
   let sp = rt.sp - 1
@@ -1350,7 +1354,7 @@ fn op_ref_cast(rt : Runtime) -> ReturnCode {
 
 ///|
 /// br_on_cast label target_type target_nullable
-fn op_br_on_cast(rt : Runtime) -> ReturnCode {
+fn op_br_on_cast(rt : Instance) -> ReturnCode {
   let target_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let not_taken_pc = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let target_type = rt.ops.unsafe_get(rt.pc + 3).to_int()
@@ -1371,7 +1375,7 @@ fn op_br_on_cast(rt : Runtime) -> ReturnCode {
 
 ///|
 /// br_on_cast_fail label target_type target_nullable
-fn op_br_on_cast_fail(rt : Runtime) -> ReturnCode {
+fn op_br_on_cast_fail(rt : Instance) -> ReturnCode {
   let target_pc = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let not_taken_pc = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let target_type = rt.ops.unsafe_get(rt.pc + 3).to_int()
@@ -1397,7 +1401,7 @@ fn op_br_on_cast_fail(rt : Runtime) -> ReturnCode {
 ///|
 /// array.new_elem type_idx elem_idx
 /// Creates a new array from element segment values
-fn op_array_new_elem(rt : Runtime) -> ReturnCode {
+fn op_array_new_elem(rt : Instance) -> ReturnCode {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let elem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let sp = rt.sp - 2
@@ -1453,7 +1457,7 @@ fn op_array_new_elem(rt : Runtime) -> ReturnCode {
 ///|
 /// array.init_data type_idx data_idx
 /// Initializes array elements from data segment
-fn op_array_init_data(rt : Runtime) -> ReturnCode {
+fn op_array_init_data(rt : Instance) -> ReturnCode {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let data_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let elem_size = rt.ops.unsafe_get(rt.pc + 3).to_int()
@@ -1513,7 +1517,7 @@ fn op_array_init_data(rt : Runtime) -> ReturnCode {
 ///|
 /// array.init_elem type_idx elem_idx
 /// Initializes array elements from element segment
-fn op_array_init_elem(rt : Runtime) -> ReturnCode {
+fn op_array_init_elem(rt : Instance) -> ReturnCode {
   let type_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let elem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let sp = rt.sp - 4
@@ -1583,7 +1587,7 @@ fn op_array_init_elem(rt : Runtime) -> ReturnCode {
 ///|
 /// Evaluate an element segment expression to get a reference value
 fn eval_elem_expr_gc(
-  rt : Runtime,
+  rt : Instance,
   expr : @core.Expr,
   elem_type : @core.RefType,
 ) -> UInt64 {

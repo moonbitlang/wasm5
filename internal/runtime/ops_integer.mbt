@@ -3,7 +3,7 @@
 // ============================================================================
 
 ///|
-fn op_i32_const(rt : Runtime) -> ReturnCode {
+fn op_i32_const(rt : Instance) -> ReturnCode {
   let value = rt.ops.unsafe_get(rt.pc + 1).to_uint()
   rt.stack.unsafe_set(rt.sp, value.to_uint64())
   rt.sp = rt.sp + 1
@@ -12,7 +12,7 @@ fn op_i32_const(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_add(rt : Runtime) -> ReturnCode {
+fn op_i32_add(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).to_uint()
   let a = rt.stack.unsafe_get(stack_top - 1).to_uint()
@@ -23,7 +23,7 @@ fn op_i32_add(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_sub(rt : Runtime) -> ReturnCode {
+fn op_i32_sub(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).to_uint()
   let a = rt.stack.unsafe_get(stack_top - 1).to_uint()
@@ -34,7 +34,7 @@ fn op_i32_sub(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_mul(rt : Runtime) -> ReturnCode {
+fn op_i32_mul(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).to_uint()
   let a = rt.stack.unsafe_get(stack_top - 1).to_uint()
@@ -45,7 +45,7 @@ fn op_i32_mul(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_div_s(rt : Runtime) -> ReturnCode {
+fn op_i32_div_s(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).to_uint()
   let a = rt.stack.unsafe_get(stack_top - 1).to_uint()
@@ -67,7 +67,7 @@ fn op_i32_div_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_div_u(rt : Runtime) -> ReturnCode {
+fn op_i32_div_u(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).to_uint()
   let a = rt.stack.unsafe_get(stack_top - 1).to_uint()
@@ -83,7 +83,7 @@ fn op_i32_div_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_rem_s(rt : Runtime) -> ReturnCode {
+fn op_i32_rem_s(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).to_uint()
   let a = rt.stack.unsafe_get(stack_top - 1).to_uint()
@@ -107,7 +107,7 @@ fn op_i32_rem_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_rem_u(rt : Runtime) -> ReturnCode {
+fn op_i32_rem_u(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).to_uint()
   let a = rt.stack.unsafe_get(stack_top - 1).to_uint()
@@ -123,7 +123,7 @@ fn op_i32_rem_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_and(rt : Runtime) -> ReturnCode {
+fn op_i32_and(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).to_uint()
   let a = rt.stack.unsafe_get(stack_top - 1).to_uint()
@@ -134,7 +134,7 @@ fn op_i32_and(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_or(rt : Runtime) -> ReturnCode {
+fn op_i32_or(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).to_uint()
   let a = rt.stack.unsafe_get(stack_top - 1).to_uint()
@@ -145,7 +145,7 @@ fn op_i32_or(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_xor(rt : Runtime) -> ReturnCode {
+fn op_i32_xor(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).to_uint()
   let a = rt.stack.unsafe_get(stack_top - 1).to_uint()
@@ -156,7 +156,7 @@ fn op_i32_xor(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_shl(rt : Runtime) -> ReturnCode {
+fn op_i32_shl(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).to_uint()
   let a = rt.stack.unsafe_get(stack_top - 1).to_uint()
@@ -168,7 +168,7 @@ fn op_i32_shl(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_shr_s(rt : Runtime) -> ReturnCode {
+fn op_i32_shr_s(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).to_uint()
   let a = rt.stack.unsafe_get(stack_top - 1).to_uint()
@@ -181,7 +181,7 @@ fn op_i32_shr_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_shr_u(rt : Runtime) -> ReturnCode {
+fn op_i32_shr_u(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).to_uint()
   let a = rt.stack.unsafe_get(stack_top - 1).to_uint()
@@ -193,7 +193,7 @@ fn op_i32_shr_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_rotl(rt : Runtime) -> ReturnCode {
+fn op_i32_rotl(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).to_uint()
   let a = rt.stack.unsafe_get(stack_top - 1).to_uint()
@@ -206,7 +206,7 @@ fn op_i32_rotl(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_rotr(rt : Runtime) -> ReturnCode {
+fn op_i32_rotr(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).to_uint()
   let a = rt.stack.unsafe_get(stack_top - 1).to_uint()
@@ -221,7 +221,7 @@ fn op_i32_rotr(rt : Runtime) -> ReturnCode {
 // Comparison operations
 
 ///|
-fn op_i32_eq(rt : Runtime) -> ReturnCode {
+fn op_i32_eq(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).to_uint()
   let a = rt.stack.unsafe_get(stack_top - 1).to_uint()
@@ -232,7 +232,7 @@ fn op_i32_eq(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_ne(rt : Runtime) -> ReturnCode {
+fn op_i32_ne(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).to_uint()
   let a = rt.stack.unsafe_get(stack_top - 1).to_uint()
@@ -243,7 +243,7 @@ fn op_i32_ne(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_lt_s(rt : Runtime) -> ReturnCode {
+fn op_i32_lt_s(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).to_uint()
   let a = rt.stack.unsafe_get(stack_top - 1).to_uint()
@@ -259,7 +259,7 @@ fn op_i32_lt_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_lt_u(rt : Runtime) -> ReturnCode {
+fn op_i32_lt_u(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).to_uint()
   let a = rt.stack.unsafe_get(stack_top - 1).to_uint()
@@ -270,7 +270,7 @@ fn op_i32_lt_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_gt_s(rt : Runtime) -> ReturnCode {
+fn op_i32_gt_s(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).to_uint()
   let a = rt.stack.unsafe_get(stack_top - 1).to_uint()
@@ -286,7 +286,7 @@ fn op_i32_gt_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_gt_u(rt : Runtime) -> ReturnCode {
+fn op_i32_gt_u(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).to_uint()
   let a = rt.stack.unsafe_get(stack_top - 1).to_uint()
@@ -297,7 +297,7 @@ fn op_i32_gt_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_le_s(rt : Runtime) -> ReturnCode {
+fn op_i32_le_s(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).to_uint()
   let a = rt.stack.unsafe_get(stack_top - 1).to_uint()
@@ -313,7 +313,7 @@ fn op_i32_le_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_le_u(rt : Runtime) -> ReturnCode {
+fn op_i32_le_u(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).to_uint()
   let a = rt.stack.unsafe_get(stack_top - 1).to_uint()
@@ -324,7 +324,7 @@ fn op_i32_le_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_ge_s(rt : Runtime) -> ReturnCode {
+fn op_i32_ge_s(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).to_uint()
   let a = rt.stack.unsafe_get(stack_top - 1).to_uint()
@@ -340,7 +340,7 @@ fn op_i32_ge_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_ge_u(rt : Runtime) -> ReturnCode {
+fn op_i32_ge_u(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top).to_uint()
   let a = rt.stack.unsafe_get(stack_top - 1).to_uint()
@@ -353,7 +353,7 @@ fn op_i32_ge_u(rt : Runtime) -> ReturnCode {
 // Unary operations
 
 ///|
-fn op_i32_eqz(rt : Runtime) -> ReturnCode {
+fn op_i32_eqz(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).to_uint()
   rt.stack.unsafe_set(rt.sp - 1, if a == 0U { 1UL } else { 0UL })
   rt.pc = rt.pc + 1
@@ -361,7 +361,7 @@ fn op_i32_eqz(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_clz(rt : Runtime) -> ReturnCode {
+fn op_i32_clz(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).to_uint()
   rt.stack.unsafe_set(rt.sp - 1, a.clz().reinterpret_as_uint().to_uint64())
   rt.pc = rt.pc + 1
@@ -369,7 +369,7 @@ fn op_i32_clz(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_ctz(rt : Runtime) -> ReturnCode {
+fn op_i32_ctz(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).to_uint()
   rt.stack.unsafe_set(rt.sp - 1, a.ctz().reinterpret_as_uint().to_uint64())
   rt.pc = rt.pc + 1
@@ -377,7 +377,7 @@ fn op_i32_ctz(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_popcnt(rt : Runtime) -> ReturnCode {
+fn op_i32_popcnt(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).to_uint()
   rt.stack.unsafe_set(rt.sp - 1, a.popcnt().reinterpret_as_uint().to_uint64())
   rt.pc = rt.pc + 1
@@ -385,7 +385,7 @@ fn op_i32_popcnt(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_extend8_s(rt : Runtime) -> ReturnCode {
+fn op_i32_extend8_s(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).to_uint()
   let byte = a & 0xFFU
   let result = if (byte & 0x80U) != 0U { byte | 0xFFFFFF00U } else { byte }
@@ -395,7 +395,7 @@ fn op_i32_extend8_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_extend16_s(rt : Runtime) -> ReturnCode {
+fn op_i32_extend16_s(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).to_uint()
   let half = a & 0xFFFFU
   let result = if (half & 0x8000U) != 0U { half | 0xFFFF0000U } else { half }
@@ -405,7 +405,7 @@ fn op_i32_extend16_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_wrap_i64(rt : Runtime) -> ReturnCode {
+fn op_i32_wrap_i64(rt : Instance) -> ReturnCode {
   let v = rt.stack.unsafe_get(rt.sp - 1)
   rt.stack.unsafe_set(rt.sp - 1, v & 0xFFFFFFFFUL)
   rt.pc = rt.pc + 1
@@ -417,7 +417,7 @@ fn op_i32_wrap_i64(rt : Runtime) -> ReturnCode {
 // ============================================================================
 
 ///|
-fn op_i64_const(rt : Runtime) -> ReturnCode {
+fn op_i64_const(rt : Instance) -> ReturnCode {
   let value = rt.ops.unsafe_get(rt.pc + 1)
   rt.stack.unsafe_set(rt.sp, value)
   rt.sp = rt.sp + 1
@@ -426,7 +426,7 @@ fn op_i64_const(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f32_const(rt : Runtime) -> ReturnCode {
+fn op_f32_const(rt : Instance) -> ReturnCode {
   let bits = rt.ops.unsafe_get(rt.pc + 1).to_uint()
   rt.stack.unsafe_set(rt.sp, bits.to_uint64())
   rt.sp = rt.sp + 1
@@ -435,7 +435,7 @@ fn op_f32_const(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_const(rt : Runtime) -> ReturnCode {
+fn op_f64_const(rt : Instance) -> ReturnCode {
   let bits = rt.ops.unsafe_get(rt.pc + 1)
   rt.stack.unsafe_set(rt.sp, bits)
   rt.sp = rt.sp + 1
@@ -444,7 +444,7 @@ fn op_f64_const(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_add(rt : Runtime) -> ReturnCode {
+fn op_i64_add(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top)
   let a = rt.stack.unsafe_get(stack_top - 1)
@@ -455,7 +455,7 @@ fn op_i64_add(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_sub(rt : Runtime) -> ReturnCode {
+fn op_i64_sub(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top)
   let a = rt.stack.unsafe_get(stack_top - 1)
@@ -466,7 +466,7 @@ fn op_i64_sub(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_mul(rt : Runtime) -> ReturnCode {
+fn op_i64_mul(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top)
   let a = rt.stack.unsafe_get(stack_top - 1)
@@ -477,7 +477,7 @@ fn op_i64_mul(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_div_s(rt : Runtime) -> ReturnCode {
+fn op_i64_div_s(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top)
   let a = rt.stack.unsafe_get(stack_top - 1)
@@ -499,7 +499,7 @@ fn op_i64_div_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_div_u(rt : Runtime) -> ReturnCode {
+fn op_i64_div_u(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top)
   let a = rt.stack.unsafe_get(stack_top - 1)
@@ -515,7 +515,7 @@ fn op_i64_div_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_rem_s(rt : Runtime) -> ReturnCode {
+fn op_i64_rem_s(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top)
   let a = rt.stack.unsafe_get(stack_top - 1)
@@ -539,7 +539,7 @@ fn op_i64_rem_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_rem_u(rt : Runtime) -> ReturnCode {
+fn op_i64_rem_u(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top)
   let a = rt.stack.unsafe_get(stack_top - 1)
@@ -555,7 +555,7 @@ fn op_i64_rem_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_and(rt : Runtime) -> ReturnCode {
+fn op_i64_and(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top)
   let a = rt.stack.unsafe_get(stack_top - 1)
@@ -566,7 +566,7 @@ fn op_i64_and(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_or(rt : Runtime) -> ReturnCode {
+fn op_i64_or(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top)
   let a = rt.stack.unsafe_get(stack_top - 1)
@@ -577,7 +577,7 @@ fn op_i64_or(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_xor(rt : Runtime) -> ReturnCode {
+fn op_i64_xor(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top)
   let a = rt.stack.unsafe_get(stack_top - 1)
@@ -588,7 +588,7 @@ fn op_i64_xor(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_shl(rt : Runtime) -> ReturnCode {
+fn op_i64_shl(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top)
   let a = rt.stack.unsafe_get(stack_top - 1)
@@ -600,7 +600,7 @@ fn op_i64_shl(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_shr_s(rt : Runtime) -> ReturnCode {
+fn op_i64_shr_s(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top)
   let a = rt.stack.unsafe_get(stack_top - 1)
@@ -613,7 +613,7 @@ fn op_i64_shr_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_shr_u(rt : Runtime) -> ReturnCode {
+fn op_i64_shr_u(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top)
   let a = rt.stack.unsafe_get(stack_top - 1)
@@ -625,7 +625,7 @@ fn op_i64_shr_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_rotl(rt : Runtime) -> ReturnCode {
+fn op_i64_rotl(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top)
   let a = rt.stack.unsafe_get(stack_top - 1)
@@ -638,7 +638,7 @@ fn op_i64_rotl(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_rotr(rt : Runtime) -> ReturnCode {
+fn op_i64_rotr(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top)
   let a = rt.stack.unsafe_get(stack_top - 1)
@@ -653,7 +653,7 @@ fn op_i64_rotr(rt : Runtime) -> ReturnCode {
 // Comparison operations
 
 ///|
-fn op_i64_eq(rt : Runtime) -> ReturnCode {
+fn op_i64_eq(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top)
   let a = rt.stack.unsafe_get(stack_top - 1)
@@ -664,7 +664,7 @@ fn op_i64_eq(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_ne(rt : Runtime) -> ReturnCode {
+fn op_i64_ne(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top)
   let a = rt.stack.unsafe_get(stack_top - 1)
@@ -675,7 +675,7 @@ fn op_i64_ne(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_lt_s(rt : Runtime) -> ReturnCode {
+fn op_i64_lt_s(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top)
   let a = rt.stack.unsafe_get(stack_top - 1)
@@ -691,7 +691,7 @@ fn op_i64_lt_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_lt_u(rt : Runtime) -> ReturnCode {
+fn op_i64_lt_u(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top)
   let a = rt.stack.unsafe_get(stack_top - 1)
@@ -702,7 +702,7 @@ fn op_i64_lt_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_gt_s(rt : Runtime) -> ReturnCode {
+fn op_i64_gt_s(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top)
   let a = rt.stack.unsafe_get(stack_top - 1)
@@ -718,7 +718,7 @@ fn op_i64_gt_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_gt_u(rt : Runtime) -> ReturnCode {
+fn op_i64_gt_u(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top)
   let a = rt.stack.unsafe_get(stack_top - 1)
@@ -729,7 +729,7 @@ fn op_i64_gt_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_le_s(rt : Runtime) -> ReturnCode {
+fn op_i64_le_s(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top)
   let a = rt.stack.unsafe_get(stack_top - 1)
@@ -745,7 +745,7 @@ fn op_i64_le_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_le_u(rt : Runtime) -> ReturnCode {
+fn op_i64_le_u(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top)
   let a = rt.stack.unsafe_get(stack_top - 1)
@@ -756,7 +756,7 @@ fn op_i64_le_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_ge_s(rt : Runtime) -> ReturnCode {
+fn op_i64_ge_s(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top)
   let a = rt.stack.unsafe_get(stack_top - 1)
@@ -772,7 +772,7 @@ fn op_i64_ge_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_ge_u(rt : Runtime) -> ReturnCode {
+fn op_i64_ge_u(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 1
   let b = rt.stack.unsafe_get(stack_top)
   let a = rt.stack.unsafe_get(stack_top - 1)
@@ -785,7 +785,7 @@ fn op_i64_ge_u(rt : Runtime) -> ReturnCode {
 // Unary operations
 
 ///|
-fn op_i64_eqz(rt : Runtime) -> ReturnCode {
+fn op_i64_eqz(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1)
   rt.stack.unsafe_set(rt.sp - 1, if a == 0UL { 1UL } else { 0UL })
   rt.pc = rt.pc + 1
@@ -793,7 +793,7 @@ fn op_i64_eqz(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_clz(rt : Runtime) -> ReturnCode {
+fn op_i64_clz(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1)
   rt.stack.unsafe_set(rt.sp - 1, a.clz().to_uint64())
   rt.pc = rt.pc + 1
@@ -801,7 +801,7 @@ fn op_i64_clz(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_ctz(rt : Runtime) -> ReturnCode {
+fn op_i64_ctz(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1)
   rt.stack.unsafe_set(rt.sp - 1, a.ctz().to_uint64())
   rt.pc = rt.pc + 1
@@ -809,7 +809,7 @@ fn op_i64_ctz(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_popcnt(rt : Runtime) -> ReturnCode {
+fn op_i64_popcnt(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1)
   rt.stack.unsafe_set(rt.sp - 1, a.popcnt().to_uint64())
   rt.pc = rt.pc + 1
@@ -817,7 +817,7 @@ fn op_i64_popcnt(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_extend8_s(rt : Runtime) -> ReturnCode {
+fn op_i64_extend8_s(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1)
   let byte = a & 0xFFUL
   let result = if (byte & 0x80UL) != 0UL {
@@ -831,7 +831,7 @@ fn op_i64_extend8_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_extend16_s(rt : Runtime) -> ReturnCode {
+fn op_i64_extend16_s(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1)
   let half = a & 0xFFFFUL
   let result = if (half & 0x8000UL) != 0UL {
@@ -845,7 +845,7 @@ fn op_i64_extend16_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_extend32_s(rt : Runtime) -> ReturnCode {
+fn op_i64_extend32_s(rt : Instance) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1)
   let word = a & 0xFFFFFFFFUL
   let result = if (word & 0x80000000UL) != 0UL {
@@ -861,7 +861,7 @@ fn op_i64_extend32_s(rt : Runtime) -> ReturnCode {
 // Extension operations
 
 ///|
-fn op_i64_extend_i32_s(rt : Runtime) -> ReturnCode {
+fn op_i64_extend_i32_s(rt : Instance) -> ReturnCode {
   let v = rt.stack.unsafe_get(rt.sp - 1).to_uint().reinterpret_as_int()
   rt.stack.unsafe_set(rt.sp - 1, v.to_int64().reinterpret_as_uint64())
   rt.pc = rt.pc + 1
@@ -869,7 +869,7 @@ fn op_i64_extend_i32_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_extend_i32_u(rt : Runtime) -> ReturnCode {
+fn op_i64_extend_i32_u(rt : Instance) -> ReturnCode {
   let v = rt.stack.unsafe_get(rt.sp - 1).to_uint()
   rt.stack.unsafe_set(rt.sp - 1, v.to_uint64())
   rt.pc = rt.pc + 1

@@ -1,5 +1,5 @@
 ///|
-fn parse_instr_prefix_fc(parser : Parser) -> @core.Instr raise {
+fn parse_instr_prefix_fc(parser : Parser) -> @core.Instr raise ParseError {
   let sub_opcode = parser.read_u32_leb128()
   match sub_opcode {
     // Saturating truncation instructions
@@ -67,8 +67,6 @@ fn parse_instr_prefix_fc(parser : Parser) -> @core.Instr raise {
       TableFill(table_idx)
     }
     _ =>
-      raise @validate.ValidationError::TypeMismatch(
-        "unknown 0xFC sub-opcode: \{sub_opcode}",
-      )
+      raise ParseError::InvalidFormat("unknown 0xFC sub-opcode: \{sub_opcode}")
   }
 }

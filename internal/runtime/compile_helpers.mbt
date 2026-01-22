@@ -230,13 +230,13 @@ fn get_func_type_idx(
 ///|
 /// Value struct for pop_arguments result (avoids tuple allocation)
 priv struct PopArgs {
-  rt : Runtime
+  rt : Instance
   args : Array[Value]
 }
 
 ///|
 /// Pop function arguments from the stack (converts UInt64 to Value)
-fn pop_arguments(rt : Runtime, func_type : @core.FuncType) -> PopArgs {
+fn pop_arguments(rt : Instance, func_type : @core.FuncType) -> PopArgs {
   let num_params = func_type.params.length()
   let args : Array[Value] = Array::make(num_params, Value::I32(0U))
   let mut stack_top = rt.sp
@@ -253,12 +253,12 @@ fn pop_arguments(rt : Runtime, func_type : @core.FuncType) -> PopArgs {
 /// Initialize locals for entry point (call_compiled, start function).
 /// Pushes args onto stack and sets bp/num_locals.
 /// Declared locals will be initialized by compiled code's first instructions.
-/// Returns Runtime with updated sp, bp, num_locals.
+/// Returns Instance with updated sp, bp, num_locals.
 fn initialize_entry_locals(
-  rt : Runtime,
+  rt : Instance,
   args : Array[Value],
   code : @core.Code,
-) -> Runtime {
+) -> Instance {
   // bp points to start of frame
   let bp = rt.sp
   let mut stack_top = rt.sp
@@ -284,7 +284,7 @@ fn check_type_signature_match(
   expected : @core.FuncType,
   actual : @core.FuncType,
   error_msg : String,
-  rt : Runtime,
+  rt : Instance,
 ) -> ReturnCode {
   if expected.params.length() != actual.params.length() ||
     expected.results.length() != actual.results.length() {
@@ -308,13 +308,13 @@ fn check_type_signature_match(
 
 ///|
 /// Call an imported function and push results onto the stack (as UInt64)
-/// Returns Runtime with updated sp.
+/// Returns Instance with updated sp.
 fn call_imported_function(
-  rt : Runtime,
+  rt : Instance,
   func_idx : Int,
   args : Array[Value],
   expected_results : Int,
-) -> Runtime {
+) -> Instance {
   let imported_func = rt.ctx.imported_funcs[func_idx]
   let results = (imported_func.func)(args)
   let count = if expected_results < results.length() {
@@ -333,8 +333,8 @@ fn call_imported_function(
 
 ///|
 /// Push results from an external function call onto the stack.
-/// Returns Runtime with updated sp.
-fn push_results(rt : Runtime, results : Array[Value]) -> Runtime {
+/// Returns Instance with updated sp.
+fn push_results(rt : Instance, results : Array[Value]) -> Instance {
   let mut stack_top = rt.sp
   for i in 0..<results.length() {
     rt.stack.unsafe_set(stack_top, value_to_stack(results[i]))
@@ -348,7 +348,7 @@ fn push_results(rt : Runtime, results : Array[Value]) -> Runtime {
 /// Handle return from a tail call to imported function.
 /// Results are already on stack at sp, copy to bp and return a tail-call code.
 /// Uses native stack approach - caller's execute_call will restore caller state.
-fn handle_tail_call_return(rt : Runtime) -> ReturnCode {
+fn handle_tail_call_return(rt : Instance) -> ReturnCode {
   // Results are at stack[rt.bp..rt.sp) - they're already in place for tail calls
   // Just signal return to let native stack unwind
   if rt.bp == 0 {

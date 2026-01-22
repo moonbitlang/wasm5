@@ -41,7 +41,7 @@ fn make_runtime(
   stack : Array[Value],
   ops : Array[UInt64],
   memory_size : Int,
-) -> Runtime {
+) -> Instance {
   // Convert Value array to UInt64 array and allocate fixed buffer
   let stack64 = stack.map(value_to_stack)
   let stack_len = stack64.length()
@@ -60,7 +60,7 @@ fn make_runtime(
     [],
     [],
   )
-  Runtime::{
+  Instance::{
     ops: FixedArray::from_array(ops),
     stack: stack_buf,
     sp: stack_len,
@@ -90,14 +90,14 @@ fn stack_f64(raw : UInt64) -> Double {
 }
 
 ///|
-fn push_value(rt : Runtime, v : Value) -> Runtime {
+fn push_value(rt : Instance, v : Value) -> Instance {
   rt.stack.unsafe_set(rt.sp, value_to_stack(v))
   rt.sp = rt.sp + 1
   rt
 }
 
 ///|
-fn assert_ok(code : ReturnCode, rt : Runtime) -> Unit {
+fn assert_ok(code : ReturnCode, rt : Instance) -> Unit {
   if code == Trap {
     abort("expected OK but got Trap: \{rt.ctx.error_detail}")
   }
@@ -232,7 +232,7 @@ test "ops i32 const and arithmetic" {
   let rc = op_i32_const(rt_const)
   assert_ok(rc, rt_const)
   assert_stack_elem_eq(rt_const.stack[0], Value::I32(123U))
-  let cases : Array[((Runtime) -> ReturnCode, UInt)] = [
+  let cases : Array[((Instance) -> ReturnCode, UInt)] = [
     (op_i32_add, 9U),
     (op_i32_sub, 3U),
     (op_i32_mul, 18U),
@@ -260,7 +260,7 @@ test "ops i32 const and arithmetic" {
 
 ///|
 test "ops i32 compare and unary" {
-  let compare_cases : Array[((Runtime) -> ReturnCode, UInt, UInt, UInt)] = [
+  let compare_cases : Array[((Instance) -> ReturnCode, UInt, UInt, UInt)] = [
     (op_i32_eq, 7U, 7U, 1U),
     (op_i32_ne, 7U, 6U, 1U),
     (op_i32_lt_s, 0xFFFFFFFFU, 1U, 1U),
@@ -325,7 +325,7 @@ test "ops i64 const and arithmetic" {
   let rc = op_i64_const(rt_const)
   assert_ok(rc, rt_const)
   assert_stack_elem_eq(rt_const.stack[0], Value::I64(0x0000000200000003UL))
-  let cases : Array[((Runtime) -> ReturnCode, UInt64)] = [
+  let cases : Array[((Instance) -> ReturnCode, UInt64)] = [
     (op_i64_add, 9UL),
     (op_i64_sub, 3UL),
     (op_i64_mul, 18UL),
@@ -353,7 +353,7 @@ test "ops i64 const and arithmetic" {
 
 ///|
 test "ops i64 compare and unary" {
-  let compare_cases : Array[((Runtime) -> ReturnCode, UInt64, UInt64, UInt)] = [
+  let compare_cases : Array[((Instance) -> ReturnCode, UInt64, UInt64, UInt)] = [
     (op_i64_eq, 7UL, 7UL, 1U),
     (op_i64_ne, 7UL, 6UL, 1U),
     (op_i64_lt_s, 0xFFFFFFFFFFFFFFFFUL, 1UL, 1U),
@@ -450,7 +450,7 @@ test "ops float const and arithmetic" {
   let rc = op_f64_const(rt_f64_const)
   assert_ok(rc, rt_f64_const)
   assert_stack_elem_eq(rt_f64_const.stack[0], Value::F64(1.0))
-  let f32_bin_cases : Array[((Runtime) -> ReturnCode, Float, Float, Float)] = [
+  let f32_bin_cases : Array[((Instance) -> ReturnCode, Float, Float, Float)] = [
     (op_f32_add, 6.0, 3.0, 9.0),
     (op_f32_sub, 6.0, 3.0, 3.0),
     (op_f32_mul, 6.0, 3.0, 18.0),
@@ -469,7 +469,7 @@ test "ops float const and arithmetic" {
   let rc = op_f32_copysign(rt_f32_copysign)
   assert_ok(rc, rt_f32_copysign)
   assert_stack_elem_eq(rt_f32_copysign.stack[0], Value::F32(-3.0))
-  let f32_cmp_cases : Array[((Runtime) -> ReturnCode, Float, Float, UInt)] = [
+  let f32_cmp_cases : Array[((Instance) -> ReturnCode, Float, Float, UInt)] = [
     (op_f32_eq, 3.0, 3.0, 1U),
     (op_f32_ne, 3.0, 2.0, 1U),
     (op_f32_lt, 2.0, 3.0, 1U),
@@ -512,7 +512,7 @@ test "ops float const and arithmetic" {
   let rc = op_f32_nearest(rt_f32_nearest)
   assert_ok(rc, rt_f32_nearest)
   assert_stack_elem_eq(rt_f32_nearest.stack[0], Value::F32(1.0))
-  let f64_bin_cases : Array[((Runtime) -> ReturnCode, Double, Double, Double)] = [
+  let f64_bin_cases : Array[((Instance) -> ReturnCode, Double, Double, Double)] = [
     (op_f64_add, 6.0, 3.0, 9.0),
     (op_f64_sub, 6.0, 3.0, 3.0),
     (op_f64_mul, 6.0, 3.0, 18.0),
@@ -531,7 +531,7 @@ test "ops float const and arithmetic" {
   let rc = op_f64_copysign(rt_f64_copysign)
   assert_ok(rc, rt_f64_copysign)
   assert_stack_elem_eq(rt_f64_copysign.stack[0], Value::F64(-3.0))
-  let f64_cmp_cases : Array[((Runtime) -> ReturnCode, Double, Double, UInt)] = [
+  let f64_cmp_cases : Array[((Instance) -> ReturnCode, Double, Double, UInt)] = [
     (op_f64_eq, 3.0, 3.0, 1U),
     (op_f64_ne, 3.0, 2.0, 1U),
     (op_f64_lt, 2.0, 3.0, 1U),
@@ -664,7 +664,7 @@ test "ops float conversions" {
   let f64_value : Double = 1.0
   let f32_bits = f32_value.reinterpret_as_uint()
   let f64_bits = f64_value.reinterpret_as_uint64()
-  let cases : Array[((Runtime) -> ReturnCode, Array[Value], Value)] = [
+  let cases : Array[((Instance) -> ReturnCode, Array[Value], Value)] = [
     (op_f64_convert_i64_u, [Value::I64(5UL)], Value::F64(5.0)),
     (op_f64_convert_i64_s, [Value::I64(5UL)], Value::F64(5.0)),
     (op_f64_convert_i32_u, [Value::I32(5U)], Value::F64(5.0)),
@@ -788,7 +788,7 @@ test "ops memory load/store and size" {
     [],
     [],
   )
-  let rt_grow = Runtime::{
+  let rt_grow = Instance::{
     ops: FixedArray::from_array([]),
     stack: stack_grow,
     sp: 1,
@@ -859,7 +859,7 @@ test "ops memory out of bounds and bulk ops" {
     [[1U.to_byte(), 2U.to_byte(), 3U.to_byte()]],
     [],
   )
-  let rt_init = Runtime::{
+  let rt_init = Instance::{
     ops: FixedArray::from_array([idx(0), idx(0)]),
     stack: stack_init,
     sp: 3,
@@ -882,7 +882,7 @@ test "ops memory out of bounds and bulk ops" {
     [[1U.to_byte()]],
     [],
   )
-  let rt_drop = Runtime::{
+  let rt_drop = Instance::{
     ops: FixedArray::from_array([idx(0), idx(0)]),
     stack: FixedArray::make(64, 0UL),
     sp: 0,

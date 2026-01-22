@@ -1,5 +1,8 @@
 ///|
-fn parse_instr_parametric(parser : Parser, opcode : Byte) -> @core.Instr? raise {
+fn parse_instr_parametric(
+  parser : Parser,
+  opcode : Byte,
+) -> @core.Instr? raise ParseError {
   match opcode {
     0x1A => Some(Drop)
     0x1B => Some(Select)

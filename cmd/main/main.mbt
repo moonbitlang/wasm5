@@ -101,7 +101,7 @@ async fn run_wasm(
   let wasm_bytes = @fs.read_file(wasm_path).binary()
   let module_ = @wasm5.parse(wasm_bytes)
   // Load and compile runtime
-  let runtime = @wasm5.Runtime::load(module_)
+  let runtime = @wasm5.Instance::new(module_, @wasm5.Imports::spectest())
   runtime.run_start()
   // Find the function's type to parse arguments correctly
   let func_type = find_export_func_type(module_, func_name)

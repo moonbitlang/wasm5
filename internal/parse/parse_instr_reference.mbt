@@ -1,5 +1,8 @@
 ///|
-fn parse_instr_reference(parser : Parser, opcode : Byte) -> @core.Instr? raise {
+fn parse_instr_reference(
+  parser : Parser,
+  opcode : Byte,
+) -> @core.Instr? raise ParseError {
   match opcode {
     // GC proposal: ref.as_non_null - check reference is not null
     0x16 => {

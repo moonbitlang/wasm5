@@ -1,5 +1,8 @@
 ///|
-fn parse_instr_numeric(parser : Parser, opcode : Byte) -> @core.Instr? raise {
+fn parse_instr_numeric(
+  parser : Parser,
+  opcode : Byte,
+) -> @core.Instr? raise ParseError {
   match opcode {
     // Numeric instructions - constants
     0x41 => Some(I32Const(parser.read_i32_leb128().reinterpret_as_uint()))

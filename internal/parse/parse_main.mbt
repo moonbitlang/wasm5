@@ -1,5 +1,5 @@
 ///|
-pub fn parse(b : Bytes) -> @core.Module raise {
+pub fn parse(b : Bytes) -> @core.Module raise ParseError {
   let parser = Parser::new(b)
 
   // Parse magic number
@@ -134,19 +134,21 @@ pub fn parse(b : Bytes) -> @core.Module raise {
   }
 
   // Validate the module
-  @validate.validate_module(module_)
+  @validate.validate_module(module_) catch {
+    e => raise ParseError::InvalidFormat(e.to_string())
+  }
   module_
 }
 
 ///|
 /// Parse a WebAssembly binary without validation (for debugging)
-pub fn parse_novalidate(b : Bytes) -> @core.Module raise {
+pub fn parse_novalidate(b : Bytes) -> @core.Module raise ParseError {
   parse_skip_validation(b)
 }
 
 ///|
 /// Internal parse function that skips validation
-fn parse_skip_validation(b : Bytes) -> @core.Module raise {
+fn parse_skip_validation(b : Bytes) -> @core.Module raise ParseError {
   let parser = Parser::new(b)
 
   // Parse magic number

@@ -1,5 +1,5 @@
 ///|
-fn parse_instr_prefix_fb(parser : Parser) -> @core.Instr raise {
+fn parse_instr_prefix_fb(parser : Parser) -> @core.Instr raise ParseError {
   let sub_opcode = parser.read_u32_leb128()
   match sub_opcode {
     0x00 => StructNew(parser.read_u32_leb128())
@@ -108,8 +108,6 @@ fn parse_instr_prefix_fb(parser : Parser) -> @core.Instr raise {
     0x1D => I31GetS
     0x1E => I31GetU
     _ =>
-      raise @validate.ValidationError::TypeMismatch(
-        "unknown 0xFB sub-opcode: \{sub_opcode}",
-      )
+      raise ParseError::InvalidFormat("unknown 0xFB sub-opcode: \{sub_opcode}")
   }
 }

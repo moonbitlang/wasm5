@@ -1,7 +1,9 @@
 // Section parsers: table section
 
 ///|
-fn parse_table_section(parser : Parser) -> Array[@core.TableType] raise {
+fn parse_table_section(
+  parser : Parser,
+) -> Array[@core.TableType] raise ParseError {
   let count = parser.read_u32_leb128()
   let tables = []
   for i in 0U..<count {

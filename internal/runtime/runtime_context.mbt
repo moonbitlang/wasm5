@@ -8,14 +8,14 @@ pub struct RuntimeContext {
   memory_max : UInt64?
   globals : Array[Value]
   tables : Array[RuntimeTable]
-  imported_funcs : Array[ImportedFunc]
+  imported_funcs : Array[HostFunc]
   data_segments : Array[Array[Byte]]
   gc_heap : Array[GcObject] // GC heap for struct/array instances
   output : Array[String] // Collected spectest output
   // External function references from other modules.
   // Used for cross-module funcref globals and table entries.
   // Accessed via negative indices: index -1 = external_funcrefs[0], -2 = [1], etc.
-  external_funcrefs : Array[ImportedFunc]
+  external_funcrefs : Array[HostFunc]
   // Track which element segments have been dropped.
   // Active segments are dropped after instantiation, declarative segments are always dropped.
   dropped_elems : Array[Bool]
@@ -45,12 +45,12 @@ fn RuntimeContext::new_with_gc_heap(
   memory_max : UInt64?,
   globals : Array[Value],
   tables : Array[RuntimeTable],
-  imported_funcs : Array[ImportedFunc],
+  imported_funcs : Array[HostFunc],
   data_segments : Array[Array[Byte]],
   gc_heap : Array[GcObject],
   output? : Array[String] = [],
   compiled? : @core.CompiledModule = @core.CompiledModule::new(),
-  external_funcrefs? : Array[ImportedFunc] = [],
+  external_funcrefs? : Array[HostFunc] = [],
   dropped_elems? : Array[Bool] = [],
 ) -> RuntimeContext {
   {

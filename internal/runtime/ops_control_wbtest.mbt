@@ -28,7 +28,7 @@ fn base_runtime(
   module_ : @core.Module,
   ops : Array[UInt64],
   stack : Array[Value],
-) -> Runtime {
+) -> Instance {
   // Convert Value arrays to UInt64 and allocate fixed buffer
   let stack64 = stack.map(value_to_stack)
   let stack_len = stack64.length()
@@ -48,7 +48,7 @@ fn base_runtime(
     [],
     [],
   )
-  Runtime::{
+  Instance::{
     ops: FixedArray::from_array(ops),
     stack: stack_buf,
     sp: stack_len,
@@ -185,7 +185,7 @@ test "ops control table grow and globals" {
     [],
     [],
   )
-  let rt_table_size = Runtime::{
+  let rt_table_size = Instance::{
     ops: FixedArray::from_array([idx(0), idx(0)]),
     stack: FixedArray::make(64, 0UL),
     sp: 0,
@@ -216,7 +216,7 @@ test "ops control table grow and globals" {
     [],
     [],
   )
-  let rt_table_grow = Runtime::{
+  let rt_table_grow = Instance::{
     ops: FixedArray::from_array([idx(0), idx(0)]),
     stack: stack_grow,
     sp: 2,
@@ -240,7 +240,7 @@ test "ops control table grow and globals" {
     [],
     [],
   )
-  let rt_global = Runtime::{
+  let rt_global = Instance::{
     ops: FixedArray::from_array([idx(0), idx(0)]),
     stack: stack_global,
     sp: 1,

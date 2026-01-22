@@ -1,5 +1,5 @@
 ///|
-/// Runtime for C-based threaded code execution.
+/// Instance for C-based threaded code execution.
 pub struct CRuntime {
   module_ : @core.Module
   compiled : CompiledModule

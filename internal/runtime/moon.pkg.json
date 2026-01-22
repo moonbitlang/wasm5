@@ -4,7 +4,8 @@
       "path": "moonbitlang/wasm5/internal/core",
       "alias": "core"
     },
-    "moonbitlang/wasm5/internal/compile"
+    "moonbitlang/wasm5/internal/compile",
+    "moonbitlang/core/encoding/utf8"
   ],
   "test-import": [
     "moonbitlang/async",

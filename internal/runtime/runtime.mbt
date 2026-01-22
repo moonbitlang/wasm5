@@ -4,7 +4,7 @@
 pub type Value = @core.Value
 
 ///|
-/// Runtime error types
+/// Instance error types
 pub suberror RuntimeError {
   DivisionByZero
   IntegerOverflow
@@ -49,7 +49,7 @@ struct RuntimeTable {
   // When a module stores its own funcrefs into an imported table,
   // wrappers are added here and negative indices stored in data.
   // Mapping: use funcref tag (0x4000...) with negative indices
-  external_funcrefs : Array[ImportedFunc]
+  external_funcrefs : Array[HostFunc]
 }
 
 ///|
@@ -84,7 +84,7 @@ pub fn RuntimeTable::external_funcrefs_length(self : RuntimeTable) -> Int {
 /// Add external funcref and return its index
 pub fn RuntimeTable::add_external_funcref(
   self : RuntimeTable,
-  func : ImportedFunc,
+  func : HostFunc,
 ) -> Int {
   let idx = self.external_funcrefs.length()
   self.external_funcrefs.push(func)
@@ -92,17 +92,27 @@ pub fn RuntimeTable::add_external_funcref(
 }
 
 ///|
-pub struct ImportedFunc {
+/// Create a new runtime table for host imports.
+pub fn RuntimeTable::new(
+  data : Array[UInt64],
+  max? : UInt64? = None,
+) -> RuntimeTable {
+  { data, max, external_funcrefs: [] }
+}
+
+///|
+pub struct HostFunc {
   arity : UInt
   func : (Array[Value]) -> Array[Value]
 }
 
 ///|
-/// Create a new ImportedFunc
-pub fn ImportedFunc::new(
-  arity : UInt,
+/// Create a new HostFunc.
+/// `arity` is optional and used mainly for tests and validation.
+pub fn HostFunc::new(
   func : (Array[Value]) -> Array[Value],
-) -> ImportedFunc {
+  arity? : UInt = 0U,
+) -> HostFunc {
   { arity, func }
 }
 
@@ -114,41 +124,119 @@ pub struct ImportedMemory {
 }
 
 ///|
-/// Import resolver for linking modules
-/// Maps (module_name, field_name) to ImportedFunc, global Value, table, or memory
+/// Create an imported memory with optional max pages.
+pub fn ImportedMemory::new(
+  data : Array[Byte],
+  max? : UInt64? = None,
+) -> ImportedMemory {
+  { data, max }
+}
+
+///|
+/// Import map for linking modules
+/// Maps (module_name, field_name) to HostFunc, global Value, table, or memory
 /// Using Bytes keys to match how WebAssembly module imports work
-struct ImportResolverEntry {
-  funcs : Map[Bytes, ImportedFunc]
+struct ImportsEntry {
+  funcs : Map[Bytes, HostFunc]
   globals : Map[Bytes, Value]
   tables : Map[Bytes, RuntimeTable]
   memories : Map[Bytes, ImportedMemory]
   // Wrappers for funcref globals - used for cross-module funcref handling
-  funcref_wrappers : Map[Bytes, ImportedFunc]
+  funcref_wrappers : Map[Bytes, HostFunc]
 }
 
 ///|
-pub struct ImportResolver {
-  modules : Map[Bytes, ImportResolverEntry]
+pub struct Imports {
+  modules : Map[Bytes, ImportsEntry]
 }
 
 ///|
-/// Create a new empty import resolver
-pub fn ImportResolver::new() -> ImportResolver {
+/// Create a new empty imports set
+pub fn Imports::new() -> Imports {
   { modules: Map::new() }
 }
 
 ///|
-/// Add an imported function to the resolver (using string literals)
-pub fn ImportResolver::add_func(
-  self : ImportResolver,
+fn encode_import_name(name : String) -> Bytes {
+  @utf8.encode(name)
+}
+
+///|
+/// Add an imported function with String names.
+pub fn Imports::func(
+  self : Imports,
+  module_ : String,
+  name : String,
+  func : HostFunc,
+) -> Imports {
+  self.add_func(encode_import_name(module_), encode_import_name(name), func)
+  self
+}
+
+///|
+/// Add an imported global with String names.
+pub fn Imports::global(
+  self : Imports,
+  module_ : String,
+  name : String,
+  value : Value,
+) -> Imports {
+  self.add_global(encode_import_name(module_), encode_import_name(name), value)
+  self
+}
+
+///|
+/// Add an imported table with String names.
+pub fn Imports::table(
+  self : Imports,
+  module_ : String,
+  name : String,
+  table : RuntimeTable,
+) -> Imports {
+  self.add_table(encode_import_name(module_), encode_import_name(name), table)
+  self
+}
+
+///|
+/// Add an imported memory with String names.
+pub fn Imports::memory(
+  self : Imports,
+  module_ : String,
+  name : String,
+  memory : ImportedMemory,
+) -> Imports {
+  self.add_memory(encode_import_name(module_), encode_import_name(name), memory)
+  self
+}
+
+///|
+/// Add a funcref wrapper with String names.
+pub fn Imports::funcref_wrapper(
+  self : Imports,
+  module_ : String,
+  name : String,
+  wrapper : HostFunc,
+) -> Imports {
+  self.add_funcref_wrapper(
+    encode_import_name(module_),
+    encode_import_name(name),
+    wrapper,
+  )
+  self
+}
+
+///|
+/// Add an imported function to the imports (using Bytes names).
+pub fn Imports::add_func(
+  self : Imports,
   module_ : Bytes,
   name : Bytes,
-  func : ImportedFunc,
+  func : HostFunc,
 ) -> Unit {
   match self.modules.get(module_) {
     Some(entry) => entry.funcs[name] = func
     None => {
-      let entry : ImportResolverEntry = {
+      let entry : ImportsEntry = {
         funcs: Map::new(),
         globals: Map::new(),
         tables: Map::new(),
@@ -162,9 +250,9 @@ pub fn ImportResolver::add_func(
 }
 
 ///|
-/// Add an imported global to the resolver
-pub fn ImportResolver::add_global(
-  self : ImportResolver,
+/// Add an imported global to the imports
+pub fn Imports::add_global(
+  self : Imports,
   module_ : Bytes,
   name : Bytes,
   value : Value,
@@ -172,7 +260,7 @@ pub fn ImportResolver::add_global(
   match self.modules.get(module_) {
     Some(entry) => entry.globals[name] = value
     None => {
-      let entry : ImportResolverEntry = {
+      let entry : ImportsEntry = {
         funcs: Map::new(),
         globals: Map::new(),
         tables: Map::new(),
@@ -187,11 +275,11 @@ pub fn ImportResolver::add_global(
 
 ///|
 /// Look up an imported function
-pub fn ImportResolver::get_func(
-  self : ImportResolver,
+pub fn Imports::get_func(
+  self : Imports,
   module_ : Bytes,
   name : Bytes,
-) -> ImportedFunc? {
+) -> HostFunc? {
   match self.modules.get(module_) {
     Some(entry) => entry.funcs.get(name)
     None => None
@@ -200,8 +288,8 @@ pub fn ImportResolver::get_func(
 
 ///|
 /// Look up an imported global
-pub fn ImportResolver::get_global(
-  self : ImportResolver,
+pub fn Imports::get_global(
+  self : Imports,
   module_ : Bytes,
   name : Bytes,
 ) -> Value? {
@@ -212,9 +300,9 @@ pub fn ImportResolver::get_global(
 }
 
 ///|
-/// Add an imported table to the resolver
-pub fn ImportResolver::add_table(
-  self : ImportResolver,
+/// Add an imported table to the imports
+pub fn Imports::add_table(
+  self : Imports,
   module_ : Bytes,
   name : Bytes,
   table : RuntimeTable,
@@ -222,7 +310,7 @@ pub fn ImportResolver::add_table(
   match self.modules.get(module_) {
     Some(entry) => entry.tables[name] = table
     None => {
-      let entry : ImportResolverEntry = {
+      let entry : ImportsEntry = {
         funcs: Map::new(),
         globals: Map::new(),
         tables: Map::new(),
@@ -237,8 +325,8 @@ pub fn ImportResolver::add_table(
 
 ///|
 /// Look up an imported table
-pub fn ImportResolver::get_table(
-  self : ImportResolver,
+pub fn Imports::get_table(
+  self : Imports,
   module_ : Bytes,
   name : Bytes,
 ) -> RuntimeTable? {
@@ -249,9 +337,9 @@ pub fn ImportResolver::get_table(
 }
 
 ///|
-/// Add an imported memory to the resolver
-pub fn ImportResolver::add_memory(
-  self : ImportResolver,
+/// Add an imported memory to the imports
+pub fn Imports::add_memory(
+  self : Imports,
   module_ : Bytes,
   name : Bytes,
   memory : ImportedMemory,
@@ -259,7 +347,7 @@ pub fn ImportResolver::add_memory(
   match self.modules.get(module_) {
     Some(entry) => entry.memories[name] = memory
     None => {
-      let entry : ImportResolverEntry = {
+      let entry : ImportsEntry = {
         funcs: Map::new(),
         globals: Map::new(),
         tables: Map::new(),
@@ -274,8 +362,8 @@ pub fn ImportResolver::add_memory(
 
 ///|
 /// Look up an imported memory
-pub fn ImportResolver::get_memory(
-  self : ImportResolver,
+pub fn Imports::get_memory(
+  self : Imports,
   module_ : Bytes,
   name : Bytes,
 ) -> ImportedMemory? {
@@ -286,19 +374,19 @@ pub fn ImportResolver::get_memory(
 }
 
 ///|
-/// Add a funcref wrapper to the resolver.
+/// Add a funcref wrapper to the imports.
 /// This is used for cross-module funcref handling - when a module exports
 /// a funcref global, we also register a wrapper that can call the function.
-pub fn ImportResolver::add_funcref_wrapper(
-  self : ImportResolver,
+pub fn Imports::add_funcref_wrapper(
+  self : Imports,
   module_ : Bytes,
   name : Bytes,
-  wrapper : ImportedFunc,
+  wrapper : HostFunc,
 ) -> Unit {
   match self.modules.get(module_) {
     Some(entry) => entry.funcref_wrappers[name] = wrapper
     None => {
-      let entry : ImportResolverEntry = {
+      let entry : ImportsEntry = {
         funcs: Map::new(),
         globals: Map::new(),
         tables: Map::new(),
@@ -313,11 +401,11 @@ pub fn ImportResolver::add_funcref_wrapper(
 
 ///|
 /// Look up a funcref wrapper
-pub fn ImportResolver::get_funcref_wrapper(
-  self : ImportResolver,
+pub fn Imports::get_funcref_wrapper(
+  self : Imports,
   module_ : Bytes,
   name : Bytes,
-) -> ImportedFunc? {
+) -> HostFunc? {
   match self.modules.get(module_) {
     Some(entry) => entry.funcref_wrappers.get(name)
     None => None
@@ -329,10 +417,10 @@ pub fn ImportResolver::get_funcref_wrapper(
 let initial_stack_capacity : Int = 1024
 
 ///|
-/// Runtime structure for WebAssembly execution.
+/// Instance structure for WebAssembly execution.
 /// This is a value type containing hot fields for fast access.
 /// Cold data is accessed through the ctx reference.
-pub struct Runtime {
+pub struct Instance {
   ops : FixedArray[UInt64] // Compiled instructions (tagless: fn ptrs and immediates as UInt64)
   stack : FixedArray[UInt64] // Unified stack for locals and operand stack (tagless)
   mut sp : Int // Current top of stack (next push position)
@@ -353,96 +441,69 @@ fn code_to_ops(code : Array[Int64]) -> FixedArray[UInt64] {
 
 ///|
 /// Get the module from the runtime
-pub fn Runtime::get_module(self : Runtime) -> @core.Module {
+pub fn Instance::get_module(self : Instance) -> @core.Module {
   self.ctx.module_
 }
 
 ///|
 /// Get the globals array from the runtime
-pub fn Runtime::get_globals(self : Runtime) -> Array[Value] {
+pub fn Instance::get_globals(self : Instance) -> Array[Value] {
   self.ctx.globals
 }
 
 ///|
 /// Get the tables array from the runtime
-pub fn Runtime::get_tables(self : Runtime) -> Array[RuntimeTable] {
+pub fn Instance::get_tables(self : Instance) -> Array[RuntimeTable] {
   self.ctx.tables
 }
 
 ///|
 /// Get collected spectest output
-pub fn Runtime::get_output(self : Runtime) -> Array[String] {
+pub fn Instance::get_output(self : Instance) -> Array[String] {
   self.ctx.output
 }
 
 ///|
 /// Clear collected spectest output
-pub fn Runtime::clear_output(self : Runtime) -> Unit {
+pub fn Instance::clear_output(self : Instance) -> Unit {
   self.ctx.output.clear()
 }
 
 ///|
-/// Create a default import resolver with spectest module
-pub fn default_import_resolver() -> ImportResolver {
-  let resolver = ImportResolver::new()
-  resolver.add_func(b"spectest", b"print_char", {
-    arity: 1U,
-    func: spectest_print_char,
-  })
-  resolver.add_func(b"spectest", b"print", { arity: 0U, func: spectest_print })
-  resolver.add_func(b"spectest", b"print_i32", {
-    arity: 1U,
-    func: spectest_print_i32,
-  })
-  resolver.add_func(b"spectest", b"print_i64", {
-    arity: 1U,
-    func: spectest_print_i64,
-  })
-  resolver.add_func(b"spectest", b"print_f32", {
-    arity: 1U,
-    func: spectest_print_f32,
-  })
-  resolver.add_func(b"spectest", b"print_f64", {
-    arity: 1U,
-    func: spectest_print_f64,
-  })
-  resolver.add_func(b"spectest", b"print_i32_f32", {
-    arity: 2U,
-    func: spectest_print_i32_f32,
-  })
-  resolver.add_func(b"spectest", b"print_f64_f64", {
-    arity: 2U,
-    func: spectest_print_f64_f64,
-  })
+/// Create an imports set with the standard spectest module.
+pub fn Imports::spectest() -> Imports {
   // Add spectest table (10 funcref, max 20)
   let table_data : Array[UInt64] = Array::make(10, 0xFFFFFFFFFFFFFFFFUL)
-  resolver.add_table(b"spectest", b"table", {
-    data: table_data,
-    max: Some(20UL),
-    external_funcrefs: [],
-  })
   // Add spectest memory (1 page initial, 2 pages max)
   let memory_size = 1 * 65536 // 1 page = 65536 bytes
   let memory_data : Array[Byte] = Array::make(memory_size, b'\x00')
-  resolver.add_memory(b"spectest", b"memory", {
-    data: memory_data,
-    max: Some(2UL),
-  })
-  resolver
+  Imports::new()
+  .func("spectest", "print_char", HostFunc::new(spectest_print_char, arity=1U))
+  .func("spectest", "print", HostFunc::new(spectest_print))
+  .func("spectest", "print_i32", HostFunc::new(spectest_print_i32, arity=1U))
+  .func("spectest", "print_i64", HostFunc::new(spectest_print_i64, arity=1U))
+  .func("spectest", "print_f32", HostFunc::new(spectest_print_f32, arity=1U))
+  .func("spectest", "print_f64", HostFunc::new(spectest_print_f64, arity=1U))
+  .func(
+    "spectest",
+    "print_i32_f32",
+    HostFunc::new(spectest_print_i32_f32, arity=2U),
+  )
+  .func(
+    "spectest",
+    "print_f64_f64",
+    HostFunc::new(spectest_print_f64_f64, arity=2U),
+  )
+  .table("spectest", "table", RuntimeTable::new(table_data, max=Some(20UL)))
+  .memory("spectest", "memory", ImportedMemory::new(memory_data, max=Some(2UL)))
 }
 
 ///|
-/// Load a WebAssembly module into the runtime (using default import resolver)
-pub fn Runtime::load(m : @core.Module) -> Runtime raise RuntimeError {
-  Runtime::load_with_resolver(m, default_import_resolver())
-}
-
-///|
-/// Load a WebAssembly module into the runtime with a custom import resolver
-pub fn Runtime::load_with_resolver(
+/// Instantiate a WebAssembly module with explicit imports.
+pub fn Instance::new(
   m : @core.Module,
-  resolver : ImportResolver,
-) -> Runtime raise RuntimeError {
+  imports : Imports,
+) -> Instance raise RuntimeError {
   // Initialize memory
   let mut memory : Array[Byte] = []
   let mut memory_max_pages : UInt64? = None
@@ -453,8 +514,8 @@ pub fn Runtime::load_with_resolver(
     match imp.desc {
       Mem(mem_type) => {
         has_imported_memory = true
-        // Try to get the memory from the resolver
-        match resolver.get_memory(imp.module_, imp.name) {
+        // Try to get the memory from the imports
+        match imports.get_memory(imp.module_, imp.name) {
           Some(imported_mem) => {
             memory = imported_mem.data
             memory_max_pages = imported_mem.max
@@ -483,22 +544,22 @@ pub fn Runtime::load_with_resolver(
     memory = Array::make(memory_size, b'\x00')
   }
   // Initialize globals
-  // First, add imported globals - try to get from resolver, otherwise use default values
+  // First, add imported globals - try to get from imports, otherwise use default values
   let globals : Array[Value] = []
   // Track external funcrefs for cross-module funcref handling
-  let external_funcrefs : Array[ImportedFunc] = []
+  let external_funcrefs : Array[HostFunc] = []
   for imp in m.imports {
     match imp.desc {
       Global(gt) => {
-        // Try to get the global value from the resolver
-        let value = match resolver.get_global(imp.module_, imp.name) {
+        // Try to get the global value from the imports
+        let value = match imports.get_global(imp.module_, imp.name) {
           Some(v) =>
             // For funcref globals, check if there's a funcref wrapper
             // and if so, use a negative index to point to external_funcrefs
             match v {
               Ref(Some(_)) =>
                 // Check for a funcref wrapper for cross-module calls
-                match resolver.get_funcref_wrapper(imp.module_, imp.name) {
+                match imports.get_funcref_wrapper(imp.module_, imp.name) {
                   Some(wrapper) => {
                     // Add wrapper to external_funcrefs and use negative index
                     // Mapping: -1 → [0], -2 → [1], etc.
@@ -564,11 +625,11 @@ pub fn Runtime::load_with_resolver(
   for imp in m.imports {
     match imp.desc {
       Table(_) =>
-        // Try to get the table from the resolver
-        match resolver.get_table(imp.module_, imp.name) {
+        // Try to get the table from the imports
+        match imports.get_table(imp.module_, imp.name) {
           Some(imported_table) => tables.push(imported_table)
           None => {
-            // Fall back to creating an empty table if resolver doesn't provide one
+            // Fall back to creating an empty table if imports doesn't provide one
             // This shouldn't happen with proper test setup, but provides graceful fallback
             let table_size = 10 // Default size for fallback
             let table_data : Array[UInt64] = Array::make(
@@ -689,13 +750,13 @@ pub fn Runtime::load_with_resolver(
     }
   }
   // Resolve imported functions - MUST push for every function import
-  let imported_funcs : Array[ImportedFunc] = []
+  let imported_funcs : Array[HostFunc] = []
   for imp in m.imports {
     let module_name = imp.module_
     let field_name = imp.name
     match imp.desc {
       Func(_type_idx) =>
-        match resolver.get_func(module_name, field_name) {
+        match imports.get_func(module_name, field_name) {
           Some(func) => imported_funcs.push(func)
           None =>
             raise RuntimeError::FunctionNotFound(
@@ -736,7 +797,7 @@ pub fn Runtime::load_with_resolver(
     external_funcrefs~,
     dropped_elems~,
   )
-  Runtime::{
+  Instance::{
     ops: code_to_ops(compiled.code),
     stack: FixedArray::make(initial_stack_capacity, 0UL),
     sp: 0,

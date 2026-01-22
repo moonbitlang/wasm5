@@ -1,6 +1,6 @@
 ///|
 test "import resolver add/get and module access" {
-  let resolver = ImportResolver::new()
+  let resolver = Imports::new()
   match resolver.get_func(b"missing", b"f") {
     None => ()
     _ => abort("expected no func")
@@ -14,7 +14,7 @@ test "import resolver add/get and module access" {
     None => ()
     _ => abort("expected no memory")
   }
-  let func = ImportedFunc::new(0U, fn(_args) { [] })
+  let func = HostFunc::new(fn(_args) { [] })
   resolver.add_func(b"m", b"f", func)
   resolver.add_global(b"m", b"g", Value::I32(1U))
   resolver.add_global(b"m", b"g2", Value::I64(2UL))

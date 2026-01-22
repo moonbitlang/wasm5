@@ -6,9 +6,9 @@ import {
 }
 
 // Values
-pub fn parse(Bytes) -> @core.Module raise
+pub fn parse(Bytes) -> @core.Module raise ParseError
 
-pub fn parse_novalidate(Bytes) -> @core.Module raise
+pub fn parse_novalidate(Bytes) -> @core.Module raise ParseError
 
 // Errors
 pub suberror ParseError {

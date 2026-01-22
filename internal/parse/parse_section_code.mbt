@@ -1,7 +1,7 @@
 // Section parsers: code section
 
 ///|
-fn parse_code_section(parser : Parser) -> Array[@core.Code] raise {
+fn parse_code_section(parser : Parser) -> Array[@core.Code] raise ParseError {
   let count = parser.read_u32_leb128()
   let codes = []
   for i in 0U..<count {

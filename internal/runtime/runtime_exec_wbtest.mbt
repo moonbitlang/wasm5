@@ -35,7 +35,7 @@ test "runtime compile start function" {
     max_stack_height: 0,
   }
   let module_ = module_with([func_type], [0U], [code], [], [], Some(0U))
-  let rt = Runtime::load_with_resolver(module_, ImportResolver::new())
+  let rt = Instance::new(module_, Imports::new())
   rt.run_start()
   assert_eq(rt.ops.length() > 0, true)
   // Stack is cleared after start function execution (unified stack model)
@@ -67,13 +67,9 @@ test "runtime call compiled imported func" {
     [{ name: b"f", desc: Func(0U) }],
     None,
   )
-  let resolver = ImportResolver::new()
-  resolver.add_func(
-    b"m",
-    b"f",
-    ImportedFunc::new(0U, fn(_args) { [Value::I32(7U)] }),
-  )
-  let rt = Runtime::load_with_resolver(module_, resolver)
+  let resolver = Imports::new()
+  resolver.add_func(b"m", b"f", HostFunc::new(fn(_args) { [Value::I32(7U)] }))
+  let rt = Instance::new(module_, resolver)
   let results = rt.call_compiled(b"f", [])
   assert_eq(results, [Value::I32(7U)])
 }
@@ -101,7 +97,7 @@ test "runtime call compiled non func export" {
     exports: [{ name: b"mem", desc: Mem(0U) }],
     codes: [],
   }
-  let rt = Runtime::load_with_resolver(module_, ImportResolver::new())
+  let rt = Instance::new(module_, Imports::new())
   let mut saw_error = false
   let _ = rt.call_compiled(b"mem", []) catch {
     _ => {
@@ -130,7 +126,7 @@ test "runtime call compiled local errors" {
     [{ name: b"bad", desc: Func(0U) }],
     None,
   )
-  let rt_bad = Runtime::load_with_resolver(module_bad, ImportResolver::new())
+  let rt_bad = Instance::new(module_bad, Imports::new())
   let results = rt_bad.call_compiled(b"bad", [])
   assert_eq(results.length(), 0)
 }

@@ -1,7 +1,7 @@
 // Parse expression (sequence of instructions ending with 0x0B)
 
 ///|
-fn parse_expr(parser : Parser) -> @core.Expr raise {
+fn parse_expr(parser : Parser) -> @core.Expr raise ParseError {
   let instrs = parse_instrs(parser)
   // parse_instrs puts back the 0x0B, we need to consume it
   let end_marker = parser.read_byte()
@@ -16,8 +16,10 @@ fn parse_expr(parser : Parser) -> @core.Expr raise {
 // Parse instructions until 0x0B (end marker)
 
 ///|
-fn parse_instrs(parser : Parser) -> Array[@core.Instr] raise {
-  fn read_loop(instrs : Array[@core.Instr]) -> Array[@core.Instr] raise {
+fn parse_instrs(parser : Parser) -> Array[@core.Instr] raise ParseError {
+  fn read_loop(
+    instrs : Array[@core.Instr],
+  ) -> Array[@core.Instr] raise ParseError {
     let opcode = parser.read_byte()
     if opcode == 0x0B {
       // End marker (0x0B) - put it back for caller to handle
@@ -39,7 +41,7 @@ fn parse_instrs(parser : Parser) -> Array[@core.Instr] raise {
 // Parse a single instruction
 
 ///|
-fn parse_instr(parser : Parser, opcode : Byte) -> @core.Instr raise {
+fn parse_instr(parser : Parser, opcode : Byte) -> @core.Instr raise ParseError {
   if opcode == 0xFC {
     return parse_instr_prefix_fc(parser)
   }
@@ -87,7 +89,7 @@ fn parse_instr(parser : Parser, opcode : Byte) -> @core.Instr raise {
     Some(value) => return value
     None => ()
   }
-  raise @validate.ValidationError::TypeMismatch(
+  raise ParseError::InvalidFormat(
     "unknown opcode: 0x\{opcode.to_string().to_upper()}",
   )
 }

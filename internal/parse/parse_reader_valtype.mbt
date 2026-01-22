@@ -38,7 +38,7 @@ fn Parser::read_heap_type(self : Parser) -> @core.RefType raise ParseError {
 }
 
 ///|
-fn Parser::read_valtype(self : Parser) -> @core.ValType raise {
+fn Parser::read_valtype(self : Parser) -> @core.ValType raise ParseError {
   let byte = self.read_byte()
   match byte {
     0x7F => I32
@@ -71,7 +71,7 @@ fn Parser::read_valtype(self : Parser) -> @core.ValType raise {
         Some(NoFunc) => NullFuncRef
         Some(NoExn) => NullExnRef
         Some(TypeIndex(_)) | None =>
-          raise @validate.ValidationError::TypeMismatch(
+          raise ParseError::InvalidFormat(
             "invalid value type: 0x\{byte.to_string()}",
           )
       }
@@ -79,7 +79,9 @@ fn Parser::read_valtype(self : Parser) -> @core.ValType raise {
 }
 
 ///|
-fn Parser::read_storage_type(self : Parser) -> @core.StorageType raise {
+fn Parser::read_storage_type(
+  self : Parser,
+) -> @core.StorageType raise ParseError {
   let byte = self.read_byte()
   match byte {
     0x78 => I8

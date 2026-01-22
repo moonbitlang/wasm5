@@ -6,7 +6,7 @@
 // =============================================================================
 
 ///|
-fn op_i32_load(rt : Runtime) -> ReturnCode {
+fn op_i32_load(rt : Instance) -> ReturnCode {
   let offset = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let _mem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let offset = offset.reinterpret_as_uint().to_uint64()
@@ -33,7 +33,7 @@ fn op_i32_load(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_store(rt : Runtime) -> ReturnCode {
+fn op_i32_store(rt : Instance) -> ReturnCode {
   let offset = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let _mem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let offset = offset.reinterpret_as_uint().to_uint64()
@@ -60,7 +60,7 @@ fn op_i32_store(rt : Runtime) -> ReturnCode {
 // Additional memory load operations
 
 ///|
-fn op_i32_load8_s(rt : Runtime) -> ReturnCode {
+fn op_i32_load8_s(rt : Instance) -> ReturnCode {
   let offset = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let _mem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let offset = offset.reinterpret_as_uint().to_uint64()
@@ -83,7 +83,7 @@ fn op_i32_load8_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_load8_u(rt : Runtime) -> ReturnCode {
+fn op_i32_load8_u(rt : Instance) -> ReturnCode {
   let offset = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let _mem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let offset = offset.reinterpret_as_uint().to_uint64()
@@ -103,7 +103,7 @@ fn op_i32_load8_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_load16_s(rt : Runtime) -> ReturnCode {
+fn op_i32_load16_s(rt : Instance) -> ReturnCode {
   let offset = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let _mem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let offset = offset.reinterpret_as_uint().to_uint64()
@@ -128,7 +128,7 @@ fn op_i32_load16_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_load16_u(rt : Runtime) -> ReturnCode {
+fn op_i32_load16_u(rt : Instance) -> ReturnCode {
   let offset = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let _mem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let offset = offset.reinterpret_as_uint().to_uint64()
@@ -150,7 +150,7 @@ fn op_i32_load16_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_load(rt : Runtime) -> ReturnCode {
+fn op_i64_load(rt : Instance) -> ReturnCode {
   let offset = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let _mem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let offset = offset.reinterpret_as_uint().to_uint64()
@@ -188,7 +188,7 @@ fn op_i64_load(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_store(rt : Runtime) -> ReturnCode {
+fn op_i64_store(rt : Instance) -> ReturnCode {
   let offset = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let _mem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let offset = offset.reinterpret_as_uint().to_uint64()
@@ -217,7 +217,7 @@ fn op_i64_store(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_load8_s(rt : Runtime) -> ReturnCode {
+fn op_i64_load8_s(rt : Instance) -> ReturnCode {
   let offset = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let _mem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let offset = offset.reinterpret_as_uint().to_uint64()
@@ -240,7 +240,7 @@ fn op_i64_load8_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_load8_u(rt : Runtime) -> ReturnCode {
+fn op_i64_load8_u(rt : Instance) -> ReturnCode {
   let offset = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let _mem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let offset = offset.reinterpret_as_uint().to_uint64()
@@ -260,7 +260,7 @@ fn op_i64_load8_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_load16_s(rt : Runtime) -> ReturnCode {
+fn op_i64_load16_s(rt : Instance) -> ReturnCode {
   let offset = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let _mem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let offset = offset.reinterpret_as_uint().to_uint64()
@@ -285,7 +285,7 @@ fn op_i64_load16_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_load16_u(rt : Runtime) -> ReturnCode {
+fn op_i64_load16_u(rt : Instance) -> ReturnCode {
   let offset = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let _mem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let offset = offset.reinterpret_as_uint().to_uint64()
@@ -307,7 +307,7 @@ fn op_i64_load16_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_load32_s(rt : Runtime) -> ReturnCode {
+fn op_i64_load32_s(rt : Instance) -> ReturnCode {
   let offset = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let _mem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let offset = offset.reinterpret_as_uint().to_uint64()
@@ -338,7 +338,7 @@ fn op_i64_load32_s(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_load32_u(rt : Runtime) -> ReturnCode {
+fn op_i64_load32_u(rt : Instance) -> ReturnCode {
   let offset = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let _mem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let offset = offset.reinterpret_as_uint().to_uint64()
@@ -362,7 +362,7 @@ fn op_i64_load32_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f32_load(rt : Runtime) -> ReturnCode {
+fn op_f32_load(rt : Instance) -> ReturnCode {
   let offset = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let _mem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let offset = offset.reinterpret_as_uint().to_uint64()
@@ -387,7 +387,7 @@ fn op_f32_load(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_load(rt : Runtime) -> ReturnCode {
+fn op_f64_load(rt : Instance) -> ReturnCode {
   let offset = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let _mem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let offset = offset.reinterpret_as_uint().to_uint64()
@@ -423,7 +423,7 @@ fn op_f64_load(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f32_store(rt : Runtime) -> ReturnCode {
+fn op_f32_store(rt : Instance) -> ReturnCode {
   let offset = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let _mem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let offset = offset.reinterpret_as_uint().to_uint64()
@@ -448,7 +448,7 @@ fn op_f32_store(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_f64_store(rt : Runtime) -> ReturnCode {
+fn op_f64_store(rt : Instance) -> ReturnCode {
   let offset = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let _mem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let offset = offset.reinterpret_as_uint().to_uint64()
@@ -479,7 +479,7 @@ fn op_f64_store(rt : Runtime) -> ReturnCode {
 // Narrow store operations
 
 ///|
-fn op_i32_store8(rt : Runtime) -> ReturnCode {
+fn op_i32_store8(rt : Instance) -> ReturnCode {
   let offset = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let _mem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let offset = offset.reinterpret_as_uint().to_uint64()
@@ -501,7 +501,7 @@ fn op_i32_store8(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i32_store16(rt : Runtime) -> ReturnCode {
+fn op_i32_store16(rt : Instance) -> ReturnCode {
   let offset = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let _mem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let offset = offset.reinterpret_as_uint().to_uint64()
@@ -524,7 +524,7 @@ fn op_i32_store16(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_store8(rt : Runtime) -> ReturnCode {
+fn op_i64_store8(rt : Instance) -> ReturnCode {
   let offset = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let _mem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let offset = offset.reinterpret_as_uint().to_uint64()
@@ -546,7 +546,7 @@ fn op_i64_store8(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_store16(rt : Runtime) -> ReturnCode {
+fn op_i64_store16(rt : Instance) -> ReturnCode {
   let offset = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let _mem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let offset = offset.reinterpret_as_uint().to_uint64()
@@ -569,7 +569,7 @@ fn op_i64_store16(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_i64_store32(rt : Runtime) -> ReturnCode {
+fn op_i64_store32(rt : Instance) -> ReturnCode {
   let offset = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let _mem_idx = rt.ops.unsafe_get(rt.pc + 2).to_int()
   let offset = offset.reinterpret_as_uint().to_uint64()
@@ -600,7 +600,7 @@ fn op_i64_store32(rt : Runtime) -> ReturnCode {
 let wasm_page_size : Int = 65536
 
 ///|
-fn op_memory_size(rt : Runtime) -> ReturnCode {
+fn op_memory_size(rt : Instance) -> ReturnCode {
   let _mem_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   // Return current memory size in pages
   let size_in_pages = rt.ctx.memory.length() / wasm_page_size
@@ -611,7 +611,7 @@ fn op_memory_size(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_memory_grow(rt : Runtime) -> ReturnCode {
+fn op_memory_grow(rt : Instance) -> ReturnCode {
   let _mem_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let stack_top = rt.sp - 1
   let delta_pages = rt.stack
@@ -660,7 +660,7 @@ fn op_memory_grow(rt : Runtime) -> ReturnCode {
 // =============================================================================
 
 ///|
-fn op_memory_copy(rt : Runtime) -> ReturnCode {
+fn op_memory_copy(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 3
   let n = rt.stack.unsafe_get(rt.sp - 1).to_uint().reinterpret_as_int()
   let src = rt.stack.unsafe_get(rt.sp - 2).to_uint().reinterpret_as_int()
@@ -697,7 +697,7 @@ fn op_memory_copy(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_memory_fill(rt : Runtime) -> ReturnCode {
+fn op_memory_fill(rt : Instance) -> ReturnCode {
   let stack_top = rt.sp - 3
   let n = rt.stack.unsafe_get(rt.sp - 1).to_uint().reinterpret_as_int()
   let val = rt.stack.unsafe_get(rt.sp - 2).to_uint().reinterpret_as_int() & 0xFF // Truncate to byte
@@ -721,7 +721,7 @@ fn op_memory_fill(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_memory_init(rt : Runtime) -> ReturnCode {
+fn op_memory_init(rt : Instance) -> ReturnCode {
   let data_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
   let stack_top = rt.sp - 3
   let n = rt.stack.unsafe_get(rt.sp - 1).to_uint().reinterpret_as_int()
@@ -757,7 +757,7 @@ fn op_memory_init(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-fn op_data_drop(rt : Runtime) -> ReturnCode {
+fn op_data_drop(rt : Instance) -> ReturnCode {
   let data_idx = rt.ops.unsafe_get(rt.pc + 1).to_int()
 
   // Check data segment index

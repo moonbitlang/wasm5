@@ -1,7 +1,9 @@
 // Section parsers: global section
 
 ///|
-fn parse_global_section(parser : Parser) -> Array[@core.Global] raise {
+fn parse_global_section(
+  parser : Parser,
+) -> Array[@core.Global] raise ParseError {
   let count = parser.read_u32_leb128()
   let globals = []
   for i in 0U..<count {

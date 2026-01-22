@@ -1,6 +1,6 @@
 ///|
 /// Run the start function if present.
-pub fn Runtime::run_start(self : Runtime) -> Unit raise RuntimeError {
+pub fn Instance::run_start(self : Instance) -> Unit raise RuntimeError {
   // Execute the start function if present
   match self.ctx.module_.start {
     Some(start_idx) => {
@@ -38,7 +38,7 @@ pub fn Runtime::run_start(self : Runtime) -> Unit raise RuntimeError {
 }
 
 ///|
-fn execute(rt : Runtime) -> Runtime raise RuntimeError {
+fn execute(rt : Instance) -> Instance raise RuntimeError {
   let rt = rt
   let mut code = Running
   while code is Running {
@@ -52,7 +52,7 @@ fn execute(rt : Runtime) -> Runtime raise RuntimeError {
 }
 
 ///|
-fn dispatch(rt : Runtime) -> ReturnCode {
+fn dispatch(rt : Instance) -> ReturnCode {
   let opcode = rt.ops.unsafe_get(rt.pc).reinterpret_as_int64()
   match opcode {
     // Control flow (0-18)
@@ -351,13 +351,13 @@ fn dispatch(rt : Runtime) -> ReturnCode {
 /// Caller state is preserved on the MoonBit stack frame.
 /// Returns the runtime with results on the stack after callee returns.
 fn execute_call(
-  rt : Runtime,
+  rt : Instance,
   callee_pc : Int,
   caller_bp : Int,
   caller_num_locals : Int,
   caller_sp : Int,
   return_pc : Int,
-) -> Runtime raise RuntimeError {
+) -> Instance raise RuntimeError {
   // Execute callee
   let rt = rt
   rt.pc = callee_pc
@@ -375,8 +375,8 @@ fn execute_call(
 
 ///|
 /// Call a compiled function by name with the given arguments.
-pub fn Runtime::call_compiled(
-  self : Runtime,
+pub fn Instance::call_compiled(
+  self : Instance,
   func_name : Bytes,
   args : Array[Value],
 ) -> Array[Value] raise RuntimeError {
@@ -439,8 +439,8 @@ pub fn Runtime::call_compiled(
 ///|
 /// Call a function by its index (used for funcref handling).
 /// This allows calling functions that may not be exported by name.
-pub fn Runtime::call_by_index(
-  self : Runtime,
+pub fn Instance::call_by_index(
+  self : Instance,
   func_idx : Int,
   args : Array[Value],
 ) -> Array[Value] raise RuntimeError {

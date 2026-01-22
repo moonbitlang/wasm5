@@ -5,7 +5,7 @@
 /// Returns (@core.RefType, nullable: Bool)
 fn Parser::read_reftype_with_nullability(
   self : Parser,
-) -> (@core.RefType, Bool) raise {
+) -> (@core.RefType, Bool) raise ParseError {
   let byte = self.read_byte()
   match byte {
     // GC proposal: (ref null <heaptype>) - nullable typed reference
@@ -51,7 +51,7 @@ fn Parser::read_reftype_with_nullability(
             let type_idx = self.read_i32_leb128()
             (TypeIndex(type_idx), true) // Default to nullable
           } else {
-            raise @validate.ValidationError::TypeMismatch(
+            raise ParseError::InvalidFormat(
               "invalid reftype: 0x\{byte.to_string()}",
             )
           }

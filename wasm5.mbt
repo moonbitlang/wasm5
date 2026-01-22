@@ -5,7 +5,6 @@ pub using @core {
   type RefType,
   type FuncType,
   type TypeDef,
-  type Module,
   type Limits,
   type MemType,
   type TableType,
@@ -17,7 +16,22 @@ pub using @core {
 }
 
 ///|
-pub using @parse {parse, type ParseError}
+pub type Module = @core.Module
 
 ///|
-pub using @runtime {type Runtime, type RuntimeError}
+pub using @parse {type ParseError}
+
+///|
+pub fn parse(bytes : Bytes) -> Module raise ParseError {
+  @parse.parse(bytes)
+}
+
+///|
+pub using @runtime {
+  type HostFunc,
+  type ImportedMemory,
+  type Instance,
+  type Imports,
+  type RuntimeError,
+  type RuntimeTable,
+}

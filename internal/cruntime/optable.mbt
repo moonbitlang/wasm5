@@ -1,5 +1,5 @@
 ///|
-/// C Runtime Function Signature:
+/// C Instance Function Signature:
 ///
 /// ```c
 /// typedef struct {

@@ -69,11 +69,11 @@ test "compile helpers imported func result truncation" {
     None,
     [],
     [],
-    [ImportedFunc::new(0U, fn(_args) { [Value::I32(1U), Value::I32(2U)] })],
+    [HostFunc::new(fn(_args) { [Value::I32(1U), Value::I32(2U)] })],
     [],
     [],
   )
-  let rt = Runtime::{
+  let rt = Instance::{
     ops: FixedArray::from_array([]),
     stack: FixedArray::make(64, 0UL),
     sp: 0,

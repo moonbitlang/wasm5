@@ -1,7 +1,10 @@
 // Section parsers: type section
 
 ///|
-fn parse_type_def_with_tag(parser : Parser, tag : Byte) -> @core.TypeDef raise {
+fn parse_type_def_with_tag(
+  parser : Parser,
+  tag : Byte,
+) -> @core.TypeDef raise ParseError {
   // Handle composite types from GC proposal
   match tag {
     // func type
@@ -29,7 +32,7 @@ fn parse_type_def_with_tag(parser : Parser, tag : Byte) -> @core.TypeDef raise {
           0x00 => false
           0x01 => true
           _ =>
-            raise @validate.ValidationError::TypeMismatch(
+            raise ParseError::InvalidFormat(
               "invalid mutability byte: 0x\{mut_byte.to_string()}",
             )
         }
@@ -45,7 +48,7 @@ fn parse_type_def_with_tag(parser : Parser, tag : Byte) -> @core.TypeDef raise {
         0x00 => false
         0x01 => true
         _ =>
-          raise @validate.ValidationError::TypeMismatch(
+          raise ParseError::InvalidFormat(
             "invalid mutability byte: 0x\{mut_byte.to_string()}",
           )
       }
@@ -54,14 +57,14 @@ fn parse_type_def_with_tag(parser : Parser, tag : Byte) -> @core.TypeDef raise {
       })
     }
     _ =>
-      raise @validate.ValidationError::TypeMismatch(
+      raise ParseError::InvalidFormat(
         "expected composite type tag, got 0x\{tag.to_string()}",
       )
   }
 }
 
 ///|
-fn parse_type_def(parser : Parser) -> @core.TypeDef raise {
+fn parse_type_def(parser : Parser) -> @core.TypeDef raise ParseError {
   parse_type_def_with_tag(parser, parser.read_byte())
 }
 
@@ -69,7 +72,7 @@ fn parse_type_def(parser : Parser) -> @core.TypeDef raise {
 fn parse_subtype_entry_with_tag(
   parser : Parser,
   tag : Byte,
-) -> (Array[UInt], Bool, @core.TypeDef) raise {
+) -> (Array[UInt], Bool, @core.TypeDef) raise ParseError {
   match tag {
     0x4F | 0x50 => {
       let is_final = tag == 0x4F
@@ -86,7 +89,7 @@ fn parse_subtype_entry_with_tag(
       ([], true, type_def)
     }
     _ =>
-      raise @validate.ValidationError::TypeMismatch(
+      raise ParseError::InvalidFormat(
         "expected type tag, got 0x\{tag.to_string()}",
       )
   }
@@ -95,14 +98,14 @@ fn parse_subtype_entry_with_tag(
 ///|
 fn parse_subtype_entry(
   parser : Parser,
-) -> (Array[UInt], Bool, @core.TypeDef) raise {
+) -> (Array[UInt], Bool, @core.TypeDef) raise ParseError {
   parse_subtype_entry_with_tag(parser, parser.read_byte())
 }
 
 ///|
 fn parse_type_section(
   parser : Parser,
-) -> (Array[@core.TypeDef], Array[@core.TypeGroup]) raise {
+) -> (Array[@core.TypeDef], Array[@core.TypeGroup]) raise ParseError {
   let count = parser.read_u32_leb128()
   let types = []
   let type_groups : Array[@core.TypeGroup] = []

@@ -73,8 +73,8 @@ test "runtime load with resolver" {
     exports: [],
     codes: [make_code([])],
   }
-  let resolver = ImportResolver::new()
-  resolver.add_func(b"m", b"f", ImportedFunc::new(0U, fn(_args) { [] }))
+  let resolver = Imports::new()
+  resolver.add_func(b"m", b"f", HostFunc::new(fn(_args) { [] }))
   resolver.add_global(b"m", b"g0", Value::I32(42U))
   resolver.add_global(b"m", b"g1", Value::F64(666.6))
   resolver.add_table(b"m", b"t0", RuntimeTable::{
@@ -91,7 +91,7 @@ test "runtime load with resolver" {
     data: Array::make(8, b'\x00'),
     max: Some(2UL),
   })
-  let rt = Runtime::load_with_resolver(module_, resolver)
+  let rt = Instance::new(module_, resolver)
   assert_eq(rt.ctx.memory.length(), 8)
   assert_eq(rt.ctx.memory[0], b'h')
   assert_eq(rt.ctx.memory[1], b'i')
@@ -135,7 +135,7 @@ test "runtime load fallback memory" {
     exports: [],
     codes: [],
   }
-  let rt = Runtime::load_with_resolver(module_, ImportResolver::new())
+  let rt = Instance::new(module_, Imports::new())
   assert_eq(rt.ctx.memory.length(), 65536)
   assert_eq(rt.ctx.memory_max, Some(2UL))
 }
@@ -163,7 +163,7 @@ test "runtime load local memory" {
     exports: [],
     codes: [],
   }
-  let rt = Runtime::load_with_resolver(module_, ImportResolver::new())
+  let rt = Instance::new(module_, Imports::new())
   assert_eq(rt.ctx.memory.length(), 65536)
   assert_eq(rt.ctx.memory_max, None)
 }
@@ -188,7 +188,7 @@ test "runtime load missing imported function" {
     codes: [],
   }
   let mut saw_error = false
-  let _ = Runtime::load_with_resolver(module_, ImportResolver::new()) catch {
+  let _ = Instance::new(module_, Imports::new()) catch {
     _ => {
       saw_error = true
       make_runtime([], [], 0)

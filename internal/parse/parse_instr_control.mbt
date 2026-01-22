@@ -1,5 +1,8 @@
 ///|
-fn parse_instr_control(parser : Parser, opcode : Byte) -> @core.Instr? raise {
+fn parse_instr_control(
+  parser : Parser,
+  opcode : Byte,
+) -> @core.Instr? raise ParseError {
   match opcode {
     0x00 => Some(Unreachable)
     0x01 => Some(Nop)
@@ -111,7 +114,7 @@ fn parse_instr_control(parser : Parser, opcode : Byte) -> @core.Instr? raise {
             catches.push(@core.CatchClause::CatchAllRef(label_idx))
           }
           _ =>
-            raise @validate.ValidationError::TypeMismatch(
+            raise ParseError::InvalidFormat(
               "unknown try_table catch kind: 0x\{catch_kind.to_string()}",
             )
         }

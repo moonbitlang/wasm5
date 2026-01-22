@@ -57,7 +57,7 @@ fn make_import_call_module() -> @core.Module {
 ///|
 test "runtime call compiled constant" {
   let module_ = make_const_module(42U, b"answer")
-  let runtime = Runtime::load(module_)
+  let runtime = Instance::new(module_, Imports::new())
   runtime.run_start()
   let results = runtime.call_compiled(b"answer", [])
   assert_eq(results.length(), 1)
@@ -67,10 +67,10 @@ test "runtime call compiled constant" {
 ///|
 test "runtime call imported function" {
   let module_ = make_import_call_module()
-  let resolver = ImportResolver::new()
-  let imported = ImportedFunc::new(0U, fn(_args) { [Value::I32(7U)] })
+  let resolver = Imports::new()
+  let imported = HostFunc::new(fn(_args) { [Value::I32(7U)] })
   resolver.add_func(b"m", b"f", imported)
-  let runtime = Runtime::load_with_resolver(module_, resolver)
+  let runtime = Instance::new(module_, resolver)
   runtime.run_start()
   let results = runtime.call_compiled(b"call_imported", [])
   assert_eq(results.length(), 1)
@@ -100,7 +100,7 @@ test "runtime evaluates global init expr" {
     exports: [],
     codes: [],
   }
-  let runtime = Runtime::load(module_)
+  let runtime = Instance::new(module_, Imports::new())
   let globals = runtime.get_globals()
   assert_eq(globals.length(), 1)
   assert_eq(globals[0], Value::I32(3U))
