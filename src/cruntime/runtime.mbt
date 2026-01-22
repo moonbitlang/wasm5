@@ -16,6 +16,7 @@ pub struct CRuntime {
   table_offsets : FixedArray[Int] // Offset of each table in tables_flat
   table_sizes : FixedArray[Int] // Current size of each table
   table_max_sizes : FixedArray[Int] // Max size (capacity) of each table for table.grow
+  table_elem_is_funcref : FixedArray[Int] // 1 for funcref tables, 0 for externref
   // Type information for call_indirect type checking
   func_type_idxs : FixedArray[Int] // Type index for each function (imported + local)
   type_param_counts : FixedArray[Int] // Primary signature hash for each type
@@ -122,6 +123,33 @@ fn build_import_context_arrays(
 }
 
 ///|
+fn is_funcref_table(table_type : @core.TableType) -> Bool {
+  match table_type.elem_type {
+    @core.RefType::Extern | @core.RefType::NoExtern => false
+    _ => true
+  }
+}
+
+///|
+fn build_table_elem_types(module_ : @core.Module) -> FixedArray[Int] {
+  let elem_types : Array[Int] = []
+  for imp in module_.imports {
+    match imp.desc {
+      Table(table_type) =>
+        elem_types.push(if is_funcref_table(table_type) { 1 } else { 0 })
+      _ => ()
+    }
+  }
+  for table_type in module_.tables {
+    elem_types.push(if is_funcref_table(table_type) { 1 } else { 0 })
+  }
+  if elem_types.length() == 0 {
+    elem_types.push(1)
+  }
+  FixedArray::from_array(elem_types)
+}
+
+///|
 /// Extend import metadata arrays with external funcref entries.
 fn extend_import_metadata(
   num_imported : Int,
@@ -200,6 +228,7 @@ fn build_runtime(
   let (tables_flat, table_offsets, table_sizes, table_max_sizes) = flatten_tables(
     tables, table_logical_sizes, table_max_sizes,
   )
+  let table_elem_is_funcref = build_table_elem_types(module_)
   // Build type info for call_indirect type checking
   let (func_type_idxs, type_param_counts, type_result_counts) = build_type_info(
     module_,
@@ -248,6 +277,7 @@ fn build_runtime(
     table_offsets,
     table_sizes,
     table_max_sizes,
+    table_elem_is_funcref,
     func_type_idxs,
     type_param_counts,
     type_result_counts,
@@ -339,6 +369,7 @@ pub fn CRuntime::get_context_ptr(self : CRuntime) -> Int64 {
       self.table_offsets,
       self.table_sizes,
       self.table_max_sizes,
+      self.table_elem_is_funcref,
       self.tables.length(),
       self.compiled.func_entries,
       self.compiled.func_num_locals,
@@ -1527,6 +1558,7 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
           self.table_offsets,
           self.table_sizes,
           self.table_max_sizes,
+          self.table_elem_is_funcref,
           self.tables.length(),
           self.compiled.func_entries,
           self.compiled.func_num_locals,
@@ -1684,6 +1716,7 @@ pub fn CRuntime::call_compiled(
           self.table_offsets,
           self.table_sizes,
           self.table_max_sizes,
+          self.table_elem_is_funcref,
           self.tables.length(),
           self.compiled.func_entries,
           self.compiled.func_num_locals,

@@ -212,6 +212,7 @@ static int* g_tables_flat = NULL;      // All tables concatenated
 static int* g_table_offsets = NULL;    // Offset of each table in g_tables_flat
 static int* g_table_sizes = NULL;      // Current size of each table
 static int* g_table_max_sizes = NULL;  // Maximum size (capacity) of each table for table.grow
+static int* g_table_elem_is_funcref = NULL;  // 1 for funcref tables, 0 for externref
 static int g_num_tables = 0;
 
 // Function metadata (for call_indirect)
@@ -280,6 +281,7 @@ typedef struct CRuntimeContext {
     int* table_offsets;
     int* table_sizes;
     int* table_max_sizes;
+    int* table_elem_is_funcref;
     int num_tables;
     int* func_entries;
     int* func_num_locals;
@@ -326,6 +328,7 @@ static void save_context(CRuntimeContext* ctx, CRuntime* crt) {
     ctx->table_offsets = g_table_offsets;
     ctx->table_sizes = g_table_sizes;
     ctx->table_max_sizes = g_table_max_sizes;
+    ctx->table_elem_is_funcref = g_table_elem_is_funcref;
     ctx->num_tables = g_num_tables;
     ctx->func_entries = g_func_entries;
     ctx->func_num_locals = g_func_num_locals;
@@ -367,6 +370,7 @@ static void load_context(const CRuntimeContext* ctx, CRuntime* crt) {
     g_table_offsets = ctx->table_offsets;
     g_table_sizes = ctx->table_sizes;
     g_table_max_sizes = ctx->table_max_sizes;
+    g_table_elem_is_funcref = ctx->table_elem_is_funcref;
     g_num_tables = ctx->num_tables;
     g_func_entries = ctx->func_entries;
     g_func_num_locals = ctx->func_num_locals;
@@ -401,7 +405,7 @@ static void load_context(const CRuntimeContext* ctx, CRuntime* crt) {
 CRuntimeContext* create_runtime_context(
     uint64_t* code, uint64_t* globals, uint8_t* memory, int memory_size,
     int memory_max_size, int* memory_pages, int* tables_flat, int* table_offsets, int* table_sizes,
-    int* table_max_sizes, int num_tables, int* func_entries, int* func_num_locals,
+    int* table_max_sizes, int* table_elem_is_funcref, int num_tables, int* func_entries, int* func_num_locals,
     int num_funcs, int num_imported_funcs, int* func_type_idxs,
     int* type_sig_hash1, int* type_sig_hash2, int num_types,
     int* import_num_params, int* import_num_results, int* import_handler_ids,
@@ -424,6 +428,7 @@ CRuntimeContext* create_runtime_context(
     ctx->table_offsets = table_offsets;
     ctx->table_sizes = table_sizes;
     ctx->table_max_sizes = table_max_sizes;
+    ctx->table_elem_is_funcref = table_elem_is_funcref;
     ctx->num_tables = num_tables;
     ctx->func_entries = func_entries;
     ctx->func_num_locals = func_num_locals;
@@ -569,7 +574,8 @@ static void call_host_import(int handler_id, uint64_t* args, int num_params,
 // Returns trap code (0 = success), stores results in result_out[0..num_results-1]
 int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_args,
             uint64_t* result_out, int num_results, uint64_t* globals, uint8_t* mem, int mem_size,
-            int mem_max_size, int* memory_pages, int* tables_flat, int* table_offsets, int* table_sizes, int* table_max_sizes, int num_tables,
+            int mem_max_size, int* memory_pages, int* tables_flat, int* table_offsets, int* table_sizes, int* table_max_sizes,
+            int* table_elem_is_funcref, int num_tables,
             int* func_entries, int* func_num_locals, int num_funcs, int num_imported_funcs,
             int* func_type_idxs, int* type_sig_hash1, int* type_sig_hash2, int num_types,
             int* import_num_params, int* import_num_results, int* import_handler_ids,
@@ -603,6 +609,7 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     g_table_offsets = table_offsets;
     g_table_sizes = table_sizes;
     g_table_max_sizes = table_max_sizes;
+    g_table_elem_is_funcref = table_elem_is_funcref;
     g_num_tables = num_tables;
 
     // Store function metadata for call_indirect
@@ -3769,6 +3776,10 @@ int op_table_get(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
 
     int offset = g_table_offsets[table_idx];
     int size = g_table_sizes[table_idx];
+    int is_funcref = 1;
+    if (g_table_elem_is_funcref && table_idx >= 0 && table_idx < g_num_tables) {
+        is_funcref = g_table_elem_is_funcref[table_idx] != 0;
+    }
 
     // Bounds check
     if (elem_idx < 0 || elem_idx >= size) {
@@ -3777,11 +3788,13 @@ int op_table_get(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
 
     int func_idx = g_tables_flat[offset + elem_idx];
 
-    // Convert to tagged reference
+    // Convert to tagged reference for funcref tables, raw value for externref tables
     if (func_idx == -1) {
         sp[-1] = REF_NULL;  // null
-    } else {
+    } else if (is_funcref) {
         sp[-1] = FUNCREF_TAG | (uint64_t)func_idx;
+    } else {
+        sp[-1] = (uint64_t)(uint32_t)func_idx;
     }
     NEXT();
 }
@@ -3804,19 +3817,24 @@ int op_table_set(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
 
     int offset = g_table_offsets[table_idx];
     int size = g_table_sizes[table_idx];
+    int is_funcref = 1;
+    if (g_table_elem_is_funcref && table_idx >= 0 && table_idx < g_num_tables) {
+        is_funcref = g_table_elem_is_funcref[table_idx] != 0;
+    }
 
     // Bounds check
     if (elem_idx < 0 || elem_idx >= size) {
         TRAP(TRAP_TABLE_BOUNDS_ACCESS);
     }
 
-    // Convert from tagged reference to func index
+    // Convert from reference to stored value
     int func_idx;
     if (ref == REF_NULL) {
         func_idx = -1;  // null
-    } else {
-        // Strip tag bits (use lower 62 bits)
+    } else if (is_funcref) {
         func_idx = (int)(ref & 0x3FFFFFFFFFFFFFFFULL);
+    } else {
+        func_idx = (int)ref;
     }
 
     g_tables_flat[offset + elem_idx] = func_idx;
