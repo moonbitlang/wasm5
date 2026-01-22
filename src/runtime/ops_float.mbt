@@ -209,7 +209,9 @@ fn op_f32_nearest(rt : Runtime) -> ReturnCode {
   let a = Float::reinterpret_from_uint(rt.stack.unsafe_get(rt.sp - 1).to_uint())
   rt.stack.unsafe_set(
     rt.sp - 1,
-    canonicalize_f32(rintf(a)).reinterpret_as_uint().to_uint64(),
+    canonicalize_f32(round_nearest_even_f32(a))
+    .reinterpret_as_uint()
+    .to_uint64(),
   )
   rt.pc = rt.pc + 1
   Running
@@ -580,7 +582,7 @@ fn op_f64_nearest(rt : Runtime) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_double()
   rt.stack.unsafe_set(
     rt.sp - 1,
-    canonicalize_f64(rint(a)).reinterpret_as_uint64(),
+    canonicalize_f64(round_nearest_even_f64(a)).reinterpret_as_uint64(),
   )
   rt.pc = rt.pc + 1
   Running
@@ -669,23 +671,11 @@ fn op_f32_convert_i32_u(rt : Runtime) -> ReturnCode {
 }
 
 ///|
-extern "C" fn f32_from_i64(a : Int64) -> Float = "f32_from_i64"
-
-///|
-extern "C" fn f32_from_u64(a : UInt64) -> Float = "f32_from_u64"
-
-///|
-extern "C" fn u64_from_f32(a : Float) -> UInt64 = "u64_from_f32"
-
-///|
-extern "C" fn u64_from_f64(a : Double) -> UInt64 = "u64_from_f64"
-
-///|
 fn op_f32_convert_i64_s(rt : Runtime) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1).reinterpret_as_int64()
   rt.stack.unsafe_set(
     rt.sp - 1,
-    f32_from_i64(a).reinterpret_as_uint().to_uint64(),
+    Float::from_int64(a).reinterpret_as_uint().to_uint64(),
   )
   rt.pc = rt.pc + 1
   Running
@@ -696,7 +686,7 @@ fn op_f32_convert_i64_u(rt : Runtime) -> ReturnCode {
   let a = rt.stack.unsafe_get(rt.sp - 1)
   rt.stack.unsafe_set(
     rt.sp - 1,
-    f32_from_u64(a).reinterpret_as_uint().to_uint64(),
+    Float::from_uint64(a).reinterpret_as_uint().to_uint64(),
   )
   rt.pc = rt.pc + 1
   Running
@@ -733,8 +723,7 @@ fn op_i64_trunc_f64_u(rt : Runtime) -> ReturnCode {
     rt.ctx.error_detail = "integer overflow"
     return Trap
   }
-  // Use C function for proper conversion at precision boundaries
-  rt.stack.unsafe_set(rt.sp - 1, u64_from_f64(a))
+  rt.stack.unsafe_set(rt.sp - 1, f64_to_uint64(a))
   rt.pc = rt.pc + 1
   Running
 }
@@ -837,8 +826,7 @@ fn op_i64_trunc_f32_u(rt : Runtime) -> ReturnCode {
     rt.ctx.error_detail = "integer overflow"
     return Trap
   }
-  // Use C function for proper conversion at precision boundaries
-  rt.stack.unsafe_set(rt.sp - 1, u64_from_f32(a))
+  rt.stack.unsafe_set(rt.sp - 1, f32_to_uint64(a))
   rt.pc = rt.pc + 1
   Running
 }
@@ -957,8 +945,7 @@ fn op_i64_trunc_sat_f32_u(rt : Runtime) -> ReturnCode {
     // negative, saturate to 0
     0UL
   } else {
-    // Use C function for proper conversion at precision boundaries
-    u64_from_f32(a)
+    f32_to_uint64(a)
   }
   rt.stack.unsafe_set(rt.sp - 1, result)
   rt.pc = rt.pc + 1
@@ -996,8 +983,7 @@ fn op_i64_trunc_sat_f64_u(rt : Runtime) -> ReturnCode {
     // negative, saturate to 0
     0UL
   } else {
-    // Use C function for proper conversion at precision boundaries
-    u64_from_f64(a)
+    f64_to_uint64(a)
   }
   rt.stack.unsafe_set(rt.sp - 1, result)
   rt.pc = rt.pc + 1

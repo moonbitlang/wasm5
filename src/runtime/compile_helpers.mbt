@@ -62,10 +62,102 @@ fn canonicalize_f32(v : Float) -> Float {
 }
 
 ///|
-extern "C" fn rint(x : Double) -> Double = "rint"
+/// Round to nearest even (banker's rounding) for f64.
+/// IEEE 754 "round to nearest, ties to even" - required by WebAssembly nearest.
+fn round_nearest_even_f64(x : Double) -> Double {
+  if x.is_nan() || x.is_inf() {
+    return x
+  }
+  // Handle zero specially to preserve sign of -0.0
+  if x == 0.0 {
+    return x
+  }
+  // Handle negative numbers by working with absolute value
+  let is_negative = x < 0.0
+  let abs_x = x.abs()
+  let floor_val = abs_x.floor()
+  let frac = abs_x - floor_val
+  let result = if frac < 0.5 {
+    floor_val
+  } else if frac > 0.5 {
+    floor_val + 1.0
+  } else {
+    // Exactly 0.5 - round to nearest even
+    let floor_int = floor_val.to_int64()
+    if floor_int % 2L == 0L {
+      floor_val // floor is even, round down
+    } else {
+      floor_val + 1.0 // floor is odd, round up to make it even
+    }
+  }
+  if is_negative {
+    -result
+  } else {
+    result
+  }
+}
 
 ///|
-extern "C" fn rintf(x : Float) -> Float = "rintf"
+/// Round to nearest even (banker's rounding) for f32.
+/// IEEE 754 "round to nearest, ties to even" - required by WebAssembly nearest.
+fn round_nearest_even_f32(x : Float) -> Float {
+  if x.is_nan() || x.is_inf() {
+    return x
+  }
+  // Handle zero specially to preserve sign of -0.0
+  if x == 0.0 {
+    return x
+  }
+  // Handle negative numbers by working with absolute value
+  let is_negative = x < 0.0
+  let abs_x = x.abs()
+  let floor_val = abs_x.floor()
+  let frac = abs_x - floor_val
+  let result : Float = if frac < 0.5 {
+    floor_val
+  } else if frac > 0.5 {
+    floor_val + 1.0
+  } else {
+    // Exactly 0.5 - round to nearest even
+    let floor_int = floor_val.to_int()
+    if floor_int % 2 == 0 {
+      floor_val // floor is even, round down
+    } else {
+      floor_val + 1.0 // floor is odd, round up to make it even
+    }
+  }
+  if is_negative {
+    -result
+  } else {
+    result
+  }
+}
+
+///|
+/// Convert f64 to uint64 with proper handling for large values.
+/// MoonBit's to_uint64() may not work correctly for values >= 2^63.
+/// For values in [0, 2^63), use standard conversion.
+/// For values in [2^63, 2^64), subtract 2^63, convert, then add back.
+fn f64_to_uint64(x : Double) -> UInt64 {
+  // 2^63 = 9223372036854775808.0
+  let two_pow_63 = 9223372036854775808.0
+  if x < two_pow_63 {
+    // Value is in range [0, 2^63), can convert directly via signed
+    x.to_int64().reinterpret_as_uint64()
+  } else {
+    // Value is in range [2^63, 2^64), need special handling
+    // Subtract 2^63, convert, then add 2^63 back as uint64
+    let adjusted = x - two_pow_63
+    let low_part = adjusted.to_int64().reinterpret_as_uint64()
+    low_part + 0x8000000000000000UL
+  }
+}
+
+///|
+/// Convert f32 to uint64 with proper handling for large values.
+fn f32_to_uint64(x : Float) -> UInt64 {
+  f64_to_uint64(x.to_double())
+}
 
 ///|
 /// Count the number of imported functions in a module
