@@ -1,7 +1,7 @@
 ///|
 /// Execute threaded code (FFI binding)
 /// Returns trap code (0 = success), stores results in result_out[0..num_results-1]
-#borrow(code, args, result_out, globals, memory, memory_pages, tables_flat, table_offsets, table_sizes, table_max_sizes, func_entries, func_num_locals, func_type_idxs, type_sig_hash1, type_sig_hash2, import_num_params, import_num_results, import_handler_ids, output_buffer, output_length, import_context_ptrs, import_target_func_idxs, data_segments_flat, data_segment_offsets, data_segment_sizes, elem_segments_flat, elem_segment_offsets, elem_segment_sizes, elem_segment_dropped)
+#borrow(code, args, result_out, globals, memory, memory_pages, tables_flat, table_offsets, table_sizes, table_max_sizes, table_elem_is_funcref, func_entries, func_num_locals, func_type_idxs, type_sig_hash1, type_sig_hash2, import_num_params, import_num_results, import_handler_ids, output_buffer, output_length, import_context_ptrs, import_target_func_idxs, data_segments_flat, data_segment_offsets, data_segment_sizes, elem_segments_flat, elem_segment_offsets, elem_segment_sizes, elem_segment_dropped)
 extern "C" fn c_execute_ffi(
   code : FixedArray[UInt64],
   entry : Int,
@@ -19,6 +19,7 @@ extern "C" fn c_execute_ffi(
   table_offsets : FixedArray[Int], // Offset of each table in tables_flat
   table_sizes : FixedArray[Int], // Current size of each table
   table_max_sizes : FixedArray[Int], // Max size (capacity) of each table for table.grow
+  table_elem_is_funcref : FixedArray[Int], // 1 for funcref tables, 0 for externref
   num_tables : Int,
   func_entries : FixedArray[Int], // Entry points for local functions
   func_num_locals : FixedArray[Int], // Number of locals per local function
@@ -45,6 +46,7 @@ extern "C" fn c_execute_ffi(
   elem_segment_sizes : FixedArray[Int], // Size of each segment
   elem_segment_dropped : FixedArray[Int], // Whether each segment has been dropped
   num_elem_segments : Int, // Number of element segments
+  num_external_funcrefs : Int, // Number of external funcref entries
 ) -> Int = "execute"
 
 ///|

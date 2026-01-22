@@ -53,7 +53,16 @@ extern "C" fn call() -> UInt64 = "call"
 extern "C" fn call_import() -> UInt64 = "call_import"
 
 ///|
+extern "C" fn return_call() -> UInt64 = "return_call"
+
+///|
 extern "C" fn return_call_import() -> UInt64 = "return_call_import"
+
+///|
+extern "C" fn return_call_indirect() -> UInt64 = "return_call_indirect"
+
+///|
+extern "C" fn return_call_ref() -> UInt64 = "return_call_ref"
 
 ///|
 extern "C" fn call_external() -> UInt64 = "call_external"
@@ -702,7 +711,7 @@ extern "C" fn table_grow() -> UInt64 = "table_grow"
 ///|
 /// Create a CRuntimeContext for cross-module calls.
 /// Returns a pointer (as Int64) to a heap-allocated context structure.
-#borrow(code, globals, memory, memory_pages, tables_flat, table_offsets, table_sizes, table_max_sizes, func_entries, func_num_locals, func_type_idxs, type_sig_hash1, type_sig_hash2, import_num_params, import_num_results, import_handler_ids, output_buffer, output_length, import_context_ptrs, import_target_func_idxs, data_segments_flat, data_segment_offsets, data_segment_sizes, elem_segments_flat, elem_segment_offsets, elem_segment_sizes, elem_segment_dropped)
+#borrow(code, globals, memory, memory_pages, tables_flat, table_offsets, table_sizes, table_max_sizes, table_elem_is_funcref, func_entries, func_num_locals, func_type_idxs, type_sig_hash1, type_sig_hash2, import_num_params, import_num_results, import_handler_ids, output_buffer, output_length, import_context_ptrs, import_target_func_idxs, data_segments_flat, data_segment_offsets, data_segment_sizes, elem_segments_flat, elem_segment_offsets, elem_segment_sizes, elem_segment_dropped)
 extern "C" fn c_create_runtime_context(
   code : FixedArray[UInt64],
   globals : FixedArray[UInt64],
@@ -714,6 +723,7 @@ extern "C" fn c_create_runtime_context(
   table_offsets : FixedArray[Int],
   table_sizes : FixedArray[Int],
   table_max_sizes : FixedArray[Int],
+  table_elem_is_funcref : FixedArray[Int],
   num_tables : Int,
   func_entries : FixedArray[Int],
   func_num_locals : FixedArray[Int],
@@ -740,6 +750,7 @@ extern "C" fn c_create_runtime_context(
   elem_segment_sizes : FixedArray[Int],
   elem_segment_dropped : FixedArray[Int],
   num_elem_segments : Int,
+  num_external_funcrefs : Int,
 ) -> Int64 = "create_runtime_context"
 
 ///|

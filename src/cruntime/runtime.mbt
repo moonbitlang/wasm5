@@ -16,6 +16,7 @@ pub struct CRuntime {
   table_offsets : FixedArray[Int] // Offset of each table in tables_flat
   table_sizes : FixedArray[Int] // Current size of each table
   table_max_sizes : FixedArray[Int] // Max size (capacity) of each table for table.grow
+  table_elem_is_funcref : FixedArray[Int] // 1 for funcref tables, 0 for externref
   // Type information for call_indirect type checking
   func_type_idxs : FixedArray[Int] // Type index for each function (imported + local)
   type_param_counts : FixedArray[Int] // Primary signature hash for each type
@@ -36,6 +37,8 @@ pub struct CRuntime {
   elem_segment_offsets : FixedArray[Int] // Offset of each segment in elem_segments_flat
   elem_segment_sizes : FixedArray[Int] // Size of each segment
   elem_segment_dropped : FixedArray[Int] // Whether each segment has been dropped (0 or 1)
+  // External funcref imports (encoded after local functions)
+  external_funcref_count : Int
   // Cross-module call support: pointer to C-allocated CRuntimeContext
   mut context_ptr : Int64
   // Resolved imports for exported-import calls
@@ -120,12 +123,95 @@ fn build_import_context_arrays(
 }
 
 ///|
+fn is_funcref_table(table_type : @core.TableType) -> Bool {
+  match table_type.elem_type {
+    @core.RefType::Extern | @core.RefType::NoExtern => false
+    _ => true
+  }
+}
+
+///|
+fn build_table_elem_types(module_ : @core.Module) -> FixedArray[Int] {
+  let elem_types : Array[Int] = []
+  for imp in module_.imports {
+    match imp.desc {
+      Table(table_type) =>
+        elem_types.push(if is_funcref_table(table_type) { 1 } else { 0 })
+      _ => ()
+    }
+  }
+  for table_type in module_.tables {
+    elem_types.push(if is_funcref_table(table_type) { 1 } else { 0 })
+  }
+  if elem_types.length() == 0 {
+    elem_types.push(1)
+  }
+  FixedArray::from_array(elem_types)
+}
+
+///|
+/// Extend import metadata arrays with external funcref entries.
+fn extend_import_metadata(
+  num_imported : Int,
+  import_num_params : FixedArray[Int],
+  import_num_results : FixedArray[Int],
+  import_handler_ids : FixedArray[Int],
+  import_context_ptrs : FixedArray[Int64],
+  import_target_func_idxs : FixedArray[Int],
+  external_funcrefs : Array[ResolvedImport],
+) -> (
+  FixedArray[Int],
+  FixedArray[Int],
+  FixedArray[Int],
+  FixedArray[Int64],
+  FixedArray[Int],
+  Int,
+) {
+  let num_external = external_funcrefs.length()
+  if num_external == 0 {
+    return (
+      import_num_params, import_num_results, import_handler_ids, import_context_ptrs,
+      import_target_func_idxs, 0,
+    )
+  }
+  let total = num_imported + num_external
+  let size = if total > 0 { total } else { 1 }
+  let new_num_params = FixedArray::make(size, 0)
+  let new_num_results = FixedArray::make(size, 0)
+  let new_handler_ids = FixedArray::make(size, -1)
+  let new_context_ptrs = FixedArray::make(size, -1L)
+  let new_target_func_idxs = FixedArray::make(size, -1)
+  for i in 0..<num_imported {
+    if i < import_num_params.length() {
+      new_num_params[i] = import_num_params[i]
+      new_num_results[i] = import_num_results[i]
+      new_handler_ids[i] = import_handler_ids[i]
+      new_context_ptrs[i] = import_context_ptrs[i]
+      new_target_func_idxs[i] = import_target_func_idxs[i]
+    }
+  }
+  for i, ext in external_funcrefs {
+    let idx = num_imported + i
+    new_num_params[idx] = ext.num_params
+    new_num_results[idx] = ext.num_results
+    new_handler_ids[idx] = -1
+    new_context_ptrs[idx] = ext.target_context_ptr
+    new_target_func_idxs[idx] = ext.target_func_idx
+  }
+  (
+    new_num_params, new_num_results, new_handler_ids, new_context_ptrs, new_target_func_idxs,
+    num_external,
+  )
+}
+
+///|
 /// Build a CRuntime instance from a compiled module.
 fn build_runtime(
   module_ : @core.Module,
   compiled : CompiledModule,
   resolved_imports : Map[Int, ResolvedImport],
   resolved_imported_globals : Map[Int, UInt64],
+  external_funcrefs : Array[ResolvedImport],
 ) -> CRuntime {
   // Initialize globals from module
   let globals = init_globals(module_, resolved_imported_globals)
@@ -142,6 +228,7 @@ fn build_runtime(
   let (tables_flat, table_offsets, table_sizes, table_max_sizes) = flatten_tables(
     tables, table_logical_sizes, table_max_sizes,
   )
+  let table_elem_is_funcref = build_table_elem_types(module_)
   // Build type info for call_indirect type checking
   let (func_type_idxs, type_param_counts, type_result_counts) = build_type_info(
     module_,
@@ -159,10 +246,21 @@ fn build_runtime(
     elem_segment_offsets,
     elem_segment_sizes,
     elem_segment_dropped,
-  ) = flatten_elem_segments(module_)
+  ) = flatten_elem_segments(module_, globals)
   let num_imported = count_imported_funcs(module_)
   let (import_context_ptrs, import_target_func_idxs) = build_import_context_arrays(
     num_imported, resolved_imports,
+  )
+  let (
+    import_num_params_ext,
+    import_num_results_ext,
+    import_handler_ids_ext,
+    import_context_ptrs_ext,
+    import_target_func_idxs_ext,
+    external_funcref_count,
+  ) = extend_import_metadata(
+    num_imported, import_num_params, import_num_results, import_handler_ids, import_context_ptrs,
+    import_target_func_idxs, external_funcrefs,
   )
   {
     module_,
@@ -179,14 +277,15 @@ fn build_runtime(
     table_offsets,
     table_sizes,
     table_max_sizes,
+    table_elem_is_funcref,
     func_type_idxs,
     type_param_counts,
     type_result_counts,
-    import_num_params,
-    import_num_results,
-    import_handler_ids,
-    import_context_ptrs,
-    import_target_func_idxs,
+    import_num_params: import_num_params_ext,
+    import_num_results: import_num_results_ext,
+    import_handler_ids: import_handler_ids_ext,
+    import_context_ptrs: import_context_ptrs_ext,
+    import_target_func_idxs: import_target_func_idxs_ext,
     data_segments_flat,
     data_segment_offsets,
     data_segment_sizes,
@@ -194,6 +293,7 @@ fn build_runtime(
     elem_segment_offsets,
     elem_segment_sizes,
     elem_segment_dropped,
+    external_funcref_count,
     context_ptr: 0L, // Will be lazily created when needed for cross-module calls
     resolved_imports,
   }
@@ -203,7 +303,7 @@ fn build_runtime(
 /// Load a module and compile it for C runtime execution.
 pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
   let compiled = compile(module_)
-  build_runtime(module_, compiled, {}, {})
+  build_runtime(module_, compiled, {}, {}, [])
 }
 
 ///|
@@ -213,7 +313,7 @@ pub fn CRuntime::load_with_imports(
   resolved_imports : Map[Int, ResolvedImport],
 ) -> CRuntime {
   let compiled = compile_with_imports(module_, resolved_imports)
-  build_runtime(module_, compiled, resolved_imports, {})
+  build_runtime(module_, compiled, resolved_imports, {}, [])
 }
 
 ///|
@@ -224,7 +324,27 @@ pub fn CRuntime::load_with_imports_and_globals(
   resolved_imported_globals : Map[Int, UInt64],
 ) -> CRuntime {
   let compiled = compile_with_imports(module_, resolved_imports)
-  build_runtime(module_, compiled, resolved_imports, resolved_imported_globals)
+  build_runtime(
+    module_,
+    compiled,
+    resolved_imports,
+    resolved_imported_globals,
+    [],
+  )
+}
+
+///|
+/// Load a module with resolved imports, imported globals, and external funcrefs.
+pub fn CRuntime::load_with_imports_globals_and_funcrefs(
+  module_ : @core.Module,
+  resolved_imports : Map[Int, ResolvedImport],
+  resolved_imported_globals : Map[Int, UInt64],
+  external_funcrefs : Array[ResolvedImport],
+) -> CRuntime {
+  let compiled = compile_with_imports(module_, resolved_imports)
+  build_runtime(
+    module_, compiled, resolved_imports, resolved_imported_globals, external_funcrefs,
+  )
 }
 
 ///|
@@ -249,6 +369,7 @@ pub fn CRuntime::get_context_ptr(self : CRuntime) -> Int64 {
       self.table_offsets,
       self.table_sizes,
       self.table_max_sizes,
+      self.table_elem_is_funcref,
       self.tables.length(),
       self.compiled.func_entries,
       self.compiled.func_num_locals,
@@ -275,6 +396,7 @@ pub fn CRuntime::get_context_ptr(self : CRuntime) -> Int64 {
       self.elem_segment_sizes,
       self.elem_segment_dropped,
       self.elem_segment_sizes.length(),
+      self.external_funcref_count,
     )
   }
   self.context_ptr
@@ -448,6 +570,7 @@ fn flatten_data_segments(
 /// and dropped tracks whether each segment has been dropped (0 or 1)
 fn flatten_elem_segments(
   module_ : @core.Module,
+  globals : FixedArray[UInt64],
 ) -> (FixedArray[Int], FixedArray[Int], FixedArray[Int], FixedArray[Int]) {
   let num_segments = module_.elems.length()
   if num_segments == 0 {
@@ -463,8 +586,14 @@ fn flatten_elem_segments(
     segment_offsets.push(total_size)
     let size = elem.init.length()
     segment_sizes.push(size)
-    // Active element segments are automatically dropped after instantiation
-    segment_dropped.push(if elem.is_active { 1 } else { 0 })
+    // Active and declarative element segments are dropped after instantiation
+    segment_dropped.push(
+      if elem.is_active || elem.is_declarative {
+        1
+      } else {
+        0
+      },
+    )
     total_size += size
   }
   // Flatten into single int array
@@ -480,7 +609,7 @@ fn flatten_elem_segments(
     let offset = segment_offsets[i]
     for j, init_expr in elem.init {
       // Evaluate the init expression to get the function index
-      elem_flat[offset + j] = eval_elem_expr(init_expr)
+      elem_flat[offset + j] = eval_elem_expr_with_globals(init_expr, globals)
     }
   }
   (
@@ -492,41 +621,408 @@ fn flatten_elem_segments(
 }
 
 ///|
-/// Compute a hash for a value type (for type signature comparison)
-fn valtype_code(vt : @core.ValType) -> Int {
-  match vt {
-    I32 => 1
-    I64 => 2
-    F32 => 3
-    F64 => 4
-    V128 => 5
-    FuncRef => 6
-    ExternRef => 7
-    _ => 0 // Other reference types
+/// Get rec group info for a type index: (group_index, position_in_group)
+fn get_rec_group_info_cruntime(
+  module_ : @core.Module,
+  type_idx : Int,
+) -> (Int, Int) {
+  for i, group in module_.type_groups {
+    for j, subtype_def in group.subtypes {
+      if subtype_def.type_idx.reinterpret_as_int() == type_idx {
+        return (i, j)
+      }
+    }
+  }
+  (-1, -1)
+}
+
+///|
+/// Get all type indices in a rec group
+fn get_rec_group_types_cruntime(
+  module_ : @core.Module,
+  group_idx : Int,
+) -> Array[Int] {
+  let result : Array[Int] = []
+  if group_idx >= 0 && group_idx < module_.type_groups.length() {
+    let group = module_.type_groups[group_idx]
+    for subtype_def in group.subtypes {
+      result.push(subtype_def.type_idx.reinterpret_as_int())
+    }
+  }
+  result
+}
+
+///|
+/// Check if a type index is within a given rec group
+fn is_in_rec_group_cruntime(types : Array[Int], type_idx : Int) -> Bool {
+  for t in types {
+    if t == type_idx {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Get the position of a type within its rec group
+fn get_position_in_group_cruntime(types : Array[Int], type_idx : Int) -> Int {
+  for i, t in types {
+    if t == type_idx {
+      return i
+    }
+  }
+  -1
+}
+
+///|
+/// Check if a type index is final (cannot be extended)
+fn is_type_final_cruntime(module_ : @core.Module, type_idx : Int) -> Bool {
+  for group in module_.type_groups {
+    for subtype_def in group.subtypes {
+      if subtype_def.type_idx.reinterpret_as_int() == type_idx {
+        return subtype_def.is_final
+      }
+    }
+  }
+  true
+}
+
+///|
+/// Get the list of supertypes for a type index
+fn get_supertypes_cruntime(
+  module_ : @core.Module,
+  type_idx : Int,
+) -> Array[Int] {
+  let result : Array[Int] = []
+  for group in module_.type_groups {
+    for subtype_def in group.subtypes {
+      if subtype_def.type_idx.reinterpret_as_int() == type_idx {
+        for sup in subtype_def.supertypes {
+          result.push(sup.reinterpret_as_int())
+        }
+        return result
+      }
+    }
+  }
+  result
+}
+
+///|
+/// Check if two rec groups are structurally equivalent
+fn rec_groups_equivalent_cruntime(
+  module_ : @core.Module,
+  group1_idx : Int,
+  group2_idx : Int,
+  visited : Array[(Int, Int)],
+) -> Bool {
+  if group1_idx == group2_idx {
+    return true
+  }
+  for v in visited {
+    if (v.0 == group1_idx && v.1 == group2_idx) ||
+      (v.0 == group2_idx && v.1 == group1_idx) {
+      return true
+    }
+  }
+  let types1 = get_rec_group_types_cruntime(module_, group1_idx)
+  let types2 = get_rec_group_types_cruntime(module_, group2_idx)
+  if types1.length() != types2.length() {
+    return false
+  }
+  visited.push((group1_idx, group2_idx))
+  for i in 0..<types1.length() {
+    let t1 = types1[i]
+    let t2 = types2[i]
+    if not(
+        types_equivalent_in_context_cruntime(
+          module_, t1, t2, types1, types2, visited,
+        ),
+      ) {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// Check if two types are equivalent in the context of their rec groups
+fn types_equivalent_in_context_cruntime(
+  module_ : @core.Module,
+  type_idx1 : Int,
+  type_idx2 : Int,
+  group1_types : Array[Int],
+  group2_types : Array[Int],
+  visited : Array[(Int, Int)],
+) -> Bool {
+  if type_idx1 < 0 ||
+    type_idx1 >= module_.types.length() ||
+    type_idx2 < 0 ||
+    type_idx2 >= module_.types.length() {
+    return false
+  }
+  match (module_.types[type_idx1], module_.types[type_idx2]) {
+    (Func(f1), Func(f2)) => {
+      if is_type_final_cruntime(module_, type_idx1) !=
+        is_type_final_cruntime(module_, type_idx2) {
+        return false
+      }
+      if f1.params.length() != f2.params.length() ||
+        f1.results.length() != f2.results.length() {
+        return false
+      }
+      for i in 0..<f1.params.length() {
+        if not(
+            valtypes_equivalent_in_context_cruntime(
+              module_,
+              f1.params[i],
+              f2.params[i],
+              group1_types,
+              group2_types,
+              visited,
+            ),
+          ) {
+          return false
+        }
+      }
+      for i in 0..<f1.results.length() {
+        if not(
+            valtypes_equivalent_in_context_cruntime(
+              module_,
+              f1.results[i],
+              f2.results[i],
+              group1_types,
+              group2_types,
+              visited,
+            ),
+          ) {
+          return false
+        }
+      }
+      let supers1 = get_supertypes_cruntime(module_, type_idx1)
+      let supers2 = get_supertypes_cruntime(module_, type_idx2)
+      if supers1.length() != supers2.length() {
+        return false
+      }
+      for i in 0..<supers1.length() {
+        if not(
+            type_refs_equivalent_in_context_cruntime(
+              module_,
+              supers1[i],
+              supers2[i],
+              group1_types,
+              group2_types,
+              visited,
+            ),
+          ) {
+          return false
+        }
+      }
+      true
+    }
+    (Struct(s1), Struct(s2)) => {
+      if is_type_final_cruntime(module_, type_idx1) !=
+        is_type_final_cruntime(module_, type_idx2) {
+        return false
+      }
+      if s1.fields.length() != s2.fields.length() {
+        return false
+      }
+      for i in 0..<s1.fields.length() {
+        if s1.fields[i].mutable != s2.fields[i].mutable {
+          return false
+        }
+        if not(
+            storage_types_equivalent_in_context_cruntime(
+              module_,
+              s1.fields[i].storage,
+              s2.fields[i].storage,
+              group1_types,
+              group2_types,
+              visited,
+            ),
+          ) {
+          return false
+        }
+      }
+      let supers1 = get_supertypes_cruntime(module_, type_idx1)
+      let supers2 = get_supertypes_cruntime(module_, type_idx2)
+      if supers1.length() != supers2.length() {
+        return false
+      }
+      for i in 0..<supers1.length() {
+        if not(
+            type_refs_equivalent_in_context_cruntime(
+              module_,
+              supers1[i],
+              supers2[i],
+              group1_types,
+              group2_types,
+              visited,
+            ),
+          ) {
+          return false
+        }
+      }
+      true
+    }
+    (Array(a1), Array(a2)) => {
+      if is_type_final_cruntime(module_, type_idx1) !=
+        is_type_final_cruntime(module_, type_idx2) {
+        return false
+      }
+      if a1.element.mutable != a2.element.mutable {
+        return false
+      }
+      if not(
+          storage_types_equivalent_in_context_cruntime(
+            module_,
+            a1.element.storage,
+            a2.element.storage,
+            group1_types,
+            group2_types,
+            visited,
+          ),
+        ) {
+        return false
+      }
+      let supers1 = get_supertypes_cruntime(module_, type_idx1)
+      let supers2 = get_supertypes_cruntime(module_, type_idx2)
+      if supers1.length() != supers2.length() {
+        return false
+      }
+      for i in 0..<supers1.length() {
+        if not(
+            type_refs_equivalent_in_context_cruntime(
+              module_,
+              supers1[i],
+              supers2[i],
+              group1_types,
+              group2_types,
+              visited,
+            ),
+          ) {
+          return false
+        }
+      }
+      true
+    }
+    _ => false
   }
 }
 
 ///|
-/// Compute a signature hash for a function type
-/// This hash uniquely identifies the function signature for type checking
-fn compute_type_signature_hash(ft : @core.FuncType) -> Int {
-  // Use a simple polynomial hash that includes both types and positions
-  let mut hash = 0
-  let mut multiplier = 1
-  // Hash params
-  for param in ft.params {
-    hash = hash + valtype_code(param) * multiplier
-    multiplier = multiplier * 17
+/// Check if two type references are equivalent considering rec group context
+fn type_refs_equivalent_in_context_cruntime(
+  module_ : @core.Module,
+  ref1 : Int,
+  ref2 : Int,
+  group1_types : Array[Int],
+  group2_types : Array[Int],
+  visited : Array[(Int, Int)],
+) -> Bool {
+  let in_group1 = is_in_rec_group_cruntime(group1_types, ref1)
+  let in_group2 = is_in_rec_group_cruntime(group2_types, ref2)
+  if in_group1 && in_group2 {
+    let pos1 = get_position_in_group_cruntime(group1_types, ref1)
+    let pos2 = get_position_in_group_cruntime(group2_types, ref2)
+    pos1 == pos2
+  } else if not(in_group1) && not(in_group2) {
+    if ref1 == ref2 {
+      return true
+    }
+    let (g1, _) = get_rec_group_info_cruntime(module_, ref1)
+    let (g2, _) = get_rec_group_info_cruntime(module_, ref2)
+    rec_groups_equivalent_cruntime(module_, g1, g2, visited)
+  } else {
+    false
   }
-  // Add separator
-  hash = hash + 100 * multiplier
-  multiplier = multiplier * 17
-  // Hash results
-  for result in ft.results {
-    hash = hash + valtype_code(result) * multiplier
-    multiplier = multiplier * 17
+}
+
+///|
+/// Check if two value types are equivalent in rec group context
+fn valtypes_equivalent_in_context_cruntime(
+  module_ : @core.Module,
+  vt1 : @core.ValType,
+  vt2 : @core.ValType,
+  group1_types : Array[Int],
+  group2_types : Array[Int],
+  visited : Array[(Int, Int)],
+) -> Bool {
+  match (vt1, vt2) {
+    (Ref(TypeIndex(idx1), n1), Ref(TypeIndex(idx2), n2)) =>
+      n1 == n2 &&
+      type_refs_equivalent_in_context_cruntime(
+        module_, idx1, idx2, group1_types, group2_types, visited,
+      )
+    _ => vt1 == vt2
   }
-  hash
+}
+
+///|
+/// Check if two storage types are equivalent in rec group context
+fn storage_types_equivalent_in_context_cruntime(
+  module_ : @core.Module,
+  st1 : @core.StorageType,
+  st2 : @core.StorageType,
+  group1_types : Array[Int],
+  group2_types : Array[Int],
+  visited : Array[(Int, Int)],
+) -> Bool {
+  match (st1, st2) {
+    (Val(vt1), Val(vt2)) =>
+      valtypes_equivalent_in_context_cruntime(
+        module_, vt1, vt2, group1_types, group2_types, visited,
+      )
+    _ => st1 == st2
+  }
+}
+
+///|
+/// Check if two types are equivalent (rec group aware)
+fn gc_types_equivalent_cruntime(
+  module_ : @core.Module,
+  type_idx1 : Int,
+  type_idx2 : Int,
+) -> Bool {
+  if type_idx1 == type_idx2 {
+    return true
+  }
+  let (group1_idx, _) = get_rec_group_info_cruntime(module_, type_idx1)
+  let (group2_idx, _) = get_rec_group_info_cruntime(module_, type_idx2)
+  let visited : Array[(Int, Int)] = []
+  rec_groups_equivalent_cruntime(module_, group1_idx, group2_idx, visited)
+}
+
+///|
+/// Build equivalence class ids for function types
+fn build_func_type_equiv_ids(module_ : @core.Module) -> Array[Int] {
+  let count = module_.types.length()
+  let ids : Array[Int] = Array::make(count, -1)
+  let mut next_id = 0
+  for i in 0..<count {
+    if ids[i] != -1 {
+      continue
+    }
+    match module_.types[i] {
+      Func(_) => {
+        ids[i] = next_id
+        for j in (i + 1)..<count {
+          if ids[j] == -1 {
+            match module_.types[j] {
+              Func(_) =>
+                if gc_types_equivalent_cruntime(module_, i, j) {
+                  ids[j] = next_id
+                }
+              _ => ()
+            }
+          }
+        }
+        next_id += 1
+      }
+      _ => ()
+    }
+  }
+  ids
 }
 
 ///|
@@ -547,14 +1043,15 @@ fn build_type_info(
   for i = 0; i < module_.funcs.length(); i = i + 1 {
     func_type_idxs.push(module_.funcs[i].reinterpret_as_int())
   }
+  let func_type_equiv_ids = build_func_type_equiv_ids(module_)
   // Build type signature hashes for each type
-  // We use two arrays to store high and low bits of the hash for better discrimination
+  // We use two arrays to store equivalence id and param/result count
   let type_sig_hash1 : Array[Int] = [] // Primary hash
   let type_sig_hash2 : Array[Int] = [] // Secondary hash (param count << 16 | result count)
-  for type_def in module_.types {
+  for i, type_def in module_.types {
     match type_def {
       Func(ft) => {
-        type_sig_hash1.push(compute_type_signature_hash(ft))
+        type_sig_hash1.push(func_type_equiv_ids[i])
         type_sig_hash2.push((ft.params.length() << 16) | ft.results.length())
       }
       _ => {
@@ -710,19 +1207,46 @@ fn init_memory(
   module_ : @core.Module,
   globals : FixedArray[UInt64],
 ) -> (FixedArray[Byte], FixedArray[Int], Int) {
-  // Get initial and max memory size from first memory (if any)
-  let initial_pages = if module_.mems.length() > 0 {
-    module_.mems[0].limits.min.to_int()
-  } else {
-    0
-  }
-  let max_pages = if module_.mems.length() > 0 {
-    match module_.mems[0].limits.max {
-      Some(max) => max.to_int()
-      None => default_memory_max_pages
+  // Check for imported memory (first import only)
+  let mut import_mem_type : @core.MemType? = None
+  let mut import_module : Bytes? = None
+  let mut import_name : Bytes? = None
+  for imp in module_.imports {
+    match imp.desc {
+      Mem(mem_type) => {
+        import_mem_type = Some(mem_type)
+        import_module = Some(imp.module_)
+        import_name = Some(imp.name)
+      }
+      _ => ()
     }
-  } else {
-    default_memory_max_pages
+  }
+
+  // Get initial and max memory size from imported memory or local memory
+  let (initial_pages, max_pages) = match import_mem_type {
+    Some(mem_type) =>
+      if import_module == Some(b"spectest") && import_name == Some(b"memory") {
+        // spectest memory has min 1, max 2
+        (1, 2)
+      } else {
+        let min_pages = mem_type.limits.min.to_int()
+        let max_pages = match mem_type.limits.max {
+          Some(max) => max.to_int()
+          None => default_memory_max_pages
+        }
+        (min_pages, if max_pages >= min_pages { max_pages } else { min_pages })
+      }
+    None =>
+      if module_.mems.length() > 0 {
+        let min_pages = module_.mems[0].limits.min.to_int()
+        let max_pages = match module_.mems[0].limits.max {
+          Some(max) => max.to_int()
+          None => default_memory_max_pages
+        }
+        (min_pages, if max_pages >= min_pages { max_pages } else { min_pages })
+      } else {
+        (0, default_memory_max_pages)
+      }
   }
   // Pre-allocate memory to max size (at least 1 byte to avoid empty array)
   let max_size = max_pages * page_size
@@ -904,7 +1428,7 @@ fn init_tables(
         for i, init_expr in elem.init {
           if offset + i < logical_size {
             // Evaluate the init expression to get the function index
-            let func_idx = eval_elem_expr(init_expr)
+            let func_idx = eval_elem_expr_with_globals(init_expr, globals)
             table[offset + i] = func_idx
           }
         }
@@ -920,15 +1444,16 @@ fn init_tables(
 
 ///|
 /// Evaluate an element init expression to get function index
-fn eval_elem_expr(expr : @core.Expr) -> Int {
-  for instr in expr.instrs {
-    match instr {
-      RefFunc(idx) => return idx.reinterpret_as_int()
-      RefNull(_) => return -1 // null function reference
-      _ => continue
-    }
+fn eval_elem_expr_with_globals(
+  expr : @core.Expr,
+  globals : FixedArray[UInt64],
+) -> Int {
+  let raw = eval_const_expr_with_globals(expr, globals)
+  if raw == 0xFFFFFFFF_FFFFFFFFUL {
+    -1
+  } else {
+    raw.to_uint().reinterpret_as_int()
   }
-  -1
 }
 
 ///|
@@ -1033,6 +1558,7 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
           self.table_offsets,
           self.table_sizes,
           self.table_max_sizes,
+          self.table_elem_is_funcref,
           self.tables.length(),
           self.compiled.func_entries,
           self.compiled.func_num_locals,
@@ -1059,6 +1585,7 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
           self.elem_segment_sizes,
           self.elem_segment_dropped,
           self.module_.elems.length(),
+          self.external_funcref_count,
         )
         let trap = trap_code_from_int(trap_code)
         if trap != TrapCode::None {
@@ -1189,6 +1716,7 @@ pub fn CRuntime::call_compiled(
           self.table_offsets,
           self.table_sizes,
           self.table_max_sizes,
+          self.table_elem_is_funcref,
           self.tables.length(),
           self.compiled.func_entries,
           self.compiled.func_num_locals,
@@ -1215,6 +1743,7 @@ pub fn CRuntime::call_compiled(
           self.elem_segment_sizes,
           self.elem_segment_dropped,
           self.module_.elems.length(),
+          self.external_funcref_count,
         )
         // Check for trap
         let trap = trap_code_from_int(trap_code)
