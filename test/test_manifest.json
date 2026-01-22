@@ -123,7 +123,7 @@
     {"file": "memory_copy.wast", "subdir": "bulk-memory/", "moonbit": true, "cruntime": true},
     {"file": "memory_fill.wast", "subdir": "bulk-memory/", "moonbit": true, "cruntime": true},
     {"file": "memory_init.wast", "subdir": "bulk-memory/", "moonbit": true, "cruntime": true},
-    {"file": "table-sub.wast", "subdir": "bulk-memory/", "moonbit": true, "cruntime": false},
+    {"file": "table-sub.wast", "subdir": "bulk-memory/", "moonbit": true, "cruntime": true},
     {"file": "table_copy.wast", "subdir": "bulk-memory/", "moonbit": true, "cruntime": true},
     {"file": "table_fill.wast", "subdir": "bulk-memory/", "moonbit": true, "cruntime": false, "disabled_reason": "externref tables not supported"},
     {"file": "table_init.wast", "subdir": "bulk-memory/", "moonbit": true, "cruntime": true}
