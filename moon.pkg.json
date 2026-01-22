@@ -1,0 +1,16 @@
+{
+  "import": [
+    {
+      "path": "moonbitlang/wasm5/internal/core",
+      "alias": "core"
+    },
+    {
+      "path": "moonbitlang/wasm5/internal/parse",
+      "alias": "parse"
+    },
+    {
+      "path": "moonbitlang/wasm5/internal/runtime",
+      "alias": "runtime"
+    }
+  ]
+}

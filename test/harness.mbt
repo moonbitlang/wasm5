@@ -21,7 +21,7 @@ pub impl Show for TestFailure with output(self, logger) {
 }
 
 ///|
-/// Runtime type selector for test harness
+/// Instance type selector for test harness
 pub(all) enum RuntimeType {
   MoonBit // Default MoonBit interpreter (full features)
   CRuntime // C-based threaded code executor (basic features)
@@ -34,17 +34,17 @@ priv trait Executor {
   call_compiled(Self, Bytes, Array[@wasm5_runtime.Value]) -> Array[
     @wasm5_runtime.Value,
   ] raise Error
-  // Returns the underlying MoonBit Runtime if available (for cross-module imports)
-  as_runtime(Self) -> @wasm5_runtime.Runtime?
+  // Returns the underlying MoonBit Instance if available (for cross-module imports)
+  as_runtime(Self) -> @wasm5_runtime.Instance?
   // Returns the underlying CRuntime if available (for cross-module imports)
   as_cruntime(Self) -> @wasm5_cruntime.CRuntime?
 }
 
 ///|
-/// Implement Executor for MoonBit Runtime
+/// Implement Executor for MoonBit Instance
 
 ///|
-impl Executor for @wasm5_runtime.Runtime with call_compiled(
+impl Executor for @wasm5_runtime.Instance with call_compiled(
   self,
   name : Bytes,
   args : Array[@wasm5_runtime.Value],
@@ -55,17 +55,17 @@ impl Executor for @wasm5_runtime.Runtime with call_compiled(
 ///|
 
 ///|
-impl Executor for @wasm5_runtime.Runtime with as_runtime(self) -> @wasm5_runtime.Runtime? {
+impl Executor for @wasm5_runtime.Instance with as_runtime(self) -> @wasm5_runtime.Instance? {
   Some(self)
 }
 
 ///|
-impl Executor for @wasm5_runtime.Runtime with as_cruntime(_self) -> @wasm5_cruntime.CRuntime? {
+impl Executor for @wasm5_runtime.Instance with as_cruntime(_self) -> @wasm5_cruntime.CRuntime? {
   None
 }
 
 ///|
-/// Implement Executor for C Runtime
+/// Implement Executor for C Instance
 
 ///|
 impl Executor for @wasm5_cruntime.CRuntime with call_compiled(
@@ -79,8 +79,8 @@ impl Executor for @wasm5_cruntime.CRuntime with call_compiled(
 ///|
 
 ///|
-impl Executor for @wasm5_cruntime.CRuntime with as_runtime(_self) -> @wasm5_runtime.Runtime? {
-  // CRuntime is not a MoonBit Runtime
+impl Executor for @wasm5_cruntime.CRuntime with as_runtime(_self) -> @wasm5_runtime.Instance? {
+  // CRuntime is not a MoonBit Instance
   None
 }
 
@@ -93,7 +93,7 @@ impl Executor for @wasm5_cruntime.CRuntime with as_cruntime(self) -> @wasm5_crun
 /// Registered module entry for cross-module imports
 /// Supports both MoonBit runtime and CRuntime
 priv struct RegisteredModule {
-  runtime : @wasm5_runtime.Runtime?
+  runtime : @wasm5_runtime.Instance?
   cruntime : @wasm5_cruntime.CRuntime?
   module_ : @wasm5_core.Module // Needed for resolving imports from this module
 }
@@ -116,7 +116,7 @@ priv struct TestContext {
   runtime_type : RuntimeType
   mut executor : &Executor?
   registry : ModuleRegistry
-  resolver : @wasm5_runtime.ImportResolver
+  resolver : @wasm5_runtime.Imports
   mut skipped_count : Int
   output_lines : Array[String]
 }
@@ -192,10 +192,7 @@ async fn parse_and_compile(ctx : TestContext, file_name : String) -> &Executor {
   let module_ = @wasm5_parse.parse(content)
   match ctx.runtime_type {
     MoonBit => {
-      let runtime = @wasm5_runtime.Runtime::load_with_resolver(
-        module_,
-        ctx.resolver,
-      )
+      let runtime = @wasm5_runtime.Instance::new(module_, ctx.resolver)
       runtime.run_start()
       (runtime : &Executor)
     }
@@ -227,7 +224,7 @@ fn make_import_wrapper(
   registered : RegisteredModule,
   export_name : String,
   arity : UInt,
-) -> @wasm5_runtime.ImportedFunc {
+) -> @wasm5_runtime.HostFunc {
   // Create a wrapper that calls the registered module's function
   let func : (Array[@wasm5_runtime.Value]) -> Array[@wasm5_runtime.Value] = fn(
     args,
@@ -241,7 +238,7 @@ fn make_import_wrapper(
       None => [] // CRuntime uses context switching, not wrappers
     }
   }
-  @wasm5_runtime.ImportedFunc::new(arity, func)
+  @wasm5_runtime.HostFunc::new(func, arity~)
 }
 
 ///|
@@ -251,7 +248,7 @@ fn make_funcref_wrapper(
   registered : RegisteredModule,
   func_idx : Int,
   arity : UInt,
-) -> @wasm5_runtime.ImportedFunc {
+) -> @wasm5_runtime.HostFunc {
   let func : (Array[@wasm5_runtime.Value]) -> Array[@wasm5_runtime.Value] = fn(
     args,
   ) {
@@ -261,7 +258,7 @@ fn make_funcref_wrapper(
       None => [] // CRuntime uses context switching, not wrappers
     }
   }
-  @wasm5_runtime.ImportedFunc::new(arity, func)
+  @wasm5_runtime.HostFunc::new(func, arity~)
 }
 
 ///|
@@ -306,7 +303,7 @@ fn register_exported_functions(
   ctx : TestContext,
   entry : RegisteredModule,
   module_ : @wasm5_core.Module,
-  name_bytes : Bytes,
+  module_name : String,
 ) -> Unit {
   for exp in module_.exports {
     match exp.desc {
@@ -315,7 +312,7 @@ fn register_exported_functions(
         let arity = get_func_arity(module_, func_idx_int)
         let export_name_str = @utf8.decode(exp.name) catch { _ => continue }
         let wrapper = make_import_wrapper(entry, export_name_str, arity)
-        ctx.resolver.add_func(name_bytes, exp.name, wrapper)
+        ignore(ctx.resolver.func(module_name, export_name_str, wrapper))
       }
       _ => ()
     }
@@ -328,8 +325,8 @@ fn register_exported_globals(
   ctx : TestContext,
   entry : RegisteredModule,
   module_ : @wasm5_core.Module,
-  name_bytes : Bytes,
-  runtime : @wasm5_runtime.Runtime,
+  module_name : String,
+  runtime : @wasm5_runtime.Instance,
 ) -> Unit {
   let globals = runtime.get_globals()
   for exp in module_.exports {
@@ -338,13 +335,20 @@ fn register_exported_globals(
         let global_idx_int = global_idx.reinterpret_as_int()
         if global_idx_int >= 0 && global_idx_int < globals.length() {
           let global_value = globals[global_idx_int]
-          ctx.resolver.add_global(name_bytes, exp.name, global_value)
+          let export_name_str = @utf8.decode(exp.name) catch { _ => continue }
+          ignore(
+            ctx.resolver.global(module_name, export_name_str, global_value),
+          )
           // Register funcref wrapper for cross-module call_indirect
           match global_value {
             Ref(Some(func_idx)) => {
               let arity = get_func_arity(module_, func_idx)
               let wrapper = make_funcref_wrapper(entry, func_idx, arity)
-              ctx.resolver.add_funcref_wrapper(name_bytes, exp.name, wrapper)
+              ignore(
+                ctx.resolver.funcref_wrapper(
+                  module_name, export_name_str, wrapper,
+                ),
+              )
             }
             _ => ()
           }
@@ -359,8 +363,8 @@ fn register_exported_globals(
 /// Register exported tables from a module
 fn register_exported_tables(
   ctx : TestContext,
-  name_bytes : Bytes,
-  runtime : @wasm5_runtime.Runtime,
+  module_name : String,
+  runtime : @wasm5_runtime.Instance,
   module_ : @wasm5_core.Module,
 ) -> Unit {
   let tables = runtime.get_tables()
@@ -369,7 +373,14 @@ fn register_exported_tables(
       @wasm5_core.ExportDesc::Table(table_idx) => {
         let table_idx_int = table_idx.reinterpret_as_int()
         if table_idx_int >= 0 && table_idx_int < tables.length() {
-          ctx.resolver.add_table(name_bytes, exp.name, tables[table_idx_int])
+          let export_name_str = @utf8.decode(exp.name) catch { _ => continue }
+          ignore(
+            ctx.resolver.table(
+              module_name,
+              export_name_str,
+              tables[table_idx_int],
+            ),
+          )
         }
       }
       _ => ()
@@ -382,7 +393,7 @@ fn register_exported_tables(
 fn register_module(
   ctx : TestContext,
   name : String,
-  runtime : @wasm5_runtime.Runtime,
+  runtime : @wasm5_runtime.Instance,
   module_ : @wasm5_core.Module,
 ) -> Unit {
   let entry : RegisteredModule = {
@@ -391,10 +402,9 @@ fn register_module(
     module_,
   }
   ctx.registry.0[name] = entry
-  let name_bytes = @utf8.encode(name)
-  register_exported_functions(ctx, entry, module_, name_bytes)
-  register_exported_globals(ctx, entry, module_, name_bytes, runtime)
-  register_exported_tables(ctx, name_bytes, runtime, module_)
+  register_exported_functions(ctx, entry, module_, name)
+  register_exported_globals(ctx, entry, module_, name, runtime)
+  register_exported_tables(ctx, name, runtime, module_)
   fix_shared_table_elements(entry, module_, runtime)
 }
 
@@ -652,7 +662,7 @@ fn get_func_type_info(
 fn fix_shared_table_elements(
   registered : RegisteredModule,
   module_ : @wasm5_core.Module,
-  runtime : @wasm5_runtime.Runtime,
+  runtime : @wasm5_runtime.Instance,
 ) -> Unit {
   // Count imported tables
   let mut num_imported_tables = 0
@@ -754,7 +764,7 @@ fn fix_shared_table_elements(
 /// Evaluate element segment offset expression
 fn eval_elem_offset(
   elem : @wasm5_core.Elem,
-  runtime : @wasm5_runtime.Runtime,
+  runtime : @wasm5_runtime.Instance,
 ) -> Int? {
   // Simple evaluation for common cases
   for instr in elem.offset.instrs {
@@ -1562,7 +1572,7 @@ fn handle_assert_return_get(
   module_name? : String? = None,
 ) -> Unit {
   try {
-    let rt : @wasm5_runtime.Runtime? = match module_name {
+    let rt : @wasm5_runtime.Instance? = match module_name {
       Some(name) =>
         match ctx.registry.0.get(name) {
           Some(registered) => registered.runtime
@@ -1808,7 +1818,7 @@ async fn process_meta(
   match meta {
     { "commands": Array(commands), .. } => {
       let registry = ModuleRegistry::new()
-      let resolver = @wasm5_runtime.default_import_resolver()
+      let resolver = @wasm5_runtime.Imports::spectest()
       let ctx = TestContext::{
         dir,
         source_file,

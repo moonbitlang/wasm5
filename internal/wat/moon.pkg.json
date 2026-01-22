@@ -1,0 +1,25 @@
+{
+  "import": [
+    "moonbitlang/core/encoding/utf8",
+    "moonbitlang/core/math",
+    "moonbitlang/core/strconv",
+    {
+      "path": "moonbitlang/wasm5/internal/core",
+      "alias": "core"
+    },
+    {
+      "path": "moonbitlang/wasm5/internal/encode",
+      "alias": "encode"
+    },
+    {
+      "path": "moonbitlang/wasm5/internal/parse",
+      "alias": "parse"
+    }
+  ],
+  "test-import": [
+    "moonbitlang/async",
+    "moonbitlang/async/fs",
+    "moonbitlang/async/process",
+    "moonbitlang/async/io"
+  ]
+}

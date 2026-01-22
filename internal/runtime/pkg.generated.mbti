@@ -1,0 +1,180 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/wasm5/internal/runtime"
+
+import {
+  "moonbitlang/wasm5/internal/core",
+}
+
+// Values
+pub fn clear_spectest_output() -> Unit
+
+pub fn get_spectest_output() -> Array[String]
+
+// Errors
+pub suberror RuntimeError {
+  DivisionByZero
+  IntegerOverflow
+  MemoryOutOfBounds
+  TableOutOfBounds
+  InvalidType(String)
+  FunctionNotFound(String)
+  Unreachable
+  FunctionNotCompiled(String)
+  UnsupportedInitExpression(String)
+  StackOverflow
+}
+pub fn RuntimeError::from_detail(String) -> Self
+pub impl Show for RuntimeError
+
+// Types and methods
+pub struct Func {
+  instance : Instance
+  func_idx : Int
+  func_type : @core.FuncType
+}
+pub fn Func::call(Self, Array[@core.Value]) -> Array[@core.Value] raise RuntimeError
+pub fn Func::type_(Self) -> @core.FuncType
+
+pub(all) struct GcArray {
+  type_idx : Int
+  elements : Array[UInt64]
+}
+
+pub(all) enum GcObject {
+  Struct(GcStruct)
+  Array(GcArray)
+  I31(Int)
+}
+
+pub(all) struct GcStruct {
+  type_idx : Int
+  fields : Array[UInt64]
+}
+
+pub struct Global {
+  instance : Instance
+  global_idx : Int
+  global_type : @core.GlobalType
+}
+pub fn Global::get(Self) -> @core.Value
+pub fn Global::set(Self, @core.Value) -> Unit raise RuntimeError
+
+pub struct HostFunc {
+  arity : UInt
+  func : (Array[@core.Value]) -> Array[@core.Value]
+}
+pub fn HostFunc::new((Array[@core.Value]) -> Array[@core.Value], arity? : UInt) -> Self
+
+pub struct ImportedMemory {
+  data : Array[Byte]
+  max : UInt64?
+}
+pub fn ImportedMemory::new(Array[Byte], max? : UInt64?) -> Self
+
+pub struct Imports {
+  modules : Map[Bytes, ImportsEntry]
+}
+pub fn Imports::add_func(Self, Bytes, Bytes, HostFunc) -> Unit
+pub fn Imports::add_funcref_wrapper(Self, Bytes, Bytes, HostFunc) -> Unit
+pub fn Imports::add_global(Self, Bytes, Bytes, @core.Value) -> Unit
+pub fn Imports::add_memory(Self, Bytes, Bytes, ImportedMemory) -> Unit
+pub fn Imports::add_table(Self, Bytes, Bytes, RuntimeTable) -> Unit
+pub fn Imports::func(Self, String, String, HostFunc) -> Self
+pub fn Imports::funcref_wrapper(Self, String, String, HostFunc) -> Self
+pub fn Imports::get_func(Self, Bytes, Bytes) -> HostFunc?
+pub fn Imports::get_funcref_wrapper(Self, Bytes, Bytes) -> HostFunc?
+pub fn Imports::get_global(Self, Bytes, Bytes) -> @core.Value?
+pub fn Imports::get_memory(Self, Bytes, Bytes) -> ImportedMemory?
+pub fn Imports::get_table(Self, Bytes, Bytes) -> RuntimeTable?
+pub fn Imports::global(Self, String, String, @core.Value) -> Self
+pub fn Imports::memory(Self, String, String, ImportedMemory) -> Self
+pub fn Imports::new() -> Self
+pub fn Imports::spectest() -> Self
+pub fn Imports::table(Self, String, String, RuntimeTable) -> Self
+
+type ImportsEntry
+
+pub struct Instance {
+  ops : FixedArray[UInt64]
+  stack : FixedArray[UInt64]
+  mut sp : Int
+  mut bp : Int
+  mut num_locals : Int
+  mut pc : Int
+  ctx : RuntimeContext
+}
+pub fn Instance::call_by_index(Self, Int, Array[@core.Value]) -> Array[@core.Value] raise RuntimeError
+pub fn Instance::call_compiled(Self, Bytes, Array[@core.Value]) -> Array[@core.Value] raise RuntimeError
+pub fn Instance::clear_output(Self) -> Unit
+pub fn Instance::get_func(Self, String) -> Func?
+pub fn Instance::get_global(Self, String) -> Global?
+pub fn Instance::get_globals(Self) -> Array[@core.Value]
+pub fn Instance::get_memory(Self, String) -> Memory?
+pub fn Instance::get_module(Self) -> @core.Module
+pub fn Instance::get_output(Self) -> Array[String]
+pub fn Instance::get_table(Self, String) -> Table?
+pub fn Instance::get_tables(Self) -> Array[RuntimeTable]
+pub fn Instance::new(@core.Module, Imports) -> Self raise RuntimeError
+pub fn Instance::run_start(Self) -> Unit raise RuntimeError
+
+pub struct Memory {
+  instance : Instance
+  mem_idx : Int
+}
+pub fn Memory::grow(Self, Int) -> Int raise RuntimeError
+pub fn Memory::read(Self, Int, Int) -> Bytes raise RuntimeError
+pub fn Memory::size(Self) -> Int
+pub fn Memory::write(Self, Int, Bytes) -> Unit raise RuntimeError
+
+pub struct RuntimeContext {
+  module_ : @core.Module
+  compiled : @core.CompiledModule
+  memory : Array[Byte]
+  memory_max : UInt64?
+  globals : Array[@core.Value]
+  tables : Array[RuntimeTable]
+  imported_funcs : Array[HostFunc]
+  data_segments : Array[Array[Byte]]
+  gc_heap : Array[GcObject]
+  output : Array[String]
+  external_funcrefs : Array[HostFunc]
+  dropped_elems : Array[Bool]
+  num_imported_funcs : Int
+  mut error_detail : String
+}
+pub fn RuntimeContext::clear_output(Self) -> Unit
+pub fn RuntimeContext::get_output(Self) -> Array[String]
+pub fn RuntimeContext::push_output(Self, String) -> Unit
+
+#alias(ReturnCode)
+pub enum RuntimeStatus {
+  Running
+  Terminated
+  Trap
+  Returned
+}
+pub impl Eq for RuntimeStatus
+pub impl Show for RuntimeStatus
+
+type RuntimeTable
+pub fn RuntimeTable::add_external_funcref(Self, HostFunc) -> Int
+pub fn RuntimeTable::data_length(Self) -> Int
+pub fn RuntimeTable::external_funcrefs_length(Self) -> Int
+pub fn RuntimeTable::get_data(Self, Int) -> UInt64
+pub fn RuntimeTable::new(Array[UInt64], max? : UInt64?) -> Self
+pub fn RuntimeTable::set_data(Self, Int, UInt64) -> Unit
+
+pub struct Table {
+  instance : Instance
+  table_idx : Int
+  table_type : @core.TableType
+}
+pub fn Table::get(Self, Int) -> @core.Value? raise RuntimeError
+pub fn Table::set(Self, Int, @core.Value) -> Unit raise RuntimeError
+pub fn Table::size(Self) -> Int
+
+// Type aliases
+pub using @core {type Value}
+
+// Traits
+

@@ -58,36 +58,33 @@ fn parse_args(args : Array[String]) -> (String, String, Array[String])? {
 }
 
 ///|
-fn parse_value(
-  s : String,
-  expected_type : @wasm5_core.ValType,
-) -> @wasm5_core.Value? {
+fn parse_value(s : String, expected_type : @wasm5.ValType) -> @wasm5.Value? {
   match expected_type {
     I32 =>
       try {
         let n = @strconv.parse_int(s)
-        Some(@wasm5_core.Value::I32(n.reinterpret_as_uint()))
+        Some(@wasm5.Value::I32(n.reinterpret_as_uint()))
       } catch {
         _ => None
       }
     I64 =>
       try {
         let n = @strconv.parse_int64(s)
-        Some(@wasm5_core.Value::I64(n.reinterpret_as_uint64()))
+        Some(@wasm5.Value::I64(n.reinterpret_as_uint64()))
       } catch {
         _ => None
       }
     F32 =>
       try {
         let f = @strconv.parse_double(s)
-        Some(@wasm5_core.Value::F32(Float::from_double(f)))
+        Some(@wasm5.Value::F32(Float::from_double(f)))
       } catch {
         _ => None
       }
     F64 =>
       try {
         let f = @strconv.parse_double(s)
-        Some(@wasm5_core.Value::F64(f))
+        Some(@wasm5.Value::F64(f))
       } catch {
         _ => None
       }
@@ -102,9 +99,9 @@ async fn run_wasm(
   arg_strings : Array[String],
 ) -> Unit {
   let wasm_bytes = @fs.read_file(wasm_path).binary()
-  let module_ = @wasm5_parse.parse(wasm_bytes)
-  // Load and compile for C runtime (default)
-  let runtime = @wasm5_cruntime.CRuntime::load(module_)
+  let module_ = @wasm5.parse(wasm_bytes)
+  // Load and compile runtime
+  let runtime = @wasm5.Instance::new(module_, @wasm5.Imports::spectest())
   runtime.run_start()
   // Find the function's type to parse arguments correctly
   let func_type = find_export_func_type(module_, func_name)
@@ -117,7 +114,7 @@ async fn run_wasm(
         )
         return
       }
-      let args : Array[@wasm5_core.Value] = []
+      let args : Array[@wasm5.Value] = []
       for i in 0..<arg_strings.length() {
         match parse_value(arg_strings[i], ft.params[i]) {
           Some(v) => args.push(v)
@@ -130,10 +127,10 @@ async fn run_wasm(
         }
       }
       let results = runtime.call_compiled(@utf8.encode(func_name), args)
-      for line in @wasm5_runtime.get_spectest_output() {
+      for line in runtime.get_output() {
         println(line)
       }
-      @wasm5_runtime.clear_spectest_output()
+      runtime.clear_output()
       // Print results (one per line, just the value)
       for result in results {
         println(format_value(result))
@@ -145,7 +142,7 @@ async fn run_wasm(
 }
 
 ///|
-fn format_value(v : @wasm5_core.Value) -> String {
+fn format_value(v : @wasm5.Value) -> String {
   match v {
     I32(n) => n.reinterpret_as_int().to_string()
     I64(n) => n.reinterpret_as_int64().to_string()
@@ -162,9 +159,9 @@ fn format_value(v : @wasm5_core.Value) -> String {
 
 ///|
 fn find_export_func_type(
-  module_ : @wasm5_core.Module,
+  module_ : @wasm5.Module,
   name : String,
-) -> @wasm5_core.FuncType? {
+) -> @wasm5.FuncType? {
   // Find the export with the given name
   let name_bytes = @utf8.encode(name)
   for exp in module_.exports {

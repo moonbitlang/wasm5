@@ -1,0 +1,15 @@
+{
+  "import": [
+    {
+      "path": "moonbitlang/wasm5/internal/core",
+      "alias": "core"
+    },
+    "moonbitlang/wasm5/internal/compile",
+    "moonbitlang/core/encoding/utf8"
+  ],
+  "test-import": [
+    "moonbitlang/async",
+    "moonbitlang/async/fs",
+    "moonbitlang/wasm5/internal/parse"
+  ]
+}

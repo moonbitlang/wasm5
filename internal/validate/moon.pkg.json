@@ -1,0 +1,8 @@
+{
+  "import": [
+    {
+      "path": "moonbitlang/wasm5/internal/core",
+      "alias": "core"
+    }
+  ]
+}

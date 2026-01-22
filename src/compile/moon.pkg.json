@@ -1,6 +1,0 @@
-{
-  "import": [
-    "moonbitlang/core/encoding/utf8",
-    "moonbitlang/wasm5/src/core"
-  ]
-}

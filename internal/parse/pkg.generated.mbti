@@ -1,0 +1,27 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/wasm5/internal/parse"
+
+import {
+  "moonbitlang/wasm5/internal/core",
+}
+
+// Values
+pub fn parse(Bytes) -> @core.Module raise ParseError
+
+pub fn parse_novalidate(Bytes) -> @core.Module raise ParseError
+
+// Errors
+pub suberror ParseError {
+  UnexpectedEof
+  InvalidMagic
+  UnsupportedVersion
+  InvalidFormat(String)
+}
+pub impl Show for ParseError
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+
