@@ -415,19 +415,6 @@ fn get_block_arities(mod_ : @core.Module, bt : @core.BlockType) -> (Int, Int) {
 }
 
 ///|
-/// Count imported functions
-fn count_imported_funcs(mod_ : @core.Module) -> Int {
-  let mut count = 0
-  for imp in mod_.imports {
-    match imp.desc {
-      Func(_) => count += 1
-      _ => ()
-    }
-  }
-  count
-}
-
-///|
 /// Get function type by index
 fn get_func_type(mod_ : @core.Module, type_idx : Int) -> @core.FuncType {
   match mod_.types[type_idx] {

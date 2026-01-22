@@ -7,7 +7,7 @@ pub fn Instance::run_start(self : Instance) -> Unit raise RuntimeError {
       // Call the start function
       // Start function must have type [] -> []
       let func_idx = start_idx.reinterpret_as_int()
-      let num_imported_funcs = count_imported_funcs(self.ctx.module_)
+      let num_imported_funcs = @core.count_imported_funcs(self.ctx.module_)
 
       // Only execute if it's a local function (not imported)
       // Imported start functions would require host environment support
@@ -395,7 +395,7 @@ pub fn Instance::call_compiled(
   guard func_idx is Some(idx) else {
     raise RuntimeError::FunctionNotFound("Function not found: \{func_name}")
   }
-  let num_imported_funcs = count_imported_funcs(self.ctx.module_)
+  let num_imported_funcs = @core.count_imported_funcs(self.ctx.module_)
 
   // Check if it's an imported function - call it directly via import resolver
   if idx < num_imported_funcs {
@@ -444,7 +444,7 @@ pub fn Instance::call_by_index(
   func_idx : Int,
   args : Array[Value],
 ) -> Array[Value] raise RuntimeError {
-  let num_imported_funcs = count_imported_funcs(self.ctx.module_)
+  let num_imported_funcs = @core.count_imported_funcs(self.ctx.module_)
 
   // Check if it's an imported function - call it directly via import resolver
   if func_idx < num_imported_funcs {

@@ -51,18 +51,6 @@ pub struct CRuntime {
 using @core {type Value}
 
 ///|
-fn count_imported_funcs(module_ : @core.Module) -> Int {
-  let mut count = 0
-  for imp in module_.imports {
-    match imp.desc {
-      Func(_) => count += 1
-      _ => ()
-    }
-  }
-  count
-}
-
-///|
 fn get_func_type(module_ : @core.Module, type_idx : Int) -> @core.FuncType {
   match module_.types[type_idx] {
     Func(ft) => ft
@@ -247,7 +235,7 @@ fn build_runtime(
     elem_segment_sizes,
     elem_segment_dropped,
   ) = flatten_elem_segments(module_, globals)
-  let num_imported = count_imported_funcs(module_)
+  let num_imported = @core.count_imported_funcs(module_)
   let (import_context_ptrs, import_target_func_idxs) = build_import_context_arrays(
     num_imported, resolved_imports,
   )
@@ -621,379 +609,6 @@ fn flatten_elem_segments(
 }
 
 ///|
-/// Get rec group info for a type index: (group_index, position_in_group)
-fn get_rec_group_info_cruntime(
-  module_ : @core.Module,
-  type_idx : Int,
-) -> (Int, Int) {
-  for i, group in module_.type_groups {
-    for j, subtype_def in group.subtypes {
-      if subtype_def.type_idx.reinterpret_as_int() == type_idx {
-        return (i, j)
-      }
-    }
-  }
-  (-1, -1)
-}
-
-///|
-/// Get all type indices in a rec group
-fn get_rec_group_types_cruntime(
-  module_ : @core.Module,
-  group_idx : Int,
-) -> Array[Int] {
-  let result : Array[Int] = []
-  if group_idx >= 0 && group_idx < module_.type_groups.length() {
-    let group = module_.type_groups[group_idx]
-    for subtype_def in group.subtypes {
-      result.push(subtype_def.type_idx.reinterpret_as_int())
-    }
-  }
-  result
-}
-
-///|
-/// Check if a type index is within a given rec group
-fn is_in_rec_group_cruntime(types : Array[Int], type_idx : Int) -> Bool {
-  for t in types {
-    if t == type_idx {
-      return true
-    }
-  }
-  false
-}
-
-///|
-/// Get the position of a type within its rec group
-fn get_position_in_group_cruntime(types : Array[Int], type_idx : Int) -> Int {
-  for i, t in types {
-    if t == type_idx {
-      return i
-    }
-  }
-  -1
-}
-
-///|
-/// Check if a type index is final (cannot be extended)
-fn is_type_final_cruntime(module_ : @core.Module, type_idx : Int) -> Bool {
-  for group in module_.type_groups {
-    for subtype_def in group.subtypes {
-      if subtype_def.type_idx.reinterpret_as_int() == type_idx {
-        return subtype_def.is_final
-      }
-    }
-  }
-  true
-}
-
-///|
-/// Get the list of supertypes for a type index
-fn get_supertypes_cruntime(
-  module_ : @core.Module,
-  type_idx : Int,
-) -> Array[Int] {
-  let result : Array[Int] = []
-  for group in module_.type_groups {
-    for subtype_def in group.subtypes {
-      if subtype_def.type_idx.reinterpret_as_int() == type_idx {
-        for sup in subtype_def.supertypes {
-          result.push(sup.reinterpret_as_int())
-        }
-        return result
-      }
-    }
-  }
-  result
-}
-
-///|
-/// Check if two rec groups are structurally equivalent
-fn rec_groups_equivalent_cruntime(
-  module_ : @core.Module,
-  group1_idx : Int,
-  group2_idx : Int,
-  visited : Array[(Int, Int)],
-) -> Bool {
-  if group1_idx == group2_idx {
-    return true
-  }
-  for v in visited {
-    if (v.0 == group1_idx && v.1 == group2_idx) ||
-      (v.0 == group2_idx && v.1 == group1_idx) {
-      return true
-    }
-  }
-  let types1 = get_rec_group_types_cruntime(module_, group1_idx)
-  let types2 = get_rec_group_types_cruntime(module_, group2_idx)
-  if types1.length() != types2.length() {
-    return false
-  }
-  visited.push((group1_idx, group2_idx))
-  for i in 0..<types1.length() {
-    let t1 = types1[i]
-    let t2 = types2[i]
-    if not(
-        types_equivalent_in_context_cruntime(
-          module_, t1, t2, types1, types2, visited,
-        ),
-      ) {
-      return false
-    }
-  }
-  true
-}
-
-///|
-/// Check if two types are equivalent in the context of their rec groups
-fn types_equivalent_in_context_cruntime(
-  module_ : @core.Module,
-  type_idx1 : Int,
-  type_idx2 : Int,
-  group1_types : Array[Int],
-  group2_types : Array[Int],
-  visited : Array[(Int, Int)],
-) -> Bool {
-  if type_idx1 < 0 ||
-    type_idx1 >= module_.types.length() ||
-    type_idx2 < 0 ||
-    type_idx2 >= module_.types.length() {
-    return false
-  }
-  match (module_.types[type_idx1], module_.types[type_idx2]) {
-    (Func(f1), Func(f2)) => {
-      if is_type_final_cruntime(module_, type_idx1) !=
-        is_type_final_cruntime(module_, type_idx2) {
-        return false
-      }
-      if f1.params.length() != f2.params.length() ||
-        f1.results.length() != f2.results.length() {
-        return false
-      }
-      for i in 0..<f1.params.length() {
-        if not(
-            valtypes_equivalent_in_context_cruntime(
-              module_,
-              f1.params[i],
-              f2.params[i],
-              group1_types,
-              group2_types,
-              visited,
-            ),
-          ) {
-          return false
-        }
-      }
-      for i in 0..<f1.results.length() {
-        if not(
-            valtypes_equivalent_in_context_cruntime(
-              module_,
-              f1.results[i],
-              f2.results[i],
-              group1_types,
-              group2_types,
-              visited,
-            ),
-          ) {
-          return false
-        }
-      }
-      let supers1 = get_supertypes_cruntime(module_, type_idx1)
-      let supers2 = get_supertypes_cruntime(module_, type_idx2)
-      if supers1.length() != supers2.length() {
-        return false
-      }
-      for i in 0..<supers1.length() {
-        if not(
-            type_refs_equivalent_in_context_cruntime(
-              module_,
-              supers1[i],
-              supers2[i],
-              group1_types,
-              group2_types,
-              visited,
-            ),
-          ) {
-          return false
-        }
-      }
-      true
-    }
-    (Struct(s1), Struct(s2)) => {
-      if is_type_final_cruntime(module_, type_idx1) !=
-        is_type_final_cruntime(module_, type_idx2) {
-        return false
-      }
-      if s1.fields.length() != s2.fields.length() {
-        return false
-      }
-      for i in 0..<s1.fields.length() {
-        if s1.fields[i].mutable != s2.fields[i].mutable {
-          return false
-        }
-        if not(
-            storage_types_equivalent_in_context_cruntime(
-              module_,
-              s1.fields[i].storage,
-              s2.fields[i].storage,
-              group1_types,
-              group2_types,
-              visited,
-            ),
-          ) {
-          return false
-        }
-      }
-      let supers1 = get_supertypes_cruntime(module_, type_idx1)
-      let supers2 = get_supertypes_cruntime(module_, type_idx2)
-      if supers1.length() != supers2.length() {
-        return false
-      }
-      for i in 0..<supers1.length() {
-        if not(
-            type_refs_equivalent_in_context_cruntime(
-              module_,
-              supers1[i],
-              supers2[i],
-              group1_types,
-              group2_types,
-              visited,
-            ),
-          ) {
-          return false
-        }
-      }
-      true
-    }
-    (Array(a1), Array(a2)) => {
-      if is_type_final_cruntime(module_, type_idx1) !=
-        is_type_final_cruntime(module_, type_idx2) {
-        return false
-      }
-      if a1.element.mutable != a2.element.mutable {
-        return false
-      }
-      if not(
-          storage_types_equivalent_in_context_cruntime(
-            module_,
-            a1.element.storage,
-            a2.element.storage,
-            group1_types,
-            group2_types,
-            visited,
-          ),
-        ) {
-        return false
-      }
-      let supers1 = get_supertypes_cruntime(module_, type_idx1)
-      let supers2 = get_supertypes_cruntime(module_, type_idx2)
-      if supers1.length() != supers2.length() {
-        return false
-      }
-      for i in 0..<supers1.length() {
-        if not(
-            type_refs_equivalent_in_context_cruntime(
-              module_,
-              supers1[i],
-              supers2[i],
-              group1_types,
-              group2_types,
-              visited,
-            ),
-          ) {
-          return false
-        }
-      }
-      true
-    }
-    _ => false
-  }
-}
-
-///|
-/// Check if two type references are equivalent considering rec group context
-fn type_refs_equivalent_in_context_cruntime(
-  module_ : @core.Module,
-  ref1 : Int,
-  ref2 : Int,
-  group1_types : Array[Int],
-  group2_types : Array[Int],
-  visited : Array[(Int, Int)],
-) -> Bool {
-  let in_group1 = is_in_rec_group_cruntime(group1_types, ref1)
-  let in_group2 = is_in_rec_group_cruntime(group2_types, ref2)
-  if in_group1 && in_group2 {
-    let pos1 = get_position_in_group_cruntime(group1_types, ref1)
-    let pos2 = get_position_in_group_cruntime(group2_types, ref2)
-    pos1 == pos2
-  } else if not(in_group1) && not(in_group2) {
-    if ref1 == ref2 {
-      return true
-    }
-    let (g1, _) = get_rec_group_info_cruntime(module_, ref1)
-    let (g2, _) = get_rec_group_info_cruntime(module_, ref2)
-    rec_groups_equivalent_cruntime(module_, g1, g2, visited)
-  } else {
-    false
-  }
-}
-
-///|
-/// Check if two value types are equivalent in rec group context
-fn valtypes_equivalent_in_context_cruntime(
-  module_ : @core.Module,
-  vt1 : @core.ValType,
-  vt2 : @core.ValType,
-  group1_types : Array[Int],
-  group2_types : Array[Int],
-  visited : Array[(Int, Int)],
-) -> Bool {
-  match (vt1, vt2) {
-    (Ref(TypeIndex(idx1), n1), Ref(TypeIndex(idx2), n2)) =>
-      n1 == n2 &&
-      type_refs_equivalent_in_context_cruntime(
-        module_, idx1, idx2, group1_types, group2_types, visited,
-      )
-    _ => vt1 == vt2
-  }
-}
-
-///|
-/// Check if two storage types are equivalent in rec group context
-fn storage_types_equivalent_in_context_cruntime(
-  module_ : @core.Module,
-  st1 : @core.StorageType,
-  st2 : @core.StorageType,
-  group1_types : Array[Int],
-  group2_types : Array[Int],
-  visited : Array[(Int, Int)],
-) -> Bool {
-  match (st1, st2) {
-    (Val(vt1), Val(vt2)) =>
-      valtypes_equivalent_in_context_cruntime(
-        module_, vt1, vt2, group1_types, group2_types, visited,
-      )
-    _ => st1 == st2
-  }
-}
-
-///|
-/// Check if two types are equivalent (rec group aware)
-fn gc_types_equivalent_cruntime(
-  module_ : @core.Module,
-  type_idx1 : Int,
-  type_idx2 : Int,
-) -> Bool {
-  if type_idx1 == type_idx2 {
-    return true
-  }
-  let (group1_idx, _) = get_rec_group_info_cruntime(module_, type_idx1)
-  let (group2_idx, _) = get_rec_group_info_cruntime(module_, type_idx2)
-  let visited : Array[(Int, Int)] = []
-  rec_groups_equivalent_cruntime(module_, group1_idx, group2_idx, visited)
-}
-
-///|
 /// Build equivalence class ids for function types
 fn build_func_type_equiv_ids(module_ : @core.Module) -> Array[Int] {
   let count = module_.types.length()
@@ -1010,7 +625,7 @@ fn build_func_type_equiv_ids(module_ : @core.Module) -> Array[Int] {
           if ids[j] == -1 {
             match module_.types[j] {
               Func(_) =>
-                if gc_types_equivalent_cruntime(module_, i, j) {
+                if @core.gc_types_equivalent(module_, i, j) {
                   ids[j] = next_id
                 }
               _ => ()
@@ -1277,25 +892,12 @@ fn init_memory(
 }
 
 ///|
-/// Count imported globals in module
-fn count_imported_globals(module_ : @core.Module) -> Int {
-  let mut count = 0
-  for imp in module_.imports {
-    match imp.desc {
-      Global(_) => count += 1
-      _ => ()
-    }
-  }
-  count
-}
-
-///|
 /// Initialize globals from module's global section
 fn init_globals(
   module_ : @core.Module,
   resolved_imported_globals : Map[Int, UInt64],
 ) -> FixedArray[UInt64] {
-  let num_imported = count_imported_globals(module_)
+  let num_imported = @core.count_imported_globals(module_)
   let num_local = module_.globals.length()
   let total = num_imported + num_local
   let globals = FixedArray::make(if total > 0 { total } else { 1 }, 0UL)
@@ -1340,19 +942,6 @@ fn init_globals(
 }
 
 ///|
-/// Count the number of imported tables in the module
-fn count_imported_tables(module_ : @core.Module) -> Int {
-  let mut count = 0
-  for imp in module_.imports {
-    match imp.desc {
-      Table(_) => count += 1
-      _ => ()
-    }
-  }
-  count
-}
-
-///|
 /// Default max table size when no max is specified
 /// This is a reasonable limit for our implementation
 let default_table_max_size : Int = 65536
@@ -1367,7 +956,7 @@ fn init_tables(
   module_ : @core.Module,
   globals : FixedArray[UInt64],
 ) -> (FixedArray[FixedArray[Int]], FixedArray[Int], FixedArray[Int]) {
-  let num_imported_tables = count_imported_tables(module_)
+  let num_imported_tables = @core.count_imported_tables(module_)
   let num_local_tables = module_.tables.length()
   let num_tables = num_imported_tables + num_local_tables
   if num_tables == 0 {
@@ -1533,7 +1122,7 @@ fn eval_const_expr_with_globals(
 pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError {
   match self.module_.start {
     Some(start_idx) => {
-      let num_imported = count_imported_funcs(self.module_)
+      let num_imported = @core.count_imported_funcs(self.module_)
       let local_idx = start_idx.reinterpret_as_int() - num_imported
       if local_idx >= 0 && local_idx < self.compiled.func_entries.length() {
         let entry = self.compiled.func_entries[local_idx]
@@ -1658,7 +1247,7 @@ pub fn CRuntime::call_compiled(
   let name_str = @utf8.decode(name) catch { _ => return [] }
   match self.compiled.exports.get(name_str) {
     Some(export_idx) => {
-      let num_imported = count_imported_funcs(self.module_)
+      let num_imported = @core.count_imported_funcs(self.module_)
       // Check if this is an exported import (negative index)
       if export_idx < 0 {
         // Exported import: -(import_idx + 1) is stored

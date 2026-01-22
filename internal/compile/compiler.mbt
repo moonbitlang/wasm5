@@ -2,7 +2,7 @@
 /// Compile a module to universal IR.
 pub fn compile(mod_ : @core.Module) -> @core.CompiledModule {
   let ctx = CompileCtx::new()
-  let num_imported_funcs = count_imported_funcs(mod_)
+  let num_imported_funcs = @core.count_imported_funcs(mod_)
 
   // Pre-compute function info
   let func_entries : Array[Int] = []

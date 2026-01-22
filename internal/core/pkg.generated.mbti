@@ -10,15 +10,47 @@ pub fn atomic_stack_effect(Bytes) -> AtomicStackEffect
 
 pub let compiled_module_version : Int
 
+pub fn count_imported_funcs(Module) -> Int
+
+pub fn count_imported_globals(Module) -> Int
+
+pub fn count_imported_mems(Module) -> Int
+
+pub fn count_imported_tables(Module) -> Int
+
+pub fn gc_types_equivalent(Module, Int, Int) -> Bool
+
 pub fn get_immediate_count(Int64) -> Int
 
+pub fn get_position_in_group(Array[Int], Int) -> Int
+
+pub fn get_rec_group_info(Module, Int) -> (Int, Int)
+
+pub fn get_rec_group_types(Module, Int) -> Array[Int]
+
+pub fn get_supertypes(Module, Int) -> Array[Int]
+
+pub fn is_in_rec_group(Array[Int], Int) -> Bool
+
+pub fn is_type_final(Module, Int) -> Bool
+
 pub let max_opcode : Int64
+
+pub fn rec_groups_equivalent(Module, Int, Int, Array[(Int, Int)]) -> Bool
 
 pub fn simd_spec_by_name(Bytes) -> SimdSpec?
 
 pub fn simd_spec_by_opcode(UInt) -> SimdSpec?
 
 pub fn simd_stack_effect(Bytes) -> SimdStackEffect
+
+pub fn storage_types_equivalent_in_context(Module, StorageType, StorageType, Array[Int], Array[Int], Array[(Int, Int)]) -> Bool
+
+pub fn type_refs_equivalent_in_context(Module, Int, Int, Array[Int], Array[Int], Array[(Int, Int)]) -> Bool
+
+pub fn types_equivalent_in_context(Module, Int, Int, Array[Int], Array[Int], Array[(Int, Int)]) -> Bool
+
+pub fn valtypes_equivalent_in_context(Module, ValType, ValType, Array[Int], Array[Int], Array[(Int, Int)]) -> Bool
 
 // Errors
 

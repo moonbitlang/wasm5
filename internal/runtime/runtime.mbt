@@ -686,18 +686,6 @@ fn get_global_type_for_index(
 }
 
 ///|
-fn count_imported_mems(module_ : @core.Module) -> Int {
-  let mut count = 0
-  for imp in module_.imports {
-    match imp.desc {
-      Mem(_) => count += 1
-      _ => ()
-    }
-  }
-  count
-}
-
-///|
 fn get_table_val_type(table_type : @core.TableType) -> @core.ValType {
   match table_type.elem_type {
     @core.Func | @core.NoFunc =>
@@ -798,7 +786,7 @@ pub fn Instance::get_memory(self : Instance, name : String) -> Memory? {
       match exp.desc {
         Mem(idx) => {
           let mem_idx = idx.reinterpret_as_int()
-          let total_mems = count_imported_mems(self.ctx.module_) +
+          let total_mems = @core.count_imported_mems(self.ctx.module_) +
             self.ctx.module_.mems.length()
           if mem_idx < 0 || mem_idx >= total_mems || mem_idx != 0 {
             return None

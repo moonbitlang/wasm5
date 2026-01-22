@@ -160,19 +160,6 @@ fn f32_to_uint64(x : Float) -> UInt64 {
 }
 
 ///|
-/// Count the number of imported functions in a module
-fn count_imported_funcs(module_ : @core.Module) -> Int {
-  let mut count = 0
-  for imp in module_.imports {
-    match imp.desc {
-      Func(_) => count += 1
-      _ => ()
-    }
-  }
-  count
-}
-
-///|
 fn require_func_type(
   module_ : @core.Module,
   type_idx : Int,
