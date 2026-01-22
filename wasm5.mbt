@@ -29,9 +29,13 @@ pub fn parse(bytes : Bytes) -> Module raise ParseError {
 ///|
 pub using @runtime {
   type HostFunc,
+  type Func,
   type ImportedMemory,
   type Instance,
   type Imports,
+  type Memory,
+  type Table,
+  type Global,
   type RuntimeError,
   type RuntimeTable,
 }

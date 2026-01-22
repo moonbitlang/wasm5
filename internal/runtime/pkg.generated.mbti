@@ -27,6 +27,14 @@ pub fn RuntimeError::from_detail(String) -> Self
 pub impl Show for RuntimeError
 
 // Types and methods
+pub struct Func {
+  instance : Instance
+  func_idx : Int
+  func_type : @core.FuncType
+}
+pub fn Func::call(Self, Array[@core.Value]) -> Array[@core.Value] raise RuntimeError
+pub fn Func::type_(Self) -> @core.FuncType
+
 pub(all) struct GcArray {
   type_idx : Int
   elements : Array[UInt64]
@@ -42,6 +50,14 @@ pub(all) struct GcStruct {
   type_idx : Int
   fields : Array[UInt64]
 }
+
+pub struct Global {
+  instance : Instance
+  global_idx : Int
+  global_type : @core.GlobalType
+}
+pub fn Global::get(Self) -> @core.Value
+pub fn Global::set(Self, @core.Value) -> Unit raise RuntimeError
 
 pub struct HostFunc {
   arity : UInt
@@ -90,12 +106,25 @@ pub struct Instance {
 pub fn Instance::call_by_index(Self, Int, Array[@core.Value]) -> Array[@core.Value] raise RuntimeError
 pub fn Instance::call_compiled(Self, Bytes, Array[@core.Value]) -> Array[@core.Value] raise RuntimeError
 pub fn Instance::clear_output(Self) -> Unit
+pub fn Instance::get_func(Self, String) -> Func?
+pub fn Instance::get_global(Self, String) -> Global?
 pub fn Instance::get_globals(Self) -> Array[@core.Value]
+pub fn Instance::get_memory(Self, String) -> Memory?
 pub fn Instance::get_module(Self) -> @core.Module
 pub fn Instance::get_output(Self) -> Array[String]
+pub fn Instance::get_table(Self, String) -> Table?
 pub fn Instance::get_tables(Self) -> Array[RuntimeTable]
 pub fn Instance::new(@core.Module, Imports) -> Self raise RuntimeError
 pub fn Instance::run_start(Self) -> Unit raise RuntimeError
+
+pub struct Memory {
+  instance : Instance
+  mem_idx : Int
+}
+pub fn Memory::grow(Self, Int) -> Int raise RuntimeError
+pub fn Memory::read(Self, Int, Int) -> Bytes raise RuntimeError
+pub fn Memory::size(Self) -> Int
+pub fn Memory::write(Self, Int, Bytes) -> Unit raise RuntimeError
 
 pub struct RuntimeContext {
   module_ : @core.Module
@@ -134,6 +163,15 @@ pub fn RuntimeTable::external_funcrefs_length(Self) -> Int
 pub fn RuntimeTable::get_data(Self, Int) -> UInt64
 pub fn RuntimeTable::new(Array[UInt64], max? : UInt64?) -> Self
 pub fn RuntimeTable::set_data(Self, Int, UInt64) -> Unit
+
+pub struct Table {
+  instance : Instance
+  table_idx : Int
+  table_type : @core.TableType
+}
+pub fn Table::get(Self, Int) -> @core.Value? raise RuntimeError
+pub fn Table::set(Self, Int, @core.Value) -> Unit raise RuntimeError
+pub fn Table::size(Self) -> Int
 
 // Type aliases
 pub using @core {type Value}

@@ -470,6 +470,568 @@ pub fn Instance::clear_output(self : Instance) -> Unit {
 }
 
 ///|
+/// Typed function export.
+pub struct Func {
+  instance : Instance
+  func_idx : Int
+  func_type : @core.FuncType
+}
+
+///|
+/// Typed memory export.
+pub struct Memory {
+  instance : Instance
+  mem_idx : Int
+}
+
+///|
+/// Typed table export.
+pub struct Table {
+  instance : Instance
+  table_idx : Int
+  table_type : @core.TableType
+}
+
+///|
+/// Typed global export.
+pub struct Global {
+  instance : Instance
+  global_idx : Int
+  global_type : @core.GlobalType
+}
+
+///|
+fn is_ref_value(value : Value) -> Bool {
+  match value {
+    Ref(_) | Funcref(_) | Externref(_) => true
+    _ => false
+  }
+}
+
+///|
+fn is_null_ref(value : Value) -> Bool {
+  match value {
+    Ref(None) | Funcref(None) | Externref(None) => true
+    _ => false
+  }
+}
+
+///|
+fn is_func_ref_type(val_type : @core.ValType) -> Bool {
+  match val_type {
+    FuncRef | NullFuncRef | Ref(@core.Func, _) | Ref(@core.NoFunc, _) => true
+    _ => false
+  }
+}
+
+///|
+fn is_extern_ref_type(val_type : @core.ValType) -> Bool {
+  match val_type {
+    ExternRef | NullExternRef | Ref(@core.Extern, _) | Ref(@core.NoExtern, _) =>
+      true
+    _ => false
+  }
+}
+
+///|
+fn is_null_only_type(val_type : @core.ValType) -> Bool {
+  match val_type {
+    NullRef | NullFuncRef | NullExternRef | NullExnRef => true
+    _ => false
+  }
+}
+
+///|
+fn is_non_nullable_ref_type(val_type : @core.ValType) -> Bool {
+  match val_type {
+    Ref(_, false) => true
+    _ => false
+  }
+}
+
+///|
+fn check_value_type(value : Value, val_type : @core.ValType) -> Bool {
+  match val_type {
+    I32 =>
+      match value {
+        I32(_) => true
+        _ => false
+      }
+    I64 =>
+      match value {
+        I64(_) => true
+        _ => false
+      }
+    F32 =>
+      match value {
+        F32(_) => true
+        _ => false
+      }
+    F64 =>
+      match value {
+        F64(_) => true
+        _ => false
+      }
+    V128 =>
+      match value {
+        I32(_) => true
+        _ => false
+      }
+    _ => {
+      if not(is_ref_value(value)) {
+        return false
+      }
+      if is_func_ref_type(val_type) {
+        match value {
+          Externref(_) => return false
+          _ => ()
+        }
+      } else if is_extern_ref_type(val_type) {
+        match value {
+          Funcref(_) => return false
+          _ => ()
+        }
+      } else {
+        match value {
+          Ref(_) => ()
+          _ => return false
+        }
+      }
+      if is_null_only_type(val_type) {
+        return is_null_ref(value)
+      }
+      if is_non_nullable_ref_type(val_type) {
+        return not(is_null_ref(value))
+      }
+      true
+    }
+  }
+}
+
+///|
+fn require_value_type(
+  value : Value,
+  val_type : @core.ValType,
+  context : String,
+) -> Unit raise RuntimeError {
+  if not(check_value_type(value, val_type)) {
+    raise RuntimeError::InvalidType("\{context}: type mismatch")
+  }
+}
+
+///|
+fn get_func_type_for_index(
+  module_ : @core.Module,
+  func_idx : Int,
+  num_imported_funcs : Int,
+) -> @core.FuncType? {
+  let type_idx = get_func_type_idx(module_, func_idx, num_imported_funcs)
+  if type_idx < 0 || type_idx >= module_.types.length() {
+    return None
+  }
+  match module_.types[type_idx] {
+    Func(ft) => Some(ft)
+    _ => None
+  }
+}
+
+///|
+fn get_table_type_for_index(
+  module_ : @core.Module,
+  table_idx : Int,
+) -> @core.TableType? {
+  let mut import_idx = 0
+  for imp in module_.imports {
+    match imp.desc {
+      Table(table_type) => {
+        if import_idx == table_idx {
+          return Some(table_type)
+        }
+        import_idx += 1
+      }
+      _ => ()
+    }
+  }
+  let local_idx = table_idx - import_idx
+  if local_idx >= 0 && local_idx < module_.tables.length() {
+    Some(module_.tables[local_idx])
+  } else {
+    None
+  }
+}
+
+///|
+fn get_global_type_for_index(
+  module_ : @core.Module,
+  global_idx : Int,
+) -> @core.GlobalType? {
+  let mut import_idx = 0
+  for imp in module_.imports {
+    match imp.desc {
+      Global(global_type) => {
+        if import_idx == global_idx {
+          return Some(global_type)
+        }
+        import_idx += 1
+      }
+      _ => ()
+    }
+  }
+  let local_idx = global_idx - import_idx
+  if local_idx >= 0 && local_idx < module_.globals.length() {
+    Some(module_.globals[local_idx].type_)
+  } else {
+    None
+  }
+}
+
+///|
+fn count_imported_mems(module_ : @core.Module) -> Int {
+  let mut count = 0
+  for imp in module_.imports {
+    match imp.desc {
+      Mem(_) => count += 1
+      _ => ()
+    }
+  }
+  count
+}
+
+///|
+fn get_table_val_type(table_type : @core.TableType) -> @core.ValType {
+  match table_type.elem_type {
+    @core.Func | @core.NoFunc =>
+      if table_type.nullable {
+        FuncRef
+      } else {
+        Ref(@core.Func, false)
+      }
+    @core.Extern | @core.NoExtern =>
+      if table_type.nullable {
+        ExternRef
+      } else {
+        Ref(@core.Extern, false)
+      }
+    _ => Ref(table_type.elem_type, table_type.nullable)
+  }
+}
+
+///|
+fn encode_tagged_ref(idx : Int, tag : UInt64) -> UInt64 {
+  let raw = idx.to_int64().reinterpret_as_uint64()
+  let masked = raw & 0x3FFFFFFFFFFFFFFFUL
+  masked | tag
+}
+
+///|
+fn encode_table_value(
+  value : Value,
+  table_type : @core.TableType,
+) -> UInt64 raise RuntimeError {
+  if not(is_ref_value(value)) {
+    raise RuntimeError::InvalidType("table.set: expected reference value")
+  }
+  if not(table_type.nullable) && is_null_ref(value) {
+    raise RuntimeError::InvalidType("table.set: null for non-nullable table")
+  }
+  match table_type.elem_type {
+    @core.Func | @core.NoFunc =>
+      match value {
+        Ref(Some(idx)) | Funcref(Some(idx)) =>
+          encode_tagged_ref(idx, 0x4000000000000000UL)
+        Ref(None) | Funcref(None) => 0xFFFFFFFFFFFFFFFFUL
+        Externref(_) =>
+          raise RuntimeError::InvalidType("table.set: expected funcref")
+        _ => raise RuntimeError::InvalidType("table.set: expected funcref")
+      }
+    @core.Extern | @core.NoExtern =>
+      match value {
+        Ref(Some(idx)) | Externref(Some(idx)) =>
+          encode_tagged_ref(idx, 0x2000000000000000UL)
+        Ref(None) | Externref(None) => 0xFFFFFFFFFFFFFFFFUL
+        Funcref(_) =>
+          raise RuntimeError::InvalidType("table.set: expected externref")
+        _ => raise RuntimeError::InvalidType("table.set: expected externref")
+      }
+    _ =>
+      match value {
+        Ref(Some(idx)) => idx.to_int64().reinterpret_as_uint64()
+        Ref(None) => 0xFFFFFFFFFFFFFFFFUL
+        _ => raise RuntimeError::InvalidType("table.set: expected reference")
+      }
+  }
+}
+
+///|
+/// Get a function export by name.
+pub fn Instance::get_func(self : Instance, name : String) -> Func? {
+  let name_bytes = encode_import_name(name)
+  for exp in self.ctx.module_.exports {
+    if exp.name == name_bytes {
+      match exp.desc {
+        Func(idx) => {
+          let func_idx = idx.reinterpret_as_int()
+          let func_type = match
+            get_func_type_for_index(
+              self.ctx.module_,
+              func_idx,
+              self.ctx.num_imported_funcs,
+            ) {
+            Some(ft) => ft
+            None => return None
+          }
+          return Some({ instance: self, func_idx, func_type })
+        }
+        _ => return None
+      }
+    }
+  }
+  None
+}
+
+///|
+/// Get a memory export by name.
+pub fn Instance::get_memory(self : Instance, name : String) -> Memory? {
+  let name_bytes = encode_import_name(name)
+  for exp in self.ctx.module_.exports {
+    if exp.name == name_bytes {
+      match exp.desc {
+        Mem(idx) => {
+          let mem_idx = idx.reinterpret_as_int()
+          let total_mems = count_imported_mems(self.ctx.module_) +
+            self.ctx.module_.mems.length()
+          if mem_idx < 0 || mem_idx >= total_mems || mem_idx != 0 {
+            return None
+          }
+          return Some({ instance: self, mem_idx })
+        }
+        _ => return None
+      }
+    }
+  }
+  None
+}
+
+///|
+/// Get a table export by name.
+pub fn Instance::get_table(self : Instance, name : String) -> Table? {
+  let name_bytes = encode_import_name(name)
+  for exp in self.ctx.module_.exports {
+    if exp.name == name_bytes {
+      match exp.desc {
+        Table(idx) => {
+          let table_idx = idx.reinterpret_as_int()
+          let table_type = match
+            get_table_type_for_index(self.ctx.module_, table_idx) {
+            Some(found) => found
+            None => return None
+          }
+          return Some({ instance: self, table_idx, table_type })
+        }
+        _ => return None
+      }
+    }
+  }
+  None
+}
+
+///|
+/// Get a global export by name.
+pub fn Instance::get_global(self : Instance, name : String) -> Global? {
+  let name_bytes = encode_import_name(name)
+  for exp in self.ctx.module_.exports {
+    if exp.name == name_bytes {
+      match exp.desc {
+        Global(idx) => {
+          let global_idx = idx.reinterpret_as_int()
+          let global_type = match
+            get_global_type_for_index(self.ctx.module_, global_idx) {
+            Some(found) => found
+            None => return None
+          }
+          return Some({ instance: self, global_idx, global_type })
+        }
+        _ => return None
+      }
+    }
+  }
+  None
+}
+
+///|
+/// Call a typed function export.
+pub fn Func::call(
+  self : Func,
+  args : Array[Value],
+) -> Array[Value] raise RuntimeError {
+  if args.length() != self.func_type.params.length() {
+    raise RuntimeError::InvalidType("func.call: arity mismatch")
+  }
+  for i in 0..<args.length() {
+    require_value_type(args[i], self.func_type.params[i], "func.call")
+  }
+  self.instance.call_by_index(self.func_idx, args)
+}
+
+///|
+/// Get the function type.
+pub fn Func::type_(self : Func) -> @core.FuncType {
+  self.func_type
+}
+
+///|
+/// Read memory bytes.
+pub fn Memory::read(
+  self : Memory,
+  offset : Int,
+  len : Int,
+) -> Bytes raise RuntimeError {
+  if self.mem_idx != 0 {
+    raise RuntimeError::InvalidType("memory.read: unsupported memory index")
+  }
+  let memory = self.instance.ctx.memory
+  if offset < 0 ||
+    len < 0 ||
+    offset > memory.length() ||
+    memory.length() - offset < len {
+    raise RuntimeError::MemoryOutOfBounds
+  }
+  let out : Array[Byte] = Array::make(len, b'\x00')
+  for i in 0..<len {
+    out[i] = memory[offset + i]
+  }
+  Bytes::from_array(out)
+}
+
+///|
+/// Write bytes into memory.
+pub fn Memory::write(
+  self : Memory,
+  offset : Int,
+  data : Bytes,
+) -> Unit raise RuntimeError {
+  if self.mem_idx != 0 {
+    raise RuntimeError::InvalidType("memory.write: unsupported memory index")
+  }
+  let memory = self.instance.ctx.memory
+  let len = data.length()
+  if offset < 0 ||
+    len < 0 ||
+    offset > memory.length() ||
+    memory.length() - offset < len {
+    raise RuntimeError::MemoryOutOfBounds
+  }
+  for i in 0..<len {
+    memory[offset + i] = data[i]
+  }
+}
+
+///|
+/// Get memory size in pages.
+pub fn Memory::size(self : Memory) -> Int {
+  if self.mem_idx != 0 {
+    return 0
+  }
+  self.instance.ctx.memory.length() / wasm_page_size
+}
+
+///|
+/// Grow memory by the given number of pages, returning previous size.
+pub fn Memory::grow(self : Memory, pages : Int) -> Int raise RuntimeError {
+  if self.mem_idx != 0 {
+    raise RuntimeError::InvalidType("memory.grow: unsupported memory index")
+  }
+  let memory = self.instance.ctx.memory
+  let old_size_pages = memory.length() / wasm_page_size
+  if pages < 0 {
+    raise RuntimeError::MemoryOutOfBounds
+  }
+  let new_size_pages = old_size_pages + pages
+  let max_pages = match self.instance.ctx.memory_max {
+    Some(max) => max.to_int()
+    None => 65536
+  }
+  if new_size_pages > max_pages {
+    raise RuntimeError::MemoryOutOfBounds
+  }
+  let bytes_to_add = pages * wasm_page_size
+  for i = 0; i < bytes_to_add; i = i + 1 {
+    memory.push(b'\x00')
+  }
+  old_size_pages
+}
+
+///|
+/// Get a table element by index.
+pub fn Table::get(self : Table, idx : Int) -> Value? raise RuntimeError {
+  if self.table_idx < 0 || self.table_idx >= self.instance.ctx.tables.length() {
+    raise RuntimeError::TableOutOfBounds
+  }
+  let table = self.instance.ctx.tables[self.table_idx].data
+  if idx < 0 || idx >= table.length() {
+    raise RuntimeError::TableOutOfBounds
+  }
+  let raw = table[idx]
+  if raw == 0xFFFFFFFFFFFFFFFFUL {
+    None
+  } else {
+    let val_type = get_table_val_type(self.table_type)
+    Some(stack_to_value(raw, val_type))
+  }
+}
+
+///|
+/// Set a table element by index.
+pub fn Table::set(
+  self : Table,
+  idx : Int,
+  value : Value,
+) -> Unit raise RuntimeError {
+  if self.table_idx < 0 || self.table_idx >= self.instance.ctx.tables.length() {
+    raise RuntimeError::TableOutOfBounds
+  }
+  let table = self.instance.ctx.tables[self.table_idx].data
+  if idx < 0 || idx >= table.length() {
+    raise RuntimeError::TableOutOfBounds
+  }
+  let raw = encode_table_value(value, self.table_type)
+  table[idx] = raw
+}
+
+///|
+/// Get the table size.
+pub fn Table::size(self : Table) -> Int {
+  if self.table_idx < 0 || self.table_idx >= self.instance.ctx.tables.length() {
+    return 0
+  }
+  self.instance.ctx.tables[self.table_idx].data.length()
+}
+
+///|
+/// Get a global value.
+pub fn Global::get(self : Global) -> Value {
+  if self.global_idx < 0 ||
+    self.global_idx >= self.instance.ctx.globals.length() {
+    return Value::I32(0U)
+  }
+  self.instance.ctx.globals[self.global_idx]
+}
+
+///|
+/// Set a global value.
+pub fn Global::set(self : Global, value : Value) -> Unit raise RuntimeError {
+  if not(self.global_type.mutable) {
+    raise RuntimeError::InvalidType("global.set: immutable global")
+  }
+  require_value_type(value, self.global_type.val_type, "global.set")
+  if self.global_idx < 0 ||
+    self.global_idx >= self.instance.ctx.globals.length() {
+    raise RuntimeError::InvalidType("global.set: index out of bounds")
+  }
+  self.instance.ctx.globals[self.global_idx] = value
+}
+
+///|
 /// Create an imports set with the standard spectest module.
 pub fn Imports::spectest() -> Imports {
   // Add spectest table (10 funcref, max 20)

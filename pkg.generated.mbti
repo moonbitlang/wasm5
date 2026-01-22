@@ -19,7 +19,11 @@ pub using @core {type Export}
 
 pub using @core {type ExportDesc}
 
+pub using @runtime {type Func}
+
 pub using @core {type FuncType}
+
+pub using @runtime {type Global}
 
 pub using @core {type GlobalType}
 
@@ -39,6 +43,8 @@ pub using @core {type Limits}
 
 pub using @core {type MemType}
 
+pub using @runtime {type Memory}
+
 pub using @core {type Module}
 
 pub using @parse {type ParseError}
@@ -48,6 +54,8 @@ pub using @core {type RefType}
 pub using @runtime {type RuntimeError}
 
 pub using @runtime {type RuntimeTable}
+
+pub using @runtime {type Table}
 
 pub using @core {type TableType}
 
