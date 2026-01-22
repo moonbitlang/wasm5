@@ -233,3 +233,37 @@ pub fn get_global_type(
     }
   }
 }
+
+///|
+/// Get the memory type for a memory index (imported or local).
+/// Returns None if the memory index is invalid.
+pub fn get_mem_type(
+  module_ : Module,
+  mem_idx : Int,
+  num_imported_mems : Int,
+) -> MemType? {
+  if mem_idx < num_imported_mems {
+    // Imported memory - find type from imports
+    let mut import_idx = 0
+    for imp in module_.imports {
+      match imp.desc {
+        Mem(mem_type) => {
+          if import_idx == mem_idx {
+            return Some(mem_type)
+          }
+          import_idx += 1
+        }
+        _ => ()
+      }
+    }
+    None
+  } else {
+    // Local memory - look up in module mems
+    let local_idx = mem_idx - num_imported_mems
+    if local_idx >= 0 && local_idx < module_.mems.length() {
+      Some(module_.mems[local_idx])
+    } else {
+      None
+    }
+  }
+}

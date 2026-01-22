@@ -180,34 +180,18 @@ fn validate_memory_index(
 }
 
 ///|
+/// Get memory type for index. Delegates to core implementation.
+/// Raises ValidationError for invalid memory indices.
 fn get_memtype(
   module_ : @core.Module,
   import_counts : ImportCounts,
   mem_idx : UInt,
 ) -> @core.MemType raise ValidationError {
-  let total_mems = import_counts.mems + module_.mems.length()
   let idx = mem_idx.reinterpret_as_int()
-  if idx < 0 || idx >= total_mems {
-    raise ValidationError::UnknownMemory(idx)
+  match @core.get_mem_type(module_, idx, import_counts.mems) {
+    Some(mem_type) => mem_type
+    None => raise ValidationError::UnknownMemory(idx)
   }
-  if idx < import_counts.mems {
-    let mut import_mem_idx = 0
-    for imp in module_.imports {
-      match imp.desc {
-        Mem(mem_type) => {
-          if import_mem_idx == idx {
-            return mem_type
-          }
-          import_mem_idx = import_mem_idx + 1
-        }
-        _ => ()
-      }
-    }
-  } else {
-    let local_idx = idx - import_counts.mems
-    return module_.mems[local_idx]
-  }
-  raise ValidationError::UnknownMemory(idx)
 }
 
 ///|

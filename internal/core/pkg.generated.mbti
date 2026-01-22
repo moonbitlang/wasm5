@@ -30,6 +30,8 @@ pub fn get_immediate_count(Int64) -> Int
 
 pub fn get_import_counts(Module) -> ImportCounts
 
+pub fn get_mem_type(Module, Int, Int) -> MemType?
+
 pub fn get_position_in_group(Array[Int], Int) -> Int
 
 pub fn get_rec_group_info(Module, Int) -> (Int, Int)
