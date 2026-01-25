@@ -51,6 +51,25 @@ pub struct CRuntime {
 using @core {type Value}
 
 ///|
+/// Initialize WASI environment for C runtime.
+/// Must be called before executing WASI modules.
+pub fn init_wasi() -> Unit {
+  c_wasi_init_empty()
+}
+
+///|
+/// Get the WASI exit code after proc_exit was called.
+pub fn wasi_exit_code() -> Int {
+  c_wasi_get_exit_code()
+}
+
+///|
+/// Check if WASI has exited (proc_exit was called).
+pub fn wasi_has_exited() -> Bool {
+  c_wasi_has_exited() != 0
+}
+
+///|
 /// Convert TrapCode to RuntimeError using the error detail string approach
 fn trap_to_error(trap : TrapCode) -> @runtime.RuntimeError {
   let detail = match trap {
@@ -67,6 +86,7 @@ fn trap_to_error(trap : TrapCode) -> @runtime.RuntimeError {
     UninitializedElement => "uninitialized element"
     TableBoundsAccess => "out of bounds table access" // For bulk table ops
     NullReference => "null reference"
+    WasiExit => "wasi exit" // Not a real trap - WASI proc_exit was called
   }
   @runtime.RuntimeError::from_detail(detail)
 }
@@ -755,6 +775,104 @@ let host_import_spectest_print_f64_f64 : Int = 6
 ///|
 let host_import_spectest_print_char : Int = 7
 
+// WASI handler IDs (starting from 8)
+
+///|
+let host_import_wasi_args_get : Int = 8
+
+///|
+let host_import_wasi_args_sizes_get : Int = 9
+
+///|
+let host_import_wasi_environ_get : Int = 10
+
+///|
+let host_import_wasi_environ_sizes_get : Int = 11
+
+///|
+let host_import_wasi_fd_write : Int = 12
+
+///|
+let host_import_wasi_fd_read : Int = 13
+
+///|
+let host_import_wasi_fd_close : Int = 14
+
+///|
+let host_import_wasi_fd_prestat_get : Int = 15
+
+///|
+let host_import_wasi_fd_prestat_dir_name : Int = 16
+
+///|
+let host_import_wasi_fd_fdstat_get : Int = 17
+
+///|
+let host_import_wasi_proc_exit : Int = 18
+
+///|
+let host_import_wasi_clock_time_get : Int = 19
+
+///|
+let host_import_wasi_random_get : Int = 20
+
+///|
+let host_import_wasi_path_open : Int = 21
+
+///|
+let host_import_wasi_fd_seek : Int = 22
+
+///|
+/// Match a WASI import name to its handler ID
+fn match_wasi_import(name : Bytes) -> Int {
+  if name == b"args_get" {
+    return host_import_wasi_args_get
+  }
+  if name == b"args_sizes_get" {
+    return host_import_wasi_args_sizes_get
+  }
+  if name == b"environ_get" {
+    return host_import_wasi_environ_get
+  }
+  if name == b"environ_sizes_get" {
+    return host_import_wasi_environ_sizes_get
+  }
+  if name == b"fd_write" {
+    return host_import_wasi_fd_write
+  }
+  if name == b"fd_read" {
+    return host_import_wasi_fd_read
+  }
+  if name == b"fd_close" {
+    return host_import_wasi_fd_close
+  }
+  if name == b"fd_prestat_get" {
+    return host_import_wasi_fd_prestat_get
+  }
+  if name == b"fd_prestat_dir_name" {
+    return host_import_wasi_fd_prestat_dir_name
+  }
+  if name == b"fd_fdstat_get" {
+    return host_import_wasi_fd_fdstat_get
+  }
+  if name == b"proc_exit" {
+    return host_import_wasi_proc_exit
+  }
+  if name == b"clock_time_get" {
+    return host_import_wasi_clock_time_get
+  }
+  if name == b"random_get" {
+    return host_import_wasi_random_get
+  }
+  if name == b"path_open" {
+    return host_import_wasi_path_open
+  }
+  if name == b"fd_seek" {
+    return host_import_wasi_fd_seek
+  }
+  host_import_none
+}
+
 ///|
 /// Build host import handler ids for imported functions
 fn build_import_handlers(module_ : @core.Module) -> FixedArray[Int] {
@@ -781,6 +899,9 @@ fn build_import_handlers(module_ : @core.Module) -> FixedArray[Int] {
           } else if imp.name == b"print_char" {
             handler = host_import_spectest_print_char
           }
+        } else if imp.module_ == b"wasi_snapshot_preview1" ||
+          imp.module_ == b"wasi_unstable" {
+          handler = match_wasi_import(imp.name)
         }
         handlers.push(handler)
       }
@@ -1329,6 +1450,10 @@ pub fn CRuntime::call_compiled(
         // Check for trap
         let trap = trap_code_from_int(trap_code)
         if trap != TrapCode::None {
+          // WasiExit is not a real trap - it's a normal exit
+          if trap == TrapCode::WasiExit {
+            return []
+          }
           raise trap_to_error(trap)
         }
 

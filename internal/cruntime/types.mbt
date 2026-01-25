@@ -15,6 +15,7 @@ pub enum TrapCode {
   UninitializedElement = 10 // "uninitialized element" - null entry in table
   TableBoundsAccess = 11 // "out of bounds table access" - for bulk table ops
   NullReference = 12 // ref.as_non_null on null ref
+  WasiExit = 13 // WASI proc_exit was called (not a real trap)
 } derive(Eq, Show)
 
 ///|

@@ -1,9 +1,26 @@
+// Feature test macros for POSIX time functions
+#if defined(__linux__)
+#define _POSIX_C_SOURCE 199309L
+#elif defined(__APPLE__)
+// macOS: clock_gettime is available in macOS 10.12+
+#include <AvailabilityMacros.h>
+#endif
+
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <limits.h>
 #include <stdio.h>
+#include <time.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
+#ifdef __APPLE__
+#include <mach/mach_time.h>
+#endif
 
 // Debug flag - set to 1 to enable tracing
 #define DEBUG_TRACE 0
@@ -27,6 +44,7 @@
 #define TRAP_UNINITIALIZED_ELEMENT      10 // "uninitialized element" - null entry in table
 #define TRAP_TABLE_BOUNDS_ACCESS        11 // "out of bounds table access" - for bulk table ops
 #define TRAP_NULL_REFERENCE             12 // "null reference" - for ref.as_non_null
+#define TRAP_WASI_EXIT                  13 // WASI proc_exit was called
 
 // Memory bounds check helper - use 64-bit arithmetic to avoid overflow
 #define CHECK_MEMORY(addr, size) \
@@ -261,6 +279,86 @@ static int g_num_external_funcrefs = 0;
 #define HOST_IMPORT_SPECTEST_PRINT_I32_F32 5
 #define HOST_IMPORT_SPECTEST_PRINT_F64_F64 6
 #define HOST_IMPORT_SPECTEST_PRINT_CHAR 7
+
+// WASI handler IDs (must match runtime.mbt)
+#define HOST_IMPORT_WASI_ARGS_GET           8
+#define HOST_IMPORT_WASI_ARGS_SIZES_GET     9
+#define HOST_IMPORT_WASI_ENVIRON_GET        10
+#define HOST_IMPORT_WASI_ENVIRON_SIZES_GET  11
+#define HOST_IMPORT_WASI_FD_WRITE           12
+#define HOST_IMPORT_WASI_FD_READ            13
+#define HOST_IMPORT_WASI_FD_CLOSE           14
+#define HOST_IMPORT_WASI_FD_PRESTAT_GET     15
+#define HOST_IMPORT_WASI_FD_PRESTAT_DIR_NAME 16
+#define HOST_IMPORT_WASI_FD_FDSTAT_GET      17
+#define HOST_IMPORT_WASI_PROC_EXIT          18
+#define HOST_IMPORT_WASI_CLOCK_TIME_GET     19
+#define HOST_IMPORT_WASI_RANDOM_GET         20
+#define HOST_IMPORT_WASI_PATH_OPEN          21
+#define HOST_IMPORT_WASI_FD_SEEK            22
+
+// WASI error codes
+#define WASI_ERRNO_SUCCESS  0
+#define WASI_ERRNO_BADF     8
+#define WASI_ERRNO_INVAL    28
+#define WASI_ERRNO_NOSYS    52
+#define WASI_ERRNO_NOTDIR   54
+#define WASI_ERRNO_ISDIR    31
+
+// WASI file descriptor types
+#define WASI_FILETYPE_UNKNOWN          0
+#define WASI_FILETYPE_BLOCK_DEVICE     1
+#define WASI_FILETYPE_CHARACTER_DEVICE 2
+#define WASI_FILETYPE_DIRECTORY        3
+#define WASI_FILETYPE_REGULAR_FILE     4
+#define WASI_FILETYPE_SOCKET_DGRAM     5
+#define WASI_FILETYPE_SOCKET_STREAM    6
+#define WASI_FILETYPE_SYMBOLIC_LINK    7
+
+// WASI rights (simplified - just the commonly used ones)
+#define WASI_RIGHTS_FD_READ             (1ULL << 1)
+#define WASI_RIGHTS_FD_WRITE            (1ULL << 6)
+#define WASI_RIGHTS_FD_SEEK             (1ULL << 2)
+#define WASI_RIGHTS_FD_FDSTAT_SET_FLAGS (1ULL << 3)
+#define WASI_RIGHTS_PATH_OPEN           (1ULL << 13)
+
+// WASI clock IDs
+#define WASI_CLOCKID_REALTIME  0
+#define WASI_CLOCKID_MONOTONIC 1
+
+// WASI preopen types
+#define WASI_PREOPENTYPE_DIR 0
+
+// WASI context state
+typedef struct WasiContext {
+    int argc;
+    char** argv;
+    int environ_count;
+    char** environ;
+    int exit_code;
+    int has_exited;
+} WasiContext;
+
+static WasiContext g_wasi_ctx = {0, NULL, 0, NULL, 0, 0};
+
+// Preopen table (fd 0-2 are stdin/stdout/stderr, 3+ are directories)
+#define WASI_MAX_PREOPENS 8
+typedef struct WasiPreopen {
+    int host_fd;
+    const char* path;
+} WasiPreopen;
+
+static WasiPreopen g_wasi_preopens[WASI_MAX_PREOPENS] = {
+    {0, "<stdin>"},
+    {1, "<stdout>"},
+    {2, "<stderr>"},
+    {-1, NULL},
+    {-1, NULL},
+    {-1, NULL},
+    {-1, NULL},
+    {-1, NULL},
+};
+static int g_wasi_num_preopens = 3;
 
 // Stack base for result extraction after execution
 static uint64_t* g_stack_base = NULL;
@@ -589,6 +687,366 @@ static double f64_from_u64(uint64_t v) {
     double d = 0.0;
     memcpy(&d, &v, sizeof(d));
     return d;
+}
+
+// ============================================================================
+// WASI Implementation Functions
+// ============================================================================
+
+// Initialize WASI context with command-line arguments
+void wasi_init(int argc, char** argv) {
+    g_wasi_ctx.argc = argc;
+    g_wasi_ctx.argv = argv;
+    g_wasi_ctx.exit_code = 0;
+    g_wasi_ctx.has_exited = 0;
+
+    // Initialize environment (simplified - no env vars for now)
+    g_wasi_ctx.environ_count = 0;
+    g_wasi_ctx.environ = NULL;
+}
+
+// Get WASI exit code
+int wasi_get_exit_code(void) {
+    return g_wasi_ctx.exit_code;
+}
+
+// Check if WASI has exited
+int wasi_has_exited(void) {
+    return g_wasi_ctx.has_exited;
+}
+
+// Initialize WASI with empty arguments (called from MoonBit)
+void wasi_init_empty(void) {
+    static char* empty_argv[] = {"wasm5", NULL};
+    wasi_init(1, empty_argv);
+}
+
+// WASI fd_write - write to file descriptor
+static uint32_t wasi_fd_write(uint64_t* args, uint8_t* mem, int mem_size) {
+    uint32_t fd = (uint32_t)args[0];
+    uint32_t iovs_offset = (uint32_t)args[1];
+    uint32_t iovs_len = (uint32_t)args[2];
+    uint32_t nwritten_offset = (uint32_t)args[3];
+
+    // Bounds check for iovec array and nwritten pointer
+    if (iovs_offset + iovs_len * 8 > (uint32_t)mem_size ||
+        nwritten_offset + 4 > (uint32_t)mem_size) {
+        return WASI_ERRNO_INVAL;
+    }
+
+    // Only support stdout (1) and stderr (2) for now
+    if (fd != 1 && fd != 2) {
+        return WASI_ERRNO_BADF;
+    }
+
+    FILE* out = (fd == 1) ? stdout : stderr;
+    size_t total_written = 0;
+
+    for (uint32_t i = 0; i < iovs_len; i++) {
+        // Read iovec from WASM memory (little-endian)
+        uint32_t buf_offset = *(uint32_t*)(mem + iovs_offset + i * 8);
+        uint32_t buf_len = *(uint32_t*)(mem + iovs_offset + i * 8 + 4);
+
+        if (buf_offset + buf_len > (uint32_t)mem_size) {
+            return WASI_ERRNO_INVAL;
+        }
+
+        size_t written = fwrite(mem + buf_offset, 1, buf_len, out);
+        total_written += written;
+    }
+    fflush(out);
+
+    // Write nwritten back to WASM memory
+    *(uint32_t*)(mem + nwritten_offset) = (uint32_t)total_written;
+    return WASI_ERRNO_SUCCESS;
+}
+
+// WASI fd_read - read from file descriptor
+static uint32_t wasi_fd_read(uint64_t* args, uint8_t* mem, int mem_size) {
+    uint32_t fd = (uint32_t)args[0];
+    uint32_t iovs_offset = (uint32_t)args[1];
+    uint32_t iovs_len = (uint32_t)args[2];
+    uint32_t nread_offset = (uint32_t)args[3];
+
+    // Bounds check
+    if (iovs_offset + iovs_len * 8 > (uint32_t)mem_size ||
+        nread_offset + 4 > (uint32_t)mem_size) {
+        return WASI_ERRNO_INVAL;
+    }
+
+    // Only support stdin (0) for now
+    if (fd != 0) {
+        return WASI_ERRNO_BADF;
+    }
+
+    size_t total_read = 0;
+
+    for (uint32_t i = 0; i < iovs_len; i++) {
+        uint32_t buf_offset = *(uint32_t*)(mem + iovs_offset + i * 8);
+        uint32_t buf_len = *(uint32_t*)(mem + iovs_offset + i * 8 + 4);
+
+        if (buf_offset + buf_len > (uint32_t)mem_size) {
+            return WASI_ERRNO_INVAL;
+        }
+
+        size_t bytes_read = fread(mem + buf_offset, 1, buf_len, stdin);
+        total_read += bytes_read;
+        if (bytes_read < buf_len) {
+            break;  // EOF or short read
+        }
+    }
+
+    *(uint32_t*)(mem + nread_offset) = (uint32_t)total_read;
+    return WASI_ERRNO_SUCCESS;
+}
+
+// WASI args_sizes_get - get sizes of command line arguments
+static uint32_t wasi_args_sizes_get(uint64_t* args, uint8_t* mem, int mem_size) {
+    uint32_t argc_offset = (uint32_t)args[0];
+    uint32_t argv_buf_size_offset = (uint32_t)args[1];
+
+    if (argc_offset + 4 > (uint32_t)mem_size ||
+        argv_buf_size_offset + 4 > (uint32_t)mem_size) {
+        return WASI_ERRNO_INVAL;
+    }
+
+    // Calculate total buffer size needed
+    size_t buf_size = 0;
+    for (int i = 0; i < g_wasi_ctx.argc; i++) {
+        buf_size += strlen(g_wasi_ctx.argv[i]) + 1;  // +1 for null terminator
+    }
+
+    *(uint32_t*)(mem + argc_offset) = (uint32_t)g_wasi_ctx.argc;
+    *(uint32_t*)(mem + argv_buf_size_offset) = (uint32_t)buf_size;
+    return WASI_ERRNO_SUCCESS;
+}
+
+// WASI args_get - get command line arguments
+static uint32_t wasi_args_get(uint64_t* args, uint8_t* mem, int mem_size) {
+    uint32_t argv_offset = (uint32_t)args[0];      // Array of i32 pointers
+    uint32_t argv_buf_offset = (uint32_t)args[1];  // String data buffer
+
+    uint32_t buf_ptr = argv_buf_offset;
+    for (int i = 0; i < g_wasi_ctx.argc; i++) {
+        // Write pointer to argv array
+        if (argv_offset + (uint32_t)i * 4 + 4 > (uint32_t)mem_size) {
+            return WASI_ERRNO_INVAL;
+        }
+        *(uint32_t*)(mem + argv_offset + i * 4) = buf_ptr;
+
+        // Copy string to buffer
+        size_t len = strlen(g_wasi_ctx.argv[i]) + 1;
+        if (buf_ptr + len > (uint32_t)mem_size) {
+            return WASI_ERRNO_INVAL;
+        }
+        memcpy(mem + buf_ptr, g_wasi_ctx.argv[i], len);
+        buf_ptr += (uint32_t)len;
+    }
+    return WASI_ERRNO_SUCCESS;
+}
+
+// WASI environ_sizes_get - get sizes of environment variables
+static uint32_t wasi_environ_sizes_get(uint64_t* args, uint8_t* mem, int mem_size) {
+    uint32_t count_offset = (uint32_t)args[0];
+    uint32_t buf_size_offset = (uint32_t)args[1];
+
+    if (count_offset + 4 > (uint32_t)mem_size ||
+        buf_size_offset + 4 > (uint32_t)mem_size) {
+        return WASI_ERRNO_INVAL;
+    }
+
+    // No environment variables for now
+    *(uint32_t*)(mem + count_offset) = 0;
+    *(uint32_t*)(mem + buf_size_offset) = 0;
+    return WASI_ERRNO_SUCCESS;
+}
+
+// WASI environ_get - get environment variables
+static uint32_t wasi_environ_get(uint64_t* args, uint8_t* mem, int mem_size) {
+    (void)args;
+    (void)mem;
+    (void)mem_size;
+    // No environment variables for now - nothing to copy
+    return WASI_ERRNO_SUCCESS;
+}
+
+// WASI proc_exit - exit the process
+static uint32_t wasi_proc_exit(uint64_t* args) {
+    g_wasi_ctx.exit_code = (int)(uint32_t)args[0];
+    g_wasi_ctx.has_exited = 1;
+    return 0;  // Never actually returns normally
+}
+
+// WASI fd_close - close file descriptor
+static uint32_t wasi_fd_close(uint64_t* args) {
+    uint32_t fd = (uint32_t)args[0];
+    // Don't allow closing stdin/stdout/stderr
+    if (fd <= 2) {
+        return WASI_ERRNO_BADF;
+    }
+    // For now, just succeed (we don't track open files)
+    return WASI_ERRNO_SUCCESS;
+}
+
+// WASI fd_prestat_get - get preopen info for fd
+static uint32_t wasi_fd_prestat_get(uint64_t* args, uint8_t* mem, int mem_size) {
+    uint32_t fd = (uint32_t)args[0];
+    uint32_t buf_offset = (uint32_t)args[1];
+
+    if (buf_offset + 8 > (uint32_t)mem_size) {
+        return WASI_ERRNO_INVAL;
+    }
+
+    // Check if fd is a valid preopen
+    if (fd >= (uint32_t)g_wasi_num_preopens || fd < 3) {
+        // fd 0-2 are stdio, not preopens; fd >= num_preopens is invalid
+        return WASI_ERRNO_BADF;
+    }
+
+    if (g_wasi_preopens[fd].host_fd < 0) {
+        return WASI_ERRNO_BADF;
+    }
+
+    // Write prestat structure (type=dir, name_len)
+    const char* path = g_wasi_preopens[fd].path;
+    size_t path_len = path ? strlen(path) : 0;
+
+    *(uint32_t*)(mem + buf_offset) = WASI_PREOPENTYPE_DIR;  // type
+    *(uint32_t*)(mem + buf_offset + 4) = (uint32_t)path_len;  // name_len
+
+    return WASI_ERRNO_SUCCESS;
+}
+
+// WASI fd_prestat_dir_name - get preopen directory name
+static uint32_t wasi_fd_prestat_dir_name(uint64_t* args, uint8_t* mem, int mem_size) {
+    uint32_t fd = (uint32_t)args[0];
+    uint32_t path_offset = (uint32_t)args[1];
+    uint32_t path_len = (uint32_t)args[2];
+
+    if (path_offset + path_len > (uint32_t)mem_size) {
+        return WASI_ERRNO_INVAL;
+    }
+
+    if (fd >= (uint32_t)g_wasi_num_preopens || fd < 3) {
+        return WASI_ERRNO_BADF;
+    }
+
+    if (g_wasi_preopens[fd].host_fd < 0) {
+        return WASI_ERRNO_BADF;
+    }
+
+    const char* path = g_wasi_preopens[fd].path;
+    size_t actual_len = path ? strlen(path) : 0;
+
+    if (path_len < actual_len) {
+        return WASI_ERRNO_INVAL;  // Buffer too small
+    }
+
+    if (path && actual_len > 0) {
+        memcpy(mem + path_offset, path, actual_len);
+    }
+
+    return WASI_ERRNO_SUCCESS;
+}
+
+// WASI fd_fdstat_get - get file descriptor status
+static uint32_t wasi_fd_fdstat_get(uint64_t* args, uint8_t* mem, int mem_size) {
+    uint32_t fd = (uint32_t)args[0];
+    uint32_t buf_offset = (uint32_t)args[1];
+
+    // fdstat structure is 24 bytes
+    if (buf_offset + 24 > (uint32_t)mem_size) {
+        return WASI_ERRNO_INVAL;
+    }
+
+    uint8_t filetype;
+    uint64_t rights_base;
+    uint64_t rights_inheriting;
+
+    if (fd == 0) {
+        // stdin
+        filetype = WASI_FILETYPE_CHARACTER_DEVICE;
+        rights_base = WASI_RIGHTS_FD_READ;
+        rights_inheriting = 0;
+    } else if (fd == 1 || fd == 2) {
+        // stdout/stderr
+        filetype = WASI_FILETYPE_CHARACTER_DEVICE;
+        rights_base = WASI_RIGHTS_FD_WRITE;
+        rights_inheriting = 0;
+    } else if (fd < (uint32_t)g_wasi_num_preopens && g_wasi_preopens[fd].host_fd >= 0) {
+        // Preopened directory
+        filetype = WASI_FILETYPE_DIRECTORY;
+        rights_base = WASI_RIGHTS_PATH_OPEN | WASI_RIGHTS_FD_READ;
+        rights_inheriting = WASI_RIGHTS_FD_READ | WASI_RIGHTS_FD_WRITE | WASI_RIGHTS_FD_SEEK;
+    } else {
+        return WASI_ERRNO_BADF;
+    }
+
+    // Write fdstat structure
+    *(uint8_t*)(mem + buf_offset) = filetype;         // fs_filetype
+    *(uint8_t*)(mem + buf_offset + 1) = 0;            // padding
+    *(uint16_t*)(mem + buf_offset + 2) = 0;           // fs_flags
+    *(uint32_t*)(mem + buf_offset + 4) = 0;           // padding
+    *(uint64_t*)(mem + buf_offset + 8) = rights_base; // fs_rights_base
+    *(uint64_t*)(mem + buf_offset + 16) = rights_inheriting; // fs_rights_inheriting
+
+    return WASI_ERRNO_SUCCESS;
+}
+
+// WASI clock_time_get - get current time
+static uint32_t wasi_clock_time_get(uint64_t* args, uint8_t* mem, int mem_size) {
+    uint32_t clock_id = (uint32_t)args[0];
+    // uint64_t precision = args[1];  // Ignored
+    uint32_t time_offset = (uint32_t)args[2];
+
+    if (time_offset + 8 > (uint32_t)mem_size) {
+        return WASI_ERRNO_INVAL;
+    }
+
+    uint64_t time_ns;
+
+    if (clock_id == WASI_CLOCKID_REALTIME || clock_id == WASI_CLOCKID_MONOTONIC) {
+#ifdef _WIN32
+        FILETIME ft;
+        GetSystemTimeAsFileTime(&ft);
+        uint64_t t = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
+        // Convert from 100-ns intervals since 1601 to ns since Unix epoch
+        time_ns = (t - 116444736000000000ULL) * 100;
+#else
+        struct timespec ts;
+        clock_gettime(clock_id == WASI_CLOCKID_REALTIME ? CLOCK_REALTIME : CLOCK_MONOTONIC, &ts);
+        time_ns = (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
+#endif
+    } else {
+        return WASI_ERRNO_INVAL;
+    }
+
+    *(uint64_t*)(mem + time_offset) = time_ns;
+    return WASI_ERRNO_SUCCESS;
+}
+
+// WASI random_get - get random bytes
+static uint32_t wasi_random_get(uint64_t* args, uint8_t* mem, int mem_size) {
+    uint32_t buf_offset = (uint32_t)args[0];
+    uint32_t buf_len = (uint32_t)args[1];
+
+    if (buf_offset + buf_len > (uint32_t)mem_size) {
+        return WASI_ERRNO_INVAL;
+    }
+
+    // Simple PRNG for now (not cryptographically secure)
+    static uint64_t seed = 0;
+    if (seed == 0) {
+        seed = (uint64_t)time(NULL);
+    }
+
+    for (uint32_t i = 0; i < buf_len; i++) {
+        // LCG random
+        seed = seed * 6364136223846793005ULL + 1442695040888963407ULL;
+        mem[buf_offset + i] = (uint8_t)(seed >> 33);
+    }
+
+    return WASI_ERRNO_SUCCESS;
 }
 
 // Host import handlers (spectest formatting)
@@ -944,7 +1402,72 @@ int op_call_import(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
         uint64_t* args_ptr = fp + frame_offset;
         uint64_t results[16];
         int actual_results = num_results < 16 ? num_results : 16;
-        call_host_import(handler_id, args_ptr, num_params, results, actual_results);
+
+        // Check if this is a WASI handler (IDs 8-22)
+        if (handler_id >= HOST_IMPORT_WASI_ARGS_GET && handler_id <= HOST_IMPORT_WASI_FD_SEEK) {
+            uint32_t wasi_ret = WASI_ERRNO_NOSYS;
+            uint8_t* mem = crt->mem;
+            int mem_size = g_memory_size;
+
+            switch (handler_id) {
+                case HOST_IMPORT_WASI_ARGS_GET:
+                    wasi_ret = wasi_args_get(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_ARGS_SIZES_GET:
+                    wasi_ret = wasi_args_sizes_get(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_ENVIRON_GET:
+                    wasi_ret = wasi_environ_get(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_ENVIRON_SIZES_GET:
+                    wasi_ret = wasi_environ_sizes_get(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_FD_WRITE:
+                    wasi_ret = wasi_fd_write(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_FD_READ:
+                    wasi_ret = wasi_fd_read(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_FD_CLOSE:
+                    wasi_ret = wasi_fd_close(args_ptr);
+                    break;
+                case HOST_IMPORT_WASI_FD_PRESTAT_GET:
+                    wasi_ret = wasi_fd_prestat_get(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_FD_PRESTAT_DIR_NAME:
+                    wasi_ret = wasi_fd_prestat_dir_name(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_FD_FDSTAT_GET:
+                    wasi_ret = wasi_fd_fdstat_get(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_PROC_EXIT:
+                    wasi_proc_exit(args_ptr);
+                    return TRAP_WASI_EXIT;  // Signal exit to caller
+                case HOST_IMPORT_WASI_CLOCK_TIME_GET:
+                    wasi_ret = wasi_clock_time_get(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_RANDOM_GET:
+                    wasi_ret = wasi_random_get(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_PATH_OPEN:
+                    // Not implemented yet - return NOSYS
+                    wasi_ret = WASI_ERRNO_NOSYS;
+                    break;
+                case HOST_IMPORT_WASI_FD_SEEK:
+                    // Not implemented yet - return NOSYS
+                    wasi_ret = WASI_ERRNO_NOSYS;
+                    break;
+            }
+
+            // WASI functions return their error code as the result
+            if (actual_results > 0) {
+                results[0] = wasi_ret;
+            }
+        } else {
+            // Spectest or other handlers
+            call_host_import(handler_id, args_ptr, num_params, results, actual_results);
+        }
+
         uint64_t* result_dst = fp + frame_offset;
         for (int i = 0; i < actual_results; i++) {
             result_dst[i] = results[i];
