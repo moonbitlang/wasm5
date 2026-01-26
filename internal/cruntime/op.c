@@ -21,6 +21,12 @@
 #define read _read
 #else
 #include <unistd.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#endif
+
+#if !defined(_WIN32)
+#include <sched.h>
 #endif
 
 #ifdef __APPLE__
@@ -301,14 +307,24 @@ static int g_num_external_funcrefs = 0;
 #define HOST_IMPORT_WASI_RANDOM_GET         20
 #define HOST_IMPORT_WASI_PATH_OPEN          21
 #define HOST_IMPORT_WASI_FD_SEEK            22
+#define HOST_IMPORT_WASI_FD_TELL            23
+#define HOST_IMPORT_WASI_FD_FILESTAT_GET    24
+#define HOST_IMPORT_WASI_PATH_FILESTAT_GET  25
+#define HOST_IMPORT_WASI_FD_SYNC            26
+#define HOST_IMPORT_WASI_FD_DATASYNC        27
+#define HOST_IMPORT_WASI_SCHED_YIELD        28
 
 // WASI error codes
 #define WASI_ERRNO_SUCCESS  0
+#define WASI_ERRNO_ACCES    2    // Permission denied
 #define WASI_ERRNO_BADF     8
 #define WASI_ERRNO_INVAL    28
+#define WASI_ERRNO_IO       29   // I/O error
+#define WASI_ERRNO_NOENT    44   // No such file or directory
 #define WASI_ERRNO_NOSYS    52
 #define WASI_ERRNO_NOTDIR   54
 #define WASI_ERRNO_ISDIR    31
+#define WASI_ERRNO_SPIPE    70   // Invalid seek (pipe)
 
 // WASI file descriptor types
 #define WASI_FILETYPE_UNKNOWN          0
@@ -1110,6 +1126,221 @@ static uint32_t wasi_random_get(uint64_t* args, uint8_t* mem, int mem_size) {
     return WASI_ERRNO_SUCCESS;
 }
 
+// WASI fd_seek - seek to position in file
+static uint32_t wasi_fd_seek(uint64_t* args, uint8_t* mem, int mem_size) {
+    uint32_t fd = (uint32_t)args[0];
+    int64_t offset = (int64_t)args[1];
+    uint8_t whence = (uint8_t)args[2];  // 0=SET, 1=CUR, 2=END
+    uint32_t newoffset_ptr = (uint32_t)args[3];
+
+    if (newoffset_ptr + 8 > (uint32_t)mem_size) {
+        return WASI_ERRNO_INVAL;
+    }
+
+    int host_fd;
+    if (fd >= 3 && fd < (uint32_t)g_wasi_num_preopens) {
+        host_fd = g_wasi_preopens[fd].host_fd;
+        if (host_fd < 0) {
+            return WASI_ERRNO_BADF;
+        }
+    } else {
+        return WASI_ERRNO_BADF;
+    }
+
+#ifdef _WIN32
+    int host_whence = (whence == 0) ? SEEK_SET : (whence == 1) ? SEEK_CUR : SEEK_END;
+    int64_t result = _lseeki64(host_fd, offset, host_whence);
+#else
+    int host_whence = (whence == 0) ? SEEK_SET : (whence == 1) ? SEEK_CUR : SEEK_END;
+    off_t result = lseek(host_fd, offset, host_whence);
+#endif
+    if (result < 0) {
+        return WASI_ERRNO_INVAL;
+    }
+
+    *(uint64_t*)(mem + newoffset_ptr) = (uint64_t)result;
+    return WASI_ERRNO_SUCCESS;
+}
+
+// WASI fd_tell - get current file position
+static uint32_t wasi_fd_tell(uint64_t* args, uint8_t* mem, int mem_size) {
+    uint32_t fd = (uint32_t)args[0];
+    uint32_t offset_ptr = (uint32_t)args[1];
+
+    if (offset_ptr + 8 > (uint32_t)mem_size) {
+        return WASI_ERRNO_INVAL;
+    }
+
+    int host_fd;
+    if (fd >= 3 && fd < (uint32_t)g_wasi_num_preopens) {
+        host_fd = g_wasi_preopens[fd].host_fd;
+        if (host_fd < 0) {
+            return WASI_ERRNO_BADF;
+        }
+    } else {
+        return WASI_ERRNO_BADF;
+    }
+
+#ifdef _WIN32
+    int64_t result = _lseeki64(host_fd, 0, SEEK_CUR);
+#else
+    off_t result = lseek(host_fd, 0, SEEK_CUR);
+#endif
+    if (result < 0) {
+        return WASI_ERRNO_INVAL;
+    }
+
+    *(uint64_t*)(mem + offset_ptr) = (uint64_t)result;
+    return WASI_ERRNO_SUCCESS;
+}
+
+// WASI fd_filestat_get - get file stats via fd
+// WASI filestat structure (64 bytes):
+// dev: u64, ino: u64, filetype: u8, nlink: u64, size: u64, atim: u64, mtim: u64, ctim: u64
+static uint32_t wasi_fd_filestat_get(uint64_t* args, uint8_t* mem, int mem_size) {
+    uint32_t fd = (uint32_t)args[0];
+    uint32_t buf_ptr = (uint32_t)args[1];
+
+    if (buf_ptr + 64 > (uint32_t)mem_size) {
+        return WASI_ERRNO_INVAL;
+    }
+
+    int host_fd;
+    if (fd == 0) {
+        host_fd = 0;  // stdin
+    } else if (fd == 1) {
+        host_fd = 1;  // stdout
+    } else if (fd == 2) {
+        host_fd = 2;  // stderr
+    } else if (fd >= 3 && fd < (uint32_t)g_wasi_num_preopens) {
+        host_fd = g_wasi_preopens[fd].host_fd;
+        if (host_fd < 0) {
+            return WASI_ERRNO_BADF;
+        }
+    } else {
+        return WASI_ERRNO_BADF;
+    }
+
+#ifdef _WIN32
+    // On Windows, use _fstat64
+    struct __stat64 st;
+    if (_fstat64(host_fd, &st) < 0) {
+        return WASI_ERRNO_BADF;
+    }
+    uint8_t filetype = ((st.st_mode & _S_IFDIR) ? WASI_FILETYPE_DIRECTORY :
+                        (st.st_mode & _S_IFREG) ? WASI_FILETYPE_REGULAR_FILE :
+                        (st.st_mode & _S_IFCHR) ? WASI_FILETYPE_CHARACTER_DEVICE :
+                        WASI_FILETYPE_UNKNOWN);
+    uint64_t dev = st.st_dev;
+    uint64_t ino = st.st_ino;
+    uint64_t nlink = st.st_nlink;
+    uint64_t size = st.st_size;
+    uint64_t atim = (uint64_t)st.st_atime * 1000000000ULL;
+    uint64_t mtim = (uint64_t)st.st_mtime * 1000000000ULL;
+    uint64_t ctim = (uint64_t)st.st_ctime * 1000000000ULL;
+#else
+    struct stat st;
+    if (fstat(host_fd, &st) < 0) {
+        return WASI_ERRNO_BADF;
+    }
+    uint8_t filetype = (S_ISDIR(st.st_mode) ? WASI_FILETYPE_DIRECTORY :
+                        S_ISREG(st.st_mode) ? WASI_FILETYPE_REGULAR_FILE :
+                        S_ISCHR(st.st_mode) ? WASI_FILETYPE_CHARACTER_DEVICE :
+                        WASI_FILETYPE_UNKNOWN);
+    uint64_t dev = st.st_dev;
+    uint64_t ino = st.st_ino;
+    uint64_t nlink = st.st_nlink;
+    uint64_t size = (uint64_t)st.st_size;
+    uint64_t atim = (uint64_t)st.st_atime * 1000000000ULL;
+    uint64_t mtim = (uint64_t)st.st_mtime * 1000000000ULL;
+    uint64_t ctim = (uint64_t)st.st_ctime * 1000000000ULL;
+#endif
+
+    uint8_t* buf = mem + buf_ptr;
+    memset(buf, 0, 64);  // Zero out padding bytes
+    *(uint64_t*)(buf + 0) = dev;
+    *(uint64_t*)(buf + 8) = ino;
+    buf[16] = filetype;
+    // Padding at 17-23
+    *(uint64_t*)(buf + 24) = nlink;
+    *(uint64_t*)(buf + 32) = size;
+    *(uint64_t*)(buf + 40) = atim;
+    *(uint64_t*)(buf + 48) = mtim;
+    *(uint64_t*)(buf + 56) = ctim;
+
+    return WASI_ERRNO_SUCCESS;
+}
+
+// WASI fd_sync - sync data and metadata to storage
+static uint32_t wasi_fd_sync(uint64_t* args) {
+    uint32_t fd = (uint32_t)args[0];
+
+    int host_fd;
+    if (fd >= 3 && fd < (uint32_t)g_wasi_num_preopens) {
+        host_fd = g_wasi_preopens[fd].host_fd;
+        if (host_fd < 0) {
+            return WASI_ERRNO_BADF;
+        }
+    } else {
+        return WASI_ERRNO_BADF;
+    }
+
+#ifdef _WIN32
+    if (_commit(host_fd) < 0) {
+        return WASI_ERRNO_IO;
+    }
+#else
+    if (fsync(host_fd) < 0) {
+        return WASI_ERRNO_IO;
+    }
+#endif
+    return WASI_ERRNO_SUCCESS;
+}
+
+// WASI fd_datasync - sync data (not metadata) to storage
+static uint32_t wasi_fd_datasync(uint64_t* args) {
+    uint32_t fd = (uint32_t)args[0];
+
+    int host_fd;
+    if (fd >= 3 && fd < (uint32_t)g_wasi_num_preopens) {
+        host_fd = g_wasi_preopens[fd].host_fd;
+        if (host_fd < 0) {
+            return WASI_ERRNO_BADF;
+        }
+    } else {
+        return WASI_ERRNO_BADF;
+    }
+
+#ifdef _WIN32
+    if (_commit(host_fd) < 0) {
+        return WASI_ERRNO_IO;
+    }
+#elif defined(__APPLE__)
+    // macOS doesn't have fdatasync, use fcntl F_FULLFSYNC for full sync
+    if (fcntl(host_fd, F_FULLFSYNC) < 0) {
+        // Fall back to fsync if F_FULLFSYNC fails
+        if (fsync(host_fd) < 0) {
+            return WASI_ERRNO_IO;
+        }
+    }
+#else
+    if (fdatasync(host_fd) < 0) {
+        return WASI_ERRNO_IO;
+    }
+#endif
+    return WASI_ERRNO_SUCCESS;
+}
+
+// WASI sched_yield - yield the current thread
+static uint32_t wasi_sched_yield(void) {
+#ifdef _WIN32
+    SwitchToThread();
+#else
+    sched_yield();
+#endif
+    return WASI_ERRNO_SUCCESS;
+}
+
 // Host import handlers (spectest formatting)
 static void call_host_import(int handler_id, uint64_t* args, int num_params,
                              uint64_t* results, int num_results) {
@@ -1464,8 +1695,8 @@ int op_call_import(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
         uint64_t results[16];
         int actual_results = num_results < 16 ? num_results : 16;
 
-        // Check if this is a WASI handler (IDs 8-22)
-        if (handler_id >= HOST_IMPORT_WASI_ARGS_GET && handler_id <= HOST_IMPORT_WASI_FD_SEEK) {
+        // Check if this is a WASI handler (IDs 8-28)
+        if (handler_id >= HOST_IMPORT_WASI_ARGS_GET && handler_id <= HOST_IMPORT_WASI_SCHED_YIELD) {
             uint32_t wasi_ret = WASI_ERRNO_NOSYS;
             uint8_t* mem = crt->mem;
             int mem_size = g_memory_size;
@@ -1515,8 +1746,26 @@ int op_call_import(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
                     wasi_ret = WASI_ERRNO_NOSYS;
                     break;
                 case HOST_IMPORT_WASI_FD_SEEK:
+                    wasi_ret = wasi_fd_seek(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_FD_TELL:
+                    wasi_ret = wasi_fd_tell(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_FD_FILESTAT_GET:
+                    wasi_ret = wasi_fd_filestat_get(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_PATH_FILESTAT_GET:
                     // Not implemented yet - return NOSYS
                     wasi_ret = WASI_ERRNO_NOSYS;
+                    break;
+                case HOST_IMPORT_WASI_FD_SYNC:
+                    wasi_ret = wasi_fd_sync(args_ptr);
+                    break;
+                case HOST_IMPORT_WASI_FD_DATASYNC:
+                    wasi_ret = wasi_fd_datasync(args_ptr);
+                    break;
+                case HOST_IMPORT_WASI_SCHED_YIELD:
+                    wasi_ret = wasi_sched_yield();
                     break;
             }
 

@@ -22,7 +22,9 @@ async fn compile_wasi_wat(wat_path : String) -> Bytes raise Error {
   let wasm_path = base + ".wasm"
 
   // Run wasm-tools wat2wasm
-  let exit_code = @process.run("wasm-tools", ["parse", wat_path, "-o", wasm_path])
+  let exit_code = @process.run("wasm-tools", [
+    "parse", wat_path, "-o", wasm_path,
+  ])
   if exit_code != 0 {
     raise WasiTestError("Failed to compile WAT file: \{wat_path}")
   }
@@ -33,7 +35,6 @@ async fn compile_wasi_wat(wat_path : String) -> Bytes raise Error {
 
   // Clean up the WASM file
   @fs.remove(wasm_path)
-
   wasm
 }
 
@@ -89,15 +90,10 @@ async fn run_wasi_with_preopen(
 
   // Read file contents
   let data = @fs.read_file(temp_path)
-  let content = try {
-    data.text()
-  } catch {
-    _ => wasi_bytes_to_string(data.binary())
-  }
+  let content = data.text() catch { _ => wasi_bytes_to_string(data.binary()) }
 
   // Clean up temp file
   @fs.remove(temp_path)
-
   (content, exit_code)
 }
 
@@ -186,6 +182,47 @@ async test "wasi/fd_prestat_get" {
 /// Test fd_fdstat_get - fd 3 should return success
 async test "wasi/fd_fdstat_get" {
   let wasm = compile_wasi_wat("test/wasi/fdstat.wat")
+  let (output, _) = run_wasi_with_preopen(wasm, "")
+  assert_eq(output, "ok")
+}
+
+///|
+/// Test fd_seek - seek to position in file
+/// Writes "Hello", seeks to 0, writes "ok" -> result is "okllo"
+async test "wasi/fd_seek" {
+  let wasm = compile_wasi_wat("test/wasi/fd_seek.wat")
+  let (output, _) = run_wasi_with_preopen(wasm, "")
+  assert_eq(output, "okllo") // "ok" overwrites first 2 chars of "Hello"
+}
+
+///|
+/// Test fd_tell - get current file position
+async test "wasi/fd_tell" {
+  let wasm = compile_wasi_wat("test/wasi/fd_tell.wat")
+  let (output, _) = run_wasi_with_preopen(wasm, "")
+  assert_eq(output, "Hellook")
+}
+
+///|
+/// Test fd_filestat_get - get file stats
+async test "wasi/fd_filestat_get" {
+  let wasm = compile_wasi_wat("test/wasi/fd_filestat_get.wat")
+  let (output, _) = run_wasi_with_preopen(wasm, "")
+  assert_eq(output, "ok")
+}
+
+///|
+/// Test fd_sync - sync file to storage
+async test "wasi/fd_sync" {
+  let wasm = compile_wasi_wat("test/wasi/fd_sync.wat")
+  let (output, _) = run_wasi_with_preopen(wasm, "")
+  assert_eq(output, "Hellook")
+}
+
+///|
+/// Test sched_yield - yield CPU
+async test "wasi/sched_yield" {
+  let wasm = compile_wasi_wat("test/wasi/sched_yield.wat")
   let (output, _) = run_wasi_with_preopen(wasm, "")
   assert_eq(output, "ok")
 }

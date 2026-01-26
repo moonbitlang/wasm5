@@ -17,9 +17,13 @@ pub fn init_wasi() -> Unit
 
 pub fn transform_to_c_runtime(Array[Int64]) -> FixedArray[UInt64]
 
+pub fn wasi_add_preopen_file(Int) -> Int
+
 pub fn wasi_exit_code() -> Int
 
 pub fn wasi_has_exited() -> Bool
+
+pub fn wasi_reset_preopens() -> Unit
 
 // Errors
 

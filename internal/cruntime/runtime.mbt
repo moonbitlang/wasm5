@@ -836,6 +836,24 @@ let host_import_wasi_path_open : Int = 21
 let host_import_wasi_fd_seek : Int = 22
 
 ///|
+let host_import_wasi_fd_tell : Int = 23
+
+///|
+let host_import_wasi_fd_filestat_get : Int = 24
+
+///|
+let host_import_wasi_path_filestat_get : Int = 25
+
+///|
+let host_import_wasi_fd_sync : Int = 26
+
+///|
+let host_import_wasi_fd_datasync : Int = 27
+
+///|
+let host_import_wasi_sched_yield : Int = 28
+
+///|
 /// Match a WASI import name to its handler ID
 fn match_wasi_import(name : Bytes) -> Int {
   if name == b"args_get" {
@@ -882,6 +900,24 @@ fn match_wasi_import(name : Bytes) -> Int {
   }
   if name == b"fd_seek" {
     return host_import_wasi_fd_seek
+  }
+  if name == b"fd_tell" {
+    return host_import_wasi_fd_tell
+  }
+  if name == b"fd_filestat_get" {
+    return host_import_wasi_fd_filestat_get
+  }
+  if name == b"path_filestat_get" {
+    return host_import_wasi_path_filestat_get
+  }
+  if name == b"fd_sync" {
+    return host_import_wasi_fd_sync
+  }
+  if name == b"fd_datasync" {
+    return host_import_wasi_fd_datasync
+  }
+  if name == b"sched_yield" {
+    return host_import_wasi_sched_yield
   }
   host_import_none
 }
