@@ -16,6 +16,11 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#include <io.h>
+#define write _write
+#define read _read
+#else
+#include <unistd.h>
 #endif
 
 #ifdef __APPLE__
@@ -721,6 +726,37 @@ void wasi_init_empty(void) {
     wasi_init(1, empty_argv);
 }
 
+// Add a preopened file to the WASI environment
+// Returns the WASI fd number (3+) or -1 on error
+int wasi_add_preopen_file(int host_fd, const char* path) {
+    if (g_wasi_num_preopens >= WASI_MAX_PREOPENS) {
+        return -1;
+    }
+    int wasi_fd = g_wasi_num_preopens;
+    g_wasi_preopens[wasi_fd].host_fd = host_fd;
+    g_wasi_preopens[wasi_fd].path = path;
+    g_wasi_num_preopens++;
+    return wasi_fd;
+}
+
+// FFI wrapper for wasi_add_preopen_file without path (for testing)
+int wasi_add_preopen_file_ffi(int host_fd) {
+    return wasi_add_preopen_file(host_fd, "<test>");
+}
+
+// Reset preopens to just stdin/stdout/stderr
+void wasi_reset_preopens(void) {
+    // Close any open preopened files (fd 3+)
+    for (int i = 3; i < g_wasi_num_preopens; i++) {
+        if (g_wasi_preopens[i].host_fd >= 0) {
+            // Don't close - the caller is responsible for closing host fds
+            g_wasi_preopens[i].host_fd = -1;
+            g_wasi_preopens[i].path = NULL;
+        }
+    }
+    g_wasi_num_preopens = 3;
+}
+
 // WASI fd_write - write to file descriptor
 static uint32_t wasi_fd_write(uint64_t* args, uint8_t* mem, int mem_size) {
     uint32_t fd = (uint32_t)args[0];
@@ -734,12 +770,21 @@ static uint32_t wasi_fd_write(uint64_t* args, uint8_t* mem, int mem_size) {
         return WASI_ERRNO_INVAL;
     }
 
-    // Only support stdout (1) and stderr (2) for now
-    if (fd != 1 && fd != 2) {
+    // Determine host fd
+    int host_fd;
+    if (fd == 1) {
+        host_fd = 1;  // stdout
+    } else if (fd == 2) {
+        host_fd = 2;  // stderr
+    } else if (fd >= 3 && fd < (uint32_t)g_wasi_num_preopens) {
+        host_fd = g_wasi_preopens[fd].host_fd;
+        if (host_fd < 0) {
+            return WASI_ERRNO_BADF;
+        }
+    } else {
         return WASI_ERRNO_BADF;
     }
 
-    FILE* out = (fd == 1) ? stdout : stderr;
     size_t total_written = 0;
 
     for (uint32_t i = 0; i < iovs_len; i++) {
@@ -751,10 +796,14 @@ static uint32_t wasi_fd_write(uint64_t* args, uint8_t* mem, int mem_size) {
             return WASI_ERRNO_INVAL;
         }
 
-        size_t written = fwrite(mem + buf_offset, 1, buf_len, out);
-        total_written += written;
+        // Use write() syscall for all fds (works for both stdio and files)
+        ssize_t written = write(host_fd, mem + buf_offset, buf_len);
+        if (written < 0) {
+            // On error, return what we've written so far
+            break;
+        }
+        total_written += (size_t)written;
     }
-    fflush(out);
 
     // Write nwritten back to WASM memory
     *(uint32_t*)(mem + nwritten_offset) = (uint32_t)total_written;
@@ -774,8 +823,16 @@ static uint32_t wasi_fd_read(uint64_t* args, uint8_t* mem, int mem_size) {
         return WASI_ERRNO_INVAL;
     }
 
-    // Only support stdin (0) for now
-    if (fd != 0) {
+    // Determine host fd
+    int host_fd;
+    if (fd == 0) {
+        host_fd = 0;  // stdin
+    } else if (fd >= 3 && fd < (uint32_t)g_wasi_num_preopens) {
+        host_fd = g_wasi_preopens[fd].host_fd;
+        if (host_fd < 0) {
+            return WASI_ERRNO_BADF;
+        }
+    } else {
         return WASI_ERRNO_BADF;
     }
 
@@ -789,9 +846,13 @@ static uint32_t wasi_fd_read(uint64_t* args, uint8_t* mem, int mem_size) {
             return WASI_ERRNO_INVAL;
         }
 
-        size_t bytes_read = fread(mem + buf_offset, 1, buf_len, stdin);
-        total_read += bytes_read;
-        if (bytes_read < buf_len) {
+        // Use read() syscall for all fds (works for both stdio and files)
+        ssize_t bytes_read = read(host_fd, mem + buf_offset, buf_len);
+        if (bytes_read < 0) {
+            break;  // Error
+        }
+        total_read += (size_t)bytes_read;
+        if ((size_t)bytes_read < buf_len) {
             break;  // EOF or short read
         }
     }

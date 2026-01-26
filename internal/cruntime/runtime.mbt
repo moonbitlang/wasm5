@@ -70,6 +70,19 @@ pub fn wasi_has_exited() -> Bool {
 }
 
 ///|
+/// Add a preopened file to the WASI environment.
+/// Returns the WASI fd number (3+) or -1 on error.
+pub fn wasi_add_preopen_file(host_fd : Int) -> Int {
+  c_wasi_add_preopen_file(host_fd)
+}
+
+///|
+/// Reset preopens to just stdin/stdout/stderr.
+pub fn wasi_reset_preopens() -> Unit {
+  c_wasi_reset_preopens()
+}
+
+///|
 /// Convert TrapCode to RuntimeError using the error detail string approach
 fn trap_to_error(trap : TrapCode) -> @runtime.RuntimeError {
   let detail = match trap {

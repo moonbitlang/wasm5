@@ -782,3 +782,12 @@ extern "C" fn c_wasi_get_exit_code() -> Int = "wasi_get_exit_code"
 ///|
 /// Check if WASI has exited (proc_exit was called).
 extern "C" fn c_wasi_has_exited() -> Int = "wasi_has_exited"
+
+///|
+/// Add a preopened file to the WASI environment.
+/// Returns the WASI fd number (3+) or -1 on error.
+extern "C" fn c_wasi_add_preopen_file(host_fd : Int) -> Int = "wasi_add_preopen_file_ffi"
+
+///|
+/// Reset preopens to just stdin/stdout/stderr.
+extern "C" fn c_wasi_reset_preopens() -> Unit = "wasi_reset_preopens"
