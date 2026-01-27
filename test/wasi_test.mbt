@@ -4,12 +4,23 @@
 
 // Counter for unique temp file names
 let wasi_temp_counter : Ref[Int] = { val: 0 }
+// Counter for unique temp dir names
+
+///|
+let wasi_temp_dir_counter : Ref[Int] = { val: 0 }
 
 ///|
 /// Generate unique temp file path
 fn get_wasi_temp_path() -> String {
   wasi_temp_counter.val += 1
   "/tmp/wasi_test_\{wasi_temp_counter.val}.txt"
+}
+
+///|
+/// Generate unique temp dir path
+fn get_wasi_temp_dir() -> String {
+  wasi_temp_dir_counter.val += 1
+  "/tmp/wasi_test_dir_\{wasi_temp_dir_counter.val}"
 }
 
 ///|
@@ -98,6 +109,82 @@ async fn run_wasi_with_preopen(
 }
 
 ///|
+/// Helper: run WASI module with preopened file + directory
+async fn run_wasi_with_preopen_dir(
+  wasm : Bytes,
+  initial_content : String,
+) -> (String, Int) raise Error {
+  // Create temp file (output)
+  let temp_path = get_wasi_temp_path()
+
+  // Create temp directory
+  let temp_dir = get_wasi_temp_dir()
+  let _ = @fs.mkdir(temp_dir, permission=0o755) catch { _ => () }
+
+  // Write initial content to temp file
+  if initial_content.length() > 0 {
+    @fs.write_file(temp_path, initial_content, create=0o644, truncate=true)
+  } else {
+    let temp_file = @fs.create(temp_path, permission=0o644)
+    temp_file.close()
+  }
+
+  // Open file and directory
+  let preopen_file = @fs.open(temp_path, mode=ReadWrite)
+  let preopen_dir = @fs.open(temp_dir, mode=ReadOnly)
+  let host_fd = preopen_file.fd()
+  let dir_fd = preopen_dir.fd()
+
+  // Initialize WASI and add preopens
+  @wasm5_cruntime.init_wasi()
+  let wasi_fd_file = @wasm5_cruntime.wasi_add_preopen_file(host_fd)
+  if wasi_fd_file < 0 {
+    preopen_file.close()
+    preopen_dir.close()
+    @fs.remove(temp_path)
+    @fs.rmdir(temp_dir, recursive=true)
+    raise WasiTestError("Failed to add preopen file")
+  }
+  let wasi_fd_dir = @wasm5_cruntime.wasi_add_preopen_file(dir_fd)
+  if wasi_fd_dir < 0 {
+    preopen_file.close()
+    preopen_dir.close()
+    @fs.remove(temp_path)
+    @fs.rmdir(temp_dir, recursive=true)
+    raise WasiTestError("Failed to add preopen dir")
+  }
+
+  // Parse and run the WASI module
+  let module_ = @wasm5_parse.parse(wasm)
+  @wasm5_validate.validate_module(module_)
+  let runtime = @wasm5_cruntime.CRuntime::load(module_)
+
+  // Try to run _start function
+  let _ = runtime.call_compiled(b"_start", []) catch { _ => [] }
+
+  // Get exit code
+  let exit_code = if @wasm5_cruntime.wasi_has_exited() {
+    @wasm5_cruntime.wasi_exit_code()
+  } else {
+    0
+  }
+
+  // Close preopens and reset
+  preopen_file.close()
+  preopen_dir.close()
+  @wasm5_cruntime.wasi_reset_preopens()
+
+  // Read file contents
+  let data = @fs.read_file(temp_path)
+  let content = data.text() catch { _ => wasi_bytes_to_string(data.binary()) }
+
+  // Clean up temp file/dir
+  @fs.remove(temp_path)
+  @fs.rmdir(temp_dir, recursive=true)
+  (content, exit_code)
+}
+
+///|
 /// Convert Bytes to String (assuming ASCII/UTF-8)
 fn wasi_bytes_to_string(b : Bytes) -> String {
   let chars : Array[Char] = []
@@ -155,11 +242,27 @@ async test "wasi/args_sizes_get" {
 }
 
 ///|
+/// Test args_get - argv[0] should be "wasm5"
+async test "wasi/args_get" {
+  let wasm = compile_wasi_wat("test/wasi/args_get.wat")
+  let (output, _) = run_wasi_with_preopen(wasm, "")
+  assert_eq(output, "wasm5")
+}
+
+///|
 /// Test environ_sizes_get - should return 0 env vars
 async test "wasi/environ_sizes_get" {
   let wasm = compile_wasi_wat("test/wasi/environ.wat")
   let (output, _) = run_wasi_with_preopen(wasm, "")
   assert_eq(output, "0")
+}
+
+///|
+/// Test environ_get - should return ok when env is empty
+async test "wasi/environ_get" {
+  let wasm = compile_wasi_wat("test/wasi/environ_get.wat")
+  let (output, _) = run_wasi_with_preopen(wasm, "")
+  assert_eq(output, "ok")
 }
 
 ///|
@@ -184,6 +287,14 @@ async test "wasi/fd_prestat_get" {
   let wasm = compile_wasi_wat("test/wasi/prestat.wat")
   let (output, _) = run_wasi_with_preopen(wasm, "")
   assert_eq(output, "ok")
+}
+
+///|
+/// Test fd_prestat_dir_name - fd 4 should return "<test>"
+async test "wasi/fd_prestat_dir_name" {
+  let wasm = compile_wasi_wat("test/wasi/fd_prestat_dir_name.wat")
+  let (output, _) = run_wasi_with_preopen_dir(wasm, "")
+  assert_eq(output, "<test>")
 }
 
 ///|
@@ -225,6 +336,22 @@ async test "wasi/fd_sync" {
   let wasm = compile_wasi_wat("test/wasi/fd_sync.wat")
   let (output, _) = run_wasi_with_preopen(wasm, "")
   assert_eq(output, "Hellook")
+}
+
+///|
+/// Test fd_datasync - sync file data to storage
+async test "wasi/fd_datasync" {
+  let wasm = compile_wasi_wat("test/wasi/fd_datasync.wat")
+  let (output, _) = run_wasi_with_preopen(wasm, "")
+  assert_eq(output, "ok")
+}
+
+///|
+/// Test fd_fdstat_set_flags - should succeed
+async test "wasi/fd_fdstat_set_flags" {
+  let wasm = compile_wasi_wat("test/wasi/fd_fdstat_set_flags.wat")
+  let (output, _) = run_wasi_with_preopen(wasm, "")
+  assert_eq(output, "ok")
 }
 
 ///|
@@ -310,6 +437,38 @@ async test "wasi/fd_seek_invalid_whence" {
 }
 
 ///|
+/// Test fd_filestat_set_times - should succeed
+async test "wasi/fd_filestat_set_times" {
+  let wasm = compile_wasi_wat("test/wasi/fd_filestat_set_times.wat")
+  let (output, _) = run_wasi_with_preopen(wasm, "")
+  assert_eq(output, "ok")
+}
+
+///|
+/// Test fd_advise - should succeed
+async test "wasi/fd_advise" {
+  let wasm = compile_wasi_wat("test/wasi/fd_advise.wat")
+  let (output, _) = run_wasi_with_preopen(wasm, "")
+  assert_eq(output, "ok")
+}
+
+///|
+/// Test fd_allocate - should succeed
+async test "wasi/fd_allocate" {
+  let wasm = compile_wasi_wat("test/wasi/fd_allocate.wat")
+  let (output, _) = run_wasi_with_preopen(wasm, "")
+  assert_eq(output, "ok")
+}
+
+///|
+/// Test proc_raise - should return NOSYS (52)
+async test "wasi/proc_raise" {
+  let wasm = compile_wasi_wat("test/wasi/proc_raise.wat")
+  let (output, _) = run_wasi_with_preopen(wasm, "")
+  assert_eq(output, "52")
+}
+
+///|
 /// Test fd_filestat_set_size - truncate file to specified size
 /// Writes "Hello World" (11 bytes), truncates to 5, verifies size, writes "ok" -> "okllo"
 async test "wasi/fd_filestat_set_size" {
@@ -318,4 +477,50 @@ async test "wasi/fd_filestat_set_size" {
   assert_eq(output, "okllo")
 }
 
-// Note: path_filestat_get test skipped - requires directory preopen, not file preopen
+///|
+/// Test path_open + fd_close using preopened directory
+async test "wasi/path_open_fd_close" {
+  let wasm = compile_wasi_wat("test/wasi/path_open_fd_close.wat")
+  let (output, _) = run_wasi_with_preopen_dir(wasm, "")
+  assert_eq(output, "ok")
+}
+
+///|
+/// Test path_filestat_get using preopened directory
+async test "wasi/path_filestat_get" {
+  let wasm = compile_wasi_wat("test/wasi/path_filestat_get.wat")
+  let (output, _) = run_wasi_with_preopen_dir(wasm, "")
+  assert_eq(output, "ok")
+}
+
+///|
+/// Test path_create_directory + path_remove_directory
+async test "wasi/path_create_remove_directory" {
+  let wasm = compile_wasi_wat("test/wasi/path_create_remove_directory.wat")
+  let (output, _) = run_wasi_with_preopen_dir(wasm, "")
+  assert_eq(output, "ok")
+}
+
+///|
+/// Test path_unlink_file
+async test "wasi/path_unlink_file" {
+  let wasm = compile_wasi_wat("test/wasi/path_unlink_file.wat")
+  let (output, _) = run_wasi_with_preopen_dir(wasm, "")
+  assert_eq(output, "ok")
+}
+
+///|
+/// Test path_rename
+async test "wasi/path_rename" {
+  let wasm = compile_wasi_wat("test/wasi/path_rename.wat")
+  let (output, _) = run_wasi_with_preopen_dir(wasm, "")
+  assert_eq(output, "ok")
+}
+
+///|
+/// Test fd_readdir using preopened directory
+async test "wasi/fd_readdir" {
+  let wasm = compile_wasi_wat("test/wasi/fd_readdir.wat")
+  let (output, _) = run_wasi_with_preopen_dir(wasm, "")
+  assert_eq(output, "ok")
+}
