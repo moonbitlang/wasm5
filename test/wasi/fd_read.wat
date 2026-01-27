@@ -1,5 +1,5 @@
 ;; Test fd_read from preopened file (fd 3)
-;; Reads content and writes to fd 3 (same file, seeking is not needed for test)
+;; Reads content and writes back to fd 3 (append), so "Hello" -> "HelloHello"
 (module
   (import "wasi_snapshot_preview1" "fd_read"
     (func $fd_read (param i32 i32 i32 i32) (result i32)))
@@ -21,7 +21,7 @@
     (i32.store (i32.const 40) (i32.const 0))
     (i32.store (i32.const 44) (i32.load (i32.const 32)))
 
-    ;; Write read content back to stdout (fd=1) so we can verify
-    (drop (call $fd_write (i32.const 1) (i32.const 40) (i32.const 1) (i32.const 52)))
+    ;; Write read content back to preopened file (fd=3) so we can verify
+    (drop (call $fd_write (i32.const 3) (i32.const 40) (i32.const 1) (i32.const 52)))
   )
 )

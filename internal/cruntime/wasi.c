@@ -135,6 +135,7 @@ static void free_fd(int wasi_fd) {
 // Get host fd from WASI fd, checking all fd sources
 // Returns host fd or -1 if invalid
 static int get_host_fd(int wasi_fd) {
+    init_fd_table();
     if (wasi_fd < 0) return -1;
 
     // stdio fds
@@ -155,6 +156,7 @@ static int get_host_fd(int wasi_fd) {
 
 // Get WasiFdEntry for a WASI fd (only for dynamic fds)
 static WasiFdEntry* get_fd_entry(int wasi_fd) {
+    init_fd_table();
     if (wasi_fd >= WASI_MAX_PREOPENS && wasi_fd < MAX_WASI_FDS) {
         if (g_fd_table[wasi_fd].host_fd >= 0) {
             return &g_fd_table[wasi_fd];

@@ -123,6 +123,14 @@ async test "wasi/fd_write" {
 }
 
 ///|
+/// Test fd_read from preopened file (append read content)
+async test "wasi/fd_read" {
+  let wasm = compile_wasi_wat("test/wasi/fd_read.wat")
+  let (output, _) = run_wasi_with_preopen(wasm, "Hello")
+  assert_eq(output, "HelloHello")
+}
+
+///|
 /// Test proc_exit with code 42
 async test "wasi/exit_42" {
   let wasm = compile_wasi_wat("test/wasi/exit.wat")
@@ -236,6 +244,14 @@ async test "wasi/clock_res_get" {
 }
 
 ///|
+/// Test clock_res_get rejects invalid clock_id
+async test "wasi/clock_res_get_invalid" {
+  let wasm = compile_wasi_wat("test/wasi/clock_res_get_invalid.wat")
+  let (output, _) = run_wasi_with_preopen(wasm, "")
+  assert_eq(output, "28")
+}
+
+///|
 /// Test fd_pread - read at offset without changing file position
 /// Writes "Hello", pread verifies content, seeks to 0, writes "ok" -> "okllo"
 async test "wasi/fd_pread" {
@@ -251,6 +267,46 @@ async test "wasi/fd_pwrite" {
   let wasm = compile_wasi_wat("test/wasi/fd_pwrite.wat")
   let (output, _) = run_wasi_with_preopen(wasm, "")
   assert_eq(output, "okllo")
+}
+
+///|
+/// Test fd_write returns BADF for invalid fd
+async test "wasi/fd_write_badf" {
+  let wasm = compile_wasi_wat("test/wasi/fd_write_badf.wat")
+  let (output, _) = run_wasi_with_preopen(wasm, "")
+  assert_eq(output, "8")
+}
+
+///|
+/// Test fd_read returns BADF for invalid fd
+async test "wasi/fd_read_badf" {
+  let wasm = compile_wasi_wat("test/wasi/fd_read_badf.wat")
+  let (output, _) = run_wasi_with_preopen(wasm, "")
+  assert_eq(output, "8")
+}
+
+///|
+/// Test fd_pread returns BADF for invalid fd
+async test "wasi/fd_pread_badf" {
+  let wasm = compile_wasi_wat("test/wasi/fd_pread_badf.wat")
+  let (output, _) = run_wasi_with_preopen(wasm, "")
+  assert_eq(output, "8")
+}
+
+///|
+/// Test fd_pwrite returns BADF for invalid fd
+async test "wasi/fd_pwrite_badf" {
+  let wasm = compile_wasi_wat("test/wasi/fd_pwrite_badf.wat")
+  let (output, _) = run_wasi_with_preopen(wasm, "")
+  assert_eq(output, "8")
+}
+
+///|
+/// Test fd_seek rejects invalid whence
+async test "wasi/fd_seek_invalid_whence" {
+  let wasm = compile_wasi_wat("test/wasi/fd_seek_invalid_whence.wat")
+  let (output, _) = run_wasi_with_preopen(wasm, "")
+  assert_eq(output, "28")
 }
 
 ///|
