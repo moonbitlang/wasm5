@@ -1,40 +1,9 @@
-// Feature test macros for POSIX time functions
-#if defined(__linux__)
-#define _POSIX_C_SOURCE 199309L
-#elif defined(__APPLE__)
-// macOS: clock_gettime is available in macOS 10.12+
-#include <AvailabilityMacros.h>
-#endif
-
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <limits.h>
 #include <stdio.h>
-#include <time.h>
-#include <errno.h>
-
-#ifdef _WIN32
-#include <windows.h>
-#include <io.h>
-#include <direct.h>
-#define write _write
-#define read _read
-#else
-#include <unistd.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <dirent.h>
-#endif
-
-#if !defined(_WIN32)
-#include <sched.h>
-#endif
-
-#ifdef __APPLE__
-#include <mach/mach_time.h>
-#endif
 
 #include "wasi.h"
 
