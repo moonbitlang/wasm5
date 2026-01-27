@@ -1,9 +1,10 @@
 // WASI (WebAssembly System Interface) implementation for wasm5
 // This file contains all WASI-related implementations
 
-// Feature test macros for POSIX time functions
+// Feature test macros for POSIX APIs
 #if defined(__linux__)
-#define _POSIX_C_SOURCE 199309L
+#define _POSIX_C_SOURCE 200809L
+#define _DEFAULT_SOURCE
 #elif defined(__APPLE__)
 // macOS: clock_gettime is available in macOS 10.12+
 #include <AvailabilityMacros.h>
