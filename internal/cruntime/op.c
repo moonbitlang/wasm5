@@ -5,6 +5,8 @@
 #include <limits.h>
 #include <stdio.h>
 
+#include "wasi.h"
+
 // Debug flag - set to 1 to enable tracing
 #define DEBUG_TRACE 0
 #if DEBUG_TRACE
@@ -27,6 +29,7 @@
 #define TRAP_UNINITIALIZED_ELEMENT      10 // "uninitialized element" - null entry in table
 #define TRAP_TABLE_BOUNDS_ACCESS        11 // "out of bounds table access" - for bulk table ops
 #define TRAP_NULL_REFERENCE             12 // "null reference" - for ref.as_non_null
+#define TRAP_WASI_EXIT                  13 // WASI proc_exit was called
 
 // Memory bounds check helper - use 64-bit arithmetic to avoid overflow
 #define CHECK_MEMORY(addr, size) \
@@ -944,7 +947,148 @@ int op_call_import(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
         uint64_t* args_ptr = fp + frame_offset;
         uint64_t results[16];
         int actual_results = num_results < 16 ? num_results : 16;
-        call_host_import(handler_id, args_ptr, num_params, results, actual_results);
+
+        // Check if this is a WASI handler (IDs 8-48)
+        if (handler_id >= HOST_IMPORT_WASI_ARGS_GET && handler_id <= HOST_IMPORT_WASI_PATH_SYMLINK) {
+            uint32_t wasi_ret = WASI_ERRNO_NOSYS;
+            uint8_t* mem = crt->mem;
+            int mem_size = g_memory_size;
+
+            switch (handler_id) {
+                case HOST_IMPORT_WASI_ARGS_GET:
+                    wasi_ret = wasi_args_get(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_ARGS_SIZES_GET:
+                    wasi_ret = wasi_args_sizes_get(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_ENVIRON_GET:
+                    wasi_ret = wasi_environ_get(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_ENVIRON_SIZES_GET:
+                    wasi_ret = wasi_environ_sizes_get(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_FD_WRITE:
+                    wasi_ret = wasi_fd_write(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_FD_READ:
+                    wasi_ret = wasi_fd_read(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_FD_CLOSE:
+                    wasi_ret = wasi_fd_close(args_ptr);
+                    break;
+                case HOST_IMPORT_WASI_FD_PRESTAT_GET:
+                    wasi_ret = wasi_fd_prestat_get(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_FD_PRESTAT_DIR_NAME:
+                    wasi_ret = wasi_fd_prestat_dir_name(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_FD_FDSTAT_GET:
+                    wasi_ret = wasi_fd_fdstat_get(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_PROC_EXIT:
+                    wasi_proc_exit(args_ptr);
+                    return TRAP_WASI_EXIT;  // Signal exit to caller
+                case HOST_IMPORT_WASI_CLOCK_TIME_GET:
+                    wasi_ret = wasi_clock_time_get(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_RANDOM_GET:
+                    wasi_ret = wasi_random_get(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_PATH_OPEN:
+                    wasi_ret = wasi_path_open(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_FD_SEEK:
+                    wasi_ret = wasi_fd_seek(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_FD_TELL:
+                    wasi_ret = wasi_fd_tell(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_FD_FILESTAT_GET:
+                    wasi_ret = wasi_fd_filestat_get(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_PATH_FILESTAT_GET:
+                    wasi_ret = wasi_path_filestat_get(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_FD_SYNC:
+                    wasi_ret = wasi_fd_sync(args_ptr);
+                    break;
+                case HOST_IMPORT_WASI_FD_DATASYNC:
+                    wasi_ret = wasi_fd_datasync(args_ptr);
+                    break;
+                case HOST_IMPORT_WASI_SCHED_YIELD:
+                    wasi_ret = wasi_sched_yield();
+                    break;
+                case HOST_IMPORT_WASI_PATH_CREATE_DIRECTORY:
+                    wasi_ret = wasi_path_create_directory(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_PATH_REMOVE_DIRECTORY:
+                    wasi_ret = wasi_path_remove_directory(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_PATH_UNLINK_FILE:
+                    wasi_ret = wasi_path_unlink_file(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_PATH_RENAME:
+                    wasi_ret = wasi_path_rename(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_FD_FDSTAT_SET_FLAGS:
+                    wasi_ret = wasi_fd_fdstat_set_flags(args_ptr);
+                    break;
+                case HOST_IMPORT_WASI_FD_FDSTAT_SET_RIGHTS:
+                    wasi_ret = wasi_fd_fdstat_set_rights(args_ptr);
+                    break;
+                case HOST_IMPORT_WASI_FD_PREAD:
+                    wasi_ret = wasi_fd_pread(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_FD_PWRITE:
+                    wasi_ret = wasi_fd_pwrite(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_FD_READDIR:
+                    wasi_ret = wasi_fd_readdir(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_FD_RENUMBER:
+                    wasi_ret = wasi_fd_renumber(args_ptr);
+                    break;
+                case HOST_IMPORT_WASI_FD_FILESTAT_SET_SIZE:
+                    wasi_ret = wasi_fd_filestat_set_size(args_ptr);
+                    break;
+                case HOST_IMPORT_WASI_FD_FILESTAT_SET_TIMES:
+                    wasi_ret = wasi_fd_filestat_set_times(args_ptr);
+                    break;
+                case HOST_IMPORT_WASI_FD_ADVISE:
+                    wasi_ret = wasi_fd_advise(args_ptr);
+                    break;
+                case HOST_IMPORT_WASI_FD_ALLOCATE:
+                    wasi_ret = wasi_fd_allocate(args_ptr);
+                    break;
+                case HOST_IMPORT_WASI_PATH_FILESTAT_SET_TIMES:
+                    wasi_ret = wasi_path_filestat_set_times(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_PATH_LINK:
+                    wasi_ret = wasi_path_link(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_PATH_READLINK:
+                    wasi_ret = wasi_path_readlink(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_CLOCK_RES_GET:
+                    wasi_ret = wasi_clock_res_get(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_PROC_RAISE:
+                    wasi_ret = wasi_proc_raise(args_ptr);
+                    break;
+                case HOST_IMPORT_WASI_PATH_SYMLINK:
+                    wasi_ret = wasi_path_symlink(args_ptr, mem, mem_size);
+                    break;
+            }
+
+            // WASI functions return their error code as the result
+            if (actual_results > 0) {
+                results[0] = wasi_ret;
+            }
+        } else {
+            // Spectest or other handlers
+            call_host_import(handler_id, args_ptr, num_params, results, actual_results);
+        }
+
         uint64_t* result_dst = fp + frame_offset;
         for (int i = 0; i < actual_results; i++) {
             result_dst[i] = results[i];

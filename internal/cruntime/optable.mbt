@@ -769,3 +769,25 @@ extern "C" fn c_call_external_ffi(
   result_out : FixedArray[UInt64],
   num_results : Int,
 ) -> Int = "call_external_ffi"
+
+///|
+/// Initialize WASI context (with empty arguments for now).
+/// Must be called before executing WASI modules.
+extern "C" fn c_wasi_init_empty() -> Unit = "wasi_init_empty"
+
+///|
+/// Get the WASI exit code after proc_exit was called.
+extern "C" fn c_wasi_get_exit_code() -> Int = "wasi_get_exit_code"
+
+///|
+/// Check if WASI has exited (proc_exit was called).
+extern "C" fn c_wasi_has_exited() -> Int = "wasi_has_exited"
+
+///|
+/// Add a preopened file to the WASI environment.
+/// Returns the WASI fd number (3+) or -1 on error.
+extern "C" fn c_wasi_add_preopen_file(host_fd : Int) -> Int = "wasi_add_preopen_file_ffi"
+
+///|
+/// Reset preopens to just stdin/stdout/stderr.
+extern "C" fn c_wasi_reset_preopens() -> Unit = "wasi_reset_preopens"

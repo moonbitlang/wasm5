@@ -13,7 +13,17 @@ pub fn compile_with_imports(@core.Module, Map[Int, ResolvedImport]) -> CompiledM
 
 pub fn get_entry_fnptr() -> UInt64
 
+pub fn init_wasi() -> Unit
+
 pub fn transform_to_c_runtime(Array[Int64]) -> FixedArray[UInt64]
+
+pub fn wasi_add_preopen_file(Int) -> Int
+
+pub fn wasi_exit_code() -> Int
+
+pub fn wasi_has_exited() -> Bool
+
+pub fn wasi_reset_preopens() -> Unit
 
 // Errors
 
@@ -96,6 +106,7 @@ pub enum TrapCode {
   UninitializedElement
   TableBoundsAccess
   NullReference
+  WasiExit
 }
 pub impl Eq for TrapCode
 pub impl Show for TrapCode

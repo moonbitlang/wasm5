@@ -51,6 +51,38 @@ pub struct CRuntime {
 using @core {type Value}
 
 ///|
+/// Initialize WASI environment for C runtime.
+/// Must be called before executing WASI modules.
+pub fn init_wasi() -> Unit {
+  c_wasi_init_empty()
+}
+
+///|
+/// Get the WASI exit code after proc_exit was called.
+pub fn wasi_exit_code() -> Int {
+  c_wasi_get_exit_code()
+}
+
+///|
+/// Check if WASI has exited (proc_exit was called).
+pub fn wasi_has_exited() -> Bool {
+  c_wasi_has_exited() != 0
+}
+
+///|
+/// Add a preopened file to the WASI environment.
+/// Returns the WASI fd number (3+) or -1 on error.
+pub fn wasi_add_preopen_file(host_fd : Int) -> Int {
+  c_wasi_add_preopen_file(host_fd)
+}
+
+///|
+/// Reset preopens to just stdin/stdout/stderr.
+pub fn wasi_reset_preopens() -> Unit {
+  c_wasi_reset_preopens()
+}
+
+///|
 /// Convert TrapCode to RuntimeError using the error detail string approach
 fn trap_to_error(trap : TrapCode) -> @runtime.RuntimeError {
   let detail = match trap {
@@ -67,6 +99,7 @@ fn trap_to_error(trap : TrapCode) -> @runtime.RuntimeError {
     UninitializedElement => "uninitialized element"
     TableBoundsAccess => "out of bounds table access" // For bulk table ops
     NullReference => "null reference"
+    WasiExit => "wasi exit" // Not a real trap - WASI proc_exit was called
   }
   @runtime.RuntimeError::from_detail(detail)
 }
@@ -755,6 +788,260 @@ let host_import_spectest_print_f64_f64 : Int = 6
 ///|
 let host_import_spectest_print_char : Int = 7
 
+// WASI handler IDs (starting from 8)
+
+///|
+let host_import_wasi_args_get : Int = 8
+
+///|
+let host_import_wasi_args_sizes_get : Int = 9
+
+///|
+let host_import_wasi_environ_get : Int = 10
+
+///|
+let host_import_wasi_environ_sizes_get : Int = 11
+
+///|
+let host_import_wasi_fd_write : Int = 12
+
+///|
+let host_import_wasi_fd_read : Int = 13
+
+///|
+let host_import_wasi_fd_close : Int = 14
+
+///|
+let host_import_wasi_fd_prestat_get : Int = 15
+
+///|
+let host_import_wasi_fd_prestat_dir_name : Int = 16
+
+///|
+let host_import_wasi_fd_fdstat_get : Int = 17
+
+///|
+let host_import_wasi_proc_exit : Int = 18
+
+///|
+let host_import_wasi_clock_time_get : Int = 19
+
+///|
+let host_import_wasi_random_get : Int = 20
+
+///|
+let host_import_wasi_path_open : Int = 21
+
+///|
+let host_import_wasi_fd_seek : Int = 22
+
+///|
+let host_import_wasi_fd_tell : Int = 23
+
+///|
+let host_import_wasi_fd_filestat_get : Int = 24
+
+///|
+let host_import_wasi_path_filestat_get : Int = 25
+
+///|
+let host_import_wasi_fd_sync : Int = 26
+
+///|
+let host_import_wasi_fd_datasync : Int = 27
+
+///|
+let host_import_wasi_sched_yield : Int = 28
+
+///|
+let host_import_wasi_path_create_directory : Int = 29
+
+///|
+let host_import_wasi_path_remove_directory : Int = 30
+
+///|
+let host_import_wasi_path_unlink_file : Int = 31
+
+///|
+let host_import_wasi_path_rename : Int = 32
+
+///|
+let host_import_wasi_fd_fdstat_set_flags : Int = 33
+
+///|
+let host_import_wasi_fd_pread : Int = 34
+
+///|
+let host_import_wasi_fd_pwrite : Int = 35
+
+///|
+let host_import_wasi_fd_readdir : Int = 36
+
+///|
+let host_import_wasi_fd_filestat_set_size : Int = 37
+
+///|
+let host_import_wasi_fd_filestat_set_times : Int = 38
+
+///|
+let host_import_wasi_fd_advise : Int = 39
+
+///|
+let host_import_wasi_fd_allocate : Int = 40
+
+///|
+let host_import_wasi_fd_fdstat_set_rights : Int = 41
+
+///|
+let host_import_wasi_clock_res_get : Int = 42
+
+///|
+let host_import_wasi_fd_renumber : Int = 43
+
+///|
+let host_import_wasi_path_filestat_set_times : Int = 44
+
+///|
+let host_import_wasi_path_link : Int = 45
+
+///|
+let host_import_wasi_path_readlink : Int = 46
+
+///|
+let host_import_wasi_proc_raise : Int = 47
+
+///|
+let host_import_wasi_path_symlink : Int = 48
+
+///|
+/// Match a WASI import name to its handler ID
+fn match_wasi_import(name : Bytes) -> Int {
+  if name == b"args_get" {
+    return host_import_wasi_args_get
+  }
+  if name == b"args_sizes_get" {
+    return host_import_wasi_args_sizes_get
+  }
+  if name == b"environ_get" {
+    return host_import_wasi_environ_get
+  }
+  if name == b"environ_sizes_get" {
+    return host_import_wasi_environ_sizes_get
+  }
+  if name == b"fd_write" {
+    return host_import_wasi_fd_write
+  }
+  if name == b"fd_read" {
+    return host_import_wasi_fd_read
+  }
+  if name == b"fd_close" {
+    return host_import_wasi_fd_close
+  }
+  if name == b"fd_prestat_get" {
+    return host_import_wasi_fd_prestat_get
+  }
+  if name == b"fd_prestat_dir_name" {
+    return host_import_wasi_fd_prestat_dir_name
+  }
+  if name == b"fd_fdstat_get" {
+    return host_import_wasi_fd_fdstat_get
+  }
+  if name == b"proc_exit" {
+    return host_import_wasi_proc_exit
+  }
+  if name == b"clock_time_get" {
+    return host_import_wasi_clock_time_get
+  }
+  if name == b"random_get" {
+    return host_import_wasi_random_get
+  }
+  if name == b"path_open" {
+    return host_import_wasi_path_open
+  }
+  if name == b"fd_seek" {
+    return host_import_wasi_fd_seek
+  }
+  if name == b"fd_tell" {
+    return host_import_wasi_fd_tell
+  }
+  if name == b"fd_filestat_get" {
+    return host_import_wasi_fd_filestat_get
+  }
+  if name == b"path_filestat_get" {
+    return host_import_wasi_path_filestat_get
+  }
+  if name == b"fd_sync" {
+    return host_import_wasi_fd_sync
+  }
+  if name == b"fd_datasync" {
+    return host_import_wasi_fd_datasync
+  }
+  if name == b"sched_yield" {
+    return host_import_wasi_sched_yield
+  }
+  if name == b"path_create_directory" {
+    return host_import_wasi_path_create_directory
+  }
+  if name == b"path_remove_directory" {
+    return host_import_wasi_path_remove_directory
+  }
+  if name == b"path_unlink_file" {
+    return host_import_wasi_path_unlink_file
+  }
+  if name == b"path_rename" {
+    return host_import_wasi_path_rename
+  }
+  if name == b"fd_fdstat_set_flags" {
+    return host_import_wasi_fd_fdstat_set_flags
+  }
+  if name == b"fd_fdstat_set_rights" {
+    return host_import_wasi_fd_fdstat_set_rights
+  }
+  if name == b"fd_pread" {
+    return host_import_wasi_fd_pread
+  }
+  if name == b"fd_pwrite" {
+    return host_import_wasi_fd_pwrite
+  }
+  if name == b"fd_readdir" {
+    return host_import_wasi_fd_readdir
+  }
+  if name == b"fd_renumber" {
+    return host_import_wasi_fd_renumber
+  }
+  if name == b"fd_filestat_set_size" {
+    return host_import_wasi_fd_filestat_set_size
+  }
+  if name == b"fd_filestat_set_times" {
+    return host_import_wasi_fd_filestat_set_times
+  }
+  if name == b"fd_advise" {
+    return host_import_wasi_fd_advise
+  }
+  if name == b"fd_allocate" {
+    return host_import_wasi_fd_allocate
+  }
+  if name == b"path_filestat_set_times" {
+    return host_import_wasi_path_filestat_set_times
+  }
+  if name == b"path_link" {
+    return host_import_wasi_path_link
+  }
+  if name == b"path_readlink" {
+    return host_import_wasi_path_readlink
+  }
+  if name == b"clock_res_get" {
+    return host_import_wasi_clock_res_get
+  }
+  if name == b"proc_raise" {
+    return host_import_wasi_proc_raise
+  }
+  if name == b"path_symlink" {
+    return host_import_wasi_path_symlink
+  }
+  host_import_none
+}
+
 ///|
 /// Build host import handler ids for imported functions
 fn build_import_handlers(module_ : @core.Module) -> FixedArray[Int] {
@@ -781,6 +1068,9 @@ fn build_import_handlers(module_ : @core.Module) -> FixedArray[Int] {
           } else if imp.name == b"print_char" {
             handler = host_import_spectest_print_char
           }
+        } else if imp.module_ == b"wasi_snapshot_preview1" ||
+          imp.module_ == b"wasi_unstable" {
+          handler = match_wasi_import(imp.name)
         }
         handlers.push(handler)
       }
@@ -1329,6 +1619,10 @@ pub fn CRuntime::call_compiled(
         // Check for trap
         let trap = trap_code_from_int(trap_code)
         if trap != TrapCode::None {
+          // WasiExit is not a real trap - it's a normal exit
+          if trap == TrapCode::WasiExit {
+            return []
+          }
           raise trap_to_error(trap)
         }
 

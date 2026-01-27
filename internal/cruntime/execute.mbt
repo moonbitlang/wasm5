@@ -66,6 +66,7 @@ fn trap_code_from_int(code : Int) -> TrapCode {
     10 => TrapCode::UninitializedElement
     11 => TrapCode::TableBoundsAccess
     12 => TrapCode::NullReference
+    13 => TrapCode::WasiExit
     _ => TrapCode::Unreachable // Unknown trap code
   }
 }
