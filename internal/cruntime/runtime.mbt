@@ -854,6 +854,48 @@ let host_import_wasi_fd_datasync : Int = 27
 let host_import_wasi_sched_yield : Int = 28
 
 ///|
+let host_import_wasi_path_create_directory : Int = 29
+
+///|
+let host_import_wasi_path_remove_directory : Int = 30
+
+///|
+let host_import_wasi_path_unlink_file : Int = 31
+
+///|
+let host_import_wasi_path_rename : Int = 32
+
+///|
+let host_import_wasi_fd_fdstat_set_flags : Int = 33
+
+///|
+let host_import_wasi_fd_pread : Int = 34
+
+///|
+let host_import_wasi_fd_pwrite : Int = 35
+
+///|
+let host_import_wasi_fd_readdir : Int = 36
+
+///|
+let host_import_wasi_fd_filestat_set_size : Int = 37
+
+///|
+let host_import_wasi_fd_filestat_set_times : Int = 38
+
+///|
+let host_import_wasi_fd_advise : Int = 39
+
+///|
+let host_import_wasi_fd_allocate : Int = 40
+
+///|
+let host_import_wasi_clock_res_get : Int = 42
+
+///|
+let host_import_wasi_proc_raise : Int = 47
+
+///|
 /// Match a WASI import name to its handler ID
 fn match_wasi_import(name : Bytes) -> Int {
   if name == b"args_get" {
@@ -918,6 +960,48 @@ fn match_wasi_import(name : Bytes) -> Int {
   }
   if name == b"sched_yield" {
     return host_import_wasi_sched_yield
+  }
+  if name == b"path_create_directory" {
+    return host_import_wasi_path_create_directory
+  }
+  if name == b"path_remove_directory" {
+    return host_import_wasi_path_remove_directory
+  }
+  if name == b"path_unlink_file" {
+    return host_import_wasi_path_unlink_file
+  }
+  if name == b"path_rename" {
+    return host_import_wasi_path_rename
+  }
+  if name == b"fd_fdstat_set_flags" {
+    return host_import_wasi_fd_fdstat_set_flags
+  }
+  if name == b"fd_pread" {
+    return host_import_wasi_fd_pread
+  }
+  if name == b"fd_pwrite" {
+    return host_import_wasi_fd_pwrite
+  }
+  if name == b"fd_readdir" {
+    return host_import_wasi_fd_readdir
+  }
+  if name == b"fd_filestat_set_size" {
+    return host_import_wasi_fd_filestat_set_size
+  }
+  if name == b"fd_filestat_set_times" {
+    return host_import_wasi_fd_filestat_set_times
+  }
+  if name == b"fd_advise" {
+    return host_import_wasi_fd_advise
+  }
+  if name == b"fd_allocate" {
+    return host_import_wasi_fd_allocate
+  }
+  if name == b"clock_res_get" {
+    return host_import_wasi_clock_res_get
+  }
+  if name == b"proc_raise" {
+    return host_import_wasi_proc_raise
   }
   host_import_none
 }

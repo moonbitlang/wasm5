@@ -226,3 +226,40 @@ async test "wasi/sched_yield" {
   let (output, _) = run_wasi_with_preopen(wasm, "")
   assert_eq(output, "ok")
 }
+
+///|
+/// Test clock_res_get - get clock resolution
+async test "wasi/clock_res_get" {
+  let wasm = compile_wasi_wat("test/wasi/clock_res_get.wat")
+  let (output, _) = run_wasi_with_preopen(wasm, "")
+  assert_eq(output, "ok")
+}
+
+///|
+/// Test fd_pread - read at offset without changing file position
+/// Writes "Hello", pread verifies content, seeks to 0, writes "ok" -> "okllo"
+async test "wasi/fd_pread" {
+  let wasm = compile_wasi_wat("test/wasi/fd_pread.wat")
+  let (output, _) = run_wasi_with_preopen(wasm, "")
+  assert_eq(output, "okllo")
+}
+
+///|
+/// Test fd_pwrite - write at offset without changing file position
+/// Writes "Hello", then pwrite "ok" at offset 0, resulting in "okllo"
+async test "wasi/fd_pwrite" {
+  let wasm = compile_wasi_wat("test/wasi/fd_pwrite.wat")
+  let (output, _) = run_wasi_with_preopen(wasm, "")
+  assert_eq(output, "okllo")
+}
+
+///|
+/// Test fd_filestat_set_size - truncate file to specified size
+/// Writes "Hello World" (11 bytes), truncates to 5, verifies size, writes "ok" -> "okllo"
+async test "wasi/fd_filestat_set_size" {
+  let wasm = compile_wasi_wat("test/wasi/fd_filestat_set_size.wat")
+  let (output, _) = run_wasi_with_preopen(wasm, "")
+  assert_eq(output, "okllo")
+}
+
+// Note: path_filestat_get test skipped - requires directory preopen, not file preopen
