@@ -313,10 +313,13 @@ uint32_t wasi_fd_write(uint64_t* args, uint8_t* mem, int mem_size) {
         // Use write() syscall for all fds (works for both stdio and files)
         ssize_t written = write(host_fd, mem + buf_offset, buf_len);
         if (written < 0) {
-            // On error, return what we've written so far
-            break;
+            *(uint32_t*)(mem + nwritten_offset) = (uint32_t)total_written;
+            return errno_to_wasi(errno);
         }
         total_written += (size_t)written;
+        if ((size_t)written < buf_len) {
+            break;  // Short write
+        }
     }
 
     // Write nwritten back to WASM memory
@@ -356,7 +359,8 @@ uint32_t wasi_fd_read(uint64_t* args, uint8_t* mem, int mem_size) {
         // Use read() syscall for all fds (works for both stdio and files)
         ssize_t bytes_read = read(host_fd, mem + buf_offset, buf_len);
         if (bytes_read < 0) {
-            break;  // Error
+            *(uint32_t*)(mem + nread_offset) = (uint32_t)total_read;
+            return errno_to_wasi(errno);
         }
         total_read += (size_t)bytes_read;
         if ((size_t)bytes_read < buf_len) {
@@ -661,10 +665,36 @@ uint32_t wasi_fd_seek(uint64_t* args, uint8_t* mem, int mem_size) {
     }
 
 #ifdef _WIN32
-    int host_whence = (whence == 0) ? SEEK_SET : (whence == 1) ? SEEK_CUR : SEEK_END;
+    int host_whence;
+    switch (whence) {
+        case 0:
+            host_whence = SEEK_SET;
+            break;
+        case 1:
+            host_whence = SEEK_CUR;
+            break;
+        case 2:
+            host_whence = SEEK_END;
+            break;
+        default:
+            return WASI_ERRNO_INVAL;
+    }
     int64_t result = _lseeki64(host_fd, offset, host_whence);
 #else
-    int host_whence = (whence == 0) ? SEEK_SET : (whence == 1) ? SEEK_CUR : SEEK_END;
+    int host_whence;
+    switch (whence) {
+        case 0:
+            host_whence = SEEK_SET;
+            break;
+        case 1:
+            host_whence = SEEK_CUR;
+            break;
+        case 2:
+            host_whence = SEEK_END;
+            break;
+        default:
+            return WASI_ERRNO_INVAL;
+    }
     off_t result = lseek(host_fd, offset, host_whence);
 #endif
     if (result < 0) {
@@ -1223,7 +1253,10 @@ uint32_t wasi_fd_pread(uint64_t* args, uint8_t* mem, int mem_size) {
 #else
         ssize_t bytes_read = pread(host_fd, mem + buf_ptr, buf_len, (off_t)(offset + total_read));
 #endif
-        if (bytes_read < 0) break;
+        if (bytes_read < 0) {
+            *(uint32_t*)(mem + nread_ptr) = (uint32_t)total_read;
+            return errno_to_wasi(errno);
+        }
         total_read += (size_t)bytes_read;
         if ((size_t)bytes_read < buf_len) break;
     }
@@ -1266,7 +1299,10 @@ uint32_t wasi_fd_pwrite(uint64_t* args, uint8_t* mem, int mem_size) {
 #else
         ssize_t bytes_written = pwrite(host_fd, mem + buf_ptr, buf_len, (off_t)(offset + total_written));
 #endif
-        if (bytes_written < 0) break;
+        if (bytes_written < 0) {
+            *(uint32_t*)(mem + nwritten_ptr) = (uint32_t)total_written;
+            return errno_to_wasi(errno);
+        }
         total_written += (size_t)bytes_written;
         if ((size_t)bytes_written < buf_len) break;
     }
@@ -1411,6 +1447,10 @@ uint32_t wasi_clock_res_get(uint64_t* args, uint8_t* mem, int mem_size) {
     uint32_t res_ptr = (uint32_t)args[1];
 
     if (res_ptr + 8 > (uint32_t)mem_size) return WASI_ERRNO_INVAL;
+
+    if (clock_id != WASI_CLOCKID_REALTIME && clock_id != WASI_CLOCKID_MONOTONIC) {
+        return WASI_ERRNO_INVAL;
+    }
 
     uint64_t resolution;
 #ifdef _WIN32
