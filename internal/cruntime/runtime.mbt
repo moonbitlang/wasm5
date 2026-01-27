@@ -890,10 +890,28 @@ let host_import_wasi_fd_advise : Int = 39
 let host_import_wasi_fd_allocate : Int = 40
 
 ///|
+let host_import_wasi_fd_fdstat_set_rights : Int = 41
+
+///|
 let host_import_wasi_clock_res_get : Int = 42
 
 ///|
+let host_import_wasi_fd_renumber : Int = 43
+
+///|
+let host_import_wasi_path_filestat_set_times : Int = 44
+
+///|
+let host_import_wasi_path_link : Int = 45
+
+///|
+let host_import_wasi_path_readlink : Int = 46
+
+///|
 let host_import_wasi_proc_raise : Int = 47
+
+///|
+let host_import_wasi_path_symlink : Int = 48
 
 ///|
 /// Match a WASI import name to its handler ID
@@ -976,6 +994,9 @@ fn match_wasi_import(name : Bytes) -> Int {
   if name == b"fd_fdstat_set_flags" {
     return host_import_wasi_fd_fdstat_set_flags
   }
+  if name == b"fd_fdstat_set_rights" {
+    return host_import_wasi_fd_fdstat_set_rights
+  }
   if name == b"fd_pread" {
     return host_import_wasi_fd_pread
   }
@@ -984,6 +1005,9 @@ fn match_wasi_import(name : Bytes) -> Int {
   }
   if name == b"fd_readdir" {
     return host_import_wasi_fd_readdir
+  }
+  if name == b"fd_renumber" {
+    return host_import_wasi_fd_renumber
   }
   if name == b"fd_filestat_set_size" {
     return host_import_wasi_fd_filestat_set_size
@@ -997,11 +1021,23 @@ fn match_wasi_import(name : Bytes) -> Int {
   if name == b"fd_allocate" {
     return host_import_wasi_fd_allocate
   }
+  if name == b"path_filestat_set_times" {
+    return host_import_wasi_path_filestat_set_times
+  }
+  if name == b"path_link" {
+    return host_import_wasi_path_link
+  }
+  if name == b"path_readlink" {
+    return host_import_wasi_path_readlink
+  }
   if name == b"clock_res_get" {
     return host_import_wasi_clock_res_get
   }
   if name == b"proc_raise" {
     return host_import_wasi_proc_raise
+  }
+  if name == b"path_symlink" {
+    return host_import_wasi_path_symlink
   }
   host_import_none
 }

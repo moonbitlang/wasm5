@@ -1052,6 +1052,66 @@ uint32_t wasi_path_filestat_get(uint64_t* args, uint8_t* mem, int mem_size) {
     return WASI_ERRNO_SUCCESS;
 }
 
+// WASI path_filestat_set_times - set file timestamps via path
+uint32_t wasi_path_filestat_set_times(uint64_t* args, uint8_t* mem, int mem_size) {
+    uint32_t dirfd = (uint32_t)args[0];
+    uint32_t flags = (uint32_t)args[1];  // lookupflags
+    uint32_t path_ptr = (uint32_t)args[2];
+    uint32_t path_len = (uint32_t)args[3];
+    uint64_t atim = args[4];
+    uint64_t mtim = args[5];
+    uint16_t fst_flags = (uint16_t)args[6];
+
+    if (path_ptr + path_len > (uint32_t)mem_size) return WASI_ERRNO_INVAL;
+    if (path_len >= 512) return WASI_ERRNO_NAMETOOLONG;
+
+    char host_path[512];
+    memcpy(host_path, mem + path_ptr, path_len);
+    host_path[path_len] = '\0';
+
+    int base_fd = -1;
+    const char* base_path = NULL;
+    if (dirfd >= 3 && dirfd < (uint32_t)g_wasi_num_preopens) {
+        base_fd = g_wasi_preopens[dirfd].host_fd;
+        base_path = g_wasi_preopens[dirfd].path;
+        if (base_fd < 0) return WASI_ERRNO_BADF;
+    } else {
+        return WASI_ERRNO_BADF;
+    }
+
+#ifdef _WIN32
+    (void)flags;
+    (void)base_path;
+    (void)atim;
+    (void)mtim;
+    (void)fst_flags;
+    return WASI_ERRNO_NOSYS;
+#else
+    struct timespec times[2];
+    // Access time
+    if (fst_flags & 1) {  // FSTFLAGS_ATIM_NOW
+        times[0].tv_nsec = UTIME_NOW;
+    } else if (fst_flags & 2) {  // FSTFLAGS_ATIM
+        times[0].tv_sec = (time_t)(atim / 1000000000ULL);
+        times[0].tv_nsec = (long)(atim % 1000000000ULL);
+    } else {
+        times[0].tv_nsec = UTIME_OMIT;
+    }
+    // Modification time
+    if (fst_flags & 4) {  // FSTFLAGS_MTIM_NOW
+        times[1].tv_nsec = UTIME_NOW;
+    } else if (fst_flags & 8) {  // FSTFLAGS_MTIM
+        times[1].tv_sec = (time_t)(mtim / 1000000000ULL);
+        times[1].tv_nsec = (long)(mtim % 1000000000ULL);
+    } else {
+        times[1].tv_nsec = UTIME_OMIT;
+    }
+    int stat_flags = (flags & 1) ? 0 : AT_SYMLINK_NOFOLLOW;
+    if (utimensat(base_fd, host_path, times, stat_flags) < 0) return errno_to_wasi(errno);
+    return WASI_ERRNO_SUCCESS;
+#endif
+}
+
 // WASI path_create_directory - create a directory
 uint32_t wasi_path_create_directory(uint64_t* args, uint8_t* mem, int mem_size) {
     uint32_t dirfd = (uint32_t)args[0];
@@ -1221,6 +1281,139 @@ uint32_t wasi_path_rename(uint64_t* args, uint8_t* mem, int mem_size) {
     return WASI_ERRNO_SUCCESS;
 }
 
+// WASI path_link - create a hard link
+uint32_t wasi_path_link(uint64_t* args, uint8_t* mem, int mem_size) {
+    uint32_t old_dirfd = (uint32_t)args[0];
+    uint32_t old_flags = (uint32_t)args[1];  // lookupflags
+    uint32_t old_path_ptr = (uint32_t)args[2];
+    uint32_t old_path_len = (uint32_t)args[3];
+    uint32_t new_dirfd = (uint32_t)args[4];
+    uint32_t new_path_ptr = (uint32_t)args[5];
+    uint32_t new_path_len = (uint32_t)args[6];
+
+    if (old_path_ptr + old_path_len > (uint32_t)mem_size) return WASI_ERRNO_INVAL;
+    if (new_path_ptr + new_path_len > (uint32_t)mem_size) return WASI_ERRNO_INVAL;
+    if (old_path_len >= 512 || new_path_len >= 512) return WASI_ERRNO_NAMETOOLONG;
+
+    char old_path[512];
+    char new_path[512];
+    memcpy(old_path, mem + old_path_ptr, old_path_len);
+    memcpy(new_path, mem + new_path_ptr, new_path_len);
+    old_path[old_path_len] = '\0';
+    new_path[new_path_len] = '\0';
+
+    int old_base_fd = -1;
+    const char* old_base_path = NULL;
+    if (old_dirfd >= 3 && old_dirfd < (uint32_t)g_wasi_num_preopens) {
+        old_base_fd = g_wasi_preopens[old_dirfd].host_fd;
+        old_base_path = g_wasi_preopens[old_dirfd].path;
+        if (old_base_fd < 0) return WASI_ERRNO_BADF;
+    } else {
+        return WASI_ERRNO_BADF;
+    }
+
+    int new_base_fd = -1;
+    const char* new_base_path = NULL;
+    if (new_dirfd >= 3 && new_dirfd < (uint32_t)g_wasi_num_preopens) {
+        new_base_fd = g_wasi_preopens[new_dirfd].host_fd;
+        new_base_path = g_wasi_preopens[new_dirfd].path;
+        if (new_base_fd < 0) return WASI_ERRNO_BADF;
+    } else {
+        return WASI_ERRNO_BADF;
+    }
+
+#ifdef _WIN32
+    (void)old_flags;
+    (void)old_base_path;
+    (void)new_base_path;
+    return WASI_ERRNO_NOSYS;
+#else
+    int link_flags = (old_flags & 1) ? AT_SYMLINK_FOLLOW : 0;
+    if (linkat(old_base_fd, old_path, new_base_fd, new_path, link_flags) < 0) {
+        return errno_to_wasi(errno);
+    }
+    return WASI_ERRNO_SUCCESS;
+#endif
+}
+
+// WASI path_readlink - read the target of a symlink
+uint32_t wasi_path_readlink(uint64_t* args, uint8_t* mem, int mem_size) {
+    uint32_t dirfd = (uint32_t)args[0];
+    uint32_t path_ptr = (uint32_t)args[1];
+    uint32_t path_len = (uint32_t)args[2];
+    uint32_t buf_ptr = (uint32_t)args[3];
+    uint32_t buf_len = (uint32_t)args[4];
+    uint32_t bufused_ptr = (uint32_t)args[5];
+
+    if (path_ptr + path_len > (uint32_t)mem_size) return WASI_ERRNO_INVAL;
+    if (buf_ptr + buf_len > (uint32_t)mem_size) return WASI_ERRNO_INVAL;
+    if (bufused_ptr + 4 > (uint32_t)mem_size) return WASI_ERRNO_INVAL;
+    if (path_len >= 512) return WASI_ERRNO_NAMETOOLONG;
+
+    char host_path[512];
+    memcpy(host_path, mem + path_ptr, path_len);
+    host_path[path_len] = '\0';
+
+    int base_fd = -1;
+    const char* base_path = NULL;
+    if (dirfd >= 3 && dirfd < (uint32_t)g_wasi_num_preopens) {
+        base_fd = g_wasi_preopens[dirfd].host_fd;
+        base_path = g_wasi_preopens[dirfd].path;
+        if (base_fd < 0) return WASI_ERRNO_BADF;
+    } else {
+        return WASI_ERRNO_BADF;
+    }
+
+#ifdef _WIN32
+    (void)base_path;
+    *(uint32_t*)(mem + bufused_ptr) = 0;
+    return WASI_ERRNO_NOSYS;
+#else
+    ssize_t len = readlinkat(base_fd, host_path, (char*)(mem + buf_ptr), buf_len);
+    if (len < 0) return errno_to_wasi(errno);
+    *(uint32_t*)(mem + bufused_ptr) = (uint32_t)len;
+    return WASI_ERRNO_SUCCESS;
+#endif
+}
+
+// WASI path_symlink - create a symlink
+uint32_t wasi_path_symlink(uint64_t* args, uint8_t* mem, int mem_size) {
+    uint32_t old_path_ptr = (uint32_t)args[0];
+    uint32_t old_path_len = (uint32_t)args[1];
+    uint32_t dirfd = (uint32_t)args[2];
+    uint32_t new_path_ptr = (uint32_t)args[3];
+    uint32_t new_path_len = (uint32_t)args[4];
+
+    if (old_path_ptr + old_path_len > (uint32_t)mem_size) return WASI_ERRNO_INVAL;
+    if (new_path_ptr + new_path_len > (uint32_t)mem_size) return WASI_ERRNO_INVAL;
+    if (old_path_len >= 512 || new_path_len >= 512) return WASI_ERRNO_NAMETOOLONG;
+
+    char old_path[512];
+    char new_path[512];
+    memcpy(old_path, mem + old_path_ptr, old_path_len);
+    memcpy(new_path, mem + new_path_ptr, new_path_len);
+    old_path[old_path_len] = '\0';
+    new_path[new_path_len] = '\0';
+
+    int base_fd = -1;
+    const char* base_path = NULL;
+    if (dirfd >= 3 && dirfd < (uint32_t)g_wasi_num_preopens) {
+        base_fd = g_wasi_preopens[dirfd].host_fd;
+        base_path = g_wasi_preopens[dirfd].path;
+        if (base_fd < 0) return WASI_ERRNO_BADF;
+    } else {
+        return WASI_ERRNO_BADF;
+    }
+
+#ifdef _WIN32
+    (void)base_path;
+    return WASI_ERRNO_NOSYS;
+#else
+    if (symlinkat(old_path, base_fd, new_path) < 0) return errno_to_wasi(errno);
+    return WASI_ERRNO_SUCCESS;
+#endif
+}
+
 // WASI fd_pread - read from file at offset without changing position
 uint32_t wasi_fd_pread(uint64_t* args, uint8_t* mem, int mem_size) {
     uint32_t fd = (uint32_t)args[0];
@@ -1339,6 +1532,51 @@ uint32_t wasi_fd_fdstat_set_flags(uint64_t* args) {
     if (entry) {
         entry->flags = flags;
     }
+
+    return WASI_ERRNO_SUCCESS;
+}
+
+// WASI fd_fdstat_set_rights - set fd rights
+uint32_t wasi_fd_fdstat_set_rights(uint64_t* args) {
+    uint32_t fd = (uint32_t)args[0];
+    uint64_t rights_base = args[1];
+    uint64_t rights_inheriting = args[2];
+
+    int host_fd = get_host_fd(fd);
+    if (host_fd < 0) return WASI_ERRNO_BADF;
+
+    WasiFdEntry* entry = get_fd_entry(fd);
+    if (entry) {
+        entry->rights_base = rights_base;
+        entry->rights_inheriting = rights_inheriting;
+    }
+
+    return WASI_ERRNO_SUCCESS;
+}
+
+// WASI fd_renumber - move fd to another number
+uint32_t wasi_fd_renumber(uint64_t* args) {
+    uint32_t fd = (uint32_t)args[0];
+    uint32_t to = (uint32_t)args[1];
+
+    if (fd <= 2 || to <= 2) return WASI_ERRNO_BADF;
+    if (fd < WASI_MAX_PREOPENS || to < WASI_MAX_PREOPENS) return WASI_ERRNO_BADF;
+    if (fd >= MAX_WASI_FDS || to >= MAX_WASI_FDS) return WASI_ERRNO_BADF;
+    if (fd == to) return WASI_ERRNO_SUCCESS;
+
+    init_fd_table();
+    if (g_fd_table[fd].host_fd < 0) return WASI_ERRNO_BADF;
+
+    if (g_fd_table[to].host_fd >= 0) {
+        close(g_fd_table[to].host_fd);
+    }
+
+    g_fd_table[to] = g_fd_table[fd];
+    g_fd_table[fd].host_fd = -1;
+    g_fd_table[fd].filetype = WASI_FILETYPE_UNKNOWN;
+    g_fd_table[fd].flags = 0;
+    g_fd_table[fd].rights_base = 0;
+    g_fd_table[fd].rights_inheriting = 0;
 
     return WASI_ERRNO_SUCCESS;
 }

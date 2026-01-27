@@ -355,6 +355,14 @@ async test "wasi/fd_fdstat_set_flags" {
 }
 
 ///|
+/// Test fd_fdstat_set_rights - should succeed
+async test "wasi/fd_fdstat_set_rights" {
+  let wasm = compile_wasi_wat("test/wasi/fd_fdstat_set_rights.wat")
+  let (output, _) = run_wasi_with_preopen(wasm, "")
+  assert_eq(output, "ok")
+}
+
+///|
 /// Test sched_yield - yield CPU
 async test "wasi/sched_yield" {
   let wasm = compile_wasi_wat("test/wasi/sched_yield.wat")
@@ -461,6 +469,14 @@ async test "wasi/fd_allocate" {
 }
 
 ///|
+/// Test fd_renumber - should move fd and invalidate old number
+async test "wasi/fd_renumber" {
+  let wasm = compile_wasi_wat("test/wasi/fd_renumber.wat")
+  let (output, _) = run_wasi_with_preopen_dir(wasm, "")
+  assert_eq(output, "ok")
+}
+
+///|
 /// Test proc_raise - should return NOSYS (52)
 async test "wasi/proc_raise" {
   let wasm = compile_wasi_wat("test/wasi/proc_raise.wat")
@@ -494,6 +510,14 @@ async test "wasi/path_filestat_get" {
 }
 
 ///|
+/// Test path_filestat_set_times
+async test "wasi/path_filestat_set_times" {
+  let wasm = compile_wasi_wat("test/wasi/path_filestat_set_times.wat")
+  let (output, _) = run_wasi_with_preopen_dir(wasm, "")
+  assert_eq(output, "ok")
+}
+
+///|
 /// Test path_create_directory + path_remove_directory
 async test "wasi/path_create_remove_directory" {
   let wasm = compile_wasi_wat("test/wasi/path_create_remove_directory.wat")
@@ -515,6 +539,22 @@ async test "wasi/path_rename" {
   let wasm = compile_wasi_wat("test/wasi/path_rename.wat")
   let (output, _) = run_wasi_with_preopen_dir(wasm, "")
   assert_eq(output, "ok")
+}
+
+///|
+/// Test path_link
+async test "wasi/path_link" {
+  let wasm = compile_wasi_wat("test/wasi/path_link.wat")
+  let (output, _) = run_wasi_with_preopen_dir(wasm, "")
+  assert_eq(output, "ok")
+}
+
+///|
+/// Test path_symlink + path_readlink
+async test "wasi/path_symlink_readlink" {
+  let wasm = compile_wasi_wat("test/wasi/path_symlink_readlink.wat")
+  let (output, _) = run_wasi_with_preopen_dir(wasm, "")
+  assert_eq(output, "target.txt")
 }
 
 ///|

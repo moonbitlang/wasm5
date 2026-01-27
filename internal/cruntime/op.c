@@ -979,8 +979,8 @@ int op_call_import(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
         uint64_t results[16];
         int actual_results = num_results < 16 ? num_results : 16;
 
-        // Check if this is a WASI handler (IDs 8-47)
-        if (handler_id >= HOST_IMPORT_WASI_ARGS_GET && handler_id <= HOST_IMPORT_WASI_PROC_RAISE) {
+        // Check if this is a WASI handler (IDs 8-48)
+        if (handler_id >= HOST_IMPORT_WASI_ARGS_GET && handler_id <= HOST_IMPORT_WASI_PATH_SYMLINK) {
             uint32_t wasi_ret = WASI_ERRNO_NOSYS;
             uint8_t* mem = crt->mem;
             int mem_size = g_memory_size;
@@ -1064,6 +1064,9 @@ int op_call_import(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
                 case HOST_IMPORT_WASI_FD_FDSTAT_SET_FLAGS:
                     wasi_ret = wasi_fd_fdstat_set_flags(args_ptr);
                     break;
+                case HOST_IMPORT_WASI_FD_FDSTAT_SET_RIGHTS:
+                    wasi_ret = wasi_fd_fdstat_set_rights(args_ptr);
+                    break;
                 case HOST_IMPORT_WASI_FD_PREAD:
                     wasi_ret = wasi_fd_pread(args_ptr, mem, mem_size);
                     break;
@@ -1072,6 +1075,9 @@ int op_call_import(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
                     break;
                 case HOST_IMPORT_WASI_FD_READDIR:
                     wasi_ret = wasi_fd_readdir(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_FD_RENUMBER:
+                    wasi_ret = wasi_fd_renumber(args_ptr);
                     break;
                 case HOST_IMPORT_WASI_FD_FILESTAT_SET_SIZE:
                     wasi_ret = wasi_fd_filestat_set_size(args_ptr);
@@ -1085,11 +1091,23 @@ int op_call_import(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
                 case HOST_IMPORT_WASI_FD_ALLOCATE:
                     wasi_ret = wasi_fd_allocate(args_ptr);
                     break;
+                case HOST_IMPORT_WASI_PATH_FILESTAT_SET_TIMES:
+                    wasi_ret = wasi_path_filestat_set_times(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_PATH_LINK:
+                    wasi_ret = wasi_path_link(args_ptr, mem, mem_size);
+                    break;
+                case HOST_IMPORT_WASI_PATH_READLINK:
+                    wasi_ret = wasi_path_readlink(args_ptr, mem, mem_size);
+                    break;
                 case HOST_IMPORT_WASI_CLOCK_RES_GET:
                     wasi_ret = wasi_clock_res_get(args_ptr, mem, mem_size);
                     break;
                 case HOST_IMPORT_WASI_PROC_RAISE:
                     wasi_ret = wasi_proc_raise(args_ptr);
+                    break;
+                case HOST_IMPORT_WASI_PATH_SYMLINK:
+                    wasi_ret = wasi_path_symlink(args_ptr, mem, mem_size);
                     break;
             }
 

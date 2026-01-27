@@ -43,8 +43,14 @@
 #define HOST_IMPORT_WASI_FD_FILESTAT_SET_TIMES 38
 #define HOST_IMPORT_WASI_FD_ADVISE          39
 #define HOST_IMPORT_WASI_FD_ALLOCATE        40
+#define HOST_IMPORT_WASI_FD_FDSTAT_SET_RIGHTS 41
 #define HOST_IMPORT_WASI_CLOCK_RES_GET      42
+#define HOST_IMPORT_WASI_FD_RENUMBER        43
+#define HOST_IMPORT_WASI_PATH_FILESTAT_SET_TIMES 44
+#define HOST_IMPORT_WASI_PATH_LINK          45
+#define HOST_IMPORT_WASI_PATH_READLINK      46
 #define HOST_IMPORT_WASI_PROC_RAISE         47
+#define HOST_IMPORT_WASI_PATH_SYMLINK       48
 
 // ============================================================================
 // WASI Error Codes
@@ -179,13 +185,19 @@ uint32_t wasi_path_remove_directory(uint64_t* args, uint8_t* mem, int mem_size);
 uint32_t wasi_path_unlink_file(uint64_t* args, uint8_t* mem, int mem_size);
 uint32_t wasi_path_rename(uint64_t* args, uint8_t* mem, int mem_size);
 uint32_t wasi_fd_fdstat_set_flags(uint64_t* args);
+uint32_t wasi_fd_fdstat_set_rights(uint64_t* args);
 uint32_t wasi_fd_pread(uint64_t* args, uint8_t* mem, int mem_size);
 uint32_t wasi_fd_pwrite(uint64_t* args, uint8_t* mem, int mem_size);
 uint32_t wasi_fd_readdir(uint64_t* args, uint8_t* mem, int mem_size);
+uint32_t wasi_fd_renumber(uint64_t* args);
 uint32_t wasi_fd_filestat_set_size(uint64_t* args);
 uint32_t wasi_fd_filestat_set_times(uint64_t* args);
 uint32_t wasi_fd_advise(uint64_t* args);
 uint32_t wasi_fd_allocate(uint64_t* args);
+uint32_t wasi_path_filestat_set_times(uint64_t* args, uint8_t* mem, int mem_size);
+uint32_t wasi_path_link(uint64_t* args, uint8_t* mem, int mem_size);
+uint32_t wasi_path_readlink(uint64_t* args, uint8_t* mem, int mem_size);
+uint32_t wasi_path_symlink(uint64_t* args, uint8_t* mem, int mem_size);
 uint32_t wasi_clock_res_get(uint64_t* args, uint8_t* mem, int mem_size);
 uint32_t wasi_proc_raise(uint64_t* args);
 
