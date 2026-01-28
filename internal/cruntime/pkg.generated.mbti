@@ -56,6 +56,7 @@ pub struct CRuntime {
   data_segment_offsets : FixedArray[Int]
   data_segment_sizes : FixedArray[Int]
   elem_segments_flat : FixedArray[Int]
+  elem_segments_flat_u64 : FixedArray[UInt64]
   elem_segment_offsets : FixedArray[Int]
   elem_segment_sizes : FixedArray[Int]
   elem_segment_dropped : FixedArray[Int]
@@ -107,6 +108,9 @@ pub enum TrapCode {
   TableBoundsAccess
   NullReference
   WasiExit
+  OutOfBoundsArrayAccess
+  NullArrayReference
+  InvalidArrayReference
 }
 pub impl Eq for TrapCode
 pub impl Show for TrapCode

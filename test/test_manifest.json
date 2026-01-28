@@ -102,8 +102,8 @@
     {"file": "utf8-invalid-encoding.wast", "subdir": "", "moonbit": true, "cruntime": true},
 
     {"file": "array.wast", "subdir": "gc/", "moonbit": true, "cruntime": true},
-    {"file": "array_copy.wast", "subdir": "gc/", "moonbit": true, "cruntime": false},
-    {"file": "array_fill.wast", "subdir": "gc/", "moonbit": true, "cruntime": false},
+    {"file": "array_copy.wast", "subdir": "gc/", "moonbit": true, "cruntime": true},
+    {"file": "array_fill.wast", "subdir": "gc/", "moonbit": true, "cruntime": true},
     {"file": "array_init_data.wast", "subdir": "gc/", "moonbit": true, "cruntime": true},
     {"file": "array_init_elem.wast", "subdir": "gc/", "moonbit": true, "cruntime": true},
     {"file": "array_new_data.wast", "subdir": "gc/", "moonbit": true, "cruntime": true},

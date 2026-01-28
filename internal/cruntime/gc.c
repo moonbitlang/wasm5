@@ -160,6 +160,8 @@ void gc_init(void) {
     memset(&g_gc_heap, 0, sizeof(g_gc_heap));
     g_gc_heap.collect_threshold = GC_COLLECT_THRESHOLD;
     g_gc_heap.initialized = 1;
+    // Disable collection until globals/tables are scanned as roots.
+    g_gc_heap.disable_collect = 1;
     ptrset_init(&g_gc_heap.ptrs, GC_PTRSET_MIN_CAP);
     if (g_gc_heap.ptrs.cap == 0) {
         g_gc_heap.disable_collect = 1;
@@ -270,6 +272,31 @@ GcArray* gc_alloc_array(uint32_t type_idx, int32_t length) {
     }
 
     return arr;
+}
+
+uint64_t gc_alloc_array_const(uint32_t type_idx, int32_t length, uint64_t init_val) {
+    GcArray* arr = gc_alloc_array(type_idx, length);
+    if (!arr) {
+        return REF_NULL;
+    }
+    for (int32_t i = 0; i < length; i++) {
+        arr->elements[i] = init_val;
+    }
+    return (uint64_t)arr;
+}
+
+uint64_t gc_alloc_array_from_values(uint32_t type_idx, int32_t length, const uint64_t* values) {
+    if (length < 0) {
+        return REF_NULL;
+    }
+    GcArray* arr = gc_alloc_array(type_idx, length);
+    if (!arr) {
+        return REF_NULL;
+    }
+    if (values && length > 0) {
+        memcpy(arr->elements, values, (size_t)length * sizeof(uint64_t));
+    }
+    return (uint64_t)arr;
 }
 
 static void gc_mark_object(GcHeader* obj, GcHeader** stack, size_t* top, size_t cap) {

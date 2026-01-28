@@ -16,6 +16,9 @@ pub enum TrapCode {
   TableBoundsAccess = 11 // "out of bounds table access" - for bulk table ops
   NullReference = 12 // ref.as_non_null on null ref
   WasiExit = 13 // WASI proc_exit was called (not a real trap)
+  OutOfBoundsArrayAccess = 14 // "out of bounds array access"
+  NullArrayReference = 15 // "null array reference"
+  InvalidArrayReference = 16 // "array: invalid reference"
 } derive(Eq, Show)
 
 ///|

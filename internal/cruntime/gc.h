@@ -34,4 +34,7 @@ void gc_set_globals(uint64_t* globals, int num_globals);
 
 int gc_is_managed_ptr(uint64_t value);
 
+uint64_t gc_alloc_array_const(uint32_t type_idx, int32_t length, uint64_t init_val);
+uint64_t gc_alloc_array_from_values(uint32_t type_idx, int32_t length, const uint64_t* values);
+
 #endif

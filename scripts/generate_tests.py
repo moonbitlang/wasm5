@@ -238,6 +238,20 @@ def generate_tests(manifest: dict) -> str:
         elif test.get("moonbit", False) and test.get("disabled_reason"):
             output.append(generate_disabled_comment(test, cruntime=True))
 
+    # Generate GC CRuntime tests
+    output.append("// =============================================================================")
+    output.append("// WebAssembly GC C Runtime Tests")
+    output.append("// =============================================================================")
+    output.append("")
+
+    for test in gc_tests:
+        if test.get("disabled"):
+            continue
+        if test.get("cruntime", False):
+            output.append(generate_test_function(test, cruntime=True))
+        elif test.get("moonbit", False) and test.get("disabled_reason"):
+            output.append(generate_disabled_comment(test, cruntime=True))
+
     # Generate bulk memory CRuntime tests
     output.append("// =============================================================================")
     output.append("// Bulk Memory CRuntime Tests")

@@ -800,7 +800,7 @@ extern "C" fn table_grow() -> UInt64 = "table_grow"
 ///|
 /// Create a CRuntimeContext for cross-module calls.
 /// Returns a pointer (as Int64) to a heap-allocated context structure.
-#borrow(code, globals, memory, memory_pages, tables_flat, table_offsets, table_sizes, table_max_sizes, table_elem_is_funcref, func_entries, func_num_locals, func_type_idxs, type_sig_hash1, type_sig_hash2, import_num_params, import_num_results, import_handler_ids, output_buffer, output_length, import_context_ptrs, import_target_func_idxs, data_segments_flat, data_segment_offsets, data_segment_sizes, elem_segments_flat, elem_segment_offsets, elem_segment_sizes, elem_segment_dropped)
+#borrow(code, globals, memory, memory_pages, tables_flat, table_offsets, table_sizes, table_max_sizes, table_elem_is_funcref, func_entries, func_num_locals, func_type_idxs, type_sig_hash1, type_sig_hash2, import_num_params, import_num_results, import_handler_ids, output_buffer, output_length, import_context_ptrs, import_target_func_idxs, data_segments_flat, data_segment_offsets, data_segment_sizes, elem_segments_flat, elem_segments_flat_u64, elem_segment_offsets, elem_segment_sizes, elem_segment_dropped)
 extern "C" fn c_create_runtime_context(
   code : FixedArray[UInt64],
   globals : FixedArray[UInt64],
@@ -835,6 +835,7 @@ extern "C" fn c_create_runtime_context(
   data_segment_sizes : FixedArray[Int],
   num_data_segments : Int,
   elem_segments_flat : FixedArray[Int],
+  elem_segments_flat_u64 : FixedArray[UInt64],
   elem_segment_offsets : FixedArray[Int],
   elem_segment_sizes : FixedArray[Int],
   elem_segment_dropped : FixedArray[Int],

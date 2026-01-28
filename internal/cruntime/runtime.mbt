@@ -34,6 +34,7 @@ pub struct CRuntime {
   data_segment_sizes : FixedArray[Int] // Size of each segment (mutable for data.drop)
   // Element segments for bulk table operations
   elem_segments_flat : FixedArray[Int] // All element segments flattened (func indices, -1 for null)
+  elem_segments_flat_u64 : FixedArray[UInt64] // All element segments flattened (GC refs)
   elem_segment_offsets : FixedArray[Int] // Offset of each segment in elem_segments_flat
   elem_segment_sizes : FixedArray[Int] // Size of each segment
   elem_segment_dropped : FixedArray[Int] // Whether each segment has been dropped (0 or 1)
@@ -83,6 +84,27 @@ pub fn wasi_reset_preopens() -> Unit {
 }
 
 ///|
+/// Initialize GC heap for CRuntime global initializers.
+extern "C" fn c_gc_init() -> Unit = "gc_init"
+
+///|
+/// Allocate a GC array with all elements initialized to init_val.
+extern "C" fn c_gc_alloc_array_const(
+  type_idx : Int,
+  length : Int,
+  init_val : UInt64,
+) -> UInt64 = "gc_alloc_array_const"
+
+///|
+/// Allocate a GC array from a fixed array of values.
+#borrow(values)
+extern "C" fn c_gc_alloc_array_from_values(
+  type_idx : Int,
+  length : Int,
+  values : FixedArray[UInt64],
+) -> UInt64 = "gc_alloc_array_from_values"
+
+///|
 /// Convert TrapCode to RuntimeError using the error detail string approach
 fn trap_to_error(trap : TrapCode) -> @runtime.RuntimeError {
   let detail = match trap {
@@ -100,6 +122,9 @@ fn trap_to_error(trap : TrapCode) -> @runtime.RuntimeError {
     TableBoundsAccess => "out of bounds table access" // For bulk table ops
     NullReference => "null reference"
     WasiExit => "wasi exit" // Not a real trap - WASI proc_exit was called
+    OutOfBoundsArrayAccess => "out of bounds array access"
+    NullArrayReference => "null array reference"
+    InvalidArrayReference => "array: invalid reference"
   }
   @runtime.RuntimeError::from_detail(detail)
 }
@@ -226,6 +251,7 @@ fn build_runtime(
   resolved_imported_globals : Map[Int, UInt64],
   external_funcrefs : Array[ResolvedImport],
 ) -> CRuntime {
+  c_gc_init()
   // Initialize globals from module
   let globals = init_globals(module_, resolved_imported_globals)
   // Initialize memory from module (pre-allocated to max size)
@@ -256,6 +282,7 @@ fn build_runtime(
   // Flatten element segments for bulk table operations
   let (
     elem_segments_flat,
+    elem_segments_flat_u64,
     elem_segment_offsets,
     elem_segment_sizes,
     elem_segment_dropped,
@@ -303,6 +330,7 @@ fn build_runtime(
     data_segment_offsets,
     data_segment_sizes,
     elem_segments_flat,
+    elem_segments_flat_u64,
     elem_segment_offsets,
     elem_segment_sizes,
     elem_segment_dropped,
@@ -405,6 +433,7 @@ pub fn CRuntime::get_context_ptr(self : CRuntime) -> Int64 {
       self.data_segment_sizes,
       self.data_segment_sizes.length(),
       self.elem_segments_flat,
+      self.elem_segments_flat_u64,
       self.elem_segment_offsets,
       self.elem_segment_sizes,
       self.elem_segment_dropped,
@@ -584,11 +613,17 @@ fn flatten_data_segments(
 fn flatten_elem_segments(
   module_ : @core.Module,
   globals : FixedArray[UInt64],
-) -> (FixedArray[Int], FixedArray[Int], FixedArray[Int], FixedArray[Int]) {
+) -> (
+  FixedArray[Int],
+  FixedArray[UInt64],
+  FixedArray[Int],
+  FixedArray[Int],
+  FixedArray[Int],
+) {
   let num_segments = module_.elems.length()
   if num_segments == 0 {
     // Return minimal arrays to avoid empty array issues
-    return (FixedArray::make(1, -1), [0], [0], [0])
+    return (FixedArray::make(1, -1), FixedArray::make(1, 0UL), [0], [0], [0])
   }
   // Calculate total size and offsets
   let segment_sizes : Array[Int] = []
@@ -618,15 +653,37 @@ fn flatten_elem_segments(
     },
     -1,
   )
+  let elem_flat_u64 : FixedArray[UInt64] = FixedArray::make(
+    if total_size > 0 {
+      total_size
+    } else {
+      1
+    },
+    0UL,
+  )
   for i, elem in module_.elems {
     let offset = segment_offsets[i]
     for j, init_expr in elem.init {
       // Evaluate the init expression to get the function index
-      elem_flat[offset + j] = eval_elem_expr_with_globals(init_expr, globals)
+      let raw = eval_const_expr_with_globals(init_expr, globals, module_)
+      let tagged = match elem.elem_type {
+        @core.RefType::Func | @core.RefType::NoFunc =>
+          if raw == 0xFFFFFFFF_FFFFFFFFUL {
+            raw
+          } else {
+            raw | 0x4000_0000_0000_0000UL
+          }
+        _ => raw
+      }
+      elem_flat_u64[offset + j] = tagged
+      elem_flat[offset + j] = eval_elem_expr_with_globals(
+        init_expr, globals, module_,
+      )
     }
   }
   (
     elem_flat,
+    elem_flat_u64,
     FixedArray::from_array(segment_offsets),
     FixedArray::from_array(segment_sizes),
     FixedArray::from_array(segment_dropped),
@@ -1158,7 +1215,7 @@ fn init_memory(
   // Initialize active data segments (write to initial region only)
   for data in module_.datas {
     if data.is_active {
-      let offset = eval_const_expr_with_globals(data.offset, globals).to_int()
+      let offset = eval_const_expr_with_globals(data.offset, globals, module_).to_int()
       for i, b in data.init {
         let pos = offset + i
         let initial_size = initial_pages * page_size
@@ -1217,7 +1274,7 @@ fn init_globals(
   // Then initialize local globals with their init expressions
   for i, g in module_.globals {
     // Evaluate init expression, passing globals array to support global.get
-    let value = eval_const_expr_with_globals(g.init, globals)
+    let value = eval_const_expr_with_globals(g.init, globals, module_)
     globals[num_imported + i] = value
   }
   globals
@@ -1293,13 +1350,15 @@ fn init_tables(
     if elem.is_active {
       let table_idx = elem.table_idx.reinterpret_as_int()
       if table_idx >= 0 && table_idx < tables.length() {
-        let offset = eval_const_expr_with_globals(elem.offset, globals).to_int()
+        let offset = eval_const_expr_with_globals(elem.offset, globals, module_).to_int()
         let table = tables[table_idx]
         let logical_size = logical_sizes_arr[table_idx]
         for i, init_expr in elem.init {
           if offset + i < logical_size {
             // Evaluate the init expression to get the function index
-            let func_idx = eval_elem_expr_with_globals(init_expr, globals)
+            let func_idx = eval_elem_expr_with_globals(
+              init_expr, globals, module_,
+            )
             table[offset + i] = func_idx
           }
         }
@@ -1318,8 +1377,9 @@ fn init_tables(
 fn eval_elem_expr_with_globals(
   expr : @core.Expr,
   globals : FixedArray[UInt64],
+  module_ : @core.Module,
 ) -> Int {
-  let raw = eval_const_expr_with_globals(expr, globals)
+  let raw = eval_const_expr_with_globals(expr, globals, module_)
   if raw == 0xFFFFFFFF_FFFFFFFFUL {
     -1
   } else {
@@ -1332,7 +1392,27 @@ fn eval_elem_expr_with_globals(
 fn eval_const_expr_with_globals(
   expr : @core.Expr,
   globals : FixedArray[UInt64],
+  module_ : @core.Module,
 ) -> UInt64 {
+  fn array_default_value(type_idx : Int) -> UInt64 {
+    if type_idx < 0 || type_idx >= module_.types.length() {
+      return 0UL
+    }
+    match module_.types[type_idx] {
+      Array(array_type) =>
+        match array_type.element.storage {
+          Val(val_type) =>
+            if val_type.is_ref_type() {
+              0xFFFFFFFF_FFFFFFFFUL
+            } else {
+              0UL
+            }
+          I8 | I16 => 0UL
+        }
+      _ => 0UL
+    }
+  }
+
   // Use a simple stack for expression evaluation
   let stack : Array[UInt64] = []
   for instr in expr.instrs {
@@ -1351,6 +1431,52 @@ fn eval_const_expr_with_globals(
       }
       RefNull(_) => stack.push(0xFFFFFFFF_FFFFFFFFUL)
       RefFunc(idx) => stack.push(idx.to_uint64()) // Function index
+      RefI31 =>
+        if stack.length() >= 1 {
+          let raw = stack.pop().unwrap()
+          let masked = raw & 0x7FFF_FFFFUL
+          stack.push((masked << 1) | 1UL)
+        }
+      ArrayNew(type_idx) =>
+        if stack.length() >= 2 {
+          let length = stack.pop().unwrap().to_int()
+          let init_val = stack.pop().unwrap()
+          let ref_val = c_gc_alloc_array_const(
+            type_idx.reinterpret_as_int(),
+            length,
+            init_val,
+          )
+          stack.push(ref_val)
+        }
+      ArrayNewDefault(type_idx) =>
+        if stack.length() >= 1 {
+          let length = stack.pop().unwrap().to_int()
+          let default_val = array_default_value(type_idx.reinterpret_as_int())
+          let ref_val = c_gc_alloc_array_const(
+            type_idx.reinterpret_as_int(),
+            length,
+            default_val,
+          )
+          stack.push(ref_val)
+        }
+      ArrayNewFixed(type_idx, len) =>
+        if len.reinterpret_as_int() >= 0 &&
+          stack.length() >= len.reinterpret_as_int() {
+          let length = len.reinterpret_as_int()
+          let elements : Array[UInt64] = Array::make(length, 0UL)
+          if length > 0 {
+            for i = length - 1; i >= 0; i = i - 1 {
+              elements[i] = stack.pop().unwrap()
+            }
+          }
+          let elements_fixed = FixedArray::from_array(elements)
+          let ref_val = c_gc_alloc_array_from_values(
+            type_idx.reinterpret_as_int(),
+            length,
+            elements_fixed,
+          )
+          stack.push(ref_val)
+        }
       // Simple arithmetic for const expr evaluation
       I32Add =>
         if stack.length() >= 2 {
@@ -1452,6 +1578,7 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
           self.data_segment_sizes,
           self.module_.datas.length(),
           self.elem_segments_flat,
+          self.elem_segments_flat_u64,
           self.elem_segment_offsets,
           self.elem_segment_sizes,
           self.elem_segment_dropped,
@@ -1610,6 +1737,7 @@ pub fn CRuntime::call_compiled(
           self.data_segment_sizes,
           self.module_.datas.length(),
           self.elem_segments_flat,
+          self.elem_segments_flat_u64,
           self.elem_segment_offsets,
           self.elem_segment_sizes,
           self.elem_segment_dropped,
@@ -1645,11 +1773,11 @@ fn value_to_u64(v : Value) -> UInt64 {
     I64(n) => n
     F32(f) => f.reinterpret_as_uint().to_uint64()
     F64(f) => f.reinterpret_as_uint64()
-    Ref(Some(n)) => n.reinterpret_as_uint().to_uint64()
+    Ref(Some(n)) => n.to_int64().reinterpret_as_uint64()
     Ref(None) => 0xFFFFFFFF_FFFFFFFFUL
-    Funcref(Some(n)) => n.reinterpret_as_uint().to_uint64()
+    Funcref(Some(n)) => n.to_int64().reinterpret_as_uint64()
     Funcref(None) => 0xFFFFFFFF_FFFFFFFFUL
-    Externref(Some(n)) => n.reinterpret_as_uint().to_uint64()
+    Externref(Some(n)) => n.to_int64().reinterpret_as_uint64()
     Externref(None) => 0xFFFFFFFF_FFFFFFFFUL
   }
 }
@@ -1679,7 +1807,7 @@ fn u64_to_value(raw : UInt64, ty : @core.ValType) -> Value {
       if raw == 0xFFFFFFFF_FFFFFFFFUL {
         Value::Ref(None)
       } else {
-        Value::Ref(Some(raw.to_uint().reinterpret_as_int()))
+        Value::Ref(Some(raw.reinterpret_as_int64().to_int()))
       }
     _ => Value::I64(raw)
   }
