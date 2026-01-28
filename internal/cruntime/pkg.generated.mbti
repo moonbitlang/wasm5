@@ -40,6 +40,7 @@ pub struct CRuntime {
   output_capacity : Int
   tables : FixedArray[FixedArray[Int]]
   tables_flat : FixedArray[Int]
+  tables_flat_u64 : FixedArray[UInt64]
   table_offsets : FixedArray[Int]
   table_sizes : FixedArray[Int]
   table_max_sizes : FixedArray[Int]
@@ -47,6 +48,7 @@ pub struct CRuntime {
   func_type_idxs : FixedArray[Int]
   type_param_counts : FixedArray[Int]
   type_result_counts : FixedArray[Int]
+  type_subtype_matrix : FixedArray[Int]
   import_num_params : FixedArray[Int]
   import_num_results : FixedArray[Int]
   import_handler_ids : FixedArray[Int]

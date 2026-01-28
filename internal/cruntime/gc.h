@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #define GC_TYPE_ARRAY 1
+#define GC_TYPE_STRUCT 2
 
 typedef struct GcHeader {
     uint32_t type_idx;
@@ -21,10 +22,18 @@ typedef struct GcArray {
     uint64_t elements[];
 } GcArray;
 
+typedef struct GcStruct {
+    GcHeader header;
+    int32_t field_count;
+    uint32_t _pad;
+    uint64_t fields[];
+} GcStruct;
+
 void gc_init(void);
 void gc_cleanup(void);
 
 GcArray* gc_alloc_array(uint32_t type_idx, int32_t length);
+GcStruct* gc_alloc_struct(uint32_t type_idx, int32_t field_count);
 void gc_collect(void);
 
 void gc_push_stack(uint64_t* base, size_t slots);

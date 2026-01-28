@@ -13,6 +13,7 @@ pub struct CRuntime {
   tables : FixedArray[FixedArray[Int]] // Tables of function indices
   // Flattened table data for C FFI
   tables_flat : FixedArray[Int] // All tables concatenated
+  tables_flat_u64 : FixedArray[UInt64] // All tables concatenated (full refs)
   table_offsets : FixedArray[Int] // Offset of each table in tables_flat
   table_sizes : FixedArray[Int] // Current size of each table
   table_max_sizes : FixedArray[Int] // Max size (capacity) of each table for table.grow
@@ -21,6 +22,7 @@ pub struct CRuntime {
   func_type_idxs : FixedArray[Int] // Type index for each function (imported + local)
   type_param_counts : FixedArray[Int] // Primary signature hash for each type
   type_result_counts : FixedArray[Int] // Secondary signature hash for each type
+  type_subtype_matrix : FixedArray[Int] // type_idx -> target_idx subtype matrix
   // Import function metadata for op_call_import
   import_num_params : FixedArray[Int] // Number of params for each imported function
   import_num_results : FixedArray[Int] // Number of results for each imported function
@@ -264,11 +266,13 @@ fn build_runtime(
   let (tables, table_logical_sizes, table_max_sizes) = init_tables(
     module_, globals,
   )
-  // Flatten tables for C FFI (pass sizes and max_sizes for allocation)
-  let (tables_flat, table_offsets, table_sizes, table_max_sizes) = flatten_tables(
-    tables, table_logical_sizes, table_max_sizes,
-  )
   let table_elem_is_funcref = build_table_elem_types(module_)
+  // Flatten tables for C FFI (pass sizes and max_sizes for allocation)
+  let (tables_flat, tables_flat_u64, table_offsets, table_sizes, table_max_sizes
+  ) = flatten_tables(
+    tables, table_logical_sizes, table_max_sizes, table_elem_is_funcref,
+  )
+  let type_subtype_matrix = build_type_subtype_matrix(module_)
   // Build type info for call_indirect type checking
   let (func_type_idxs, type_param_counts, type_result_counts) = build_type_info(
     module_,
@@ -315,6 +319,7 @@ fn build_runtime(
     output_capacity,
     tables,
     tables_flat,
+    tables_flat_u64,
     table_offsets,
     table_sizes,
     table_max_sizes,
@@ -322,6 +327,7 @@ fn build_runtime(
     func_type_idxs,
     type_param_counts,
     type_result_counts,
+    type_subtype_matrix,
     import_num_params: import_num_params_ext,
     import_num_results: import_num_results_ext,
     import_handler_ids: import_handler_ids_ext,
@@ -408,6 +414,7 @@ pub fn CRuntime::get_context_ptr(self : CRuntime) -> Int64 {
       self.memory_max_size,
       self.memory_pages,
       self.tables_flat,
+      self.tables_flat_u64,
       self.table_offsets,
       self.table_sizes,
       self.table_max_sizes,
@@ -420,6 +427,7 @@ pub fn CRuntime::get_context_ptr(self : CRuntime) -> Int64 {
       self.func_type_idxs,
       self.type_param_counts,
       self.type_result_counts,
+      self.type_subtype_matrix,
       self.module_.types.length(),
       self.import_num_params,
       self.import_num_results,
@@ -518,12 +526,19 @@ pub fn CRuntime::clear_output(self : CRuntime) -> Unit {
 
 ///|
 /// Flatten tables into a single array for C FFI
-/// Returns (tables_flat, table_offsets, table_sizes, table_max_sizes)
+/// Returns (tables_flat, tables_flat_u64, table_offsets, table_sizes, table_max_sizes)
 fn flatten_tables(
   tables : FixedArray[FixedArray[Int]],
   logical_sizes : FixedArray[Int],
   max_sizes : FixedArray[Int],
-) -> (FixedArray[Int], FixedArray[Int], FixedArray[Int], FixedArray[Int]) {
+  table_elem_is_funcref : FixedArray[Int],
+) -> (
+  FixedArray[Int],
+  FixedArray[UInt64],
+  FixedArray[Int],
+  FixedArray[Int],
+  FixedArray[Int],
+) {
   let num_tables = tables.length()
   // Calculate total size and offsets
   let table_offsets : Array[Int] = []
@@ -543,21 +558,61 @@ fn flatten_tables(
     },
     -1,
   )
+  let tables_flat_u64 : FixedArray[UInt64] = FixedArray::make(
+    if total_size > 0 {
+      total_size
+    } else {
+      1
+    },
+    0xFFFF_FFFF_FFFF_FFFFUL,
+  )
+  let funcref_tag = 0x4000_0000_0000_0000UL
+  let null_ref = 0xFFFF_FFFF_FFFF_FFFFUL
   for i in 0..<num_tables {
     let offset = table_offsets[i]
     let table = tables[i]
+    let is_funcref = if i < table_elem_is_funcref.length() {
+      table_elem_is_funcref[i] != 0
+    } else {
+      true
+    }
     // Copy elements up to the logical size
     let logical_size = if i < logical_sizes.length() {
       logical_sizes[i]
     } else {
       0
     }
-    for j in 0..<logical_size {
-      tables_flat[offset + j] = table[j]
+    let max_size = if i < max_sizes.length() {
+      max_sizes[i]
+    } else {
+      logical_size
+    }
+    for j in 0..<max_size {
+      if j < logical_size {
+        tables_flat[offset + j] = table[j]
+        if is_funcref {
+          let func_idx = table[j]
+          tables_flat_u64[offset + j] = if func_idx < 0 {
+            null_ref
+          } else {
+            funcref_tag | func_idx.reinterpret_as_uint().to_uint64()
+          }
+        } else {
+          tables_flat_u64[offset + j] = if table[j] < 0 {
+            null_ref
+          } else {
+            table[j].reinterpret_as_uint().to_uint64()
+          }
+        }
+      } else {
+        tables_flat[offset + j] = -1
+        tables_flat_u64[offset + j] = null_ref
+      }
     }
   }
   (
     tables_flat,
+    tables_flat_u64,
     FixedArray::from_array(table_offsets),
     logical_sizes, // Pass through logical sizes
     max_sizes,
@@ -721,6 +776,78 @@ fn build_func_type_equiv_ids(module_ : @core.Module) -> Array[Int] {
     }
   }
   ids
+}
+
+///|
+/// Build subtype matrix for GC type checks (num_types x num_types).
+fn build_type_subtype_matrix(module_ : @core.Module) -> FixedArray[Int] {
+  let n = module_.types.length()
+  if n <= 0 {
+    return FixedArray::make(1, 0)
+  }
+  let supers : Array[Array[Int]] = Array::make(n, [])
+  for i in 0..<n {
+    supers[i] = []
+  }
+  for group in module_.type_groups {
+    for subtype_def in group.subtypes {
+      let idx = subtype_def.type_idx.reinterpret_as_int()
+      if idx >= 0 && idx < n {
+        let list : Array[Int] = []
+        for sup in subtype_def.supertypes {
+          list.push(sup.reinterpret_as_int())
+        }
+        supers[idx] = list
+      }
+    }
+  }
+  fn is_subtype(
+    module_ : @core.Module,
+    supers : Array[Array[Int]],
+    type_idx : Int,
+    target_idx : Int,
+  ) -> Bool {
+    if type_idx == target_idx {
+      return true
+    }
+    if @core.gc_types_equivalent(module_, type_idx, target_idx) {
+      return true
+    }
+    let visited : Array[Bool] = Array::make(supers.length(), false)
+    let stack : Array[Int] = [type_idx]
+    while stack.length() > 0 {
+      let cur = stack.pop().unwrap()
+      if cur < 0 || cur >= supers.length() {
+        continue
+      }
+      if visited[cur] {
+        continue
+      }
+      visited[cur] = true
+      for sup in supers[cur] {
+        if sup == target_idx {
+          return true
+        }
+        if @core.gc_types_equivalent(module_, sup, target_idx) {
+          return true
+        }
+        if sup >= 0 && sup < supers.length() && !visited[sup] {
+          stack.push(sup)
+        }
+      }
+    }
+    false
+  }
+
+  let matrix = FixedArray::make(n * n, 0)
+  for i in 0..<n {
+    for j in 0..<n {
+      if is_subtype(module_, supers, i, j) {
+        matrix[i * n + j] = 1
+      }
+    }
+  }
+  matrix
 }
 
 ///|
@@ -1561,6 +1688,7 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
           self.memory_max_size,
           self.memory_pages,
           self.tables_flat,
+          self.tables_flat_u64,
           self.table_offsets,
           self.table_sizes,
           self.table_max_sizes,
@@ -1573,6 +1701,7 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
           self.func_type_idxs,
           self.type_param_counts,
           self.type_result_counts,
+          self.type_subtype_matrix,
           self.module_.types.length(),
           self.import_num_params,
           self.import_num_results,
@@ -1720,6 +1849,7 @@ pub fn CRuntime::call_compiled(
           self.memory_max_size,
           self.memory_pages,
           self.tables_flat,
+          self.tables_flat_u64,
           self.table_offsets,
           self.table_sizes,
           self.table_max_sizes,
@@ -1732,6 +1862,7 @@ pub fn CRuntime::call_compiled(
           self.func_type_idxs,
           self.type_param_counts,
           self.type_result_counts,
+          self.type_subtype_matrix,
           self.module_.types.length(),
           self.import_num_params,
           self.import_num_results,

@@ -9,6 +9,8 @@
 
 #define REF_NULL 0xFFFFFFFFFFFFFFFFULL
 #define FUNCREF_TAG 0x4000000000000000ULL
+#define EXTERNREF_TAG 0x2000000000000000ULL
+#define REF_TAG_MASK 0x6000000000000000ULL
 
 typedef struct GcStackRange {
     uint64_t* base;
@@ -190,7 +192,10 @@ static int gc_is_ptr(uint64_t val) {
     if (val == 0 || val == REF_NULL) {
         return 0;
     }
-    if (val & FUNCREF_TAG) {
+    if (val & REF_TAG_MASK) {
+        return 0;
+    }
+    if (val & 1ULL) {
         return 0;
     }
     if ((val & (sizeof(void*) - 1)) != 0) {
@@ -274,6 +279,42 @@ GcArray* gc_alloc_array(uint32_t type_idx, int32_t length) {
     return arr;
 }
 
+GcStruct* gc_alloc_struct(uint32_t type_idx, int32_t field_count) {
+    if (!g_gc_heap.initialized) {
+        gc_init();
+    }
+    if (field_count < 0) {
+        return NULL;
+    }
+    if (!g_gc_heap.disable_collect &&
+        g_gc_heap.alloc_since_gc >= g_gc_heap.collect_threshold) {
+        gc_collect();
+    }
+
+    size_t size = sizeof(GcStruct) + (size_t)field_count * sizeof(uint64_t);
+    GcStruct* st = (GcStruct*)calloc(1, size);
+    if (!st) {
+        return NULL;
+    }
+
+    st->header.type_idx = type_idx;
+    st->header.obj_type = GC_TYPE_STRUCT;
+    st->header.mark = 0;
+    st->header.age = 0;
+    st->header.gc_next = g_gc_heap.all_objects;
+    g_gc_heap.all_objects = &st->header;
+
+    st->field_count = field_count;
+    g_gc_heap.num_objects++;
+    g_gc_heap.alloc_since_gc++;
+
+    if (!ptrset_add(&g_gc_heap.ptrs, (uintptr_t)st)) {
+        g_gc_heap.disable_collect = 1;
+    }
+
+    return st;
+}
+
 uint64_t gc_alloc_array_const(uint32_t type_idx, int32_t length, uint64_t init_val) {
     GcArray* arr = gc_alloc_array(type_idx, length);
     if (!arr) {
@@ -312,6 +353,18 @@ static void gc_mark_object(GcHeader* obj, GcHeader** stack, size_t* top, size_t 
             GcArray* arr = (GcArray*)cur;
             for (int32_t i = 0; i < arr->length; i++) {
                 uint64_t val = arr->elements[i];
+                if (gc_is_ptr(val)) {
+                    GcHeader* child = (GcHeader*)val;
+                    if (!child->mark) {
+                        child->mark = 1;
+                        stack[(*top)++] = child;
+                    }
+                }
+            }
+        } else if (cur->obj_type == GC_TYPE_STRUCT) {
+            GcStruct* st = (GcStruct*)cur;
+            for (int32_t i = 0; i < st->field_count; i++) {
+                uint64_t val = st->fields[i];
                 if (gc_is_ptr(val)) {
                     GcHeader* child = (GcHeader*)val;
                     if (!child->mark) {
