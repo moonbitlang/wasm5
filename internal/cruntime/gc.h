@@ -1,0 +1,37 @@
+#ifndef WASM5_GC_H
+#define WASM5_GC_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+#define GC_TYPE_ARRAY 1
+
+typedef struct GcHeader {
+    uint32_t type_idx;
+    uint16_t obj_type;
+    uint8_t mark;
+    uint8_t age;
+    struct GcHeader* gc_next;
+} GcHeader;
+
+typedef struct GcArray {
+    GcHeader header;
+    int32_t length;
+    uint32_t _pad;
+    uint64_t elements[];
+} GcArray;
+
+void gc_init(void);
+void gc_cleanup(void);
+
+GcArray* gc_alloc_array(uint32_t type_idx, int32_t length);
+void gc_collect(void);
+
+void gc_push_stack(uint64_t* base, size_t slots);
+void gc_pop_stack(void);
+
+void gc_set_globals(uint64_t* globals, int num_globals);
+
+int gc_is_managed_ptr(uint64_t value);
+
+#endif

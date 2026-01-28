@@ -683,6 +683,95 @@ extern "C" fn ref_eq() -> UInt64 = "ref_eq"
 ///|
 extern "C" fn ref_as_non_null() -> UInt64 = "ref_as_non_null"
 
+// GC operations (arrays only; structs/i31/casts unimplemented in C runtime)
+
+///|
+extern "C" fn struct_new() -> UInt64 = "struct_new"
+
+///|
+extern "C" fn struct_new_default() -> UInt64 = "struct_new_default"
+
+///|
+extern "C" fn struct_get() -> UInt64 = "struct_get"
+
+///|
+extern "C" fn struct_get_s() -> UInt64 = "struct_get_s"
+
+///|
+extern "C" fn struct_get_u() -> UInt64 = "struct_get_u"
+
+///|
+extern "C" fn struct_set() -> UInt64 = "struct_set"
+
+///|
+extern "C" fn array_new() -> UInt64 = "array_new"
+
+///|
+extern "C" fn array_new_default() -> UInt64 = "array_new_default"
+
+///|
+extern "C" fn array_new_fixed() -> UInt64 = "array_new_fixed"
+
+///|
+extern "C" fn array_new_data() -> UInt64 = "array_new_data"
+
+///|
+extern "C" fn array_new_elem() -> UInt64 = "array_new_elem"
+
+///|
+extern "C" fn array_get() -> UInt64 = "array_get"
+
+///|
+extern "C" fn array_get_s() -> UInt64 = "array_get_s"
+
+///|
+extern "C" fn array_get_u() -> UInt64 = "array_get_u"
+
+///|
+extern "C" fn array_set() -> UInt64 = "array_set"
+
+///|
+extern "C" fn array_len() -> UInt64 = "array_len"
+
+///|
+extern "C" fn array_fill() -> UInt64 = "array_fill"
+
+///|
+extern "C" fn array_copy() -> UInt64 = "array_copy"
+
+///|
+extern "C" fn array_init_data() -> UInt64 = "array_init_data"
+
+///|
+extern "C" fn array_init_elem() -> UInt64 = "array_init_elem"
+
+///|
+extern "C" fn ref_i31() -> UInt64 = "ref_i31"
+
+///|
+extern "C" fn i31_get_s() -> UInt64 = "i31_get_s"
+
+///|
+extern "C" fn i31_get_u() -> UInt64 = "i31_get_u"
+
+///|
+extern "C" fn any_convert_extern() -> UInt64 = "any_convert_extern"
+
+///|
+extern "C" fn extern_convert_any() -> UInt64 = "extern_convert_any"
+
+///|
+extern "C" fn ref_test() -> UInt64 = "ref_test"
+
+///|
+extern "C" fn ref_cast() -> UInt64 = "ref_cast"
+
+///|
+extern "C" fn br_on_cast() -> UInt64 = "br_on_cast"
+
+///|
+extern "C" fn br_on_cast_fail() -> UInt64 = "br_on_cast_fail"
+
 ///|
 extern "C" fn br_on_null() -> UInt64 = "br_on_null"
 

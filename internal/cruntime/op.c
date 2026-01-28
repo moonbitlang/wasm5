@@ -6,6 +6,7 @@
 #include <stdio.h>
 
 #include "wasi.h"
+#include "gc.h"
 
 // Debug flag - set to 1 to enable tracing
 #define DEBUG_TRACE 0
@@ -267,6 +268,7 @@ static int g_num_external_funcrefs = 0;
 
 // Stack base for result extraction after execution
 static uint64_t* g_stack_base = NULL;
+static int g_num_globals = 0;
 
 // ============================================================================
 // Cross-module call support (context switching)
@@ -276,6 +278,7 @@ static uint64_t* g_stack_base = NULL;
 typedef struct CRuntimeContext {
     uint64_t* code;
     uint64_t* globals;
+    int num_globals;
     uint8_t* memory;
     int memory_size;
     int memory_max_size;
@@ -323,6 +326,7 @@ static int g_context_depth = 0;
 static void save_context(CRuntimeContext* ctx, CRuntime* crt) {
     ctx->code = crt->code;
     ctx->globals = crt->globals;
+    ctx->num_globals = g_num_globals;
     ctx->memory = crt->mem;
     ctx->memory_size = g_memory_size;
     ctx->memory_max_size = g_memory_max_size;
@@ -365,6 +369,8 @@ static void save_context(CRuntimeContext* ctx, CRuntime* crt) {
 static void load_context(const CRuntimeContext* ctx, CRuntime* crt) {
     crt->code = ctx->code;
     crt->globals = ctx->globals;
+    g_num_globals = ctx->num_globals;
+    gc_set_globals(crt->globals, g_num_globals);
     crt->mem = ctx->memory;
     g_memory_size = ctx->memory_size;
     g_memory_max_size = ctx->memory_max_size;
@@ -423,6 +429,7 @@ CRuntimeContext* create_runtime_context(
 
     ctx->code = code;
     ctx->globals = globals;
+    ctx->num_globals = 0;
     ctx->memory = memory;
     ctx->memory_size = memory_size;
     ctx->memory_max_size = memory_max_size;
@@ -535,6 +542,7 @@ static int call_cross_module_with_stack(
     uint64_t* callee_pc = crt->code + callee_entry;
     uint64_t* callee_fp = callee_stack;
     uint64_t* callee_sp = callee_stack + callee_num_locals;
+    gc_push_stack(callee_stack, STACK_SIZE);
 
     int trap = run(crt, callee_pc, callee_sp, callee_fp);
 
@@ -543,6 +551,7 @@ static int call_cross_module_with_stack(
         result_dst[i] = callee_stack[i];
     }
 
+    gc_pop_stack();
     free(callee_stack);
 
     // Restore caller's context
@@ -735,6 +744,10 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
 
     // Store stack base for result extraction
     g_stack_base = stack;
+    g_num_globals = 0;
+    gc_init();
+    gc_set_globals(globals, g_num_globals);
+    gc_push_stack(stack, STACK_SIZE);
 
     // Set up CRuntime with cold fields only
     CRuntime crt;
@@ -762,6 +775,8 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
             result_out[i] = stack[i];
         }
     }
+    gc_pop_stack();
+    gc_cleanup();
     free(stack);
 
     // Reset global pointers to prevent dangling references to MoonBit-managed memory
@@ -773,6 +788,7 @@ int execute(uint64_t* code, int entry, int num_locals, uint64_t* args, int num_a
     g_table_sizes = NULL;
     g_table_max_sizes = NULL;
     g_num_tables = 0;
+    g_num_globals = 0;
     g_func_entries = NULL;
     g_func_num_locals = NULL;
     g_num_funcs = 0;
@@ -1554,7 +1570,9 @@ int call_external_ffi(
     }
 
     // Execute the function using target context's code
+    gc_push_stack(temp_stack, 256);
     int trap = run(&dummy_crt, target_ctx->code + callee_pc, sp, fp);
+    gc_pop_stack();
 
     if (trap != TRAP_NONE) {
         return trap;
@@ -3851,6 +3869,575 @@ int op_return_call_ref(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) 
     NEXT();
 }
 DEFINE_OP(return_call_ref)
+
+// =============================================================================
+// GC operations (arrays only, structs/i31/casts unimplemented)
+// =============================================================================
+
+static GcArray* gc_checked_array(uint64_t ref) {
+    if (ref == REF_NULL) {
+        return NULL;
+    }
+    if (!gc_is_managed_ptr(ref)) {
+        return NULL;
+    }
+    GcHeader* header = (GcHeader*)ref;
+    if (header->obj_type != GC_TYPE_ARRAY) {
+        return NULL;
+    }
+    return (GcArray*)header;
+}
+
+// struct.new
+int op_struct_new(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)pc; (void)sp; (void)fp;
+    TRAP(TRAP_UNREACHABLE);
+}
+DEFINE_OP(struct_new)
+
+// struct.new_default
+int op_struct_new_default(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)pc; (void)sp; (void)fp;
+    TRAP(TRAP_UNREACHABLE);
+}
+DEFINE_OP(struct_new_default)
+
+// struct.get
+int op_struct_get(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)pc; (void)sp; (void)fp;
+    TRAP(TRAP_UNREACHABLE);
+}
+DEFINE_OP(struct_get)
+
+// struct.get_s
+int op_struct_get_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)pc; (void)sp; (void)fp;
+    TRAP(TRAP_UNREACHABLE);
+}
+DEFINE_OP(struct_get_s)
+
+// struct.get_u
+int op_struct_get_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)pc; (void)sp; (void)fp;
+    TRAP(TRAP_UNREACHABLE);
+}
+DEFINE_OP(struct_get_u)
+
+// struct.set
+int op_struct_set(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)pc; (void)sp; (void)fp;
+    TRAP(TRAP_UNREACHABLE);
+}
+DEFINE_OP(struct_set)
+
+// array.new
+int op_array_new(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    uint32_t type_idx = (uint32_t)*pc++;
+    int32_t length = (int32_t)sp[-1];
+    uint64_t init_val = sp[-2];
+    sp -= 2;
+
+    if (length < 0) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+
+    GcArray* arr = gc_alloc_array(type_idx, length);
+    if (!arr) {
+        TRAP(TRAP_STACK_OVERFLOW);
+    }
+
+    for (int32_t i = 0; i < length; i++) {
+        arr->elements[i] = init_val;
+    }
+
+    *sp++ = (uint64_t)arr;
+    NEXT();
+}
+DEFINE_OP(array_new)
+
+// array.new_default
+int op_array_new_default(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    uint32_t type_idx = (uint32_t)*pc++;
+    int32_t length = (int32_t)sp[-1];
+    sp -= 1;
+
+    if (length < 0) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+
+    GcArray* arr = gc_alloc_array(type_idx, length);
+    if (!arr) {
+        TRAP(TRAP_STACK_OVERFLOW);
+    }
+
+    *sp++ = (uint64_t)arr;
+    NEXT();
+}
+DEFINE_OP(array_new_default)
+
+// array.new_fixed
+int op_array_new_fixed(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    uint32_t type_idx = (uint32_t)*pc++;
+    int32_t length = (int32_t)*pc++;
+
+    if (length < 0) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+    if (length == 0) {
+        GcArray* arr = gc_alloc_array(type_idx, 0);
+        if (!arr) {
+            TRAP(TRAP_STACK_OVERFLOW);
+        }
+        *sp++ = (uint64_t)arr;
+        NEXT();
+    }
+
+    uint64_t* values = sp - length;
+    GcArray* arr = gc_alloc_array(type_idx, length);
+    if (!arr) {
+        TRAP(TRAP_STACK_OVERFLOW);
+    }
+
+    for (int32_t i = 0; i < length; i++) {
+        arr->elements[i] = values[i];
+    }
+
+    sp = values;
+    *sp++ = (uint64_t)arr;
+    NEXT();
+}
+DEFINE_OP(array_new_fixed)
+
+// array.new_data
+int op_array_new_data(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    uint32_t type_idx = (uint32_t)*pc++;
+    int data_idx = (int)*pc++;
+    int elem_size = (int)*pc++;
+
+    int32_t length = (int32_t)sp[-1];
+    int32_t offset = (int32_t)sp[-2];
+    sp -= 2;
+
+    if (elem_size <= 0 || elem_size > 8) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+
+    if (length < 0 || offset < 0) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+
+    if (data_idx < 0 || data_idx >= g_num_data_segments) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+
+    int seg_offset = g_data_segment_offsets[data_idx];
+    int seg_size = g_data_segment_sizes[data_idx];
+
+    uint64_t total_bytes = (uint64_t)length * (uint64_t)elem_size;
+    if ((uint64_t)offset + total_bytes > (uint64_t)seg_size) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+
+    GcArray* arr = gc_alloc_array(type_idx, length);
+    if (!arr) {
+        TRAP(TRAP_STACK_OVERFLOW);
+    }
+
+    const uint8_t* src = g_data_segments_flat + seg_offset + offset;
+    for (int32_t i = 0; i < length; i++) {
+        uint64_t value = 0;
+        const uint8_t* elem = src + (size_t)i * (size_t)elem_size;
+        for (int j = 0; j < elem_size; j++) {
+            value |= ((uint64_t)elem[j]) << (j * 8);
+        }
+        arr->elements[i] = value;
+    }
+
+    *sp++ = (uint64_t)arr;
+    NEXT();
+}
+DEFINE_OP(array_new_data)
+
+// array.new_elem
+int op_array_new_elem(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    uint32_t type_idx = (uint32_t)*pc++;
+    int elem_idx = (int)*pc++;
+    int32_t length = (int32_t)sp[-1];
+    int32_t offset = (int32_t)sp[-2];
+    sp -= 2;
+
+    if (length < 0 || offset < 0) {
+        TRAP(TRAP_TABLE_BOUNDS_ACCESS);
+    }
+
+    if (elem_idx < 0 || elem_idx >= g_num_elem_segments) {
+        TRAP(TRAP_TABLE_BOUNDS_ACCESS);
+    }
+
+    if (g_elem_segment_dropped && g_elem_segment_dropped[elem_idx]) {
+        if (length != 0 || offset != 0) {
+            TRAP(TRAP_TABLE_BOUNDS_ACCESS);
+        }
+        GcArray* empty = gc_alloc_array(type_idx, 0);
+        if (!empty) {
+            TRAP(TRAP_STACK_OVERFLOW);
+        }
+        *sp++ = (uint64_t)empty;
+        NEXT();
+    }
+
+    int seg_offset = g_elem_segment_offsets[elem_idx];
+    int seg_size = g_elem_segment_sizes[elem_idx];
+    if (offset + length > seg_size) {
+        TRAP(TRAP_TABLE_BOUNDS_ACCESS);
+    }
+
+    GcArray* arr = gc_alloc_array(type_idx, length);
+    if (!arr) {
+        TRAP(TRAP_STACK_OVERFLOW);
+    }
+
+    for (int32_t i = 0; i < length; i++) {
+        int val = g_elem_segments_flat[seg_offset + offset + i];
+        arr->elements[i] = val < 0 ? REF_NULL : (uint64_t)val;
+    }
+
+    *sp++ = (uint64_t)arr;
+    NEXT();
+}
+DEFINE_OP(array_new_elem)
+
+// array.get
+int op_array_get(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp; (void)pc;
+    uint64_t ref = sp[-2];
+    int32_t idx = (int32_t)sp[-1];
+
+    GcArray* arr = gc_checked_array(ref);
+    if (!arr) {
+        TRAP(ref == REF_NULL ? TRAP_NULL_REFERENCE : TRAP_UNREACHABLE);
+    }
+    if (idx < 0 || idx >= arr->length) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+
+    sp -= 2;
+    *sp++ = arr->elements[idx];
+    NEXT();
+}
+DEFINE_OP(array_get)
+
+// array.get_s
+int op_array_get_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    int storage_type = (int)*pc++;
+    uint64_t ref = sp[-2];
+    int32_t idx = (int32_t)sp[-1];
+
+    GcArray* arr = gc_checked_array(ref);
+    if (!arr) {
+        TRAP(ref == REF_NULL ? TRAP_NULL_REFERENCE : TRAP_UNREACHABLE);
+    }
+    if (idx < 0 || idx >= arr->length) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+
+    uint64_t raw = arr->elements[idx];
+    int64_t value;
+    if (storage_type == 0) {
+        value = (int8_t)(raw & 0xFF);
+    } else if (storage_type == 1) {
+        value = (int16_t)(raw & 0xFFFF);
+    } else {
+        value = (int64_t)raw;
+    }
+
+    sp -= 2;
+    *sp++ = (uint64_t)value;
+    NEXT();
+}
+DEFINE_OP(array_get_s)
+
+// array.get_u
+int op_array_get_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    int storage_type = (int)*pc++;
+    uint64_t ref = sp[-2];
+    int32_t idx = (int32_t)sp[-1];
+
+    GcArray* arr = gc_checked_array(ref);
+    if (!arr) {
+        TRAP(ref == REF_NULL ? TRAP_NULL_REFERENCE : TRAP_UNREACHABLE);
+    }
+    if (idx < 0 || idx >= arr->length) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+
+    uint64_t raw = arr->elements[idx];
+    uint64_t value;
+    if (storage_type == 0) {
+        value = raw & 0xFFU;
+    } else if (storage_type == 1) {
+        value = raw & 0xFFFFU;
+    } else {
+        value = raw;
+    }
+
+    sp -= 2;
+    *sp++ = value;
+    NEXT();
+}
+DEFINE_OP(array_get_u)
+
+// array.set
+int op_array_set(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp; (void)pc;
+    uint64_t ref = sp[-3];
+    int32_t idx = (int32_t)sp[-2];
+    uint64_t val = sp[-1];
+
+    GcArray* arr = gc_checked_array(ref);
+    if (!arr) {
+        TRAP(ref == REF_NULL ? TRAP_NULL_REFERENCE : TRAP_UNREACHABLE);
+    }
+    if (idx < 0 || idx >= arr->length) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+
+    arr->elements[idx] = val;
+    sp -= 3;
+    NEXT();
+}
+DEFINE_OP(array_set)
+
+// array.len
+int op_array_len(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp; (void)pc;
+    uint64_t ref = sp[-1];
+
+    GcArray* arr = gc_checked_array(ref);
+    if (!arr) {
+        TRAP(ref == REF_NULL ? TRAP_NULL_REFERENCE : TRAP_UNREACHABLE);
+    }
+
+    sp[-1] = (uint64_t)arr->length;
+    NEXT();
+}
+DEFINE_OP(array_len)
+
+// array.fill
+int op_array_fill(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp; (void)pc;
+    uint64_t ref = sp[-4];
+    int32_t offset = (int32_t)sp[-3];
+    uint64_t val = sp[-2];
+    int32_t length = (int32_t)sp[-1];
+
+    GcArray* arr = gc_checked_array(ref);
+    if (!arr) {
+        TRAP(ref == REF_NULL ? TRAP_NULL_REFERENCE : TRAP_UNREACHABLE);
+    }
+    if (offset < 0 || length < 0 || offset + length > arr->length) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+
+    for (int32_t i = 0; i < length; i++) {
+        arr->elements[offset + i] = val;
+    }
+
+    sp -= 4;
+    NEXT();
+}
+DEFINE_OP(array_fill)
+
+// array.copy
+int op_array_copy(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp; (void)pc;
+    uint64_t dst_ref = sp[-5];
+    int32_t dst_off = (int32_t)sp[-4];
+    uint64_t src_ref = sp[-3];
+    int32_t src_off = (int32_t)sp[-2];
+    int32_t length = (int32_t)sp[-1];
+
+    GcArray* dst = gc_checked_array(dst_ref);
+    GcArray* src = gc_checked_array(src_ref);
+    if (!dst || !src) {
+        TRAP((dst_ref == REF_NULL || src_ref == REF_NULL) ? TRAP_NULL_REFERENCE : TRAP_UNREACHABLE);
+    }
+    if (dst_off < 0 || src_off < 0 || length < 0 ||
+        dst_off + length > dst->length ||
+        src_off + length > src->length) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+
+    memmove(&dst->elements[dst_off], &src->elements[src_off], (size_t)length * sizeof(uint64_t));
+    sp -= 5;
+    NEXT();
+}
+DEFINE_OP(array_copy)
+
+// array.init_data
+int op_array_init_data(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    uint32_t type_idx = (uint32_t)*pc++;
+    int data_idx = (int)*pc++;
+    int elem_size = (int)*pc++;
+    uint64_t ref = sp[-4];
+    int32_t arr_off = (int32_t)sp[-3];
+    int32_t data_off = (int32_t)sp[-2];
+    int32_t length = (int32_t)sp[-1];
+
+    if (elem_size <= 0 || elem_size > 8) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+
+    (void)type_idx;
+    GcArray* arr = gc_checked_array(ref);
+    if (!arr) {
+        TRAP(ref == REF_NULL ? TRAP_NULL_REFERENCE : TRAP_UNREACHABLE);
+    }
+    if (arr_off < 0 || length < 0 || arr_off + length > arr->length) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+    if (data_idx < 0 || data_idx >= g_num_data_segments) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+
+    int seg_offset = g_data_segment_offsets[data_idx];
+    int seg_size = g_data_segment_sizes[data_idx];
+    uint64_t total_bytes = (uint64_t)length * (uint64_t)elem_size;
+    if (data_off < 0 || (uint64_t)data_off + total_bytes > (uint64_t)seg_size) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+
+    const uint8_t* src = g_data_segments_flat + seg_offset + data_off;
+    for (int32_t i = 0; i < length; i++) {
+        uint64_t value = 0;
+        const uint8_t* elem = src + (size_t)i * (size_t)elem_size;
+        for (int j = 0; j < elem_size; j++) {
+            value |= ((uint64_t)elem[j]) << (j * 8);
+        }
+        arr->elements[arr_off + i] = value;
+    }
+
+    sp -= 4;
+    NEXT();
+}
+DEFINE_OP(array_init_data)
+
+// array.init_elem
+int op_array_init_elem(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)fp;
+    uint32_t type_idx = (uint32_t)*pc++;
+    int elem_idx = (int)*pc++;
+    uint64_t ref = sp[-4];
+    int32_t arr_off = (int32_t)sp[-3];
+    int32_t elem_off = (int32_t)sp[-2];
+    int32_t length = (int32_t)sp[-1];
+
+    (void)type_idx;
+    GcArray* arr = gc_checked_array(ref);
+    if (!arr) {
+        TRAP(ref == REF_NULL ? TRAP_NULL_REFERENCE : TRAP_UNREACHABLE);
+    }
+    if (arr_off < 0 || length < 0 || arr_off + length > arr->length) {
+        TRAP(TRAP_OUT_OF_BOUNDS_MEMORY);
+    }
+    if (elem_idx < 0 || elem_idx >= g_num_elem_segments) {
+        TRAP(TRAP_TABLE_BOUNDS_ACCESS);
+    }
+
+    if (g_elem_segment_dropped && g_elem_segment_dropped[elem_idx]) {
+        if (length != 0 || elem_off != 0) {
+            TRAP(TRAP_TABLE_BOUNDS_ACCESS);
+        }
+        sp -= 4;
+        NEXT();
+    }
+
+    int seg_offset = g_elem_segment_offsets[elem_idx];
+    int seg_size = g_elem_segment_sizes[elem_idx];
+    if (elem_off < 0 || elem_off + length > seg_size) {
+        TRAP(TRAP_TABLE_BOUNDS_ACCESS);
+    }
+
+    for (int32_t i = 0; i < length; i++) {
+        int val = g_elem_segments_flat[seg_offset + elem_off + i];
+        arr->elements[arr_off + i] = val < 0 ? REF_NULL : (uint64_t)val;
+    }
+
+    sp -= 4;
+    NEXT();
+}
+DEFINE_OP(array_init_elem)
+
+// ref.i31
+int op_ref_i31(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)pc; (void)sp; (void)fp;
+    TRAP(TRAP_UNREACHABLE);
+}
+DEFINE_OP(ref_i31)
+
+// i31.get_s
+int op_i31_get_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)pc; (void)sp; (void)fp;
+    TRAP(TRAP_UNREACHABLE);
+}
+DEFINE_OP(i31_get_s)
+
+// i31.get_u
+int op_i31_get_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)pc; (void)sp; (void)fp;
+    TRAP(TRAP_UNREACHABLE);
+}
+DEFINE_OP(i31_get_u)
+
+// any.convert_extern
+int op_any_convert_extern(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)pc; (void)sp; (void)fp;
+    TRAP(TRAP_UNREACHABLE);
+}
+DEFINE_OP(any_convert_extern)
+
+// extern.convert_any
+int op_extern_convert_any(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)pc; (void)sp; (void)fp;
+    TRAP(TRAP_UNREACHABLE);
+}
+DEFINE_OP(extern_convert_any)
+
+// ref.test
+int op_ref_test(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)pc; (void)sp; (void)fp;
+    TRAP(TRAP_UNREACHABLE);
+}
+DEFINE_OP(ref_test)
+
+// ref.cast
+int op_ref_cast(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)pc; (void)sp; (void)fp;
+    TRAP(TRAP_UNREACHABLE);
+}
+DEFINE_OP(ref_cast)
+
+// br_on_cast
+int op_br_on_cast(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)pc; (void)sp; (void)fp;
+    TRAP(TRAP_UNREACHABLE);
+}
+DEFINE_OP(br_on_cast)
+
+// br_on_cast_fail
+int op_br_on_cast_fail(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
+    (void)crt; (void)pc; (void)sp; (void)fp;
+    TRAP(TRAP_UNREACHABLE);
+}
+DEFINE_OP(br_on_cast_fail)
 
 // =============================================================================
 // Table access operations
