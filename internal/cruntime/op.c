@@ -34,6 +34,7 @@
 #define TRAP_OUT_OF_BOUNDS_ARRAY_ACCESS 14 // "out of bounds array access"
 #define TRAP_NULL_ARRAY_REFERENCE       15 // "null array reference"
 #define TRAP_INVALID_ARRAY_REFERENCE    16 // "array: invalid reference"
+#define TRAP_NULL_I31_REFERENCE         17 // "null i31 reference"
 
 // Memory bounds check helper - use 64-bit arithmetic to avoid overflow
 #define CHECK_MEMORY(addr, size) \
@@ -4407,7 +4408,7 @@ int op_i31_get_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)crt; (void)pc; (void)fp;
     uint64_t ref = sp[-1];
     if (ref == REF_NULL) {
-        TRAP(TRAP_NULL_REFERENCE);
+        TRAP(TRAP_NULL_I31_REFERENCE);
     }
     if ((ref & 1ULL) == 0) {
         TRAP(TRAP_UNREACHABLE);
@@ -4427,7 +4428,7 @@ int op_i31_get_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)crt; (void)pc; (void)fp;
     uint64_t ref = sp[-1];
     if (ref == REF_NULL) {
-        TRAP(TRAP_NULL_REFERENCE);
+        TRAP(TRAP_NULL_I31_REFERENCE);
     }
     if ((ref & 1ULL) == 0) {
         TRAP(TRAP_UNREACHABLE);
@@ -4454,15 +4455,63 @@ DEFINE_OP(extern_convert_any)
 
 // ref.test
 int op_ref_test(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)pc; (void)sp; (void)fp;
-    TRAP(TRAP_UNREACHABLE);
+    (void)crt; (void)fp;
+    int target_type = (int)*pc++;
+    int target_nullable = (int)*pc++;
+    uint64_t ref = sp[-1];
+    int matches = 0;
+
+    if (ref == REF_NULL) {
+        matches = target_nullable != 0;
+    } else if ((ref & FUNCREF_TAG) == FUNCREF_TAG) {
+        matches = (target_type == -7);
+    } else if ((ref & 1ULL) == 1ULL) {
+        matches = (target_type == -4 || target_type == -3 || target_type == -2);
+    } else if (gc_is_managed_ptr(ref)) {
+        if (target_type == -6 || target_type == -3 || target_type == -2) {
+            matches = 1;
+        } else if (target_type >= 0) {
+            GcHeader* header = (GcHeader*)ref;
+            matches = ((int)header->type_idx == target_type);
+        }
+    } else if (target_type == -2) {
+        matches = 1;
+    }
+
+    sp[-1] = matches ? 1 : 0;
+    NEXT();
 }
 DEFINE_OP(ref_test)
 
 // ref.cast
 int op_ref_cast(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)pc; (void)sp; (void)fp;
-    TRAP(TRAP_UNREACHABLE);
+    (void)crt; (void)fp;
+    int target_type = (int)*pc++;
+    int target_nullable = (int)*pc++;
+    uint64_t ref = sp[-1];
+    int matches = 0;
+
+    if (ref == REF_NULL) {
+        matches = target_nullable != 0;
+    } else if ((ref & FUNCREF_TAG) == FUNCREF_TAG) {
+        matches = (target_type == -7);
+    } else if ((ref & 1ULL) == 1ULL) {
+        matches = (target_type == -4 || target_type == -3 || target_type == -2);
+    } else if (gc_is_managed_ptr(ref)) {
+        if (target_type == -6 || target_type == -3 || target_type == -2) {
+            matches = 1;
+        } else if (target_type >= 0) {
+            GcHeader* header = (GcHeader*)ref;
+            matches = ((int)header->type_idx == target_type);
+        }
+    } else if (target_type == -2) {
+        matches = 1;
+    }
+
+    if (!matches) {
+        TRAP(TRAP_UNREACHABLE);
+    }
+    NEXT();
 }
 DEFINE_OP(ref_cast)
 

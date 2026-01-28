@@ -125,6 +125,7 @@ fn trap_to_error(trap : TrapCode) -> @runtime.RuntimeError {
     OutOfBoundsArrayAccess => "out of bounds array access"
     NullArrayReference => "null array reference"
     InvalidArrayReference => "array: invalid reference"
+    NullI31Reference => "null i31 reference"
   }
   @runtime.RuntimeError::from_detail(detail)
 }
@@ -163,8 +164,8 @@ fn build_import_context_arrays(
 ///|
 fn is_funcref_table(table_type : @core.TableType) -> Bool {
   match table_type.elem_type {
-    @core.RefType::Extern | @core.RefType::NoExtern => false
-    _ => true
+    @core.RefType::Func | @core.RefType::NoFunc => true
+    _ => false
   }
 }
 
@@ -1306,6 +1307,12 @@ fn init_tables(
   let tables : FixedArray[FixedArray[Int]] = FixedArray::make(num_tables, [-1])
   let logical_sizes_arr : Array[Int] = []
   let max_sizes_arr : Array[Int] = []
+  fn table_init_value(table_type : @core.TableType) -> Int {
+    match table_type.init {
+      Some(expr) => eval_elem_expr_with_globals(expr, globals, module_)
+      None => -1
+    }
+  }
   // Initialize imported tables (from import descriptors)
   let mut import_table_idx = 0
   for imp in module_.imports {
@@ -1320,7 +1327,8 @@ fn init_tables(
         // Allocate to max capacity (at least 1 to avoid empty arrays)
         let alloc_size = if max_size > 0 { max_size } else { 1 }
         // Initialize imported table with -1 (null/undefined)
-        tables[import_table_idx] = FixedArray::make(alloc_size, -1)
+        let init_value = table_init_value(table_type)
+        tables[import_table_idx] = FixedArray::make(alloc_size, init_value)
         // Track logical size (actual table size from limits.min)
         logical_sizes_arr.push(min_size)
         max_sizes_arr.push(if max_size > 0 { max_size } else { 1 })
@@ -1340,7 +1348,8 @@ fn init_tables(
     // Allocate to max capacity (at least 1 to avoid empty arrays)
     let alloc_size = if max_size > 0 { max_size } else { 1 }
     // Initialize table with -1 (null/undefined)
-    tables[num_imported_tables + i] = FixedArray::make(alloc_size, -1)
+    let init_value = table_init_value(table_type)
+    tables[num_imported_tables + i] = FixedArray::make(alloc_size, init_value)
     // Track logical size (actual table size from limits.min)
     logical_sizes_arr.push(min_size)
     max_sizes_arr.push(if max_size > 0 { max_size } else { 1 })

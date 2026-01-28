@@ -19,6 +19,7 @@ pub enum TrapCode {
   OutOfBoundsArrayAccess = 14 // "out of bounds array access"
   NullArrayReference = 15 // "null array reference"
   InvalidArrayReference = 16 // "array: invalid reference"
+  NullI31Reference = 17 // "null i31 reference"
 } derive(Eq, Show)
 
 ///|

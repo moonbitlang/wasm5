@@ -112,7 +112,7 @@
     {"file": "br_on_cast.wast", "subdir": "gc/", "moonbit": true, "cruntime": false},
     {"file": "br_on_cast_fail.wast", "subdir": "gc/", "moonbit": true, "cruntime": false},
     {"file": "extern.wast", "subdir": "gc/", "moonbit": true, "cruntime": false},
-    {"file": "i31.wast", "subdir": "gc/", "moonbit": true, "cruntime": false},
+    {"file": "i31.wast", "subdir": "gc/", "moonbit": true, "cruntime": true},
     {"file": "ref_cast.wast", "subdir": "gc/", "moonbit": true, "cruntime": false},
     {"file": "ref_eq.wast", "subdir": "gc/", "moonbit": true, "cruntime": false},
     {"file": "ref_test.wast", "subdir": "gc/", "moonbit": true, "cruntime": false},
