@@ -13,6 +13,7 @@ pub struct CRuntime {
   tables : FixedArray[FixedArray[Int]] // Tables of function indices
   // Flattened table data for C FFI
   tables_flat : FixedArray[Int] // All tables concatenated
+  tables_flat_u64 : FixedArray[UInt64] // All tables concatenated (full refs)
   table_offsets : FixedArray[Int] // Offset of each table in tables_flat
   table_sizes : FixedArray[Int] // Current size of each table
   table_max_sizes : FixedArray[Int] // Max size (capacity) of each table for table.grow
@@ -21,6 +22,7 @@ pub struct CRuntime {
   func_type_idxs : FixedArray[Int] // Type index for each function (imported + local)
   type_param_counts : FixedArray[Int] // Primary signature hash for each type
   type_result_counts : FixedArray[Int] // Secondary signature hash for each type
+  type_subtype_matrix : FixedArray[Int] // type_idx -> target_idx subtype matrix
   // Import function metadata for op_call_import
   import_num_params : FixedArray[Int] // Number of params for each imported function
   import_num_results : FixedArray[Int] // Number of results for each imported function
@@ -34,6 +36,7 @@ pub struct CRuntime {
   data_segment_sizes : FixedArray[Int] // Size of each segment (mutable for data.drop)
   // Element segments for bulk table operations
   elem_segments_flat : FixedArray[Int] // All element segments flattened (func indices, -1 for null)
+  elem_segments_flat_u64 : FixedArray[UInt64] // All element segments flattened (GC refs)
   elem_segment_offsets : FixedArray[Int] // Offset of each segment in elem_segments_flat
   elem_segment_sizes : FixedArray[Int] // Size of each segment
   elem_segment_dropped : FixedArray[Int] // Whether each segment has been dropped (0 or 1)
@@ -83,6 +86,43 @@ pub fn wasi_reset_preopens() -> Unit {
 }
 
 ///|
+/// Initialize GC heap for CRuntime global initializers.
+extern "C" fn c_gc_init() -> Unit = "gc_init"
+
+///|
+/// Allocate a GC array with all elements initialized to init_val.
+extern "C" fn c_gc_alloc_array_const(
+  type_idx : Int,
+  length : Int,
+  init_val : UInt64,
+) -> UInt64 = "gc_alloc_array_const"
+
+///|
+/// Allocate a GC array from a fixed array of values.
+#borrow(values)
+extern "C" fn c_gc_alloc_array_from_values(
+  type_idx : Int,
+  length : Int,
+  values : FixedArray[UInt64],
+) -> UInt64 = "gc_alloc_array_from_values"
+
+///|
+/// Allocate a GC struct with all fields default-initialized (zeros).
+extern "C" fn c_gc_alloc_struct_default(
+  type_idx : Int,
+  field_count : Int,
+) -> UInt64 = "gc_alloc_struct_default"
+
+///|
+/// Allocate a GC struct from a fixed array of values.
+#borrow(values)
+extern "C" fn c_gc_alloc_struct_from_values(
+  type_idx : Int,
+  field_count : Int,
+  values : FixedArray[UInt64],
+) -> UInt64 = "gc_alloc_struct_from_values"
+
+///|
 /// Convert TrapCode to RuntimeError using the error detail string approach
 fn trap_to_error(trap : TrapCode) -> @runtime.RuntimeError {
   let detail = match trap {
@@ -100,6 +140,12 @@ fn trap_to_error(trap : TrapCode) -> @runtime.RuntimeError {
     TableBoundsAccess => "out of bounds table access" // For bulk table ops
     NullReference => "null reference"
     WasiExit => "wasi exit" // Not a real trap - WASI proc_exit was called
+    OutOfBoundsArrayAccess => "out of bounds array access"
+    NullArrayReference => "null array reference"
+    InvalidArrayReference => "array: invalid reference"
+    NullI31Reference => "null i31 reference"
+    CastFailure => "cast failed"
+    NullStructReference => "null structure reference"
   }
   @runtime.RuntimeError::from_detail(detail)
 }
@@ -138,8 +184,8 @@ fn build_import_context_arrays(
 ///|
 fn is_funcref_table(table_type : @core.TableType) -> Bool {
   match table_type.elem_type {
-    @core.RefType::Extern | @core.RefType::NoExtern => false
-    _ => true
+    @core.RefType::Func | @core.RefType::NoFunc => true
+    _ => false
   }
 }
 
@@ -226,6 +272,7 @@ fn build_runtime(
   resolved_imported_globals : Map[Int, UInt64],
   external_funcrefs : Array[ResolvedImport],
 ) -> CRuntime {
+  c_gc_init()
   // Initialize globals from module
   let globals = init_globals(module_, resolved_imported_globals)
   // Initialize memory from module (pre-allocated to max size)
@@ -237,11 +284,13 @@ fn build_runtime(
   let (tables, table_logical_sizes, table_max_sizes) = init_tables(
     module_, globals,
   )
-  // Flatten tables for C FFI (pass sizes and max_sizes for allocation)
-  let (tables_flat, table_offsets, table_sizes, table_max_sizes) = flatten_tables(
-    tables, table_logical_sizes, table_max_sizes,
-  )
   let table_elem_is_funcref = build_table_elem_types(module_)
+  // Flatten tables for C FFI (pass sizes and max_sizes for allocation)
+  let (tables_flat, tables_flat_u64, table_offsets, table_sizes, table_max_sizes
+  ) = flatten_tables(
+    tables, table_logical_sizes, table_max_sizes, table_elem_is_funcref,
+  )
+  let type_subtype_matrix = build_type_subtype_matrix(module_)
   // Build type info for call_indirect type checking
   let (func_type_idxs, type_param_counts, type_result_counts) = build_type_info(
     module_,
@@ -256,6 +305,7 @@ fn build_runtime(
   // Flatten element segments for bulk table operations
   let (
     elem_segments_flat,
+    elem_segments_flat_u64,
     elem_segment_offsets,
     elem_segment_sizes,
     elem_segment_dropped,
@@ -287,6 +337,7 @@ fn build_runtime(
     output_capacity,
     tables,
     tables_flat,
+    tables_flat_u64,
     table_offsets,
     table_sizes,
     table_max_sizes,
@@ -294,6 +345,7 @@ fn build_runtime(
     func_type_idxs,
     type_param_counts,
     type_result_counts,
+    type_subtype_matrix,
     import_num_params: import_num_params_ext,
     import_num_results: import_num_results_ext,
     import_handler_ids: import_handler_ids_ext,
@@ -303,6 +355,7 @@ fn build_runtime(
     data_segment_offsets,
     data_segment_sizes,
     elem_segments_flat,
+    elem_segments_flat_u64,
     elem_segment_offsets,
     elem_segment_sizes,
     elem_segment_dropped,
@@ -379,6 +432,7 @@ pub fn CRuntime::get_context_ptr(self : CRuntime) -> Int64 {
       self.memory_max_size,
       self.memory_pages,
       self.tables_flat,
+      self.tables_flat_u64,
       self.table_offsets,
       self.table_sizes,
       self.table_max_sizes,
@@ -391,6 +445,7 @@ pub fn CRuntime::get_context_ptr(self : CRuntime) -> Int64 {
       self.func_type_idxs,
       self.type_param_counts,
       self.type_result_counts,
+      self.type_subtype_matrix,
       self.module_.types.length(),
       self.import_num_params,
       self.import_num_results,
@@ -405,6 +460,7 @@ pub fn CRuntime::get_context_ptr(self : CRuntime) -> Int64 {
       self.data_segment_sizes,
       self.data_segment_sizes.length(),
       self.elem_segments_flat,
+      self.elem_segments_flat_u64,
       self.elem_segment_offsets,
       self.elem_segment_sizes,
       self.elem_segment_dropped,
@@ -488,12 +544,19 @@ pub fn CRuntime::clear_output(self : CRuntime) -> Unit {
 
 ///|
 /// Flatten tables into a single array for C FFI
-/// Returns (tables_flat, table_offsets, table_sizes, table_max_sizes)
+/// Returns (tables_flat, tables_flat_u64, table_offsets, table_sizes, table_max_sizes)
 fn flatten_tables(
   tables : FixedArray[FixedArray[Int]],
   logical_sizes : FixedArray[Int],
   max_sizes : FixedArray[Int],
-) -> (FixedArray[Int], FixedArray[Int], FixedArray[Int], FixedArray[Int]) {
+  table_elem_is_funcref : FixedArray[Int],
+) -> (
+  FixedArray[Int],
+  FixedArray[UInt64],
+  FixedArray[Int],
+  FixedArray[Int],
+  FixedArray[Int],
+) {
   let num_tables = tables.length()
   // Calculate total size and offsets
   let table_offsets : Array[Int] = []
@@ -513,21 +576,61 @@ fn flatten_tables(
     },
     -1,
   )
+  let tables_flat_u64 : FixedArray[UInt64] = FixedArray::make(
+    if total_size > 0 {
+      total_size
+    } else {
+      1
+    },
+    0xFFFF_FFFF_FFFF_FFFFUL,
+  )
+  let funcref_tag = 0x4000_0000_0000_0000UL
+  let null_ref = 0xFFFF_FFFF_FFFF_FFFFUL
   for i in 0..<num_tables {
     let offset = table_offsets[i]
     let table = tables[i]
+    let is_funcref = if i < table_elem_is_funcref.length() {
+      table_elem_is_funcref[i] != 0
+    } else {
+      true
+    }
     // Copy elements up to the logical size
     let logical_size = if i < logical_sizes.length() {
       logical_sizes[i]
     } else {
       0
     }
-    for j in 0..<logical_size {
-      tables_flat[offset + j] = table[j]
+    let max_size = if i < max_sizes.length() {
+      max_sizes[i]
+    } else {
+      logical_size
+    }
+    for j in 0..<max_size {
+      if j < logical_size {
+        tables_flat[offset + j] = table[j]
+        if is_funcref {
+          let func_idx = table[j]
+          tables_flat_u64[offset + j] = if func_idx < 0 {
+            null_ref
+          } else {
+            funcref_tag | func_idx.reinterpret_as_uint().to_uint64()
+          }
+        } else {
+          tables_flat_u64[offset + j] = if table[j] < 0 {
+            null_ref
+          } else {
+            table[j].reinterpret_as_uint().to_uint64()
+          }
+        }
+      } else {
+        tables_flat[offset + j] = -1
+        tables_flat_u64[offset + j] = null_ref
+      }
     }
   }
   (
     tables_flat,
+    tables_flat_u64,
     FixedArray::from_array(table_offsets),
     logical_sizes, // Pass through logical sizes
     max_sizes,
@@ -584,11 +687,17 @@ fn flatten_data_segments(
 fn flatten_elem_segments(
   module_ : @core.Module,
   globals : FixedArray[UInt64],
-) -> (FixedArray[Int], FixedArray[Int], FixedArray[Int], FixedArray[Int]) {
+) -> (
+  FixedArray[Int],
+  FixedArray[UInt64],
+  FixedArray[Int],
+  FixedArray[Int],
+  FixedArray[Int],
+) {
   let num_segments = module_.elems.length()
   if num_segments == 0 {
     // Return minimal arrays to avoid empty array issues
-    return (FixedArray::make(1, -1), [0], [0], [0])
+    return (FixedArray::make(1, -1), FixedArray::make(1, 0UL), [0], [0], [0])
   }
   // Calculate total size and offsets
   let segment_sizes : Array[Int] = []
@@ -618,15 +727,37 @@ fn flatten_elem_segments(
     },
     -1,
   )
+  let elem_flat_u64 : FixedArray[UInt64] = FixedArray::make(
+    if total_size > 0 {
+      total_size
+    } else {
+      1
+    },
+    0UL,
+  )
   for i, elem in module_.elems {
     let offset = segment_offsets[i]
     for j, init_expr in elem.init {
       // Evaluate the init expression to get the function index
-      elem_flat[offset + j] = eval_elem_expr_with_globals(init_expr, globals)
+      let raw = eval_const_expr_with_globals(init_expr, globals, module_)
+      let tagged = match elem.elem_type {
+        @core.RefType::Func | @core.RefType::NoFunc =>
+          if raw == 0xFFFFFFFF_FFFFFFFFUL {
+            raw
+          } else {
+            raw | 0x4000_0000_0000_0000UL
+          }
+        _ => raw
+      }
+      elem_flat_u64[offset + j] = tagged
+      elem_flat[offset + j] = eval_elem_expr_with_globals(
+        init_expr, globals, module_,
+      )
     }
   }
   (
     elem_flat,
+    elem_flat_u64,
     FixedArray::from_array(segment_offsets),
     FixedArray::from_array(segment_sizes),
     FixedArray::from_array(segment_dropped),
@@ -663,6 +794,78 @@ fn build_func_type_equiv_ids(module_ : @core.Module) -> Array[Int] {
     }
   }
   ids
+}
+
+///|
+/// Build subtype matrix for GC type checks (num_types x num_types).
+fn build_type_subtype_matrix(module_ : @core.Module) -> FixedArray[Int] {
+  let n = module_.types.length()
+  if n <= 0 {
+    return FixedArray::make(1, 0)
+  }
+  let supers : Array[Array[Int]] = Array::make(n, [])
+  for i in 0..<n {
+    supers[i] = []
+  }
+  for group in module_.type_groups {
+    for subtype_def in group.subtypes {
+      let idx = subtype_def.type_idx.reinterpret_as_int()
+      if idx >= 0 && idx < n {
+        let list : Array[Int] = []
+        for sup in subtype_def.supertypes {
+          list.push(sup.reinterpret_as_int())
+        }
+        supers[idx] = list
+      }
+    }
+  }
+  fn is_subtype(
+    module_ : @core.Module,
+    supers : Array[Array[Int]],
+    type_idx : Int,
+    target_idx : Int,
+  ) -> Bool {
+    if type_idx == target_idx {
+      return true
+    }
+    if @core.gc_types_equivalent(module_, type_idx, target_idx) {
+      return true
+    }
+    let visited : Array[Bool] = Array::make(supers.length(), false)
+    let stack : Array[Int] = [type_idx]
+    while stack.length() > 0 {
+      let cur = stack.pop().unwrap()
+      if cur < 0 || cur >= supers.length() {
+        continue
+      }
+      if visited[cur] {
+        continue
+      }
+      visited[cur] = true
+      for sup in supers[cur] {
+        if sup == target_idx {
+          return true
+        }
+        if @core.gc_types_equivalent(module_, sup, target_idx) {
+          return true
+        }
+        if sup >= 0 && sup < supers.length() && !visited[sup] {
+          stack.push(sup)
+        }
+      }
+    }
+    false
+  }
+
+  let matrix = FixedArray::make(n * n, 0)
+  for i in 0..<n {
+    for j in 0..<n {
+      if is_subtype(module_, supers, i, j) {
+        matrix[i * n + j] = 1
+      }
+    }
+  }
+  matrix
 }
 
 ///|
@@ -1158,7 +1361,7 @@ fn init_memory(
   // Initialize active data segments (write to initial region only)
   for data in module_.datas {
     if data.is_active {
-      let offset = eval_const_expr_with_globals(data.offset, globals).to_int()
+      let offset = eval_const_expr_with_globals(data.offset, globals, module_).to_int()
       for i, b in data.init {
         let pos = offset + i
         let initial_size = initial_pages * page_size
@@ -1217,7 +1420,7 @@ fn init_globals(
   // Then initialize local globals with their init expressions
   for i, g in module_.globals {
     // Evaluate init expression, passing globals array to support global.get
-    let value = eval_const_expr_with_globals(g.init, globals)
+    let value = eval_const_expr_with_globals(g.init, globals, module_)
     globals[num_imported + i] = value
   }
   globals
@@ -1249,6 +1452,12 @@ fn init_tables(
   let tables : FixedArray[FixedArray[Int]] = FixedArray::make(num_tables, [-1])
   let logical_sizes_arr : Array[Int] = []
   let max_sizes_arr : Array[Int] = []
+  fn table_init_value(table_type : @core.TableType) -> Int {
+    match table_type.init {
+      Some(expr) => eval_elem_expr_with_globals(expr, globals, module_)
+      None => -1
+    }
+  }
   // Initialize imported tables (from import descriptors)
   let mut import_table_idx = 0
   for imp in module_.imports {
@@ -1263,7 +1472,8 @@ fn init_tables(
         // Allocate to max capacity (at least 1 to avoid empty arrays)
         let alloc_size = if max_size > 0 { max_size } else { 1 }
         // Initialize imported table with -1 (null/undefined)
-        tables[import_table_idx] = FixedArray::make(alloc_size, -1)
+        let init_value = table_init_value(table_type)
+        tables[import_table_idx] = FixedArray::make(alloc_size, init_value)
         // Track logical size (actual table size from limits.min)
         logical_sizes_arr.push(min_size)
         max_sizes_arr.push(if max_size > 0 { max_size } else { 1 })
@@ -1283,7 +1493,8 @@ fn init_tables(
     // Allocate to max capacity (at least 1 to avoid empty arrays)
     let alloc_size = if max_size > 0 { max_size } else { 1 }
     // Initialize table with -1 (null/undefined)
-    tables[num_imported_tables + i] = FixedArray::make(alloc_size, -1)
+    let init_value = table_init_value(table_type)
+    tables[num_imported_tables + i] = FixedArray::make(alloc_size, init_value)
     // Track logical size (actual table size from limits.min)
     logical_sizes_arr.push(min_size)
     max_sizes_arr.push(if max_size > 0 { max_size } else { 1 })
@@ -1293,13 +1504,15 @@ fn init_tables(
     if elem.is_active {
       let table_idx = elem.table_idx.reinterpret_as_int()
       if table_idx >= 0 && table_idx < tables.length() {
-        let offset = eval_const_expr_with_globals(elem.offset, globals).to_int()
+        let offset = eval_const_expr_with_globals(elem.offset, globals, module_).to_int()
         let table = tables[table_idx]
         let logical_size = logical_sizes_arr[table_idx]
         for i, init_expr in elem.init {
           if offset + i < logical_size {
             // Evaluate the init expression to get the function index
-            let func_idx = eval_elem_expr_with_globals(init_expr, globals)
+            let func_idx = eval_elem_expr_with_globals(
+              init_expr, globals, module_,
+            )
             table[offset + i] = func_idx
           }
         }
@@ -1318,8 +1531,9 @@ fn init_tables(
 fn eval_elem_expr_with_globals(
   expr : @core.Expr,
   globals : FixedArray[UInt64],
+  module_ : @core.Module,
 ) -> Int {
-  let raw = eval_const_expr_with_globals(expr, globals)
+  let raw = eval_const_expr_with_globals(expr, globals, module_)
   if raw == 0xFFFFFFFF_FFFFFFFFUL {
     -1
   } else {
@@ -1332,7 +1546,37 @@ fn eval_elem_expr_with_globals(
 fn eval_const_expr_with_globals(
   expr : @core.Expr,
   globals : FixedArray[UInt64],
+  module_ : @core.Module,
 ) -> UInt64 {
+  fn array_default_value(type_idx : Int) -> UInt64 {
+    if type_idx < 0 || type_idx >= module_.types.length() {
+      return 0UL
+    }
+    match module_.types[type_idx] {
+      Array(array_type) =>
+        match array_type.element.storage {
+          Val(val_type) =>
+            if val_type.is_ref_type() {
+              0xFFFFFFFF_FFFFFFFFUL
+            } else {
+              0UL
+            }
+          I8 | I16 => 0UL
+        }
+      _ => 0UL
+    }
+  }
+
+  fn struct_field_count(type_idx : Int) -> Int {
+    if type_idx < 0 || type_idx >= module_.types.length() {
+      return 0
+    }
+    match module_.types[type_idx] {
+      Struct(struct_type) => struct_type.fields.length()
+      _ => 0
+    }
+  }
+
   // Use a simple stack for expression evaluation
   let stack : Array[UInt64] = []
   for instr in expr.instrs {
@@ -1351,6 +1595,78 @@ fn eval_const_expr_with_globals(
       }
       RefNull(_) => stack.push(0xFFFFFFFF_FFFFFFFFUL)
       RefFunc(idx) => stack.push(idx.to_uint64()) // Function index
+      RefI31 =>
+        if stack.length() >= 1 {
+          let raw = stack.pop().unwrap()
+          let masked = raw & 0x7FFF_FFFFUL
+          stack.push((masked << 1) | 1UL)
+        }
+      ArrayNew(type_idx) =>
+        if stack.length() >= 2 {
+          let length = stack.pop().unwrap().to_int()
+          let init_val = stack.pop().unwrap()
+          let ref_val = c_gc_alloc_array_const(
+            type_idx.reinterpret_as_int(),
+            length,
+            init_val,
+          )
+          stack.push(ref_val)
+        }
+      ArrayNewDefault(type_idx) =>
+        if stack.length() >= 1 {
+          let length = stack.pop().unwrap().to_int()
+          let default_val = array_default_value(type_idx.reinterpret_as_int())
+          let ref_val = c_gc_alloc_array_const(
+            type_idx.reinterpret_as_int(),
+            length,
+            default_val,
+          )
+          stack.push(ref_val)
+        }
+      ArrayNewFixed(type_idx, len) =>
+        if len.reinterpret_as_int() >= 0 &&
+          stack.length() >= len.reinterpret_as_int() {
+          let length = len.reinterpret_as_int()
+          let elements : Array[UInt64] = Array::make(length, 0UL)
+          if length > 0 {
+            for i = length - 1; i >= 0; i = i - 1 {
+              elements[i] = stack.pop().unwrap()
+            }
+          }
+          let elements_fixed = FixedArray::from_array(elements)
+          let ref_val = c_gc_alloc_array_from_values(
+            type_idx.reinterpret_as_int(),
+            length,
+            elements_fixed,
+          )
+          stack.push(ref_val)
+        }
+      StructNew(type_idx) =>
+        if stack.length() >= 0 {
+          let type_idx_int = type_idx.reinterpret_as_int()
+          let count = struct_field_count(type_idx_int)
+          if count > 0 && stack.length() >= count {
+            let fields : Array[UInt64] = Array::make(count, 0UL)
+            for i = count - 1; i >= 0; i = i - 1 {
+              fields[i] = stack.pop().unwrap()
+            }
+            let fields_fixed = FixedArray::from_array(fields)
+            let ref_val = c_gc_alloc_struct_from_values(
+              type_idx_int, count, fields_fixed,
+            )
+            stack.push(ref_val)
+          } else {
+            let ref_val = c_gc_alloc_struct_default(type_idx_int, count)
+            stack.push(ref_val)
+          }
+        }
+      StructNewDefault(type_idx) =>
+        if stack.length() >= 0 {
+          let type_idx_int = type_idx.reinterpret_as_int()
+          let count = struct_field_count(type_idx_int)
+          let ref_val = c_gc_alloc_struct_default(type_idx_int, count)
+          stack.push(ref_val)
+        }
       // Simple arithmetic for const expr evaluation
       I32Add =>
         if stack.length() >= 2 {
@@ -1426,6 +1742,7 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
           self.memory_max_size,
           self.memory_pages,
           self.tables_flat,
+          self.tables_flat_u64,
           self.table_offsets,
           self.table_sizes,
           self.table_max_sizes,
@@ -1438,6 +1755,7 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
           self.func_type_idxs,
           self.type_param_counts,
           self.type_result_counts,
+          self.type_subtype_matrix,
           self.module_.types.length(),
           self.import_num_params,
           self.import_num_results,
@@ -1452,6 +1770,7 @@ pub fn CRuntime::run_start(self : CRuntime) -> Unit raise @runtime.RuntimeError 
           self.data_segment_sizes,
           self.module_.datas.length(),
           self.elem_segments_flat,
+          self.elem_segments_flat_u64,
           self.elem_segment_offsets,
           self.elem_segment_sizes,
           self.elem_segment_dropped,
@@ -1584,6 +1903,7 @@ pub fn CRuntime::call_compiled(
           self.memory_max_size,
           self.memory_pages,
           self.tables_flat,
+          self.tables_flat_u64,
           self.table_offsets,
           self.table_sizes,
           self.table_max_sizes,
@@ -1596,6 +1916,7 @@ pub fn CRuntime::call_compiled(
           self.func_type_idxs,
           self.type_param_counts,
           self.type_result_counts,
+          self.type_subtype_matrix,
           self.module_.types.length(),
           self.import_num_params,
           self.import_num_results,
@@ -1610,6 +1931,7 @@ pub fn CRuntime::call_compiled(
           self.data_segment_sizes,
           self.module_.datas.length(),
           self.elem_segments_flat,
+          self.elem_segments_flat_u64,
           self.elem_segment_offsets,
           self.elem_segment_sizes,
           self.elem_segment_dropped,
@@ -1645,11 +1967,11 @@ fn value_to_u64(v : Value) -> UInt64 {
     I64(n) => n
     F32(f) => f.reinterpret_as_uint().to_uint64()
     F64(f) => f.reinterpret_as_uint64()
-    Ref(Some(n)) => n.reinterpret_as_uint().to_uint64()
+    Ref(Some(n)) => n.to_int64().reinterpret_as_uint64()
     Ref(None) => 0xFFFFFFFF_FFFFFFFFUL
-    Funcref(Some(n)) => n.reinterpret_as_uint().to_uint64()
+    Funcref(Some(n)) => n.to_int64().reinterpret_as_uint64()
     Funcref(None) => 0xFFFFFFFF_FFFFFFFFUL
-    Externref(Some(n)) => n.reinterpret_as_uint().to_uint64()
+    Externref(Some(n)) => n.to_int64().reinterpret_as_uint64()
     Externref(None) => 0xFFFFFFFF_FFFFFFFFUL
   }
 }
@@ -1679,7 +2001,7 @@ fn u64_to_value(raw : UInt64, ty : @core.ValType) -> Value {
       if raw == 0xFFFFFFFF_FFFFFFFFUL {
         Value::Ref(None)
       } else {
-        Value::Ref(Some(raw.to_uint().reinterpret_as_int()))
+        Value::Ref(Some(raw.reinterpret_as_int64().to_int()))
       }
     _ => Value::I64(raw)
   }

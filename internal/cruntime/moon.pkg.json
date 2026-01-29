@@ -5,5 +5,5 @@
     "moonbitlang/wasm5/internal/runtime",
     "moonbitlang/core/encoding/utf8"
   ],
-  "native-stub": ["op.c", "wasi.c"]
+  "native-stub": ["op.c", "wasi.c", "gc.c"]
 }
