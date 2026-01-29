@@ -313,6 +313,21 @@ static int external_funcref_type_matches(int expected_type_idx, int import_idx) 
     return expected_params == num_params && expected_results == num_results;
 }
 
+static int table_is_funcref(int table_idx, int default_value) {
+    if (!g_table_elem_is_funcref || table_idx < 0 || table_idx >= g_num_tables) {
+        return default_value;
+    }
+    return g_table_elem_is_funcref[table_idx] != 0;
+}
+
+static uint64_t funcref_from_idx(int func_idx) {
+    return func_idx < 0 ? REF_NULL : (FUNCREF_TAG | (uint64_t)func_idx);
+}
+
+static int funcref_to_idx(uint64_t ref) {
+    return ref == REF_NULL ? -1 : (int)(ref & 0x3FFFFFFFFFFFFFFFULL);
+}
+
 // Host import handler ids (kept in sync with runtime.mbt)
 #define HOST_IMPORT_SPECTEST_PRINT 0
 #define HOST_IMPORT_SPECTEST_PRINT_I32 1
@@ -3451,8 +3466,8 @@ int op_table_copy(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     int dst_size = g_table_sizes[dst_table_idx];
     int src_offset = g_table_offsets[src_table_idx];
     int src_size = g_table_sizes[src_table_idx];
-    int dst_funcref = g_table_elem_is_funcref && g_table_elem_is_funcref[dst_table_idx] != 0;
-    int src_funcref = g_table_elem_is_funcref && g_table_elem_is_funcref[src_table_idx] != 0;
+    int dst_funcref = table_is_funcref(dst_table_idx, 0);
+    int src_funcref = table_is_funcref(src_table_idx, 0);
 
     // Bounds check
     if ((uint64_t)src + n > (uint64_t)src_size ||
@@ -3461,30 +3476,23 @@ int op_table_copy(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     }
 
     if (dst_funcref && src_funcref) {
-        // Copy with proper overlap handling
-        if (dst_table_idx == src_table_idx && dest > src && dest < src + n) {
-            // Overlapping, dest > src: copy backwards
-            for (int i = n - 1; i >= 0; i--) {
-                g_tables_flat[dst_offset + dest + i] = g_tables_flat[src_offset + src + i];
-            }
-        } else {
-            // Non-overlapping or src >= dest: copy forwards
-            for (uint32_t i = 0; i < n; i++) {
-                g_tables_flat[dst_offset + dest + i] = g_tables_flat[src_offset + src + i];
-            }
+        if (n > 0) {
+            memmove(
+                &g_tables_flat[dst_offset + dest],
+                &g_tables_flat[src_offset + src],
+                (size_t)n * sizeof(int)
+            );
         }
     } else {
         if (!g_tables_flat_u64) {
             TRAP(TRAP_UNREACHABLE);
         }
-        if (dst_table_idx == src_table_idx && dest > src && dest < src + n) {
-            for (int i = n - 1; i >= 0; i--) {
-                g_tables_flat_u64[dst_offset + dest + i] = g_tables_flat_u64[src_offset + src + i];
-            }
-        } else {
-            for (uint32_t i = 0; i < n; i++) {
-                g_tables_flat_u64[dst_offset + dest + i] = g_tables_flat_u64[src_offset + src + i];
-            }
+        if (n > 0) {
+            memmove(
+                &g_tables_flat_u64[dst_offset + dest],
+                &g_tables_flat_u64[src_offset + src],
+                (size_t)n * sizeof(uint64_t)
+            );
         }
     }
     NEXT();
@@ -3516,9 +3524,9 @@ int op_table_fill(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
         TRAP(TRAP_TABLE_BOUNDS_ACCESS);
     }
 
-    int is_funcref = g_table_elem_is_funcref && g_table_elem_is_funcref[table_idx] != 0;
+    int is_funcref = table_is_funcref(table_idx, 0);
     if (is_funcref) {
-        int func_idx = (ref_val == REF_NULL) ? -1 : (int)(ref_val & 0x3FFFFFFFFFFFFFFFULL);
+        int func_idx = funcref_to_idx(ref_val);
         for (uint32_t i = 0; i < n; i++) {
             g_tables_flat[table_offset + dest + i] = func_idx;
         }
@@ -3562,7 +3570,7 @@ int op_table_init(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     int elem_size = g_elem_segment_dropped[elem_idx] ? 0 : g_elem_segment_sizes[elem_idx];
     int table_offset = g_table_offsets[table_idx];
     int table_size = g_table_sizes[table_idx];
-    int is_funcref = g_table_elem_is_funcref && g_table_elem_is_funcref[table_idx] != 0;
+    int is_funcref = table_is_funcref(table_idx, 0);
 
     // Bounds check (n=0 with dropped segment is OK, n>0 with dropped segment traps)
     if ((uint64_t)src + n > (uint64_t)elem_size ||
@@ -4763,10 +4771,7 @@ int op_table_get(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
 
     int offset = g_table_offsets[table_idx];
     int size = g_table_sizes[table_idx];
-    int is_funcref = 1;
-    if (g_table_elem_is_funcref && table_idx >= 0 && table_idx < g_num_tables) {
-        is_funcref = g_table_elem_is_funcref[table_idx] != 0;
-    }
+    int is_funcref = table_is_funcref(table_idx, 1);
 
     // Bounds check
     if (elem_idx < 0 || elem_idx >= size) {
@@ -4775,11 +4780,7 @@ int op_table_get(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
 
     if (is_funcref) {
         int func_idx = g_tables_flat[offset + elem_idx];
-        if (func_idx == -1) {
-            sp[-1] = REF_NULL;  // null
-        } else {
-            sp[-1] = FUNCREF_TAG | (uint64_t)func_idx;
-        }
+        sp[-1] = funcref_from_idx(func_idx);
     } else {
         if (!g_tables_flat_u64) {
             TRAP(TRAP_UNREACHABLE);
@@ -4807,10 +4808,7 @@ int op_table_set(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
 
     int offset = g_table_offsets[table_idx];
     int size = g_table_sizes[table_idx];
-    int is_funcref = 1;
-    if (g_table_elem_is_funcref && table_idx >= 0 && table_idx < g_num_tables) {
-        is_funcref = g_table_elem_is_funcref[table_idx] != 0;
-    }
+    int is_funcref = table_is_funcref(table_idx, 1);
 
     // Bounds check
     if (elem_idx < 0 || elem_idx >= size) {
@@ -4819,13 +4817,7 @@ int op_table_set(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
 
     if (is_funcref) {
         // Convert from reference to stored value
-        int func_idx;
-        if (ref == REF_NULL) {
-            func_idx = -1;  // null
-        } else {
-            func_idx = (int)(ref & 0x3FFFFFFFFFFFFFFFULL);
-        }
-        g_tables_flat[offset + elem_idx] = func_idx;
+        g_tables_flat[offset + elem_idx] = funcref_to_idx(ref);
     } else {
         if (!g_tables_flat_u64) {
             TRAP(TRAP_UNREACHABLE);
