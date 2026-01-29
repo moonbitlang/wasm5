@@ -107,6 +107,22 @@ extern "C" fn c_gc_alloc_array_from_values(
 ) -> UInt64 = "gc_alloc_array_from_values"
 
 ///|
+/// Allocate a GC struct with all fields default-initialized (zeros).
+extern "C" fn c_gc_alloc_struct_default(
+  type_idx : Int,
+  field_count : Int,
+) -> UInt64 = "gc_alloc_struct_default"
+
+///|
+/// Allocate a GC struct from a fixed array of values.
+#borrow(values)
+extern "C" fn c_gc_alloc_struct_from_values(
+  type_idx : Int,
+  field_count : Int,
+  values : FixedArray[UInt64],
+) -> UInt64 = "gc_alloc_struct_from_values"
+
+///|
 /// Convert TrapCode to RuntimeError using the error detail string approach
 fn trap_to_error(trap : TrapCode) -> @runtime.RuntimeError {
   let detail = match trap {
@@ -129,6 +145,7 @@ fn trap_to_error(trap : TrapCode) -> @runtime.RuntimeError {
     InvalidArrayReference => "array: invalid reference"
     NullI31Reference => "null i31 reference"
     CastFailure => "cast failed"
+    NullStructReference => "null structure reference"
   }
   @runtime.RuntimeError::from_detail(detail)
 }
@@ -1550,6 +1567,16 @@ fn eval_const_expr_with_globals(
     }
   }
 
+  fn struct_field_count(type_idx : Int) -> Int {
+    if type_idx < 0 || type_idx >= module_.types.length() {
+      return 0
+    }
+    match module_.types[type_idx] {
+      Struct(struct_type) => struct_type.fields.length()
+      _ => 0
+    }
+  }
+
   // Use a simple stack for expression evaluation
   let stack : Array[UInt64] = []
   for instr in expr.instrs {
@@ -1612,6 +1639,32 @@ fn eval_const_expr_with_globals(
             length,
             elements_fixed,
           )
+          stack.push(ref_val)
+        }
+      StructNew(type_idx) =>
+        if stack.length() >= 0 {
+          let type_idx_int = type_idx.reinterpret_as_int()
+          let count = struct_field_count(type_idx_int)
+          if count > 0 && stack.length() >= count {
+            let fields : Array[UInt64] = Array::make(count, 0UL)
+            for i = count - 1; i >= 0; i = i - 1 {
+              fields[i] = stack.pop().unwrap()
+            }
+            let fields_fixed = FixedArray::from_array(fields)
+            let ref_val = c_gc_alloc_struct_from_values(
+              type_idx_int, count, fields_fixed,
+            )
+            stack.push(ref_val)
+          } else {
+            let ref_val = c_gc_alloc_struct_default(type_idx_int, count)
+            stack.push(ref_val)
+          }
+        }
+      StructNewDefault(type_idx) =>
+        if stack.length() >= 0 {
+          let type_idx_int = type_idx.reinterpret_as_int()
+          let count = struct_field_count(type_idx_int)
+          let ref_val = c_gc_alloc_struct_default(type_idx_int, count)
           stack.push(ref_val)
         }
       // Simple arithmetic for const expr evaluation

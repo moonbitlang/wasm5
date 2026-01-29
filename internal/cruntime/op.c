@@ -36,6 +36,7 @@
 #define TRAP_INVALID_ARRAY_REFERENCE    16 // "array: invalid reference"
 #define TRAP_NULL_I31_REFERENCE         17 // "null i31 reference"
 #define TRAP_CAST_FAILURE               18 // "cast failure"
+#define TRAP_NULL_STRUCT_REFERENCE      19 // "null structure reference"
 
 // Reference tags and null
 #define REF_NULL 0xFFFFFFFFFFFFFFFFULL
@@ -4013,7 +4014,7 @@ int op_struct_get(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     uint64_t ref = sp[-1];
     GcStruct* st = gc_checked_struct(ref);
     if (!st) {
-        TRAP(ref == REF_NULL ? TRAP_NULL_REFERENCE : TRAP_UNREACHABLE);
+        TRAP(ref == REF_NULL ? TRAP_NULL_STRUCT_REFERENCE : TRAP_UNREACHABLE);
     }
     if (field_idx < 0 || field_idx >= st->field_count) {
         TRAP(TRAP_UNREACHABLE);
@@ -4031,7 +4032,7 @@ int op_struct_get_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     uint64_t ref = sp[-1];
     GcStruct* st = gc_checked_struct(ref);
     if (!st) {
-        TRAP(ref == REF_NULL ? TRAP_NULL_REFERENCE : TRAP_UNREACHABLE);
+        TRAP(ref == REF_NULL ? TRAP_NULL_STRUCT_REFERENCE : TRAP_UNREACHABLE);
     }
     if (field_idx < 0 || field_idx >= st->field_count) {
         TRAP(TRAP_UNREACHABLE);
@@ -4058,7 +4059,7 @@ int op_struct_get_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     uint64_t ref = sp[-1];
     GcStruct* st = gc_checked_struct(ref);
     if (!st) {
-        TRAP(ref == REF_NULL ? TRAP_NULL_REFERENCE : TRAP_UNREACHABLE);
+        TRAP(ref == REF_NULL ? TRAP_NULL_STRUCT_REFERENCE : TRAP_UNREACHABLE);
     }
     if (field_idx < 0 || field_idx >= st->field_count) {
         TRAP(TRAP_UNREACHABLE);
@@ -4085,7 +4086,7 @@ int op_struct_set(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     uint64_t val = sp[-1];
     GcStruct* st = gc_checked_struct(ref);
     if (!st) {
-        TRAP(ref == REF_NULL ? TRAP_NULL_REFERENCE : TRAP_UNREACHABLE);
+        TRAP(ref == REF_NULL ? TRAP_NULL_STRUCT_REFERENCE : TRAP_UNREACHABLE);
     }
     if (field_idx < 0 || field_idx >= st->field_count) {
         TRAP(TRAP_UNREACHABLE);

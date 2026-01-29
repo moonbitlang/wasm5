@@ -21,6 +21,7 @@ pub enum TrapCode {
   InvalidArrayReference = 16 // "array: invalid reference"
   NullI31Reference = 17 // "null i31 reference"
   CastFailure = 18 // "cast failure"
+  NullStructReference = 19 // "null structure reference"
 } derive(Eq, Show)
 
 ///|

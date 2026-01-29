@@ -340,6 +340,28 @@ uint64_t gc_alloc_array_from_values(uint32_t type_idx, int32_t length, const uin
     return (uint64_t)arr;
 }
 
+uint64_t gc_alloc_struct_default(uint32_t type_idx, int32_t field_count) {
+    GcStruct* st = gc_alloc_struct(type_idx, field_count);
+    if (!st) {
+        return REF_NULL;
+    }
+    return (uint64_t)st;
+}
+
+uint64_t gc_alloc_struct_from_values(uint32_t type_idx, int32_t field_count, const uint64_t* values) {
+    if (field_count < 0) {
+        return REF_NULL;
+    }
+    GcStruct* st = gc_alloc_struct(type_idx, field_count);
+    if (!st) {
+        return REF_NULL;
+    }
+    if (values && field_count > 0) {
+        memcpy(st->fields, values, (size_t)field_count * sizeof(uint64_t));
+    }
+    return (uint64_t)st;
+}
+
 static void gc_mark_object(GcHeader* obj, GcHeader** stack, size_t* top, size_t cap) {
     if (!obj || obj->mark) {
         return;
