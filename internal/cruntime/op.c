@@ -256,6 +256,22 @@ static int g_output_capacity = 0;          // Output buffer capacity
 static int64_t* g_import_context_ptrs = NULL;  // Target context pointer for each import (-1 if not resolved)
 static int* g_import_target_func_idxs = NULL;  // Function index in target module for each import
 
+
+// Data segments for bulk memory operations (memory.init, data.drop)
+static uint8_t* g_data_segments_flat = NULL;   // All data segments concatenated
+static int* g_data_segment_offsets = NULL;     // Offset of each segment in data_segments_flat
+static int* g_data_segment_sizes = NULL;       // Size of each segment (mutable for data.drop)
+static int g_num_data_segments = 0;
+
+// Element segments for bulk table operations (table.init, elem.drop)
+static int* g_elem_segments_flat = NULL;       // All element segments concatenated (func indices, -1 for null)
+static uint64_t* g_elem_segments_flat_u64 = NULL; // All element segments concatenated (GC refs)
+static int* g_elem_segment_offsets = NULL;     // Offset of each segment in elem_segments_flat
+static int* g_elem_segment_sizes = NULL;       // Size of each segment (mutable for elem.drop)
+static int* g_elem_segment_dropped = NULL;     // Whether each segment has been dropped
+static int g_num_elem_segments = 0;
+static int g_num_external_funcrefs = 0;
+
 static int func_type_is_subtype(int actual_type_idx, int expected_type_idx) {
     if (actual_type_idx == expected_type_idx) {
         return 1;
@@ -272,20 +288,30 @@ static int func_type_is_subtype(int actual_type_idx, int expected_type_idx) {
     return 0;
 }
 
-// Data segments for bulk memory operations (memory.init, data.drop)
-static uint8_t* g_data_segments_flat = NULL;   // All data segments concatenated
-static int* g_data_segment_offsets = NULL;     // Offset of each segment in data_segments_flat
-static int* g_data_segment_sizes = NULL;       // Size of each segment (mutable for data.drop)
-static int g_num_data_segments = 0;
+static int get_external_funcref_import_idx(int func_idx, int* import_idx_out) {
+    int external_base = g_num_imported_funcs + g_num_funcs;
+    if (g_num_external_funcrefs <= 0 || func_idx < external_base) {
+        return 0;
+    }
+    int ext_idx = func_idx - external_base;
+    if (ext_idx < 0 || ext_idx >= g_num_external_funcrefs) {
+        return -1;
+    }
+    *import_idx_out = g_num_imported_funcs + ext_idx;
+    return 1;
+}
 
-// Element segments for bulk table operations (table.init, elem.drop)
-static int* g_elem_segments_flat = NULL;       // All element segments concatenated (func indices, -1 for null)
-static uint64_t* g_elem_segments_flat_u64 = NULL; // All element segments concatenated (GC refs)
-static int* g_elem_segment_offsets = NULL;     // Offset of each segment in elem_segments_flat
-static int* g_elem_segment_sizes = NULL;       // Size of each segment (mutable for elem.drop)
-static int* g_elem_segment_dropped = NULL;     // Whether each segment has been dropped
-static int g_num_elem_segments = 0;
-static int g_num_external_funcrefs = 0;
+static int external_funcref_type_matches(int expected_type_idx, int import_idx) {
+    if (expected_type_idx < 0 || expected_type_idx >= g_num_types) {
+        return 1;
+    }
+    int expected_sig2 = g_type_sig_hash2[expected_type_idx];
+    int expected_params = expected_sig2 >> 16;
+    int expected_results = expected_sig2 & 0xFFFF;
+    int num_params = g_import_num_params ? g_import_num_params[import_idx] : 0;
+    int num_results = g_import_num_results ? g_import_num_results[import_idx] : 0;
+    return expected_params == num_params && expected_results == num_results;
+}
 
 // Host import handler ids (kept in sync with runtime.mbt)
 #define HOST_IMPORT_SPECTEST_PRINT 0
@@ -1315,23 +1341,17 @@ int op_return_call_indirect(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t*
         TRAP(TRAP_UNINITIALIZED_ELEMENT);  // "uninitialized element"
     }
 
-    int external_base = g_num_imported_funcs + g_num_funcs;
-    if (g_num_external_funcrefs > 0 && func_idx >= external_base) {
-        int ext_idx = func_idx - external_base;
-        if (ext_idx < 0 || ext_idx >= g_num_external_funcrefs) {
-            TRAP(TRAP_UNINITIALIZED_ELEMENT);
-        }
-        int import_idx = g_num_imported_funcs + ext_idx;
+    int import_idx = -1;
+    int external_status = get_external_funcref_import_idx(func_idx, &import_idx);
+    if (external_status < 0) {
+        TRAP(TRAP_UNINITIALIZED_ELEMENT);
+    }
+    if (external_status > 0) {
         int num_params = g_import_num_params ? g_import_num_params[import_idx] : 0;
         int num_results = g_import_num_results ? g_import_num_results[import_idx] : 0;
 
-        if (expected_type_idx >= 0 && expected_type_idx < g_num_types) {
-            int expected_sig2 = g_type_sig_hash2[expected_type_idx];
-            int expected_params = expected_sig2 >> 16;
-            int expected_results = expected_sig2 & 0xFFFF;
-            if (expected_params != num_params || expected_results != num_results) {
-                TRAP(TRAP_INDIRECT_CALL_TYPE_MISMATCH);
-            }
+        if (!external_funcref_type_matches(expected_type_idx, import_idx)) {
+            TRAP(TRAP_INDIRECT_CALL_TYPE_MISMATCH);
         }
 
         if (!g_import_context_ptrs || !g_import_target_func_idxs) {
@@ -3170,23 +3190,17 @@ int op_call_indirect(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
         TRAP(TRAP_UNINITIALIZED_ELEMENT);  // "uninitialized element"
     }
 
-    int external_base = g_num_imported_funcs + g_num_funcs;
-    if (g_num_external_funcrefs > 0 && func_idx >= external_base) {
-        int ext_idx = func_idx - external_base;
-        if (ext_idx < 0 || ext_idx >= g_num_external_funcrefs) {
-            TRAP(TRAP_UNINITIALIZED_ELEMENT);
-        }
-        int import_idx = g_num_imported_funcs + ext_idx;
+    int import_idx = -1;
+    int external_status = get_external_funcref_import_idx(func_idx, &import_idx);
+    if (external_status < 0) {
+        TRAP(TRAP_UNINITIALIZED_ELEMENT);
+    }
+    if (external_status > 0) {
         int num_params = g_import_num_params ? g_import_num_params[import_idx] : 0;
         int num_results = g_import_num_results ? g_import_num_results[import_idx] : 0;
 
-        if (expected_type_idx >= 0 && expected_type_idx < g_num_types) {
-            int expected_sig2 = g_type_sig_hash2[expected_type_idx];
-            int expected_params = expected_sig2 >> 16;
-            int expected_results = expected_sig2 & 0xFFFF;
-            if (expected_params != num_params || expected_results != num_results) {
-                TRAP(TRAP_INDIRECT_CALL_TYPE_MISMATCH);
-            }
+        if (!external_funcref_type_matches(expected_type_idx, import_idx)) {
+            TRAP(TRAP_INDIRECT_CALL_TYPE_MISMATCH);
         }
 
         if (!g_import_context_ptrs || !g_import_target_func_idxs) {
@@ -3713,23 +3727,17 @@ int op_call_ref(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     // Extract function index from tagged reference
     int func_idx = (int)(ref & 0x3FFFFFFFFFFFFFFFULL);
 
-    int external_base = g_num_imported_funcs + g_num_funcs;
-    if (g_num_external_funcrefs > 0 && func_idx >= external_base) {
-        int ext_idx = func_idx - external_base;
-        if (ext_idx < 0 || ext_idx >= g_num_external_funcrefs) {
-            TRAP(TRAP_UNINITIALIZED_ELEMENT);
-        }
-        int import_idx = g_num_imported_funcs + ext_idx;
+    int import_idx = -1;
+    int external_status = get_external_funcref_import_idx(func_idx, &import_idx);
+    if (external_status < 0) {
+        TRAP(TRAP_UNINITIALIZED_ELEMENT);
+    }
+    if (external_status > 0) {
         int num_params = g_import_num_params ? g_import_num_params[import_idx] : 0;
         int num_results = g_import_num_results ? g_import_num_results[import_idx] : 0;
 
-        if (expected_type_idx >= 0 && expected_type_idx < g_num_types) {
-            int expected_sig2 = g_type_sig_hash2[expected_type_idx];
-            int expected_params = expected_sig2 >> 16;
-            int expected_results = expected_sig2 & 0xFFFF;
-            if (expected_params != num_params || expected_results != num_results) {
-                TRAP(TRAP_INDIRECT_CALL_TYPE_MISMATCH);
-            }
+        if (!external_funcref_type_matches(expected_type_idx, import_idx)) {
+            TRAP(TRAP_INDIRECT_CALL_TYPE_MISMATCH);
         }
 
         if (!g_import_context_ptrs || !g_import_target_func_idxs) {
@@ -4640,21 +4648,13 @@ static int ref_matches_type(uint64_t ref, int target_type, int target_nullable) 
             }
             return 0;
         }
-        int external_base = g_num_imported_funcs + g_num_funcs;
-        if (g_num_external_funcrefs > 0 && func_idx >= external_base) {
-            int ext_idx = func_idx - external_base;
-            if (ext_idx < 0 || ext_idx >= g_num_external_funcrefs) {
-                return 0;
+        int import_idx = -1;
+        int external_status = get_external_funcref_import_idx(func_idx, &import_idx);
+        if (external_status > 0) {
+            if (target_type >= 0 && target_type < g_num_types) {
+                return external_funcref_type_matches(target_type, import_idx);
             }
-            int import_idx = g_num_imported_funcs + ext_idx;
-            if (target_type >= 0 && target_type < g_num_types && g_type_sig_hash2) {
-                int expected_sig2 = g_type_sig_hash2[target_type];
-                int expected_params = expected_sig2 >> 16;
-                int expected_results = expected_sig2 & 0xFFFF;
-                int num_params = g_import_num_params ? g_import_num_params[import_idx] : 0;
-                int num_results = g_import_num_results ? g_import_num_results[import_idx] : 0;
-                return expected_params == num_params && expected_results == num_results;
-            }
+            return 0;
         }
         return 0;
     }
