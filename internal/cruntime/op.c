@@ -256,6 +256,22 @@ static int g_output_capacity = 0;          // Output buffer capacity
 static int64_t* g_import_context_ptrs = NULL;  // Target context pointer for each import (-1 if not resolved)
 static int* g_import_target_func_idxs = NULL;  // Function index in target module for each import
 
+static int func_type_is_subtype(int actual_type_idx, int expected_type_idx) {
+    if (actual_type_idx == expected_type_idx) {
+        return 1;
+    }
+    if (g_type_subtype_matrix && actual_type_idx >= 0 && expected_type_idx >= 0 &&
+        actual_type_idx < g_num_types && expected_type_idx < g_num_types) {
+        return g_type_subtype_matrix[actual_type_idx * g_num_types + expected_type_idx] != 0;
+    }
+    if (g_type_sig_hash1 && g_type_sig_hash2 && actual_type_idx >= 0 && expected_type_idx >= 0 &&
+        actual_type_idx < g_num_types && expected_type_idx < g_num_types) {
+        return g_type_sig_hash1[actual_type_idx] == g_type_sig_hash1[expected_type_idx] &&
+               g_type_sig_hash2[actual_type_idx] == g_type_sig_hash2[expected_type_idx];
+    }
+    return 0;
+}
+
 // Data segments for bulk memory operations (memory.init, data.drop)
 static uint8_t* g_data_segments_flat = NULL;   // All data segments concatenated
 static int* g_data_segment_offsets = NULL;     // Offset of each segment in data_segments_flat
@@ -1373,16 +1389,12 @@ int op_return_call_indirect(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t*
         return TRAP_NONE;
     }
 
-    // Type check: compare expected type with actual function type using signature hashes
+    // Type check: actual must be subtype of expected
     if (func_idx < g_num_imported_funcs + g_num_funcs) {
         int actual_type_idx = g_func_type_idxs[func_idx];
         if (expected_type_idx >= 0 && expected_type_idx < g_num_types &&
             actual_type_idx >= 0 && actual_type_idx < g_num_types) {
-            int expected_hash1 = g_type_sig_hash1[expected_type_idx];
-            int expected_hash2 = g_type_sig_hash2[expected_type_idx];
-            int actual_hash1 = g_type_sig_hash1[actual_type_idx];
-            int actual_hash2 = g_type_sig_hash2[actual_type_idx];
-            if (expected_hash1 != actual_hash1 || expected_hash2 != actual_hash2) {
+            if (!func_type_is_subtype(actual_type_idx, expected_type_idx)) {
                 TRAP(TRAP_INDIRECT_CALL_TYPE_MISMATCH);
             }
         }
@@ -3199,17 +3211,12 @@ int op_call_indirect(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
         NEXT();
     }
 
-    // Type check: compare expected type with actual function type using signature hashes
+    // Type check: actual must be subtype of expected
     if (func_idx < g_num_imported_funcs + g_num_funcs) {
         int actual_type_idx = g_func_type_idxs[func_idx];
         if (expected_type_idx >= 0 && expected_type_idx < g_num_types &&
             actual_type_idx >= 0 && actual_type_idx < g_num_types) {
-            // Compare both signature hashes - they encode actual types, not just counts
-            int expected_hash1 = g_type_sig_hash1[expected_type_idx];
-            int expected_hash2 = g_type_sig_hash2[expected_type_idx];
-            int actual_hash1 = g_type_sig_hash1[actual_type_idx];
-            int actual_hash2 = g_type_sig_hash2[actual_type_idx];
-            if (expected_hash1 != actual_hash1 || expected_hash2 != actual_hash2) {
+            if (!func_type_is_subtype(actual_type_idx, expected_type_idx)) {
                 TRAP(TRAP_INDIRECT_CALL_TYPE_MISMATCH);
             }
         }
@@ -3760,17 +3767,12 @@ int op_call_ref(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
         TRAP(TRAP_UNREACHABLE);
     }
 
-    // Type check: compare expected type with actual function type using signature hashes
+    // Type check: actual must be subtype of expected
     if (func_idx < g_num_imported_funcs + g_num_funcs) {
         int actual_type_idx = g_func_type_idxs[func_idx];
         if (expected_type_idx >= 0 && expected_type_idx < g_num_types &&
             actual_type_idx >= 0 && actual_type_idx < g_num_types) {
-            // Compare both signature hashes - they encode actual types, not just counts
-            int expected_hash1 = g_type_sig_hash1[expected_type_idx];
-            int expected_hash2 = g_type_sig_hash2[expected_type_idx];
-            int actual_hash1 = g_type_sig_hash1[actual_type_idx];
-            int actual_hash2 = g_type_sig_hash2[actual_type_idx];
-            if (expected_hash1 != actual_hash1 || expected_hash2 != actual_hash2) {
+            if (!func_type_is_subtype(actual_type_idx, expected_type_idx)) {
                 TRAP(TRAP_INDIRECT_CALL_TYPE_MISMATCH);
             }
         }
@@ -3816,16 +3818,12 @@ int op_return_call_ref(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) 
     // Extract function index from tagged reference
     int func_idx = (int)(ref & 0x3FFFFFFFFFFFFFFFULL);
 
-    // Type check: compare expected type with actual function type using signature hashes
+    // Type check: actual must be subtype of expected
     if (func_idx < g_num_imported_funcs + g_num_funcs) {
         int actual_type_idx = g_func_type_idxs[func_idx];
         if (expected_type_idx >= 0 && expected_type_idx < g_num_types &&
             actual_type_idx >= 0 && actual_type_idx < g_num_types) {
-            int expected_hash1 = g_type_sig_hash1[expected_type_idx];
-            int expected_hash2 = g_type_sig_hash2[expected_type_idx];
-            int actual_hash1 = g_type_sig_hash1[actual_type_idx];
-            int actual_hash2 = g_type_sig_hash2[actual_type_idx];
-            if (expected_hash1 != actual_hash1 || expected_hash2 != actual_hash2) {
+            if (!func_type_is_subtype(actual_type_idx, expected_type_idx)) {
                 TRAP(TRAP_INDIRECT_CALL_TYPE_MISMATCH);
             }
         }
@@ -4628,7 +4626,37 @@ static int ref_matches_type(uint64_t ref, int target_type, int target_nullable) 
         return 0;
     }
     if ((ref & FUNCREF_TAG) == FUNCREF_TAG) {
-        return (target_type == -7);
+        int func_idx = (int)(ref & 0x3FFFFFFFFFFFFFFFULL);
+        if (target_type == -7 || target_type == -2) {
+            return 1;
+        }
+        if (target_type < 0) {
+            return 0;
+        }
+        if (func_idx >= 0 && func_idx < g_num_imported_funcs + g_num_funcs && g_func_type_idxs) {
+            int actual_type_idx = g_func_type_idxs[func_idx];
+            if (actual_type_idx >= 0 && actual_type_idx < g_num_types) {
+                return func_type_is_subtype(actual_type_idx, target_type);
+            }
+            return 0;
+        }
+        int external_base = g_num_imported_funcs + g_num_funcs;
+        if (g_num_external_funcrefs > 0 && func_idx >= external_base) {
+            int ext_idx = func_idx - external_base;
+            if (ext_idx < 0 || ext_idx >= g_num_external_funcrefs) {
+                return 0;
+            }
+            int import_idx = g_num_imported_funcs + ext_idx;
+            if (target_type >= 0 && target_type < g_num_types && g_type_sig_hash2) {
+                int expected_sig2 = g_type_sig_hash2[target_type];
+                int expected_params = expected_sig2 >> 16;
+                int expected_results = expected_sig2 & 0xFFFF;
+                int num_params = g_import_num_params ? g_import_num_params[import_idx] : 0;
+                int num_results = g_import_num_results ? g_import_num_results[import_idx] : 0;
+                return expected_params == num_params && expected_results == num_results;
+            }
+        }
+        return 0;
     }
     if ((ref & EXTERNREF_TAG) == EXTERNREF_TAG) {
         return (target_type == -8 || target_type == -2);
