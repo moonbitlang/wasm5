@@ -35,6 +35,7 @@
 #define TRAP_NULL_ARRAY_REFERENCE       15 // "null array reference"
 #define TRAP_INVALID_ARRAY_REFERENCE    16 // "array: invalid reference"
 #define TRAP_NULL_I31_REFERENCE         17 // "null i31 reference"
+#define TRAP_CAST_FAILURE               18 // "cast failure"
 
 // Reference tags and null
 #define REF_NULL 0xFFFFFFFFFFFFFFFFULL
@@ -3952,6 +3953,20 @@ static GcArray* gc_checked_array(uint64_t ref) {
     return (GcArray*)header;
 }
 
+static GcStruct* gc_checked_struct(uint64_t ref) {
+    if (ref == REF_NULL) {
+        return NULL;
+    }
+    if (!gc_is_managed_ptr(ref)) {
+        return NULL;
+    }
+    GcHeader* header = (GcHeader*)ref;
+    if (header->obj_type != GC_TYPE_STRUCT) {
+        return NULL;
+    }
+    return (GcStruct*)header;
+}
+
 // struct.new
 int op_struct_new(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)crt; (void)fp;
@@ -3993,29 +4008,91 @@ DEFINE_OP(struct_new_default)
 
 // struct.get
 int op_struct_get(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)pc; (void)sp; (void)fp;
-    TRAP(TRAP_UNREACHABLE);
+    (void)crt; (void)fp;
+    int field_idx = (int)*pc++;
+    uint64_t ref = sp[-1];
+    GcStruct* st = gc_checked_struct(ref);
+    if (!st) {
+        TRAP(ref == REF_NULL ? TRAP_NULL_REFERENCE : TRAP_UNREACHABLE);
+    }
+    if (field_idx < 0 || field_idx >= st->field_count) {
+        TRAP(TRAP_UNREACHABLE);
+    }
+    sp[-1] = st->fields[field_idx];
+    NEXT();
 }
 DEFINE_OP(struct_get)
 
 // struct.get_s
 int op_struct_get_s(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)pc; (void)sp; (void)fp;
-    TRAP(TRAP_UNREACHABLE);
+    (void)crt; (void)fp;
+    int field_idx = (int)*pc++;
+    int storage_type = (int)*pc++;
+    uint64_t ref = sp[-1];
+    GcStruct* st = gc_checked_struct(ref);
+    if (!st) {
+        TRAP(ref == REF_NULL ? TRAP_NULL_REFERENCE : TRAP_UNREACHABLE);
+    }
+    if (field_idx < 0 || field_idx >= st->field_count) {
+        TRAP(TRAP_UNREACHABLE);
+    }
+    uint64_t raw = st->fields[field_idx];
+    int64_t value;
+    if (storage_type == 0) {
+        value = (int8_t)(raw & 0xFF);
+    } else if (storage_type == 1) {
+        value = (int16_t)(raw & 0xFFFF);
+    } else {
+        value = (int64_t)raw;
+    }
+    sp[-1] = (uint64_t)value;
+    NEXT();
 }
 DEFINE_OP(struct_get_s)
 
 // struct.get_u
 int op_struct_get_u(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)pc; (void)sp; (void)fp;
-    TRAP(TRAP_UNREACHABLE);
+    (void)crt; (void)fp;
+    int field_idx = (int)*pc++;
+    int storage_type = (int)*pc++;
+    uint64_t ref = sp[-1];
+    GcStruct* st = gc_checked_struct(ref);
+    if (!st) {
+        TRAP(ref == REF_NULL ? TRAP_NULL_REFERENCE : TRAP_UNREACHABLE);
+    }
+    if (field_idx < 0 || field_idx >= st->field_count) {
+        TRAP(TRAP_UNREACHABLE);
+    }
+    uint64_t raw = st->fields[field_idx];
+    uint64_t value;
+    if (storage_type == 0) {
+        value = raw & 0xFFU;
+    } else if (storage_type == 1) {
+        value = raw & 0xFFFFU;
+    } else {
+        value = raw;
+    }
+    sp[-1] = value;
+    NEXT();
 }
 DEFINE_OP(struct_get_u)
 
 // struct.set
 int op_struct_set(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)pc; (void)sp; (void)fp;
-    TRAP(TRAP_UNREACHABLE);
+    (void)crt; (void)fp;
+    int field_idx = (int)*pc++;
+    uint64_t ref = sp[-2];
+    uint64_t val = sp[-1];
+    GcStruct* st = gc_checked_struct(ref);
+    if (!st) {
+        TRAP(ref == REF_NULL ? TRAP_NULL_REFERENCE : TRAP_UNREACHABLE);
+    }
+    if (field_idx < 0 || field_idx >= st->field_count) {
+        TRAP(TRAP_UNREACHABLE);
+    }
+    st->fields[field_idx] = val;
+    sp -= 2;
+    NEXT();
 }
 DEFINE_OP(struct_set)
 
@@ -4539,49 +4616,53 @@ int op_extern_convert_any(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* f
 }
 DEFINE_OP(extern_convert_any)
 
+static int ref_matches_type(uint64_t ref, int target_type, int target_nullable) {
+    if (ref == REF_NULL) {
+        if (target_type == -10 || target_type == -11 || target_type == -12 || target_type == -13) {
+            return 1;
+        }
+        return target_nullable != 0;
+    }
+    if (target_type == -10 || target_type == -11 || target_type == -12 || target_type == -13) {
+        return 0;
+    }
+    if ((ref & FUNCREF_TAG) == FUNCREF_TAG) {
+        return (target_type == -7);
+    }
+    if ((ref & EXTERNREF_TAG) == EXTERNREF_TAG) {
+        return (target_type == -8 || target_type == -2);
+    }
+    if ((ref & 1ULL) == 1ULL && (ref & REF_TAG_MASK) == 0) {
+        return (target_type == -4 || target_type == -3 || target_type == -2);
+    }
+    if (gc_is_managed_ptr(ref)) {
+        GcHeader* header = (GcHeader*)ref;
+        if (target_type >= 0) {
+            int actual = (int)header->type_idx;
+            if (g_type_subtype_matrix && actual >= 0 && actual < g_num_types &&
+                target_type >= 0 && target_type < g_num_types) {
+                return g_type_subtype_matrix[actual * g_num_types + target_type] != 0;
+            }
+            return actual == target_type;
+        }
+        if (header->obj_type == GC_TYPE_STRUCT) {
+            return (target_type == -5 || target_type == -3 || target_type == -2);
+        }
+        if (header->obj_type == GC_TYPE_ARRAY) {
+            return (target_type == -6 || target_type == -3 || target_type == -2);
+        }
+        return target_type == -2;
+    }
+    return (target_type == -8 || target_type == -2);
+}
+
 // ref.test
 int op_ref_test(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     (void)crt; (void)fp;
     int target_type = (int)*pc++;
     int target_nullable = (int)*pc++;
     uint64_t ref = sp[-1];
-    int matches = 0;
-
-    if (ref == REF_NULL) {
-        if (target_type == -10 || target_type == -11 || target_type == -12 || target_type == -13) {
-            matches = 1;
-        } else {
-            matches = target_nullable != 0;
-        }
-    } else if (target_type == -10 || target_type == -11 || target_type == -12 || target_type == -13) {
-        matches = 0;
-    } else if ((ref & FUNCREF_TAG) == FUNCREF_TAG) {
-        matches = (target_type == -7);
-    } else if ((ref & EXTERNREF_TAG) == EXTERNREF_TAG) {
-        matches = (target_type == -8 || target_type == -2);
-    } else if ((ref & 1ULL) == 1ULL && (ref & REF_TAG_MASK) == 0) {
-        matches = (target_type == -4 || target_type == -3 || target_type == -2);
-    } else if (gc_is_managed_ptr(ref)) {
-        GcHeader* header = (GcHeader*)ref;
-        if (target_type >= 0) {
-            int actual = (int)header->type_idx;
-            if (g_type_subtype_matrix && actual >= 0 && actual < g_num_types &&
-                target_type >= 0 && target_type < g_num_types) {
-                matches = g_type_subtype_matrix[actual * g_num_types + target_type] != 0;
-            } else {
-                matches = (actual == target_type);
-            }
-        } else if (header->obj_type == GC_TYPE_STRUCT) {
-            matches = (target_type == -5 || target_type == -3 || target_type == -2);
-        } else if (header->obj_type == GC_TYPE_ARRAY) {
-            matches = (target_type == -6 || target_type == -3 || target_type == -2);
-        } else {
-            matches = (target_type == -2);
-        }
-    } else if (target_type == -8 || target_type == -2) {
-        matches = 1;
-    }
-
+    int matches = ref_matches_type(ref, target_type, target_nullable);
     sp[-1] = matches ? 1 : 0;
     NEXT();
 }
@@ -4593,45 +4674,8 @@ int op_ref_cast(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
     int target_type = (int)*pc++;
     int target_nullable = (int)*pc++;
     uint64_t ref = sp[-1];
-    int matches = 0;
-
-    if (ref == REF_NULL) {
-        if (target_type == -10 || target_type == -11 || target_type == -12 || target_type == -13) {
-            matches = 1;
-        } else {
-            matches = target_nullable != 0;
-        }
-    } else if (target_type == -10 || target_type == -11 || target_type == -12 || target_type == -13) {
-        matches = 0;
-    } else if ((ref & FUNCREF_TAG) == FUNCREF_TAG) {
-        matches = (target_type == -7);
-    } else if ((ref & EXTERNREF_TAG) == EXTERNREF_TAG) {
-        matches = (target_type == -8 || target_type == -2);
-    } else if ((ref & 1ULL) == 1ULL && (ref & REF_TAG_MASK) == 0) {
-        matches = (target_type == -4 || target_type == -3 || target_type == -2);
-    } else if (gc_is_managed_ptr(ref)) {
-        GcHeader* header = (GcHeader*)ref;
-        if (target_type >= 0) {
-            int actual = (int)header->type_idx;
-            if (g_type_subtype_matrix && actual >= 0 && actual < g_num_types &&
-                target_type >= 0 && target_type < g_num_types) {
-                matches = g_type_subtype_matrix[actual * g_num_types + target_type] != 0;
-            } else {
-                matches = (actual == target_type);
-            }
-        } else if (header->obj_type == GC_TYPE_STRUCT) {
-            matches = (target_type == -5 || target_type == -3 || target_type == -2);
-        } else if (header->obj_type == GC_TYPE_ARRAY) {
-            matches = (target_type == -6 || target_type == -3 || target_type == -2);
-        } else {
-            matches = (target_type == -2);
-        }
-    } else if (target_type == -8 || target_type == -2) {
-        matches = 1;
-    }
-
-    if (!matches) {
-        TRAP(TRAP_UNREACHABLE);
+    if (!ref_matches_type(ref, target_type, target_nullable)) {
+        TRAP(TRAP_CAST_FAILURE);
     }
     NEXT();
 }
@@ -4639,15 +4683,35 @@ DEFINE_OP(ref_cast)
 
 // br_on_cast
 int op_br_on_cast(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)pc; (void)sp; (void)fp;
-    TRAP(TRAP_UNREACHABLE);
+    (void)crt; (void)fp;
+    int target_pc = (int)*pc++;
+    int not_taken_pc = (int)*pc++;
+    int target_type = (int)*pc++;
+    int target_nullable = (int)*pc++;
+    uint64_t ref = sp[-1];
+    if (ref_matches_type(ref, target_type, target_nullable)) {
+        pc = crt->code + target_pc;
+    } else {
+        pc = crt->code + not_taken_pc;
+    }
+    NEXT();
 }
 DEFINE_OP(br_on_cast)
 
 // br_on_cast_fail
 int op_br_on_cast_fail(CRuntime* crt, uint64_t* pc, uint64_t* sp, uint64_t* fp) {
-    (void)crt; (void)pc; (void)sp; (void)fp;
-    TRAP(TRAP_UNREACHABLE);
+    (void)crt; (void)fp;
+    int target_pc = (int)*pc++;
+    int not_taken_pc = (int)*pc++;
+    int target_type = (int)*pc++;
+    int target_nullable = (int)*pc++;
+    uint64_t ref = sp[-1];
+    if (!ref_matches_type(ref, target_type, target_nullable)) {
+        pc = crt->code + target_pc;
+    } else {
+        pc = crt->code + not_taken_pc;
+    }
+    NEXT();
 }
 DEFINE_OP(br_on_cast_fail)
 

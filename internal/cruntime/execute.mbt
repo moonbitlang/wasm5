@@ -74,6 +74,7 @@ fn trap_code_from_int(code : Int) -> TrapCode {
     15 => TrapCode::NullArrayReference
     16 => TrapCode::InvalidArrayReference
     17 => TrapCode::NullI31Reference
+    18 => TrapCode::CastFailure
     _ => TrapCode::Unreachable // Unknown trap code
   }
 }

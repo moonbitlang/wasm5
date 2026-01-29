@@ -128,6 +128,7 @@ fn trap_to_error(trap : TrapCode) -> @runtime.RuntimeError {
     NullArrayReference => "null array reference"
     InvalidArrayReference => "array: invalid reference"
     NullI31Reference => "null i31 reference"
+    CastFailure => "cast failed"
   }
   @runtime.RuntimeError::from_detail(detail)
 }

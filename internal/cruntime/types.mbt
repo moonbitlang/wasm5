@@ -20,6 +20,7 @@ pub enum TrapCode {
   NullArrayReference = 15 // "null array reference"
   InvalidArrayReference = 16 // "array: invalid reference"
   NullI31Reference = 17 // "null i31 reference"
+  CastFailure = 18 // "cast failure"
 } derive(Eq, Show)
 
 ///|
