@@ -373,33 +373,6 @@ pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
 }
 
 ///|
-/// Load a module with resolved imports for cross-module calls.
-pub fn CRuntime::load_with_imports(
-  module_ : @core.Module,
-  resolved_imports : Map[Int, ResolvedImport],
-) -> CRuntime {
-  let compiled = compile_with_imports(module_, resolved_imports)
-  build_runtime(module_, compiled, resolved_imports, {}, [])
-}
-
-///|
-/// Load a module with resolved imports and imported globals.
-pub fn CRuntime::load_with_imports_and_globals(
-  module_ : @core.Module,
-  resolved_imports : Map[Int, ResolvedImport],
-  resolved_imported_globals : Map[Int, UInt64],
-) -> CRuntime {
-  let compiled = compile_with_imports(module_, resolved_imports)
-  build_runtime(
-    module_,
-    compiled,
-    resolved_imports,
-    resolved_imported_globals,
-    [],
-  )
-}
-
-///|
 /// Load a module with resolved imports, imported globals, and external funcrefs.
 pub fn CRuntime::load_with_imports_globals_and_funcrefs(
   module_ : @core.Module,
@@ -469,15 +442,6 @@ pub fn CRuntime::get_context_ptr(self : CRuntime) -> Int64 {
     )
   }
   self.context_ptr
-}
-
-///|
-/// Free the CRuntimeContext if it was created.
-pub fn CRuntime::free_context(self : CRuntime) -> Unit {
-  if self.context_ptr != 0L {
-    c_free_runtime_context(self.context_ptr)
-    self.context_ptr = 0L
-  }
 }
 
 ///|

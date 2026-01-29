@@ -879,7 +879,6 @@ pub fn OpTag::from_int64(v : Int64) -> OpTag? {
 
 ///|
 /// Maximum valid opcode value.
-pub let max_opcode : Int64 = 241L
 
 ///|
 /// Returns the number of Int64 immediates that follow this opcode in the code array.

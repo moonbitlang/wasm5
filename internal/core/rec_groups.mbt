@@ -1,7 +1,7 @@
 ///|
 /// Get rec group info for a type index: returns (group_index, position_in_group)
 /// Returns (-1, -1) if type not found in any group
-pub fn get_rec_group_info(module_ : Module, type_idx : Int) -> (Int, Int) {
+fn get_rec_group_info(module_ : Module, type_idx : Int) -> (Int, Int) {
   for i, group in module_.type_groups {
     for j, subtype_def in group.subtypes {
       if subtype_def.type_idx.reinterpret_as_int() == type_idx {
@@ -14,7 +14,7 @@ pub fn get_rec_group_info(module_ : Module, type_idx : Int) -> (Int, Int) {
 
 ///|
 /// Get all type indices in a rec group
-pub fn get_rec_group_types(module_ : Module, group_idx : Int) -> Array[Int] {
+fn get_rec_group_types(module_ : Module, group_idx : Int) -> Array[Int] {
   let result : Array[Int] = []
   if group_idx >= 0 && group_idx < module_.type_groups.length() {
     let group = module_.type_groups[group_idx]
@@ -27,7 +27,7 @@ pub fn get_rec_group_types(module_ : Module, group_idx : Int) -> Array[Int] {
 
 ///|
 /// Check if a type index is within a given rec group
-pub fn is_in_rec_group(types : Array[Int], type_idx : Int) -> Bool {
+fn is_in_rec_group(types : Array[Int], type_idx : Int) -> Bool {
   for t in types {
     if t == type_idx {
       return true
@@ -38,7 +38,7 @@ pub fn is_in_rec_group(types : Array[Int], type_idx : Int) -> Bool {
 
 ///|
 /// Get the position of a type within its rec group
-pub fn get_position_in_group(types : Array[Int], type_idx : Int) -> Int {
+fn get_position_in_group(types : Array[Int], type_idx : Int) -> Int {
   for i, t in types {
     if t == type_idx {
       return i
@@ -49,7 +49,7 @@ pub fn get_position_in_group(types : Array[Int], type_idx : Int) -> Int {
 
 ///|
 /// Check if a type index is final (cannot be extended)
-pub fn is_type_final(module_ : Module, type_idx : Int) -> Bool {
+fn is_type_final(module_ : Module, type_idx : Int) -> Bool {
   for group in module_.type_groups {
     for subtype_def in group.subtypes {
       if subtype_def.type_idx.reinterpret_as_int() == type_idx {
@@ -62,7 +62,7 @@ pub fn is_type_final(module_ : Module, type_idx : Int) -> Bool {
 
 ///|
 /// Get the list of supertypes for a type index
-pub fn get_supertypes(module_ : Module, type_idx : Int) -> Array[Int] {
+fn get_supertypes(module_ : Module, type_idx : Int) -> Array[Int] {
   let result : Array[Int] = []
   for group in module_.type_groups {
     for subtype_def in group.subtypes {
@@ -80,7 +80,7 @@ pub fn get_supertypes(module_ : Module, type_idx : Int) -> Array[Int] {
 ///|
 /// Check if two rec groups are structurally equivalent
 /// This handles the recursive type equivalence rules in WebAssembly GC
-pub fn rec_groups_equivalent(
+fn rec_groups_equivalent(
   module_ : Module,
   group1_idx : Int,
   group2_idx : Int,
@@ -120,7 +120,7 @@ pub fn rec_groups_equivalent(
 
 ///|
 /// Check if two types are equivalent in the context of their rec groups
-pub fn types_equivalent_in_context(
+fn types_equivalent_in_context(
   module_ : Module,
   type_idx1 : Int,
   type_idx2 : Int,
@@ -287,7 +287,7 @@ pub fn types_equivalent_in_context(
 
 ///|
 /// Check if two type references are equivalent considering rec group context
-pub fn type_refs_equivalent_in_context(
+fn type_refs_equivalent_in_context(
   module_ : Module,
   ref1 : Int,
   ref2 : Int,
@@ -318,7 +318,7 @@ pub fn type_refs_equivalent_in_context(
 
 ///|
 /// Check if two value types are equivalent in rec group context
-pub fn valtypes_equivalent_in_context(
+fn valtypes_equivalent_in_context(
   module_ : Module,
   vt1 : ValType,
   vt2 : ValType,
@@ -338,7 +338,7 @@ pub fn valtypes_equivalent_in_context(
 
 ///|
 /// Check if two storage types are equivalent in rec group context
-pub fn storage_types_equivalent_in_context(
+fn storage_types_equivalent_in_context(
   module_ : Module,
   st1 : StorageType,
   st2 : StorageType,

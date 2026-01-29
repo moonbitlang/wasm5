@@ -11,8 +11,6 @@ pub fn compile(@core.Module) -> CompiledModule
 
 pub fn compile_with_imports(@core.Module, Map[Int, ResolvedImport]) -> CompiledModule
 
-pub fn get_entry_fnptr() -> UInt64
-
 pub fn init_wasi() -> Unit
 
 pub fn transform_to_c_runtime(Array[Int64]) -> FixedArray[UInt64]
@@ -68,14 +66,11 @@ pub struct CRuntime {
 }
 pub fn CRuntime::call_compiled(Self, Bytes, Array[@core.Value]) -> Array[@core.Value] raise @runtime.RuntimeError
 pub fn CRuntime::clear_output(Self) -> Unit
-pub fn CRuntime::free_context(Self) -> Unit
 pub fn CRuntime::get_context_ptr(Self) -> Int64
 pub fn CRuntime::get_globals(Self) -> Array[@core.Value]
 pub fn CRuntime::get_module(Self) -> @core.Module
 pub fn CRuntime::get_output(Self) -> Array[String]
 pub fn CRuntime::load(@core.Module) -> Self
-pub fn CRuntime::load_with_imports(@core.Module, Map[Int, ResolvedImport]) -> Self
-pub fn CRuntime::load_with_imports_and_globals(@core.Module, Map[Int, ResolvedImport], Map[Int, UInt64]) -> Self
 pub fn CRuntime::load_with_imports_globals_and_funcrefs(@core.Module, Map[Int, ResolvedImport], Map[Int, UInt64], Array[ResolvedImport]) -> Self
 pub fn CRuntime::run_start(Self) -> Unit raise @runtime.RuntimeError
 

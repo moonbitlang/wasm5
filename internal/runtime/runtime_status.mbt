@@ -1,6 +1,6 @@
 ///|
 /// Instance execution return code
-pub enum RuntimeStatus {
+enum RuntimeStatus {
   Running
   Terminated
   Trap
@@ -9,4 +9,4 @@ pub enum RuntimeStatus {
 
 ///|
 /// Return code from runtime ops (mirrors RuntimeStatus for compatibility).
-pub type ReturnCode = RuntimeStatus
+type ReturnCode = RuntimeStatus

@@ -6,8 +6,6 @@ import {
 }
 
 // Values
-pub fn wast_to_modules(String) -> Array[@core.Module] raise WatError
-
 pub fn wast_to_script(String) -> Array[WastCommand] raise WatError
 
 pub fn wast_to_wasm(String) -> Array[Bytes] raise WatError
