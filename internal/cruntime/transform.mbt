@@ -1,10 +1,4 @@
 ///|
-/// Get entry function pointer for testing.
-pub fn get_entry_fnptr() -> UInt64 {
-  entry()
-}
-
-///|
 /// Transform universal IR (Array[Int64]) to C runtime format (FixedArray[UInt64]).
 /// Replaces opcode tags with function pointers while preserving immediates.
 pub fn transform_to_c_runtime(code : Array[Int64]) -> FixedArray[UInt64] {

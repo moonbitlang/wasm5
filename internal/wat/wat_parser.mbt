@@ -870,7 +870,7 @@ pub fn wat_to_module(text : String) -> @core.Module raise WatError {
 }
 
 ///|
-pub fn wast_to_modules(text : String) -> Array[@core.Module] raise WatError {
+fn wast_to_modules(text : String) -> Array[@core.Module] raise WatError {
   let exprs = parse_sexprs(text)
   let modules : Array[@core.Module] = []
   append_wast_modules(exprs, modules)

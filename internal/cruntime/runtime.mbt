@@ -373,33 +373,6 @@ pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
 }
 
 ///|
-/// Load a module with resolved imports for cross-module calls.
-pub fn CRuntime::load_with_imports(
-  module_ : @core.Module,
-  resolved_imports : Map[Int, ResolvedImport],
-) -> CRuntime {
-  let compiled = compile_with_imports(module_, resolved_imports)
-  build_runtime(module_, compiled, resolved_imports, {}, [])
-}
-
-///|
-/// Load a module with resolved imports and imported globals.
-pub fn CRuntime::load_with_imports_and_globals(
-  module_ : @core.Module,
-  resolved_imports : Map[Int, ResolvedImport],
-  resolved_imported_globals : Map[Int, UInt64],
-) -> CRuntime {
-  let compiled = compile_with_imports(module_, resolved_imports)
-  build_runtime(
-    module_,
-    compiled,
-    resolved_imports,
-    resolved_imported_globals,
-    [],
-  )
-}
-
-///|
 /// Load a module with resolved imports, imported globals, and external funcrefs.
 pub fn CRuntime::load_with_imports_globals_and_funcrefs(
   module_ : @core.Module,
@@ -469,15 +442,6 @@ pub fn CRuntime::get_context_ptr(self : CRuntime) -> Int64 {
     )
   }
   self.context_ptr
-}
-
-///|
-/// Free the CRuntimeContext if it was created.
-pub fn CRuntime::free_context(self : CRuntime) -> Unit {
-  if self.context_ptr != 0L {
-    c_free_runtime_context(self.context_ptr)
-    self.context_ptr = 0L
-  }
 }
 
 ///|
@@ -586,6 +550,16 @@ fn flatten_tables(
   )
   let funcref_tag = 0x4000_0000_0000_0000UL
   let null_ref = 0xFFFF_FFFF_FFFF_FFFFUL
+  fn encode_table_ref(value : Int, is_funcref : Bool) -> UInt64 {
+    if value < 0 {
+      return null_ref
+    }
+    if is_funcref {
+      return funcref_tag | value.reinterpret_as_uint().to_uint64()
+    }
+    value.reinterpret_as_uint().to_uint64()
+  }
+
   for i in 0..<num_tables {
     let offset = table_offsets[i]
     let table = tables[i]
@@ -608,20 +582,7 @@ fn flatten_tables(
     for j in 0..<max_size {
       if j < logical_size {
         tables_flat[offset + j] = table[j]
-        if is_funcref {
-          let func_idx = table[j]
-          tables_flat_u64[offset + j] = if func_idx < 0 {
-            null_ref
-          } else {
-            funcref_tag | func_idx.reinterpret_as_uint().to_uint64()
-          }
-        } else {
-          tables_flat_u64[offset + j] = if table[j] < 0 {
-            null_ref
-          } else {
-            table[j].reinterpret_as_uint().to_uint64()
-          }
-        }
+        tables_flat_u64[offset + j] = encode_table_ref(table[j], is_funcref)
       } else {
         tables_flat[offset + j] = -1
         tables_flat_u64[offset + j] = null_ref

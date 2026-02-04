@@ -59,11 +59,6 @@ fn RuntimeContext::new_with_gc_heap(
 }
 
 ///|
-pub fn RuntimeContext::push_output(self : RuntimeContext, s : String) -> Unit {
-  self.output.push(s)
-}
-
-///|
 pub fn RuntimeContext::get_output(self : RuntimeContext) -> Array[String] {
   self.output
 }

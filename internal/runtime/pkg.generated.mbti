@@ -75,14 +75,12 @@ pub struct Imports {
   modules : Map[Bytes, ImportsEntry]
 }
 pub fn Imports::add_func(Self, Bytes, Bytes, HostFunc) -> Unit
-pub fn Imports::add_funcref_wrapper(Self, Bytes, Bytes, HostFunc) -> Unit
 pub fn Imports::add_global(Self, Bytes, Bytes, @core.Value) -> Unit
 pub fn Imports::add_memory(Self, Bytes, Bytes, ImportedMemory) -> Unit
 pub fn Imports::add_table(Self, Bytes, Bytes, RuntimeTable) -> Unit
 pub fn Imports::func(Self, String, String, HostFunc) -> Self
 pub fn Imports::funcref_wrapper(Self, String, String, HostFunc) -> Self
 pub fn Imports::get_func(Self, Bytes, Bytes) -> HostFunc?
-pub fn Imports::get_funcref_wrapper(Self, Bytes, Bytes) -> HostFunc?
 pub fn Imports::get_global(Self, Bytes, Bytes) -> @core.Value?
 pub fn Imports::get_memory(Self, Bytes, Bytes) -> ImportedMemory?
 pub fn Imports::get_table(Self, Bytes, Bytes) -> RuntimeTable?
@@ -144,22 +142,14 @@ pub struct RuntimeContext {
 }
 pub fn RuntimeContext::clear_output(Self) -> Unit
 pub fn RuntimeContext::get_output(Self) -> Array[String]
-pub fn RuntimeContext::push_output(Self, String) -> Unit
 
-#alias(ReturnCode)
-pub enum RuntimeStatus {
-  Running
-  Terminated
-  Trap
-  Returned
-}
+type RuntimeStatus
 pub impl Eq for RuntimeStatus
 pub impl Show for RuntimeStatus
 
 type RuntimeTable
 pub fn RuntimeTable::add_external_funcref(Self, HostFunc) -> Int
 pub fn RuntimeTable::data_length(Self) -> Int
-pub fn RuntimeTable::external_funcrefs_length(Self) -> Int
 pub fn RuntimeTable::get_data(Self, Int) -> UInt64
 pub fn RuntimeTable::new(Array[UInt64], max? : UInt64?) -> Self
 pub fn RuntimeTable::set_data(Self, Int, UInt64) -> Unit

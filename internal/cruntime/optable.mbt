@@ -846,10 +846,6 @@ extern "C" fn c_create_runtime_context(
 ) -> Int64 = "create_runtime_context"
 
 ///|
-/// Free a CRuntimeContext that was created with c_create_runtime_context.
-extern "C" fn c_free_runtime_context(context_ptr : Int64) -> Unit = "free_runtime_context"
-
-///|
 /// Call a function in another CRuntime module using context switching.
 /// Used for exported imports - functions that re-export an imported function.
 #borrow(args, result_out)

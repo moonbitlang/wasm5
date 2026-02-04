@@ -75,12 +75,6 @@ pub fn RuntimeTable::set_data(
 }
 
 ///|
-/// Get external funcrefs length
-pub fn RuntimeTable::external_funcrefs_length(self : RuntimeTable) -> Int {
-  self.external_funcrefs.length()
-}
-
-///|
 /// Add external funcref and return its index
 pub fn RuntimeTable::add_external_funcref(
   self : RuntimeTable,
@@ -377,7 +371,7 @@ pub fn Imports::get_memory(
 /// Add a funcref wrapper to the imports.
 /// This is used for cross-module funcref handling - when a module exports
 /// a funcref global, we also register a wrapper that can call the function.
-pub fn Imports::add_funcref_wrapper(
+fn Imports::add_funcref_wrapper(
   self : Imports,
   module_ : Bytes,
   name : Bytes,
@@ -401,7 +395,7 @@ pub fn Imports::add_funcref_wrapper(
 
 ///|
 /// Look up a funcref wrapper
-pub fn Imports::get_funcref_wrapper(
+fn Imports::get_funcref_wrapper(
   self : Imports,
   module_ : Bytes,
   name : Bytes,
