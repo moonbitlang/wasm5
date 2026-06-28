@@ -16,7 +16,12 @@ pub suberror RuntimeError {
   FunctionNotCompiled(String) // Function not compiled
   UnsupportedInitExpression(String) // Unsupported init expression
   StackOverflow // Stack capacity exceeded
-} derive(Show)
+} derive(Debug)
+
+///|
+pub impl Show for RuntimeError with fn output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 /// Create a RuntimeError from error_detail string.
@@ -147,7 +152,7 @@ pub struct Imports {
 ///|
 /// Create a new empty imports set
 pub fn Imports::new() -> Imports {
-  { modules: Map::new() }
+  { modules: Map([]) }
 }
 
 ///|
@@ -231,11 +236,11 @@ pub fn Imports::add_func(
     Some(entry) => entry.funcs[name] = func
     None => {
       let entry : ImportsEntry = {
-        funcs: Map::new(),
-        globals: Map::new(),
-        tables: Map::new(),
-        memories: Map::new(),
-        funcref_wrappers: Map::new(),
+        funcs: Map([]),
+        globals: Map([]),
+        tables: Map([]),
+        memories: Map([]),
+        funcref_wrappers: Map([]),
       }
       entry.funcs[name] = func
       self.modules[module_] = entry
@@ -255,11 +260,11 @@ pub fn Imports::add_global(
     Some(entry) => entry.globals[name] = value
     None => {
       let entry : ImportsEntry = {
-        funcs: Map::new(),
-        globals: Map::new(),
-        tables: Map::new(),
-        memories: Map::new(),
-        funcref_wrappers: Map::new(),
+        funcs: Map([]),
+        globals: Map([]),
+        tables: Map([]),
+        memories: Map([]),
+        funcref_wrappers: Map([]),
       }
       entry.globals[name] = value
       self.modules[module_] = entry
@@ -305,11 +310,11 @@ pub fn Imports::add_table(
     Some(entry) => entry.tables[name] = table
     None => {
       let entry : ImportsEntry = {
-        funcs: Map::new(),
-        globals: Map::new(),
-        tables: Map::new(),
-        memories: Map::new(),
-        funcref_wrappers: Map::new(),
+        funcs: Map([]),
+        globals: Map([]),
+        tables: Map([]),
+        memories: Map([]),
+        funcref_wrappers: Map([]),
       }
       entry.tables[name] = table
       self.modules[module_] = entry
@@ -342,11 +347,11 @@ pub fn Imports::add_memory(
     Some(entry) => entry.memories[name] = memory
     None => {
       let entry : ImportsEntry = {
-        funcs: Map::new(),
-        globals: Map::new(),
-        tables: Map::new(),
-        memories: Map::new(),
-        funcref_wrappers: Map::new(),
+        funcs: Map([]),
+        globals: Map([]),
+        tables: Map([]),
+        memories: Map([]),
+        funcref_wrappers: Map([]),
       }
       entry.memories[name] = memory
       self.modules[module_] = entry
@@ -381,11 +386,11 @@ fn Imports::add_funcref_wrapper(
     Some(entry) => entry.funcref_wrappers[name] = wrapper
     None => {
       let entry : ImportsEntry = {
-        funcs: Map::new(),
-        globals: Map::new(),
-        tables: Map::new(),
-        memories: Map::new(),
-        funcref_wrappers: Map::new(),
+        funcs: Map([]),
+        globals: Map([]),
+        tables: Map([]),
+        memories: Map([]),
+        funcref_wrappers: Map([]),
       }
       entry.funcref_wrappers[name] = wrapper
       self.modules[module_] = entry
@@ -572,7 +577,7 @@ fn check_value_type(value : Value, val_type : @core.ValType) -> Bool {
         _ => false
       }
     _ => {
-      if not(is_ref_value(value)) {
+      if !is_ref_value(value) {
         return false
       }
       if is_func_ref_type(val_type) {
@@ -595,7 +600,7 @@ fn check_value_type(value : Value, val_type : @core.ValType) -> Bool {
         return is_null_ref(value)
       }
       if is_non_nullable_ref_type(val_type) {
-        return not(is_null_ref(value))
+        return !is_null_ref(value)
       }
       true
     }
@@ -608,7 +613,7 @@ fn require_value_type(
   val_type : @core.ValType,
   context : String,
 ) -> Unit raise RuntimeError {
-  if not(check_value_type(value, val_type)) {
+  if !check_value_type(value, val_type) {
     raise RuntimeError::InvalidType("\{context}: type mismatch")
   }
 }
@@ -680,10 +685,10 @@ fn encode_table_value(
   value : Value,
   table_type : @core.TableType,
 ) -> UInt64 raise RuntimeError {
-  if not(is_ref_value(value)) {
+  if !is_ref_value(value) {
     raise RuntimeError::InvalidType("table.set: expected reference value")
   }
-  if not(table_type.nullable) && is_null_ref(value) {
+  if !table_type.nullable && is_null_ref(value) {
     raise RuntimeError::InvalidType("table.set: null for non-nullable table")
   }
   match table_type.elem_type {
@@ -972,7 +977,7 @@ pub fn Global::get(self : Global) -> Value {
 ///|
 /// Set a global value.
 pub fn Global::set(self : Global, value : Value) -> Unit raise RuntimeError {
-  if not(self.global_type.mutable) {
+  if !self.global_type.mutable {
     raise RuntimeError::InvalidType("global.set: immutable global")
   }
   require_value_type(value, self.global_type.val_type, "global.set")
@@ -1051,7 +1056,7 @@ pub fn Instance::new(
   }
 
   // If no imported memory, check for local memory
-  if not(has_imported_memory) && m.mems.length() > 0 {
+  if !has_imported_memory && m.mems.length() > 0 {
     let memory_min_pages = m.mems[0].limits.min
     memory_max_pages = m.mems[0].limits.max
     let memory_size = memory_min_pages.to_int() * 65536

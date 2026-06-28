@@ -8,7 +8,7 @@ pub struct TestFailure {
 }
 
 ///|
-pub impl Show for TestFailure with output(self, logger) {
+pub impl Show for TestFailure with fn output(self, logger) {
   if self.line >= 0 {
     logger.write_string(
       "[\{self.test_type}] \{self.source_file}:\{self.line}: \{self.message}",
@@ -31,20 +31,20 @@ pub(all) enum RuntimeType {
 /// Trait for WebAssembly runtime executors.
 /// Both the MoonBit interpreter and C runtime implement this trait.
 priv trait Executor {
-  call_compiled(Self, Bytes, Array[@wasm5_runtime.Value]) -> Array[
+  fn call_compiled(Self, Bytes, Array[@wasm5_runtime.Value]) -> Array[
     @wasm5_runtime.Value,
   ] raise Error
   // Returns the underlying MoonBit Instance if available (for cross-module imports)
-  as_runtime(Self) -> @wasm5_runtime.Instance?
+  fn as_runtime(Self) -> @wasm5_runtime.Instance?
   // Returns the underlying CRuntime if available (for cross-module imports)
-  as_cruntime(Self) -> @wasm5_cruntime.CRuntime?
+  fn as_cruntime(Self) -> @wasm5_cruntime.CRuntime?
 }
 
 ///|
 /// Implement Executor for MoonBit Instance
 
 ///|
-impl Executor for @wasm5_runtime.Instance with call_compiled(
+impl Executor for @wasm5_runtime.Instance with fn call_compiled(
   self,
   name : Bytes,
   args : Array[@wasm5_runtime.Value],
@@ -55,12 +55,12 @@ impl Executor for @wasm5_runtime.Instance with call_compiled(
 ///|
 
 ///|
-impl Executor for @wasm5_runtime.Instance with as_runtime(self) -> @wasm5_runtime.Instance? {
+impl Executor for @wasm5_runtime.Instance with fn as_runtime(self) -> @wasm5_runtime.Instance? {
   Some(self)
 }
 
 ///|
-impl Executor for @wasm5_runtime.Instance with as_cruntime(_self) -> @wasm5_cruntime.CRuntime? {
+impl Executor for @wasm5_runtime.Instance with fn as_cruntime(_self) -> @wasm5_cruntime.CRuntime? {
   None
 }
 
@@ -68,7 +68,7 @@ impl Executor for @wasm5_runtime.Instance with as_cruntime(_self) -> @wasm5_crun
 /// Implement Executor for C Instance
 
 ///|
-impl Executor for @wasm5_cruntime.CRuntime with call_compiled(
+impl Executor for @wasm5_cruntime.CRuntime with fn call_compiled(
   self,
   name : Bytes,
   args : Array[@wasm5_runtime.Value],
@@ -79,13 +79,13 @@ impl Executor for @wasm5_cruntime.CRuntime with call_compiled(
 ///|
 
 ///|
-impl Executor for @wasm5_cruntime.CRuntime with as_runtime(_self) -> @wasm5_runtime.Instance? {
+impl Executor for @wasm5_cruntime.CRuntime with fn as_runtime(_self) -> @wasm5_runtime.Instance? {
   // CRuntime is not a MoonBit Instance
   None
 }
 
 ///|
-impl Executor for @wasm5_cruntime.CRuntime with as_cruntime(self) -> @wasm5_cruntime.CRuntime? {
+impl Executor for @wasm5_cruntime.CRuntime with fn as_cruntime(self) -> @wasm5_cruntime.CRuntime? {
   Some(self)
 }
 
@@ -104,7 +104,7 @@ priv struct ModuleRegistry(Map[String, RegisteredModule])
 
 ///|
 fn ModuleRegistry::new() -> ModuleRegistry {
-  Map::new()
+  Map([])
 }
 
 ///|
@@ -860,7 +860,7 @@ enum ExpectedValue {
   // nullexternref) are represented identically as Ref(None). The type
   // distinction only exists during validation, not at runtime.
   AnyRefNull // any null reference
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Parse i32 value string, handling both signed and unsigned representations
@@ -869,14 +869,14 @@ fn parse_i32_value(v : String) -> UInt {
   if v.has_prefix("-") {
     // Signed value - parse as signed and reinterpret as unsigned
     try {
-      let signed = @strconv.parse_int(v)
+      let signed = @string.parse_int(v)
       signed.reinterpret_as_uint()
     } catch {
       _ => abort("Invalid i32 value: \{v}")
     }
   } else {
     // Unsigned value
-    @strconv.parse_uint(v) catch {
+    @string.parse_uint(v) catch {
       _ => abort("Invalid i32 value: \{v}")
     }
   }
@@ -888,14 +888,14 @@ fn parse_i64_value(v : String) -> UInt64 {
   if v.has_prefix("-") {
     // Signed value - parse as signed and reinterpret as unsigned
     try {
-      let signed = @strconv.parse_int64(v)
+      let signed = @string.parse_int64(v)
       signed.reinterpret_as_uint64()
     } catch {
       _ => abort("Invalid i64 value: \{v}")
     }
   } else {
     // Unsigned value
-    @strconv.parse_uint64(v) catch {
+    @string.parse_uint64(v) catch {
       _ => abort("Invalid i64 value: \{v}")
     }
   }
@@ -980,7 +980,7 @@ fn parse_args(args : Array[Json]) -> Array[@wasm5_runtime.Value] raise {
             ),
           )
         }
-      _ => raise TestUnsupported::UnsupportedArgType("\{arg}")
+      _ => raise TestUnsupported::UnsupportedArgType("\{arg.stringify()}")
     }
   }
   runtime_args
@@ -1078,7 +1078,8 @@ fn parse_expected_value(expected : Json) -> ExpectedValue raise {
     { "type": "nullfuncref", .. } => AnyRefNull
     { "type": "nullexnref", .. } => AnyRefNull
     { "type": "nullexternref", .. } => AnyRefNull
-    _ => raise TestUnsupported::UnsupportedExpectedType("\{expected}")
+    _ =>
+      raise TestUnsupported::UnsupportedExpectedType("\{expected.stringify()}")
   }
 }
 
@@ -1320,7 +1321,7 @@ fn handle_assert_return(
     // Validate each result
     for idx in 0..<expected.length() {
       let expected_value = parse_expected_value(expected[idx])
-      if not(values_match(results[idx], expected_value)) {
+      if !values_match(results[idx], expected_value) {
         ctx.fail(
           line,
           "assert_return",
@@ -1555,7 +1556,6 @@ fn handle_action(
       return
     }
     let _ = executor.call_compiled(@utf8.encode(fn_name), runtime_args)
-
   } catch {
     e => ctx.fail(line, "action", "Action failed with error: \{e}")
   }
@@ -1655,7 +1655,7 @@ fn handle_assert_return_get(
       return
     }
     let expected_value = parse_expected_value(expected[0])
-    if not(values_match(actual_value, expected_value)) {
+    if !values_match(actual_value, expected_value) {
       ctx.fail(
         line,
         "assert_return",
@@ -1742,7 +1742,7 @@ async fn process_command(ctx : TestContext, cmd : Json) -> Unit {
       ctx.fail(
         line.to_int(),
         "assert_return",
-        "unsupported action type: \{action}",
+        "unsupported action type: \{action.stringify()}",
       )
     // Assert function traps
     {
@@ -1862,8 +1862,8 @@ pub async fn process_wast_file(
   guard wast_file.strip_suffix(".wast") is Some(base_name) else {
     abort("Invalid wast file name: \{wast_file}")
   }
-  let json_file = (base_name + ".json").to_string()
-  let target_dir = wast_dir + base_name.to_string() + "/"
+  let json_file = (base_name + ".json").to_owned()
+  let target_dir = wast_dir + base_name.to_owned() + "/"
   let _ = @fs.mkdir(target_dir, permission=0o755) catch { _ => () }
   // execute: wasm-tools wast2json xxx.wast -o xxx/xxx.json --wasm-dir xxx/
   let test_result : Array[TestFailure] = []

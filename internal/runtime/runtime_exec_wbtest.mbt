@@ -71,7 +71,7 @@ test "runtime call compiled imported func" {
   resolver.add_func(b"m", b"f", HostFunc::new(fn(_args) { [Value::I32(7U)] }))
   let rt = Instance::new(module_, resolver)
   let results = rt.call_compiled(b"f", [])
-  assert_eq(results, [Value::I32(7U)])
+  @debug.assert_eq(results, [Value::I32(7U)])
 }
 
 ///|

@@ -14,7 +14,6 @@ fn validate_instruction_parametric(
         raise ValidationError::TypeMismatch("expected value on stack for drop")
       } else {
         let _ = stack.unsafe_pop()
-
       }
     Select => {
       // Untyped select (0x1B): only numeric types allowed
@@ -38,7 +37,7 @@ fn validate_instruction_parametric(
           I32 | I64 | F32 | F64 => true
           _ => false
         }
-        if not(is_val1_numeric) || not(is_val2_numeric) {
+        if !is_val1_numeric || !is_val2_numeric {
           raise ValidationError::TypeMismatch(
             "untyped select requires numeric types, got \{val1} and \{val2}",
           )
@@ -64,7 +63,7 @@ fn validate_instruction_parametric(
             I32 | I64 | F32 | F64 => true
             _ => false
           }
-          if not(is_numeric) {
+          if !is_numeric {
             raise ValidationError::TypeMismatch(
               "untyped select requires numeric types, got \{val}",
             )
@@ -108,12 +107,12 @@ fn validate_instruction_parametric(
         let val1 = stack.unsafe_pop()
 
         // Both values must be subtypes of the expected type
-        if not(is_subtype(module_, val1, expected_type)) {
+        if !is_subtype(module_, val1, expected_type) {
           raise ValidationError::TypeMismatch(
             "select value type mismatch: expected \{expected_type}, got \{val1}",
           )
         }
-        if not(is_subtype(module_, val2, expected_type)) {
+        if !is_subtype(module_, val2, expected_type) {
           raise ValidationError::TypeMismatch(
             "select value type mismatch: expected \{expected_type}, got \{val2}",
           )
@@ -123,7 +122,7 @@ fn validate_instruction_parametric(
         // Only valid in unreachable code (one concrete, one polymorphic)
         if ctx.is_unreachable {
           let val = stack.unsafe_pop()
-          if not(is_subtype(module_, val, expected_type)) {
+          if !is_subtype(module_, val, expected_type) {
             raise ValidationError::TypeMismatch(
               "select value type mismatch: expected \{expected_type}, got \{val}",
             )

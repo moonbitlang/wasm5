@@ -407,7 +407,7 @@ fn op_call_indirect(rt : Instance) -> ReturnCode {
     }
 
     // Check type matches using nominal typing (GC proposal)
-    if not(gc_is_type_subtype(rt, actual_type_idx, type_idx)) {
+    if !gc_is_type_subtype(rt, actual_type_idx, type_idx) {
       rt.ctx.error_detail = "indirect call type mismatch"
       return Trap
     }
@@ -442,7 +442,7 @@ fn op_call_indirect(rt : Instance) -> ReturnCode {
 
   // Check type matches using nominal typing (GC proposal)
   // For call_indirect, actual type must match expected type via type index subtyping
-  if not(gc_is_type_subtype(rt, actual_type_idx, type_idx)) {
+  if !gc_is_type_subtype(rt, actual_type_idx, type_idx) {
     rt.ctx.error_detail = "indirect call type mismatch"
     return Trap
   }

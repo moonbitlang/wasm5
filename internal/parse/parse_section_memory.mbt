@@ -6,7 +6,7 @@ fn parse_memory_section(
 ) -> Array[@core.MemType] raise ParseError {
   let count = parser.read_u32_leb128()
   let mems = []
-  for i in 0U..<count {
+  for _ in 0U..<count {
     let mem_type = parser.read_memtype()
     mems.push(mem_type)
   }

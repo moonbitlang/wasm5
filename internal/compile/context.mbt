@@ -167,9 +167,7 @@ fn CompileCtx::pop_control(self : CompileCtx) -> Unit {
   }
   // Update end_pc for all unresolved deferred blocks targeting this frame
   for block in self.deferred_blocks {
-    if not(block.is_loop) &&
-      not(block.resolved) &&
-      block.target_label == abs_idx {
+    if !block.is_loop && !block.resolved && block.target_label == abs_idx {
       block.end_pc = end_pc
       block.resolved = true
     }

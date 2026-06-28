@@ -55,7 +55,7 @@ fn validate_function(
     // Check types from top of stack (with subtyping)
     for i in 0..<func_type.results.length() {
       // Stack type must be a subtype of expected return type
-      if not(is_subtype(module_, stack[i], func_type.results[i])) {
+      if !is_subtype(module_, stack[i], func_type.results[i]) {
         raise ValidationError::TypeMismatch(
           "function return type mismatch: expected \{func_type.results[i]}, got \{stack[i]}",
         )

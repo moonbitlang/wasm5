@@ -5,4 +5,9 @@ pub suberror ParseError {
   InvalidMagic // Invalid magic number
   UnsupportedVersion // Unsupported version
   InvalidFormat(String) // Invalid format
-} derive(Show)
+} derive(Debug)
+
+///|
+pub impl Show for ParseError with fn output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}

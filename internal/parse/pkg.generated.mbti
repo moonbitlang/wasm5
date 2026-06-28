@@ -2,6 +2,7 @@
 package "moonbitlang/wasm5/internal/parse"
 
 import {
+  "moonbitlang/core/debug",
   "moonbitlang/wasm5/internal/core",
 }
 
@@ -16,7 +17,7 @@ pub suberror ParseError {
   InvalidMagic
   UnsupportedVersion
   InvalidFormat(String)
-}
+} derive(@debug.Debug)
 pub impl Show for ParseError
 
 // Types and methods

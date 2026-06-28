@@ -1,0 +1,22 @@
+name = "moonbitlang/wasm5"
+
+version = "0.1.0"
+
+import {
+  "moonbitlang/async@0.14.2",
+  "moonbitlang/x@0.4.38",
+}
+
+readme = "README.mbt.md"
+
+repository = ""
+
+license = "Apache-2.0"
+
+keywords = [ ]
+
+description = ""
+
+source = "."
+
+preferred_target = "native"

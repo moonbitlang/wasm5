@@ -2,6 +2,7 @@
 package "moonbitlang/wasm5/internal/validate"
 
 import {
+  "moonbitlang/core/debug",
   "moonbitlang/wasm5/internal/core",
 }
 
@@ -40,7 +41,7 @@ pub(all) suberror ValidationError {
   InvalidElemIndex(Int)
   UnknownDataSegment(Int)
   InvalidSubtype(String)
-}
+} derive(@debug.Debug)
 pub impl Show for ValidationError
 
 // Types and methods

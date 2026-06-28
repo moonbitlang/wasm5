@@ -7,12 +7,12 @@ fn is_field_type_subtype(
 ) -> Bool {
   // If supertype is mutable, subtype must also be mutable
   // (can't have immutable subtype of mutable field)
-  if super_field.mutable && not(sub_field.mutable) {
+  if super_field.mutable && !sub_field.mutable {
     return false
   }
   // If subtype is mutable, supertype must also be mutable
   // (can't have mutable subtype of immutable field)
-  if sub_field.mutable && not(super_field.mutable) {
+  if sub_field.mutable && !super_field.mutable {
     return false
   }
   // Check storage types with appropriate variance
@@ -46,13 +46,13 @@ fn is_typedef_subtype(
       }
       // Contravariant parameters: supertype param must be subtype of subtype param
       for i = 0; i < sub_func.params.length(); i = i + 1 {
-        if not(is_subtype(m, super_func.params[i], sub_func.params[i])) {
+        if !is_subtype(m, super_func.params[i], sub_func.params[i]) {
           return false
         }
       }
       // Covariant results: subtype result must be subtype of supertype result
       for i = 0; i < sub_func.results.length(); i = i + 1 {
-        if not(is_subtype(m, sub_func.results[i], super_func.results[i])) {
+        if !is_subtype(m, sub_func.results[i], super_func.results[i]) {
           return false
         }
       }
@@ -65,12 +65,10 @@ fn is_typedef_subtype(
         return false
       }
       for i = 0; i < super_struct.fields.length(); i = i + 1 {
-        if not(
-            is_field_type_subtype(
-              m,
-              sub_struct.fields[i],
-              super_struct.fields[i],
-            ),
+        if !is_field_type_subtype(
+            m,
+            sub_struct.fields[i],
+            super_struct.fields[i],
           ) {
           return false
         }
@@ -235,7 +233,7 @@ fn validate_module_type_indices(m : @core.Module) -> Unit raise ValidationError 
         }
         // Check that type definition is a valid subtype (kind match + content)
         let super_type = m.types[super_idx]
-        if not(is_typedef_subtype(m, sub_type, super_type)) {
+        if !is_typedef_subtype(m, sub_type, super_type) {
           raise ValidationError::InvalidSubtype("sub type")
         }
       }
@@ -393,7 +391,7 @@ fn all_function_indices(
   m : @core.Module,
   import_counts : ImportCounts,
 ) -> Set[Int] {
-  let all_funcs : Set[Int] = Set::new()
+  let all_funcs : Set[Int] = Set([])
   let total_funcs = import_counts.funcs + m.funcs.length()
   for i in 0..<total_funcs {
     all_funcs.add(i)
@@ -449,7 +447,7 @@ fn validate_module_global_initializers(
     }
     let produced_type = init_ctx.stack[0]
     // Use subtyping: init type must be a subtype of the declared global type
-    if not(is_subtype(m, produced_type, global.type_.val_type)) {
+    if !is_subtype(m, produced_type, global.type_.val_type) {
       raise ValidationError::TypeMismatch(
         "global initializer type mismatch: expected \{global.type_.val_type}, got \{produced_type}",
       )
@@ -470,7 +468,7 @@ fn validate_table_type_limits(
           "size minimum must not be greater than maximum",
         )
       }
-      if not(table_type.table64) && max_val > 0xFFFF_FFFFUL {
+      if !table_type.table64 && max_val > 0xFFFF_FFFFUL {
         raise ValidationError::InvalidTableSize(
           "table size must fit in 32-bit limits",
         )
@@ -478,7 +476,7 @@ fn validate_table_type_limits(
     }
     None => ()
   }
-  if not(table_type.table64) && table_type.limits.min > 0xFFFF_FFFFUL {
+  if !table_type.table64 && table_type.limits.min > 0xFFFF_FFFFUL {
     raise ValidationError::InvalidTableSize(
       "table size must fit in 32-bit limits",
     )
@@ -501,14 +499,14 @@ fn validate_mem_type_limits(
           "size minimum must not be greater than maximum",
         )
       }
-      if not(mem_type.memory64) && max_val > 65536UL {
+      if !mem_type.memory64 && max_val > 65536UL {
         raise ValidationError::InvalidMemorySize(
           "memory size must be at most 65536 pages (4GiB)",
         )
       }
     }
     None =>
-      if not(mem_type.memory64) && mem_type.limits.min > 65536UL {
+      if !mem_type.memory64 && mem_type.limits.min > 65536UL {
         raise ValidationError::InvalidMemorySize(
           "memory size must be at most 65536 pages (4GiB)",
         )
@@ -550,7 +548,7 @@ fn validate_module_tables(
     validate_table_type_limits(table)
     // Validate table initializer
     // If the table element type is non-nullable, it must have an initializer
-    if not(table.nullable) {
+    if !table.nullable {
       match table.init {
         None =>
           raise ValidationError::TypeMismatch(
@@ -814,7 +812,7 @@ fn validate_module_exports(
   import_counts : ImportCounts,
 ) -> Unit raise ValidationError {
   // Validate exports
-  let export_names : Set[Bytes] = Set::new()
+  let export_names : Set[Bytes] = Set([])
   for exp in m.exports {
     // Check for duplicate export names
     if export_names.contains(exp.name) {

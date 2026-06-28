@@ -1062,7 +1062,7 @@ test "validate module data segment errors" {
       {
         mem_idx: 1U,
         offset: test_empty_expr(),
-        init: Bytes::from_array([]).sub(),
+        init: Bytes::from_array([])[:],
         is_active: true,
       },
     ],
@@ -1101,7 +1101,7 @@ test "validate module data segment errors" {
       {
         mem_idx: 0U,
         offset: { instrs: [GlobalGet(0U)] },
-        init: Bytes::from_array([]).sub(),
+        init: Bytes::from_array([])[:],
         is_active: true,
       },
     ],

@@ -27,7 +27,7 @@ fn get_wasi_temp_dir() -> String {
 /// Helper: compile WAT file to WASM bytes using wasm-tools
 async fn compile_wasi_wat(wat_path : String) -> Bytes raise Error {
   let base = match wat_path.strip_suffix(".wat") {
-    Some(s) => s.to_string()
+    Some(s) => s.to_owned()
     None => wat_path
   }
   let wasm_path = base + ".wasm"

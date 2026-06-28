@@ -6,7 +6,7 @@ fn parse_export_section(
 ) -> Array[@core.Export] raise ParseError {
   let count = parser.read_u32_leb128()
   let exports = []
-  for i in 0U..<count {
+  for _ in 0U..<count {
     let name = parser.read_name()
     let desc_tag = parser.read_byte()
     let desc : @core.ExportDesc = match desc_tag {

@@ -374,7 +374,7 @@ test "parse instr reference typed as_non_null" {
 
 ///|
 test "parse reader errors" {
-  let empty_view = Bytes::from_array([]).sub()
+  let empty_view = Bytes::from_array([])[:]
   let mut saw_error = false
   let _ = Parser::new(Bytes::from_array([])).read_byte() catch {
     _ => {

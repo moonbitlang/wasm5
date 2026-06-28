@@ -6,7 +6,7 @@ fn parse_global_section(
 ) -> Array[@core.Global] raise ParseError {
   let count = parser.read_u32_leb128()
   let globals = []
-  for i in 0U..<count {
+  for _ in 0U..<count {
     let val_type = parser.read_valtype()
     let mutable = parser.read_byte() == 0x01
     let init = parse_expr(parser)

@@ -65,7 +65,7 @@ fn validate_instruction_table(
         raise ValidationError::TypeMismatch("table.fill expects value on stack")
       } else {
         let actual_type = stack.unsafe_pop()
-        if not(is_subtype(module_, actual_type, expected_type)) {
+        if !is_subtype(module_, actual_type, expected_type) {
           raise ValidationError::TypeMismatch(
             "table.fill value type mismatch: expected \{expected_type}, got \{actual_type}",
           )
@@ -107,7 +107,7 @@ fn validate_instruction_table(
         raise ValidationError::TypeMismatch("table.set expects value on stack")
       } else {
         let actual_type = stack.unsafe_pop()
-        if not(is_subtype(module_, actual_type, expected_type)) {
+        if !is_subtype(module_, actual_type, expected_type) {
           raise ValidationError::TypeMismatch(
             "table.set value type mismatch: expected \{expected_type}, got \{actual_type}",
           )
@@ -133,7 +133,7 @@ fn validate_instruction_table(
         )
       } else {
         let actual_type = stack.unsafe_pop()
-        if not(is_subtype(module_, actual_type, expected_type)) {
+        if !is_subtype(module_, actual_type, expected_type) {
           raise ValidationError::TypeMismatch(
             "table.grow init value type mismatch: expected \{expected_type}, got \{actual_type}",
           )

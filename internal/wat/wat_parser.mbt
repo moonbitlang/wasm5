@@ -397,14 +397,14 @@ fn parse_if_instr(
         }
         match tag {
           b"then" => {
-            guard not(seen_then) else {
+            guard !seen_then else {
               raise WatError::InvalidSyntax("duplicate then")
             }
             then_items = slice_sexprs(inner, 1)
             seen_then = true
           }
           b"else" => {
-            guard not(seen_else) else {
+            guard !seen_else else {
               raise WatError::InvalidSyntax("duplicate else")
             }
             else_items = slice_sexprs(inner, 1)
@@ -520,7 +520,7 @@ fn parse_call_indirect_items_from_items(
   let list_items : Array[SExpr] = []
   list_items.push(Atom(op_tag))
   let mut idx = start
-  if idx < items.length() && not(is_reftype_expr(items[idx])) {
+  if idx < items.length() && !is_reftype_expr(items[idx]) {
     match items[idx] {
       Atom(atom) if is_name(atom) || is_uint_atom(atom) => {
         list_items.push(items[idx])
@@ -592,7 +592,7 @@ fn parse_call_indirect_items(
           b"param" => append_types(params, items, type_map, allow_names=true)
           b"result" => append_types(results, items, type_map, allow_names=true)
           b"table" => {
-            guard not(seen_table) else {
+            guard !seen_table else {
               raise WatError::InvalidSyntax("duplicate table in \{context}")
             }
             guard items.length() == 2 else {
@@ -624,7 +624,7 @@ fn parse_call_ref_typeuse_from_items(
   let list_items : Array[SExpr] = []
   list_items.push(Atom(op_tag))
   let mut idx = start
-  if idx < items.length() && not(is_reftype_expr(items[idx])) {
+  if idx < items.length() && !is_reftype_expr(items[idx]) {
     match items[idx] {
       Atom(atom) if is_name(atom) || is_uint_atom(atom) => {
         list_items.push(items[idx])
@@ -1119,7 +1119,7 @@ fn parse_module(expr : SExpr) -> WatModule raise WatError {
             raise WatError::InvalidSyntax("unexpected module item")
         }
       }
-      let type_map = Map::new()
+      let type_map = Map([])
       let mut type_index = 0
       for type_item in type_items {
         match type_item {
@@ -1413,7 +1413,7 @@ fn parse_func(
       resolved_param_names.push(None)
     }
   }
-  let local_map = Map::new()
+  let local_map = Map([])
   for i in 0..<param_names.length() {
     match param_names[i] {
       Some(name) => {
@@ -1746,7 +1746,7 @@ fn parse_table(
     None => parse_limits_from_atoms(numeric_atoms)
   }
   let init_instrs = match init_item {
-    Some(init_expr) => Some(parse_instrs([init_expr], Map::new(), [], type_map))
+    Some(init_expr) => Some(parse_instrs([init_expr], Map([]), [], type_map))
     None => None
   }
   let table_type : @core.TableType = {
@@ -1857,7 +1857,7 @@ fn parse_global(
   guard init_items.length() > 0 else {
     raise WatError::InvalidSyntax("global init missing")
   }
-  let init_instrs = parse_instrs(init_items, Map::new(), [], type_map)
+  let init_instrs = parse_instrs(init_items, Map([]), [], type_map)
   WatGlobal::{ name, type_: global_type, init: init_instrs, exports }
 }
 
@@ -1934,7 +1934,7 @@ fn parse_data(
   let mut mem_ref = IndexRef::Index(0U)
   let mut offset_expr : Array[WatInstr] = []
   let mut is_active = false
-  if idx < items.length() && not(is_reftype_expr(items[idx])) {
+  if idx < items.length() && !is_reftype_expr(items[idx]) {
     match items[idx] {
       List(list_items) =>
         if list_items.length() > 0 &&
@@ -1949,23 +1949,23 @@ fn parse_data(
       _ => ()
     }
   }
-  if idx < items.length() && not(is_reftype_expr(items[idx])) {
+  if idx < items.length() && !is_reftype_expr(items[idx]) {
     match items[idx] {
       List(list_items) =>
         if list_items.length() > 0 &&
           list_items[0] is Atom(tag) &&
           tag == b"offset" {
           let offset_items = slice_sexprs(list_items, 1)
-          offset_expr = parse_instrs(offset_items, Map::new(), [], type_map)
+          offset_expr = parse_instrs(offset_items, Map([]), [], type_map)
           is_active = true
           idx = idx + 1
         } else {
-          offset_expr = parse_instrs([items[idx]], Map::new(), [], type_map)
+          offset_expr = parse_instrs([items[idx]], Map([]), [], type_map)
           is_active = true
           idx = idx + 1
         }
       Atom(_) => {
-        offset_expr = parse_instrs([items[idx]], Map::new(), [], type_map)
+        offset_expr = parse_instrs([items[idx]], Map([]), [], type_map)
         is_active = true
         idx = idx + 1
       }
@@ -2042,7 +2042,7 @@ fn parse_elem(
   let mut elem_type = @core.RefType::Func
   let mut elem_nullable = true
   let mut explicit_table = false
-  if idx < items.length() && not(is_reftype_expr(items[idx])) {
+  if idx < items.length() && !is_reftype_expr(items[idx]) {
     match items[idx] {
       List(list_items) =>
         if list_items.length() > 0 &&
@@ -2058,14 +2058,14 @@ fn parse_elem(
       _ => ()
     }
   }
-  if idx < items.length() && not(is_reftype_expr(items[idx])) {
+  if idx < items.length() && !is_reftype_expr(items[idx]) {
     match items[idx] {
       List(list_items) =>
         if list_items.length() > 0 &&
           list_items[0] is Atom(tag) &&
           tag == b"offset" {
           let offset_items = slice_sexprs(list_items, 1)
-          offset_instrs = parse_instrs(offset_items, Map::new(), [], type_map)
+          offset_instrs = parse_instrs(offset_items, Map([]), [], type_map)
           is_active = true
           idx = idx + 1
         } else if list_items.length() > 0 &&
@@ -2073,7 +2073,7 @@ fn parse_elem(
           tag == b"func" {
           ()
         } else {
-          offset_instrs = parse_instrs([items[idx]], Map::new(), [], type_map)
+          offset_instrs = parse_instrs([items[idx]], Map([]), [], type_map)
           is_active = true
           idx = idx + 1
         }
@@ -2081,7 +2081,7 @@ fn parse_elem(
         if atom == b"func" {
           ()
         } else {
-          offset_instrs = parse_instrs([items[idx]], Map::new(), [], type_map)
+          offset_instrs = parse_instrs([items[idx]], Map([]), [], type_map)
           is_active = true
           idx = idx + 1
         }
@@ -2112,7 +2112,7 @@ fn parse_elem(
             WatInstr::RefFunc(parse_func_ref(expect_atom(list_items[1]))),
           ])
         } else {
-          let instrs = parse_instrs([items[i]], Map::new(), [], type_map)
+          let instrs = parse_instrs([items[i]], Map([]), [], type_map)
           init.push(instrs)
         }
       _ => raise WatError::InvalidSyntax("elem expects init expressions")
@@ -2630,7 +2630,7 @@ fn append_types(
     match items[i] {
       Atom(atom) => {
         if allow_names && is_name(atom) {
-          guard not(pending) else {
+          guard !pending else {
             raise WatError::InvalidSyntax("duplicate name without type")
           }
           pending = true
@@ -2709,9 +2709,7 @@ fn split_memory_limit_atoms(
   let mut memory64 : Bool? = None
   for atom in atoms {
     if atom == b"shared" {
-      guard not(shared) else {
-        raise WatError::InvalidSyntax("duplicate shared")
-      }
+      guard !shared else { raise WatError::InvalidSyntax("duplicate shared") }
       shared = true
     } else if atom == b"i64" {
       guard memory64 is None else {
@@ -3846,7 +3844,7 @@ fn parse_memarg_from_items(
       Atom(atom) =>
         match parse_memarg_atom(atom) {
           Some(Align(value)) => {
-            guard not(seen_align) else {
+            guard !seen_align else {
               raise WatError::InvalidSyntax("duplicate align")
             }
             align = value
@@ -3854,7 +3852,7 @@ fn parse_memarg_from_items(
             idx = idx + 1
           }
           Some(Offset(value)) => {
-            guard not(seen_offset) else {
+            guard !seen_offset else {
               raise WatError::InvalidSyntax("duplicate offset")
             }
             offset = value
@@ -3862,7 +3860,7 @@ fn parse_memarg_from_items(
             idx = idx + 1
           }
           Some(Memory(value)) => {
-            guard not(seen_memory) else {
+            guard !seen_memory else {
               raise WatError::InvalidSyntax("duplicate memory")
             }
             memory_idx = value
@@ -3894,21 +3892,21 @@ fn parse_memarg_from_list(
       Atom(atom) =>
         match parse_memarg_atom(atom) {
           Some(Align(value)) => {
-            guard not(seen_align) else {
+            guard !seen_align else {
               raise WatError::InvalidSyntax("duplicate align")
             }
             align = value
             seen_align = true
           }
           Some(Offset(value)) => {
-            guard not(seen_offset) else {
+            guard !seen_offset else {
               raise WatError::InvalidSyntax("duplicate offset")
             }
             offset = value
             seen_offset = true
           }
           Some(Memory(value)) => {
-            guard not(seen_memory) else {
+            guard !seen_memory else {
               raise WatError::InvalidSyntax("duplicate memory")
             }
             memory_idx = value
@@ -5040,7 +5038,7 @@ fn build_name_custom(wat : WatModule) -> @core.CustomSection? {
     data_names.length() > 0 ||
     field_names.length() > 0 ||
     tag_names.length() > 0
-  if not(has_names) {
+  if !has_names {
     return None
   }
   let payload : Array[Byte] = []
@@ -5196,12 +5194,12 @@ fn wat_table_type_for_index(
 
 ///|
 fn build_module(wat : WatModule) -> @core.Module raise WatError {
-  let func_map = Map::new()
-  let mem_map = Map::new()
-  let table_map = Map::new()
-  let global_map = Map::new()
-  let tag_map = Map::new()
-  let elem_map = Map::new()
+  let func_map = Map([])
+  let mem_map = Map([])
+  let table_map = Map([])
+  let global_map = Map([])
+  let tag_map = Map([])
+  let elem_map = Map([])
   let mut func_index = 0U
   for imp in wat.func_imports {
     if imp.func_name is Some(name) {
@@ -5285,7 +5283,7 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
     }
     elem_index = elem_index + 1U
   }
-  let data_map = Map::new()
+  let data_map = Map([])
   let mut data_index = 0U
   for data in wat.datas {
     if data.name is Some(name) {
@@ -5298,7 +5296,7 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
   for type_def in wat.type_defs {
     types.push(type_def.type_def)
   }
-  let type_map = Map::new()
+  let type_map = Map([])
   for i in 0..<wat.type_defs.length() {
     let type_def = wat.type_defs[i]
     if type_def.name is Some(name) {
@@ -5544,7 +5542,7 @@ fn build_module(wat : WatModule) -> @core.Module raise WatError {
     datas.push({
       mem_idx,
       offset: @core.Expr::{ instrs: offset_instrs },
-      init: data.init.sub(),
+      init: data.init[:],
       is_active: data.is_active,
     })
   }
@@ -5622,7 +5620,7 @@ fn resolve_const_instrs(
           )
         }
         let imp = imported_globals[idx.reinterpret_as_int()]
-        guard not(imp.type_.mutable) else {
+        guard !imp.type_.mutable else {
           raise WatError::Unsupported(
             "global.get must reference immutable global",
           )
@@ -5668,7 +5666,7 @@ fn resolve_offset_instrs(
           )
         }
         let imp = imported_globals[idx.reinterpret_as_int()]
-        guard not(imp.type_.mutable) else {
+        guard !imp.type_.mutable else {
           raise WatError::Unsupported(
             "global.get must reference immutable global",
           )
@@ -6327,7 +6325,7 @@ fn parse_uint64(atom : Bytes) -> UInt64 raise WatError {
 ///|
 fn parse_int(atom : Bytes) -> Int raise WatError {
   let text = bytes_to_string(atom)
-  @strconv.parse_int(text) catch {
+  @string.parse_int(text) catch {
     _ => raise WatError::InvalidNumber("invalid integer \{atom}")
   }
 }
@@ -6335,7 +6333,7 @@ fn parse_int(atom : Bytes) -> Int raise WatError {
 ///|
 fn parse_int64(atom : Bytes) -> Int64 raise WatError {
   let text = bytes_to_string(atom)
-  @strconv.parse_int64(text) catch {
+  @string.parse_int64(text) catch {
     _ => raise WatError::InvalidNumber("invalid int64 \{atom}")
   }
 }
@@ -6448,7 +6446,7 @@ fn parse_hex_float(
   while idx < bytes.length() && bytes[idx] != b'p' {
     let b = bytes[idx]
     if b == b'.' {
-      guard not(after_dot) else {
+      guard !after_dot else {
         raise WatError::InvalidNumber("invalid float \{atom}")
       }
       after_dot = true
@@ -6474,7 +6472,7 @@ fn parse_hex_float(
     raise WatError::InvalidNumber("invalid float \{atom}")
   }
   let exp_text = bytes_to_string(exp_bytes)
-  let exp = @strconv.parse_int(exp_text) catch {
+  let exp = @string.parse_int(exp_text) catch {
     _ => raise WatError::InvalidNumber("invalid float \{atom}")
   }
   let exp2 = exp - frac_digits * 4
@@ -6548,7 +6546,7 @@ fn parse_double(atom : Bytes) -> Double raise WatError {
     return parse_hex_float(lower, neg, atom)
   }
   let text = bytes_to_string(cleaned)
-  @strconv.parse_double(text) catch {
+  @string.parse_double(text) catch {
     _ => raise WatError::InvalidNumber("invalid float \{atom}")
   }
 }

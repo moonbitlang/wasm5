@@ -1,7 +1,6 @@
 ///|
 async fn ensure_dir(path : String) -> Unit {
   let _ = @fs.mkdir(path, permission=0o755) catch { _ => () }
-
 }
 
 ///|

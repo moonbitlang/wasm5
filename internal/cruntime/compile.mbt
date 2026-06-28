@@ -1,7 +1,7 @@
 ///|
 /// Compile a module to threaded code for C runtime using the unified compiler.
 pub fn compile(mod_ : @core.Module) -> CompiledModule {
-  compile_with_imports(mod_, Map::new())
+  compile_with_imports(mod_, Map([]))
 }
 
 ///|

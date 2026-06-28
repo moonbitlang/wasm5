@@ -1,0 +1,15 @@
+import {
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/math",
+  "moonbitlang/core/string",
+  "moonbitlang/wasm5/internal/core",
+  "moonbitlang/wasm5/internal/encode",
+  "moonbitlang/wasm5/internal/parse",
+}
+
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/process",
+  "moonbitlang/async/io",
+} for "test"

@@ -40,21 +40,21 @@ fn Lexer::next(self : Lexer) -> Token? raise WatError {
 ///|
 fn Lexer::read_atom(self : Lexer) -> Bytes {
   let start = self.pos
-  while not(self.eof()) {
+  while !self.eof() {
     let b = self.peek()
     if is_whitespace(b) || b == b'(' || b == b')' {
       break
     }
     self.pos = self.pos + 1
   }
-  self.input[start:self.pos].to_bytes()
+  self.input[start:self.pos].to_owned()
 }
 
 ///|
 fn Lexer::read_string(self : Lexer) -> Bytes raise WatError {
   self.pos = self.pos + 1
   let out : Array[Byte] = []
-  while not(self.eof()) {
+  while !self.eof() {
     let b = self.next_byte()
     if b == b'"' {
       return Bytes::from_array(out)
@@ -75,7 +75,7 @@ fn Lexer::read_string(self : Lexer) -> Bytes raise WatError {
             let hi = hex_value(esc) catch {
               _ => raise WatError::InvalidSyntax("invalid hex escape")
             }
-            guard not(self.eof()) else {
+            guard !self.eof() else {
               raise WatError::InvalidSyntax("truncated hex escape")
             }
             let lo = self.next_byte()
@@ -99,13 +99,13 @@ fn Lexer::read_string(self : Lexer) -> Bytes raise WatError {
 fn Lexer::skip_ws_and_comments(self : Lexer) -> Unit raise WatError {
   while true {
     let mut progressed = false
-    while not(self.eof()) && is_whitespace(self.peek()) {
+    while !self.eof() && is_whitespace(self.peek()) {
       self.pos = self.pos + 1
       progressed = true
     }
     if self.starts_with(b";;") {
       self.pos = self.pos + 2
-      while not(self.eof()) && self.peek() != b'\n' {
+      while !self.eof() && self.peek() != b'\n' {
         self.pos = self.pos + 1
       }
       progressed = true
@@ -115,7 +115,7 @@ fn Lexer::skip_ws_and_comments(self : Lexer) -> Unit raise WatError {
       self.pos = self.pos + 2
       let mut depth = 1
       while depth > 0 {
-        guard not(self.eof()) else {
+        guard !self.eof() else {
           raise WatError::InvalidSyntax("unterminated block comment")
         }
         if self.starts_with(b"(;") {
@@ -133,7 +133,7 @@ fn Lexer::skip_ws_and_comments(self : Lexer) -> Unit raise WatError {
       progressed = true
       continue
     }
-    if not(progressed) {
+    if !progressed {
       break
     }
   }

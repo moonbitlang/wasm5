@@ -8,4 +8,9 @@ pub(all) enum Value {
   Ref(Int?) // For GC refs (struct, array, i31)
   Funcref(Int?) // For function references
   Externref(Int?) // For external references
-} derive(Eq, Show)
+} derive(Eq, Debug)
+
+///|
+pub impl Show for Value with fn output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}

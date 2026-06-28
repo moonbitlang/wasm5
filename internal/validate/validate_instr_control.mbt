@@ -51,7 +51,7 @@ fn validate_tail_call_return_type(
   for i in 0..<func_type_called.results.length() {
     let called_result = func_type_called.results[i]
     let expected_result = func_type.results[i]
-    if not(is_subtype(module_, called_result, expected_result)) {
+    if !is_subtype(module_, called_result, expected_result) {
       raise ValidationError::TypeMismatch(
         "\{instr_name}: return type mismatch at position \{i}: expected \{expected_result}, got \{called_result}",
       )
@@ -117,7 +117,7 @@ fn validate_instruction_control(
       } else {
         // Exact match - validate result types (with subtyping)
         for i in 0..<results.length() {
-          if not(is_subtype(module_, block_ctx.stack[i], results[i])) {
+          if !is_subtype(module_, block_ctx.stack[i], results[i]) {
             raise ValidationError::TypeMismatch(
               "block result type mismatch: expected \{results[i]}, got \{block_ctx.stack[i]}",
             )
@@ -174,7 +174,7 @@ fn validate_instruction_control(
       } else {
         // Exact match - validate result types (with subtyping)
         for i in 0..<results.length() {
-          if not(is_subtype(module_, loop_ctx.stack[i], results[i])) {
+          if !is_subtype(module_, loop_ctx.stack[i], results[i]) {
             raise ValidationError::TypeMismatch(
               "loop result type mismatch: expected \{results[i]}, got \{loop_ctx.stack[i]}",
             )
@@ -224,7 +224,7 @@ fn validate_instruction_control(
       } else {
         // Exact match - validate result types (with subtyping)
         for i in 0..<results.length() {
-          if not(is_subtype(module_, then_ctx.stack[i], results[i])) {
+          if !is_subtype(module_, then_ctx.stack[i], results[i]) {
             raise ValidationError::TypeMismatch(
               "if then branch result type mismatch: expected \{results[i]}, got \{then_ctx.stack[i]}",
             )
@@ -261,7 +261,7 @@ fn validate_instruction_control(
       } else {
         // Exact match - validate result types (with subtyping)
         for i in 0..<results.length() {
-          if not(is_subtype(module_, else_ctx.stack[i], results[i])) {
+          if !is_subtype(module_, else_ctx.stack[i], results[i]) {
             raise ValidationError::TypeMismatch(
               "if else branch result type mismatch: expected \{results[i]}, got \{else_ctx.stack[i]}",
             )
@@ -300,11 +300,9 @@ fn validate_instruction_control(
               raise ValidationError::UnknownTag(tag_int)
             }
             let _ = try_ctx.get_label_types(label_idx)
-
           }
           CatchAll(label_idx) | CatchAllRef(label_idx) => {
             let _ = try_ctx.get_label_types(label_idx)
-
           }
         }
       }
@@ -324,7 +322,7 @@ fn validate_instruction_control(
         )
       } else {
         for i in 0..<results.length() {
-          if not(is_subtype(module_, try_ctx.stack[i], results[i])) {
+          if !is_subtype(module_, try_ctx.stack[i], results[i]) {
             raise ValidationError::TypeMismatch(
               "try_table result type mismatch: expected \{results[i]}, got \{try_ctx.stack[i]}",
             )
@@ -340,7 +338,7 @@ fn validate_instruction_control(
     Return => {
       // In unreachable code with empty stack, allow polymorphic return
       // Otherwise, validate concrete values on stack
-      if not(ctx.is_unreachable) || stack.length() > 0 {
+      if !ctx.is_unreachable || stack.length() > 0 {
         // Check we have the right values on stack for function return
         if stack.length() < func_type.results.length() {
           if ctx.is_unreachable {
@@ -354,7 +352,7 @@ fn validate_instruction_control(
           // Validate result types for concrete values (with subtyping)
           for i in 0..<func_type.results.length() {
             let stack_idx = stack.length() - func_type.results.length() + i
-            if not(is_subtype(module_, stack[stack_idx], func_type.results[i])) {
+            if !is_subtype(module_, stack[stack_idx], func_type.results[i]) {
               raise ValidationError::TypeMismatch(
                 "return: result type mismatch: expected \{func_type.results[i]}, got \{stack[stack_idx]}",
               )
@@ -370,7 +368,7 @@ fn validate_instruction_control(
       let target_types = ctx.get_label_types(label)
 
       // Validate stack contents (even in unreachable code with concrete values)
-      if not(ctx.is_unreachable) || stack.length() > 0 {
+      if !ctx.is_unreachable || stack.length() > 0 {
         // Unconditional branch - validate we have required values for target
         if stack.length() < target_types.length() {
           if ctx.is_unreachable {
@@ -384,7 +382,7 @@ fn validate_instruction_control(
           // Validate types for the branch target (with subtyping)
           for i in 0..<target_types.length() {
             let stack_idx = stack.length() - target_types.length() + i
-            if not(is_subtype(module_, stack[stack_idx], target_types[i])) {
+            if !is_subtype(module_, stack[stack_idx], target_types[i]) {
               raise ValidationError::TypeMismatch(
                 "br: branch target type mismatch: expected \{target_types[i]}, got \{stack[stack_idx]}",
               )
@@ -455,7 +453,7 @@ fn validate_instruction_control(
       let target_types = default_types
 
       // Validate concrete values on stack
-      if not(ctx.is_unreachable) || stack.length() > 0 {
+      if !ctx.is_unreachable || stack.length() > 0 {
         // Validate we have required values for branch targets using default label
         if stack.length() < target_types.length() {
           if ctx.is_unreachable {
@@ -469,7 +467,7 @@ fn validate_instruction_control(
           // Validate types for concrete values (with subtyping)
           for i in 0..<target_types.length() {
             let stack_idx = stack.length() - target_types.length() + i
-            if not(is_subtype(module_, stack[stack_idx], target_types[i])) {
+            if !is_subtype(module_, stack[stack_idx], target_types[i]) {
               raise ValidationError::TypeMismatch(
                 "br_table: branch target type mismatch: expected \{target_types[i]}, got \{stack[stack_idx]}",
               )
@@ -492,7 +490,7 @@ fn validate_instruction_control(
 
       // First check we have at least 1 + label_types.length() values
       let required = label_types.length() + 1
-      if not(ctx.is_unreachable) && stack.length() < required {
+      if !ctx.is_unreachable && stack.length() < required {
         raise ValidationError::TypeMismatch(
           "br_on_null: stack has \{stack.length()} values, need \{required}",
         )
@@ -520,7 +518,7 @@ fn validate_instruction_control(
           if stack.length() > 0 {
             let stack_type = stack.unsafe_pop()
             let expected_type = label_types[i]
-            if not(is_subtype(module_, stack_type, expected_type)) {
+            if !is_subtype(module_, stack_type, expected_type) {
               raise ValidationError::TypeMismatch(
                 "br_on_null: stack type \{stack_type} not subtype of label's \{expected_type}",
               )
@@ -568,7 +566,7 @@ fn validate_instruction_control(
       }
 
       // Pop the nullable reference from the stack
-      if not(ctx.is_unreachable) && stack.length() < 1 {
+      if !ctx.is_unreachable && stack.length() < 1 {
         raise ValidationError::TypeMismatch(
           "br_on_non_null expects reference on stack",
         )
@@ -585,7 +583,7 @@ fn validate_instruction_control(
 
         // The non-null version of our popped ref must be a subtype of the label's last type
         let non_null_ref = popped_ref.to_non_nullable()
-        if not(is_subtype(module_, non_null_ref, last_label_type)) {
+        if !is_subtype(module_, non_null_ref, last_label_type) {
           raise ValidationError::TypeMismatch(
             "br_on_non_null: non-null ref type \{non_null_ref} incompatible with label's expected \{last_label_type}",
           )
@@ -595,7 +593,7 @@ fn validate_instruction_control(
         // According to the spec, the t* types must match exactly between the stack
         // and the label's expected types (before the ref type at the end)
         let prefix_len = label_types.length() - 1
-        if not(ctx.is_unreachable) && stack.length() < prefix_len {
+        if !ctx.is_unreachable && stack.length() < prefix_len {
           raise ValidationError::TypeMismatch(
             "br_on_non_null: stack has \{stack.length()} values, label expects \{prefix_len} plus ref",
           )

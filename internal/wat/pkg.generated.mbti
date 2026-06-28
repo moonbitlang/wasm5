@@ -2,6 +2,7 @@
 package "moonbitlang/wasm5/internal/wat"
 
 import {
+  "moonbitlang/core/debug",
   "moonbitlang/wasm5/internal/core",
 }
 
@@ -21,8 +22,7 @@ pub suberror WatError {
   UnknownIdentifier(String)
   Unsupported(String)
   Encode(String)
-}
-pub impl Show for WatError
+} derive(@debug.Debug)
 
 // Types and methods
 pub enum SExpr {

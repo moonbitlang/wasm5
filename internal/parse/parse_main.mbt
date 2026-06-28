@@ -36,7 +36,7 @@ pub fn parse(b : Bytes) -> @core.Module raise ParseError {
   let mut exports : Array[@core.Export] = []
   let mut codes : Array[@core.Code] = []
   let mut last_section : @core.SectionId? = None
-  while not(parser.eof()) {
+  while !parser.eof() {
     let section_id = parser.read_byte()
     let section_size = parser.read_u32_leb128()
     let section_start = parser.pos
@@ -48,7 +48,7 @@ pub fn parse(b : Bytes) -> @core.Module raise ParseError {
         guard remaining >= 0 else {
           raise ParseError::InvalidFormat("invalid custom section size")
         }
-        let data = parser.read_bytes(remaining.reinterpret_as_uint()).to_bytes()
+        let data = parser.read_bytes(remaining.reinterpret_as_uint()).to_owned()
         let placement = match last_section {
           Some(kind) => @core.CustomPlacement::After(kind)
           None => @core.CustomPlacement::Start
@@ -185,7 +185,7 @@ fn parse_skip_validation(b : Bytes) -> @core.Module raise ParseError {
   let mut exports : Array[@core.Export] = []
   let mut codes : Array[@core.Code] = []
   let mut last_section : @core.SectionId? = None
-  while not(parser.eof()) {
+  while !parser.eof() {
     let section_id = parser.read_byte()
     let section_size = parser.read_u32_leb128()
     let section_start = parser.pos
@@ -197,7 +197,7 @@ fn parse_skip_validation(b : Bytes) -> @core.Module raise ParseError {
         guard remaining >= 0 else {
           raise ParseError::InvalidFormat("invalid custom section size")
         }
-        let data = parser.read_bytes(remaining.reinterpret_as_uint()).to_bytes()
+        let data = parser.read_bytes(remaining.reinterpret_as_uint()).to_owned()
         let placement = match last_section {
           Some(kind) => @core.CustomPlacement::After(kind)
           None => @core.CustomPlacement::Start

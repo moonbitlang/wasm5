@@ -27,5 +27,5 @@ async test "runtime parse imported wasm file with host side effects" {
   rt.run_start()
   let results = rt.call_compiled(b"run", [])
   assert_eq(results.length(), 0)
-  assert_eq(calls, [42U])
+  @debug.assert_eq(calls, [42U])
 }

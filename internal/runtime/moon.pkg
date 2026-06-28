@@ -1,0 +1,12 @@
+import {
+  "moonbitlang/wasm5/internal/core",
+  "moonbitlang/wasm5/internal/compile",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/debug",
+}
+
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/wasm5/internal/parse",
+} for "test"

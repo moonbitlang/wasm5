@@ -6,7 +6,7 @@ fn parse_table_section(
 ) -> Array[@core.TableType] raise ParseError {
   let count = parser.read_u32_leb128()
   let tables = []
-  for i in 0U..<count {
+  for _ in 0U..<count {
     // GC proposal: tables can have encoding prefix:
     // - 0x40 0x00: reftype + limits + init_expr (explicit initializer)
     // - otherwise: reftype + limits (old format, implicit null init)

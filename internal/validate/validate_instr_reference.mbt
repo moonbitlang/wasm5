@@ -23,7 +23,7 @@ fn validate_instruction_reference(
         raise ValidationError::InvalidFunctionIndex(idx)
       }
       // Check that function is declared (in elem segment, export, or global init)
-      if not(declared_funcs.contains(idx)) {
+      if !declared_funcs.contains(idx) {
         raise ValidationError::UndeclaredFunctionReference(idx)
       }
       let type_idx = get_func_type_index(module_, idx, import_counts)

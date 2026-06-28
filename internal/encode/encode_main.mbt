@@ -1,7 +1,12 @@
 ///|
 pub suberror EncodeError {
   Unsupported(String)
-} derive(Show)
+} derive(Debug)
+
+///|
+pub impl Show for EncodeError with fn output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 pub fn encode(module_ : @core.Module) -> Bytes raise EncodeError {
@@ -247,8 +252,8 @@ fn encode_custom_payload(custom : @core.CustomSection) -> Array[Byte] {
     payload,
     encode_u32_leb128(custom.name.length().reinterpret_as_uint()),
   )
-  append_bytesview(payload, custom.name.sub())
-  append_bytesview(payload, custom.data.sub())
+  append_bytesview(payload, custom.name[:])
+  append_bytesview(payload, custom.data[:])
   payload
 }
 
@@ -340,7 +345,7 @@ fn encode_subtype(
   subtype : @core.SubTypeDef,
   types : Array[@core.TypeDef],
 ) -> Unit raise EncodeError {
-  if subtype.supertypes.length() > 0 || not(subtype.is_final) {
+  if subtype.supertypes.length() > 0 || !subtype.is_final {
     let tag = if subtype.is_final { 0x4FU } else { 0x50U }
     payload.push(tag.to_byte())
     append_bytes(
@@ -598,12 +603,12 @@ fn encode_element_section(
             }
           _ => can_use_indices = false
         }
-        if not(can_use_indices) {
+        if !can_use_indices {
           break
         }
       }
     }
-    let uses_exprs = not(can_use_indices)
+    let uses_exprs = !can_use_indices
     let mut flag = 0U
     let mut emit_table_idx = false
     let mut emit_elemkind = false
@@ -613,7 +618,7 @@ fn encode_element_section(
         if elem.elem_type == @core.RefType::Func &&
           elem.elem_nullable &&
           elem.table_idx == 0U &&
-          not(elem.explicit_table) {
+          !elem.explicit_table {
           flag = 0x04U
         } else {
           flag = 0x06U
@@ -628,7 +633,7 @@ fn encode_element_section(
         emit_reftype = true
       }
     } else if elem.is_active {
-      if elem.table_idx == 0U && not(elem.explicit_table) {
+      if elem.table_idx == 0U && !elem.explicit_table {
         flag = 0x00U
       } else {
         flag = 0x02U
@@ -727,7 +732,7 @@ fn encode_data_section(
 
 ///|
 fn encode_data_count_section(module_ : @core.Module) -> Array[Byte] {
-  if not(needs_data_count(module_)) {
+  if !needs_data_count(module_) {
     return []
   }
   let payload : Array[Byte] = []
@@ -741,7 +746,7 @@ fn encode_data_count_section(module_ : @core.Module) -> Array[Byte] {
 ///|
 fn needs_data_count(module_ : @core.Module) -> Bool {
   for data in module_.datas {
-    if not(data.is_active) {
+    if !data.is_active {
       return true
     }
   }
@@ -1837,7 +1842,7 @@ fn encode_i32_leb128(value : Int) -> Array[Byte] {
     let byte = byte_val.reinterpret_as_uint().to_byte()
     let sign = (byte_val & 0x40) != 0
     v = v >> 7
-    let done = (v == 0 && not(sign)) || (v == -1 && sign)
+    let done = (v == 0 && !sign) || (v == -1 && sign)
     if done {
       out.push(byte)
       break
@@ -1857,7 +1862,7 @@ fn encode_i64_leb128(value : Int64) -> Array[Byte] {
     let byte = byte_val.reinterpret_as_uint64().to_uint().to_byte()
     let sign = (byte_val & 0x40L) != 0L
     v = v >> 7
-    let done = (v == 0L && not(sign)) || (v == -1L && sign)
+    let done = (v == 0L && !sign) || (v == -1L && sign)
     if done {
       out.push(byte)
       break

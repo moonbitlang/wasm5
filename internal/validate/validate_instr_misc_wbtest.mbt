@@ -633,7 +633,7 @@ test "validate memory instruction errors" {
 test "validate reference instruction errors" {
   let module_empty = test_empty_module()
   let counts = get_import_counts(module_empty)
-  let declared_funcs : Set[Int] = Set::new()
+  let declared_funcs : Set[Int] = Set([])
   let mut saw_error = false
   let ctx_ref_func = ValidationCtx::new()
   let _ = validate_instruction_reference(
@@ -831,7 +831,7 @@ test "validate table instruction errors" {
 
 ///|
 test "validate control instruction branches" {
-  let declared_funcs : Set[Int] = Set::new()
+  let declared_funcs : Set[Int] = Set([])
   let func_type : @core.FuncType = { params: [I32], results: [I32] }
   let module_funcs : @core.Module = {
     types: [Func(func_type)],
@@ -1104,7 +1104,7 @@ test "validate control instruction branches" {
 
 ///|
 test "validate control block loop if branches" {
-  let declared_funcs : Set[Int] = Set::new()
+  let declared_funcs : Set[Int] = Set([])
   let block_type : @core.FuncType = { params: [I32], results: [I64] }
   let module_block : @core.Module = {
     types: [Func(block_type)],
@@ -1275,7 +1275,7 @@ test "validate control block loop if branches" {
 
 ///|
 test "validate control branch errors" {
-  let declared_funcs : Set[Int] = Set::new()
+  let declared_funcs : Set[Int] = Set([])
   let module_empty = test_empty_module()
   let counts = get_import_counts(module_empty)
   let code = test_make_code([], [])
@@ -1461,7 +1461,7 @@ test "validate control branch errors" {
 
 ///|
 test "validate control loop results" {
-  let declared_funcs : Set[Int] = Set::new()
+  let declared_funcs : Set[Int] = Set([])
   let module_empty = test_empty_module()
   let counts = get_import_counts(module_empty)
   let code = test_make_code([], [])
@@ -1482,7 +1482,7 @@ test "validate control loop results" {
 
 ///|
 test "validate control if branch coverage" {
-  let declared_funcs : Set[Int] = Set::new()
+  let declared_funcs : Set[Int] = Set([])
   let block_type : @core.FuncType = { params: [I32], results: [I32] }
   let module_if : @core.Module = {
     types: [Func(block_type)],
@@ -1572,7 +1572,7 @@ test "validate control if branch coverage" {
 
 ///|
 test "validate control returns false on non-control" {
-  let declared_funcs : Set[Int] = Set::new()
+  let declared_funcs : Set[Int] = Set([])
   let module_empty = test_empty_module()
   let counts = get_import_counts(module_empty)
   let code = test_make_code([], [])
@@ -1591,7 +1591,7 @@ test "validate control returns false on non-control" {
 
 ///|
 test "validate control br_on_null conversions" {
-  let declared_funcs : Set[Int] = Set::new()
+  let declared_funcs : Set[Int] = Set([])
   let module_empty = test_empty_module()
   let counts = get_import_counts(module_empty)
   let code = test_make_code([], [])
@@ -1713,7 +1713,7 @@ test "validate control br_on_null conversions" {
 
 ///|
 test "validate control call errors" {
-  let declared_funcs : Set[Int] = Set::new()
+  let declared_funcs : Set[Int] = Set([])
   let module_empty = test_empty_module()
   let counts_empty = get_import_counts(module_empty)
   let code = test_make_code([], [])
@@ -2067,7 +2067,7 @@ test "validate control call errors" {
 
 ///|
 test "validate function stack mismatch" {
-  let declared_funcs : Set[Int] = Set::new()
+  let declared_funcs : Set[Int] = Set([])
   let module_empty = test_empty_module()
   let func_type : @core.FuncType = { params: [], results: [] }
   let code = test_make_code([], [I32Const(0U)])

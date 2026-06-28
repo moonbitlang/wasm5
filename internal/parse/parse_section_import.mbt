@@ -6,7 +6,7 @@ fn parse_import_section(
 ) -> Array[@core.Import] raise ParseError {
   let count = parser.read_u32_leb128()
   let imports = []
-  for i in 0U..<count {
+  for _ in 0U..<count {
     let module_ = parser.read_name()
     let name = parser.read_name()
     let desc_tag = parser.read_byte()

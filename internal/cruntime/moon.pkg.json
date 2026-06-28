@@ -1,9 +1,0 @@
-{
-  "import": [
-    "moonbitlang/wasm5/internal/core",
-    "moonbitlang/wasm5/internal/compile",
-    "moonbitlang/wasm5/internal/runtime",
-    "moonbitlang/core/encoding/utf8"
-  ],
-  "native-stub": ["op.c", "wasi.c", "gc.c"]
-}

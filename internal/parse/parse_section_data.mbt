@@ -4,7 +4,7 @@
 fn parse_data_section(parser : Parser) -> Array[@core.Data] raise ParseError {
   let count = parser.read_u32_leb128()
   let datas = []
-  for i in 0U..<count {
+  for _ in 0U..<count {
     // Read flags to determine encoding format
     let flags = parser.read_u32_leb128()
     let is_active = flags == 0 || flags == 2

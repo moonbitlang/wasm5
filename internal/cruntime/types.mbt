@@ -22,7 +22,7 @@ pub enum TrapCode {
   NullI31Reference = 17 // "null i31 reference"
   CastFailure = 18 // "cast failure"
   NullStructReference = 19 // "null structure reference"
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Information about a resolved import for cross-module calls.
@@ -36,7 +36,7 @@ pub(all) struct ResolvedImport {
   num_params : Int
   /// Number of results the function returns
   num_results : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Compiled module ready for C runtime execution.

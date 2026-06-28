@@ -3,7 +3,7 @@ pub(all) enum AtomicImmKind {
   None
   MemArg
   Fence
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct AtomicSpec {
@@ -22,7 +22,7 @@ pub(all) enum AtomicStackEffect {
   Store(ValType, Int)
   Rmw(ValType, Int)
   Cmpxchg(ValType, Int)
-} derive(Show)
+} derive(Debug)
 
 ///|
 let atomic_specs : Array[AtomicSpec] = [

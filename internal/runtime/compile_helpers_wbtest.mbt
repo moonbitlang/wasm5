@@ -93,14 +93,14 @@ test "compile helpers tail call return branches" {
   let rt = make_runtime([], [], 0)
   let rt = { ..rt, bp: 5, num_locals: 3 }
   let rc = handle_tail_call_return(rt)
-  assert_eq(rc, Returned)
+  @debug.assert_eq(rc, Returned)
   assert_eq(rt.bp, 5) // bp unchanged - caller's execute_call will restore
 
   // Test entry function (bp == 0) - should return Terminated
   let rt_entry = make_runtime([], [], 0)
   let rt_entry = { ..rt_entry, bp: 0 }
   let rc_entry = handle_tail_call_return(rt_entry)
-  assert_eq(rc_entry, Terminated)
+  @debug.assert_eq(rc_entry, Terminated)
 }
 
 ///|

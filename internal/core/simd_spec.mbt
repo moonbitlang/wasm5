@@ -6,7 +6,7 @@ pub(all) enum SimdImmKind {
   MemArgLane
   Shuffle
   V128Const
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct SimdSpec {
@@ -30,7 +30,7 @@ pub(all) enum SimdStackEffect {
   Splat(ValType)
   Extract(ValType)
   Replace(ValType)
-} derive(Show)
+} derive(Debug)
 
 ///|
 let simd_specs : Array[SimdSpec] = [

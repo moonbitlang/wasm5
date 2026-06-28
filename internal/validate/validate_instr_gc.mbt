@@ -333,7 +333,7 @@ fn validate_instruction_gc(
       let elem_idx_int = elem_idx.reinterpret_as_int()
       let elem = module_.elems[elem_idx_int]
       let elem_val = reftype_to_valtype(elem.elem_type)
-      if not(is_subtype(module_, elem_val, arr_elem_val)) {
+      if !is_subtype(module_, elem_val, arr_elem_val) {
         raise ValidationError::TypeMismatch(
           "array.init_elem: element segment type not subtype of array element",
         )
@@ -364,7 +364,7 @@ fn validate_instruction_gc(
       // After fallthrough, stack is normalized to [t* diff_val] (label's prefix types!)
       let label_types = ctx.get_label_types(label)
       // Check we have enough values on stack for label_types
-      if not(ctx.is_unreachable) && stack.length() < label_types.length() {
+      if !ctx.is_unreachable && stack.length() < label_types.length() {
         raise ValidationError::TypeMismatch(
           "br_on_cast: stack has \{stack.length()} values, label expects \{label_types.length()}",
         )
@@ -399,7 +399,7 @@ fn validate_instruction_gc(
       }
       // Fallthrough: push back label's prefix types (normalized) plus diff type
       // This normalization is key per GC issue #516
-      let diff_nullable = source_nullable && not(target_nullable)
+      let diff_nullable = source_nullable && !target_nullable
       let diff_val = heap_type_valtype(source_type, diff_nullable)
       for i = 0; i < label_types.length() - 1; i = i + 1 {
         stack.push(label_types[i])
@@ -422,14 +422,14 @@ fn validate_instruction_gc(
         )
       }
       // The diff type (sent to label when cast fails) is source minus target
-      let diff_nullable = source_nullable && not(target_nullable)
+      let diff_nullable = source_nullable && !target_nullable
       let diff_val = heap_type_valtype(source_type, diff_nullable)
       // Per https://github.com/WebAssembly/gc/issues/516:
       // br_on_cast_fail needs to validate ALL values being sent to the label
       // After fallthrough, stack is normalized to [t* target_val] (label's prefix types!)
       let label_types = ctx.get_label_types(label)
       // Check we have enough values on stack for label_types
-      if not(ctx.is_unreachable) && stack.length() < label_types.length() {
+      if !ctx.is_unreachable && stack.length() < label_types.length() {
         raise ValidationError::TypeMismatch(
           "br_on_cast_fail: stack has \{stack.length()} values, label expects \{label_types.length()}",
         )

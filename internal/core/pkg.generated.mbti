@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "moonbitlang/wasm5/internal/core"
 
+import {
+  "moonbitlang/core/debug",
+}
+
 // Values
 pub fn atomic_spec_by_name(Bytes) -> AtomicSpec?
 
@@ -51,30 +55,24 @@ pub fn simd_stack_effect(Bytes) -> SimdStackEffect
 // Types and methods
 pub(all) struct ArrayType {
   element : FieldType
-}
-pub impl Eq for ArrayType
-pub impl Show for ArrayType
+} derive(Eq, @debug.Debug)
 
 pub(all) enum AtomicImmKind {
   None
   MemArg
   Fence
-}
-pub impl Eq for AtomicImmKind
-pub impl Show for AtomicImmKind
+} derive(Eq, @debug.Debug)
 
 pub(all) enum AtomicImmediate {
   None
   MemArg(UInt, UInt, UInt)
   Fence(UInt)
-}
-pub impl Show for AtomicImmediate
+} derive(@debug.Debug)
 
 pub(all) struct AtomicInstr {
   opcode : UInt
   imm : AtomicImmediate
-}
-pub impl Show for AtomicInstr
+} derive(@debug.Debug)
 
 pub(all) struct AtomicSpec {
   name : Bytes
@@ -91,23 +89,20 @@ pub(all) enum AtomicStackEffect {
   Store(ValType, Int)
   Rmw(ValType, Int)
   Cmpxchg(ValType, Int)
-}
-pub impl Show for AtomicStackEffect
+} derive(@debug.Debug)
 
 pub(all) enum BlockType {
   Empty
   Value(ValType)
   TypeIndex(Int)
-}
-pub impl Show for BlockType
+} derive(@debug.Debug)
 
 pub(all) enum CatchClause {
   Catch(UInt, UInt)
   CatchRef(UInt, UInt)
   CatchAll(UInt)
   CatchAllRef(UInt)
-}
-pub impl Show for CatchClause
+} derive(@debug.Debug)
 
 pub(all) struct Code {
   locals : Array[ValType]
@@ -133,17 +128,13 @@ pub(all) enum CustomPlacement {
   Before(SectionId)
   After(SectionId)
   End
-}
-pub impl Eq for CustomPlacement
-pub impl Show for CustomPlacement
+} derive(Eq, @debug.Debug)
 
 pub(all) struct CustomSection {
   name : Bytes
   data : Bytes
   placement : CustomPlacement
-}
-pub impl Eq for CustomSection
-pub impl Show for CustomSection
+} derive(Eq, @debug.Debug)
 
 pub(all) struct Data {
   mem_idx : UInt
@@ -183,16 +174,12 @@ pub(all) struct Expr {
 pub(all) struct FieldType {
   storage : StorageType
   mutable : Bool
-}
-pub impl Eq for FieldType
-pub impl Show for FieldType
+} derive(Eq, @debug.Debug)
 
 pub(all) struct FuncType {
   params : Array[ValType]
   results : Array[ValType]
-}
-pub impl Eq for FuncType
-pub impl Show for FuncType
+} derive(Eq, @debug.Debug)
 
 pub(all) struct Global {
   type_ : GlobalType
@@ -468,7 +455,7 @@ pub(all) enum Instr {
   I64TruncSatF32U
   I64TruncSatF64S
   I64TruncSatF64U
-}
+} derive(@debug.Debug)
 pub impl Show for Instr
 
 pub(all) struct Limits {
@@ -741,11 +728,9 @@ pub(all) enum OpTag {
   ReturnCallImport
   ReturnCallIndirect
   ReturnCallRef
-}
+} derive(Eq, @debug.Debug)
 pub fn OpTag::from_int64(Int64) -> Self?
 pub fn OpTag::to_int64(Self) -> Int64
-pub impl Eq for OpTag
-pub impl Show for OpTag
 
 pub(all) enum RefType {
   Func
@@ -761,8 +746,7 @@ pub(all) enum RefType {
   NoExtern
   NoExn
   TypeIndex(Int)
-}
-pub impl Eq for RefType
+} derive(Eq, @debug.Debug)
 pub impl Show for RefType
 
 pub(all) enum SectionId {
@@ -779,9 +763,7 @@ pub(all) enum SectionId {
   DataCount
   Code
   Data
-}
-pub impl Eq for SectionId
-pub impl Show for SectionId
+} derive(Eq, @debug.Debug)
 
 pub(all) enum SimdImmKind {
   None
@@ -790,9 +772,7 @@ pub(all) enum SimdImmKind {
   MemArgLane
   Shuffle
   V128Const
-}
-pub impl Eq for SimdImmKind
-pub impl Show for SimdImmKind
+} derive(Eq, @debug.Debug)
 
 pub(all) enum SimdImmediate {
   None
@@ -801,14 +781,12 @@ pub(all) enum SimdImmediate {
   MemArgLane(UInt, UInt, UInt, UInt)
   Shuffle(Array[Byte])
   V128Const(Array[Byte])
-}
-pub impl Show for SimdImmediate
+} derive(@debug.Debug)
 
 pub(all) struct SimdInstr {
   opcode : UInt
   imm : SimdImmediate
-}
-pub impl Show for SimdInstr
+} derive(@debug.Debug)
 
 pub(all) struct SimdSpec {
   name : Bytes
@@ -830,30 +808,23 @@ pub(all) enum SimdStackEffect {
   Splat(ValType)
   Extract(ValType)
   Replace(ValType)
-}
-pub impl Show for SimdStackEffect
+} derive(@debug.Debug)
 
 pub(all) enum StorageType {
   Val(ValType)
   I8
   I16
-}
-pub impl Eq for StorageType
-pub impl Show for StorageType
+} derive(Eq, @debug.Debug)
 
 pub(all) struct StructType {
   fields : Array[FieldType]
-}
-pub impl Eq for StructType
-pub impl Show for StructType
+} derive(Eq, @debug.Debug)
 
 pub(all) struct SubTypeDef {
   type_idx : UInt
   supertypes : Array[UInt]
   is_final : Bool
-}
-pub impl Eq for SubTypeDef
-pub impl Show for SubTypeDef
+} derive(Eq, @debug.Debug)
 
 pub(all) struct TableType {
   elem_type : RefType
@@ -871,16 +842,12 @@ pub(all) enum TypeDef {
   Func(FuncType)
   Struct(StructType)
   Array(ArrayType)
-}
-pub impl Eq for TypeDef
-pub impl Show for TypeDef
+} derive(Eq, @debug.Debug)
 
 pub(all) struct TypeGroup {
   subtypes : Array[SubTypeDef]
   explicit : Bool
-}
-pub impl Eq for TypeGroup
-pub impl Show for TypeGroup
+} derive(Eq, @debug.Debug)
 
 pub(all) enum ValType {
   I32
@@ -901,11 +868,10 @@ pub(all) enum ValType {
   StructRef
   ArrayRef
   Ref(RefType, Bool)
-}
+} derive(Eq, @debug.Debug)
 pub fn ValType::is_defaultable(Self) -> Bool
 pub fn ValType::is_ref_type(Self) -> Bool
 pub fn ValType::to_non_nullable(Self) -> Self
-pub impl Eq for ValType
 pub impl Show for ValType
 
 pub(all) enum Value {
@@ -916,8 +882,7 @@ pub(all) enum Value {
   Ref(Int?)
   Funcref(Int?)
   Externref(Int?)
-}
-pub impl Eq for Value
+} derive(Eq, @debug.Debug)
 pub impl Show for Value
 
 // Type aliases

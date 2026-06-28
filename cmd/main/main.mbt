@@ -62,28 +62,28 @@ fn parse_value(s : String, expected_type : @wasm5.ValType) -> @wasm5.Value? {
   match expected_type {
     I32 =>
       try {
-        let n = @strconv.parse_int(s)
+        let n = @string.parse_int(s)
         Some(@wasm5.Value::I32(n.reinterpret_as_uint()))
       } catch {
         _ => None
       }
     I64 =>
       try {
-        let n = @strconv.parse_int64(s)
+        let n = @string.parse_int64(s)
         Some(@wasm5.Value::I64(n.reinterpret_as_uint64()))
       } catch {
         _ => None
       }
     F32 =>
       try {
-        let f = @strconv.parse_double(s)
+        let f = @string.parse_double(s)
         Some(@wasm5.Value::F32(Float::from_double(f)))
       } catch {
         _ => None
       }
     F64 =>
       try {
-        let f = @strconv.parse_double(s)
+        let f = @string.parse_double(s)
         Some(@wasm5.Value::F64(f))
       } catch {
         _ => None

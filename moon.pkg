@@ -1,0 +1,5 @@
+import {
+  "moonbitlang/wasm5/internal/core",
+  "moonbitlang/wasm5/internal/parse",
+  "moonbitlang/wasm5/internal/runtime",
+}
