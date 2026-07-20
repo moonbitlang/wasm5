@@ -436,7 +436,7 @@ fn resolve_imports_for_cruntime(
   ctx : TestContext,
   module_ : @wasm5_core.Module,
 ) -> Map[Int, @wasm5_cruntime.ResolvedImport] {
-  let resolved : Map[Int, @wasm5_cruntime.ResolvedImport] = {}
+  let resolved : Map[Int, @wasm5_cruntime.ResolvedImport] = Map([])
   let mut import_func_idx = 0
   for imp in module_.imports {
     match imp.desc {
@@ -498,7 +498,7 @@ fn resolve_globals_for_cruntime(
   ctx : TestContext,
   module_ : @wasm5_core.Module,
 ) -> (Map[Int, UInt64], Array[@wasm5_cruntime.ResolvedImport]) {
-  let resolved : Map[Int, UInt64] = {}
+  let resolved : Map[Int, UInt64] = Map([])
   let external_funcrefs : Array[@wasm5_cruntime.ResolvedImport] = []
   let num_imported_funcs = count_imported_funcs(module_)
   let external_base = num_imported_funcs + module_.funcs.length()

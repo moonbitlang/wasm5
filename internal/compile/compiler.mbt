@@ -108,7 +108,7 @@ pub fn compile(mod_ : @core.Module) -> @core.CompiledModule {
   }
 
   // Collect function exports
-  let exports : Map[String, Int] = {}
+  let exports : Map[String, Int] = Map([])
   for exp in mod_.exports {
     if exp.desc is Func(idx) {
       let abs_idx = idx.reinterpret_as_int()

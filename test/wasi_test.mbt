@@ -60,7 +60,12 @@ async fn run_wasi_with_preopen(
 
   // Write initial content to temp file
   if initial_content.length() > 0 {
-    @fs.write_file(temp_path, initial_content, create=0o644, truncate=true)
+    @fs.write_file(
+      temp_path,
+      initial_content,
+      create_mode=CreateOrTruncate,
+      permission=0o644,
+    )
   } else {
     // Create empty file
     let temp_file = @fs.create(temp_path, permission=0o644)
@@ -123,7 +128,12 @@ async fn run_wasi_with_preopen_dir(
 
   // Write initial content to temp file
   if initial_content.length() > 0 {
-    @fs.write_file(temp_path, initial_content, create=0o644, truncate=true)
+    @fs.write_file(
+      temp_path,
+      initial_content,
+      create_mode=CreateOrTruncate,
+      permission=0o644,
+    )
   } else {
     let temp_file = @fs.create(temp_path, permission=0o644)
     temp_file.close()

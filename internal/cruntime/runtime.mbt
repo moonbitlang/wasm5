@@ -369,7 +369,7 @@ fn build_runtime(
 /// Load a module and compile it for C runtime execution.
 pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
   let compiled = compile(module_)
-  build_runtime(module_, compiled, {}, {}, [])
+  build_runtime(module_, compiled, Map([]), Map([]), [])
 }
 
 ///|
