@@ -686,7 +686,7 @@ fn is_subtype(
     (Ref(TypeIndex(n1), nullable1), Ref(TypeIndex(n2), nullable2)) =>
       // Non-nullable can be subtype of nullable, but not vice versa
       // If target is nullable, any source is OK; if target is non-nullable, source must be non-nullable
-      (nullable2 || not(nullable1)) && is_type_index_subtype(module_, n1, n2)
+      (nullable2 || !nullable1) && is_type_index_subtype(module_, n1, n2)
     // TypeIndex -> abstract type cases MUST come before generic Ref pattern
     // Ref(TypeIndex(n), _) is a typed function reference, compatible with FuncRef
     // only if type n is actually a function type
@@ -737,13 +737,13 @@ fn is_subtype(
     // Any reference is subtype of AnyRef
     (Ref(_, _), AnyRef) => true
     // I31/Struct/Array/Eq are subtypes of Any (for Ref types)
-    (Ref(I31, nullable1), Ref(Any, nullable2)) => nullable2 || not(nullable1)
-    (Ref(Struct, nullable1), Ref(Any, nullable2)) => nullable2 || not(nullable1)
-    (Ref(Array, nullable1), Ref(Any, nullable2)) => nullable2 || not(nullable1)
-    (Ref(Eq, nullable1), Ref(Any, nullable2)) => nullable2 || not(nullable1)
+    (Ref(I31, nullable1), Ref(Any, nullable2)) => nullable2 || !nullable1
+    (Ref(Struct, nullable1), Ref(Any, nullable2)) => nullable2 || !nullable1
+    (Ref(Array, nullable1), Ref(Any, nullable2)) => nullable2 || !nullable1
+    (Ref(Eq, nullable1), Ref(Any, nullable2)) => nullable2 || !nullable1
     // TypeIndex is subtype of Ref(Any, _) if it's a struct or array type
     (Ref(TypeIndex(n), nullable1), Ref(Any, nullable2)) =>
-      (nullable2 || not(nullable1)) &&
+      (nullable2 || !nullable1) &&
       (is_struct_type_index(module_, n) || is_array_type_index(module_, n))
 
     // Non-reference types are not related by subtyping
@@ -758,7 +758,7 @@ fn is_subtype(
 /// - An export
 /// - A global initializer containing ref.func
 fn collect_declared_funcs(m : @core.Module) -> Set[Int] {
-  let declared : Set[Int] = Set::new()
+  let declared : Set[Int] = Set([])
 
   // Collect from element segments
   for elem in m.elems {
@@ -852,7 +852,7 @@ fn validate_elem_init_const_expr(
         let (gtype, mutable) = get_global_type_and_mutable(
           m, gidx, import_counts,
         )
-        guard not(mutable) else {
+        guard !mutable else {
           raise ValidationError::ConstantExpressionRequired(
             "elem init global.get must reference immutable global",
           )
@@ -887,7 +887,6 @@ fn validate_elem_init_const_expr(
             )
           }
           let _ = stack.unsafe_pop()
-
         }
         stack.push(
           @core.ValType::Ref(@core.RefType::TypeIndex(type_idx_int), false),
@@ -975,7 +974,6 @@ fn validate_elem_init_const_expr(
         }
         for i = 0; i < length; i = i + 1 {
           let _ = stack.unsafe_pop()
-
         }
         stack.push(
           @core.ValType::Ref(@core.RefType::TypeIndex(type_idx_int), false),

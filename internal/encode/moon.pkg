@@ -1,0 +1,4 @@
+import {
+  "moonbitlang/wasm5/internal/core",
+  "moonbitlang/core/debug",
+}

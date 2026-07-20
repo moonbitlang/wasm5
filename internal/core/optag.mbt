@@ -335,7 +335,7 @@ pub(all) enum OpTag {
   ReturnCallImport // 239
   ReturnCallIndirect // 240
   ReturnCallRef // 241
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Convert OpTag to Int64 for storage in the code array.

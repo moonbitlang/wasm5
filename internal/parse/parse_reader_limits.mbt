@@ -40,7 +40,7 @@ fn Parser::read_memtype(self : Parser) -> @core.MemType raise ParseError {
       "invalid memory limits flags: 0x\{flags.to_int().to_string()}",
     )
   }
-  if shared && not(has_max) {
+  if shared && !has_max {
     raise ParseError::InvalidFormat("shared memory requires maximum")
   }
   let min = if memory64 {

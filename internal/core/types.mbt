@@ -22,7 +22,12 @@ pub(all) enum ValType {
   // Typed reference with explicit nullability: Ref(heap_type, nullable)
   // Used for (ref $t) when nullable=false, (ref null $t) when nullable=true
   Ref(RefType, Bool)
-} derive(Show, Eq)
+} derive(Debug, Eq)
+
+///|
+pub impl Show for ValType with fn output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 // Reference types (heap types)
 
@@ -41,7 +46,12 @@ pub(all) enum RefType {
   NoExtern // 0x72 - bottom type for extern
   NoExn // 0x74 - bottom type for exn
   TypeIndex(Int) // typed reference (ref null $t)
-} derive(Show, Eq)
+} derive(Debug, Eq)
+
+///|
+pub impl Show for RefType with fn output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 /// Check if a value type has a default value (is defaultable)
@@ -117,50 +127,50 @@ pub fn ValType::to_non_nullable(self : ValType) -> ValType {
 pub(all) struct FuncType {
   params : Array[ValType]
   results : Array[ValType]
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) enum StorageType {
   Val(ValType)
   I8
   I16
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct FieldType {
   storage : StorageType
   mutable : Bool
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct StructType {
   fields : Array[FieldType]
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct ArrayType {
   element : FieldType
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) enum TypeDef {
   Func(FuncType)
   Struct(StructType)
   Array(ArrayType)
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct SubTypeDef {
   type_idx : UInt
   supertypes : Array[UInt]
   is_final : Bool
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct TypeGroup {
   subtypes : Array[SubTypeDef]
   explicit : Bool
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) enum SectionId {
@@ -177,7 +187,7 @@ pub(all) enum SectionId {
   DataCount
   Code
   Data
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) enum CustomPlacement {
@@ -185,14 +195,14 @@ pub(all) enum CustomPlacement {
   Before(SectionId)
   After(SectionId)
   End
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct CustomSection {
   name : Bytes
   data : Bytes
   placement : CustomPlacement
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 // Block type (can be empty, single value, or type index to function type)
 
@@ -201,7 +211,7 @@ pub(all) enum BlockType {
   Empty // no params, no results
   Value(ValType) // no params, single result
   TypeIndex(Int) // index into types section (can have params and/or multiple results)
-} derive(Show)
+} derive(Debug)
 
 // Limits for tables and memories
 
@@ -325,26 +335,26 @@ pub(all) enum SimdImmediate {
   MemArgLane(UInt, UInt, UInt, UInt) // align, offset, memory index, lane
   Shuffle(Array[Byte]) // 16 bytes
   V128Const(Array[Byte]) // 16 bytes
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub(all) struct SimdInstr {
   opcode : UInt
   imm : SimdImmediate
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub(all) enum AtomicImmediate {
   None
   MemArg(UInt, UInt, UInt) // align, offset, memory index
   Fence(UInt) // reserved byte (must be 0)
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub(all) struct AtomicInstr {
   opcode : UInt
   imm : AtomicImmediate
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub(all) enum Instr {
@@ -619,7 +629,12 @@ pub(all) enum Instr {
   I64TruncSatF32U
   I64TruncSatF64S
   I64TruncSatF64U
-} derive(Show)
+} derive(Debug)
+
+///|
+pub impl Show for Instr with fn output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 pub(all) enum CatchClause {
@@ -627,7 +642,7 @@ pub(all) enum CatchClause {
   CatchRef(UInt, UInt) // tag index, label index
   CatchAll(UInt) // label index
   CatchAllRef(UInt) // label index
-} derive(Show)
+} derive(Debug)
 
 // Expression (sequence of instructions)
 

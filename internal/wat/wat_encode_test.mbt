@@ -1,7 +1,13 @@
 ///|
 async fn ensure_dir(path : String) -> Unit {
-  let _ = @fs.mkdir(path, permission=0o755) catch { _ => () }
+  let _ = @fs.mkdir(path, permission=0o755, recursive=true) catch { _ => () }
+}
 
+///|
+/// Keep child-process output away from the Moon test driver's JSON stream.
+async fn run_wasm_tools(args : ArrayView[String]) -> Int {
+  let (exit_code, _, _) = @process.collect_output("wasm-tools", args)
+  exit_code
 }
 
 ///|
@@ -16,7 +22,7 @@ async fn wasm_tools_available() -> Bool {
   if @fs.exists(missing_path) {
     return false
   }
-  let exit_code = @process.run("wasm-tools", ["--version"]) catch {
+  let exit_code = run_wasm_tools(["--version"]) catch {
     _ => {
       let missing_file = @fs.create(missing_path, permission=0o644)
       missing_file.close()
@@ -72,13 +78,13 @@ async fn assert_wat_matches(name : String, wat : String) -> Unit {
   let ours_file = @fs.create(ours_path, permission=0o644)
   defer ours_file.close()
   ours_file.write(ours)
-  let ours_strip = @process.run("wasm-tools", [
+  let ours_strip = run_wasm_tools([
     "strip", "--all", ours_path, "-o", ours_stripped_path,
   ])
   assert_eq(ours_strip, 0)
-  let exit_code = @process.run("wasm-tools", ["parse", wat_path, "-o", ref_path])
+  let exit_code = run_wasm_tools(["parse", wat_path, "-o", ref_path])
   assert_eq(exit_code, 0)
-  let strip_code = @process.run("wasm-tools", [
+  let strip_code = run_wasm_tools([
     "strip", "--all", ref_path, "-o", ref_stripped_path,
   ])
   assert_eq(strip_code, 0)
@@ -110,13 +116,13 @@ async fn assert_wat_matches_custom(name : String, wat : String) -> Unit {
   let ours_file = @fs.create(ours_path, permission=0o644)
   defer ours_file.close()
   ours_file.write(ours)
-  let ours_strip = @process.run("wasm-tools", [
+  let ours_strip = run_wasm_tools([
     "strip", "--delete", "^name$", ours_path, "-o", ours_stripped_path,
   ])
   assert_eq(ours_strip, 0)
-  let exit_code = @process.run("wasm-tools", ["parse", wat_path, "-o", ref_path])
+  let exit_code = run_wasm_tools(["parse", wat_path, "-o", ref_path])
   assert_eq(exit_code, 0)
-  let strip_code = @process.run("wasm-tools", [
+  let strip_code = run_wasm_tools([
     "strip", "--delete", "^name$", ref_path, "-o", ref_stripped_path,
   ])
   assert_eq(strip_code, 0)
@@ -146,7 +152,7 @@ async fn assert_wat_matches_with_names(name : String, wat : String) -> Unit {
   let ours_file = @fs.create(ours_path, permission=0o644)
   defer ours_file.close()
   ours_file.write(ours)
-  let exit_code = @process.run("wasm-tools", ["parse", wat_path, "-o", ref_path])
+  let exit_code = run_wasm_tools(["parse", wat_path, "-o", ref_path])
   assert_eq(exit_code, 0)
   let ref_file = @fs.open(ref_path, mode=ReadOnly)
   defer ref_file.close()
@@ -176,13 +182,13 @@ async fn assert_wasm_matches_wat(
   let ours_file = @fs.create(ours_path, permission=0o644)
   defer ours_file.close()
   ours_file.write(wasm)
-  let ours_strip = @process.run("wasm-tools", [
+  let ours_strip = run_wasm_tools([
     "strip", "--all", ours_path, "-o", ours_stripped_path,
   ])
   assert_eq(ours_strip, 0)
-  let exit_code = @process.run("wasm-tools", ["parse", wat_path, "-o", ref_path])
+  let exit_code = run_wasm_tools(["parse", wat_path, "-o", ref_path])
   assert_eq(exit_code, 0)
-  let strip_code = @process.run("wasm-tools", [
+  let strip_code = run_wasm_tools([
     "strip", "--all", ref_path, "-o", ref_stripped_path,
   ])
   assert_eq(strip_code, 0)

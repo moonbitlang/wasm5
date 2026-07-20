@@ -1,0 +1,10 @@
+import {
+  "moonbitlang/wasm5",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/string",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/env",
+}
+
+pkgtype(kind: "executable")

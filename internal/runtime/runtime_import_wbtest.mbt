@@ -5,7 +5,7 @@ test "import resolver add/get and module access" {
     None => ()
     _ => abort("expected no func")
   }
-  assert_eq(resolver.get_global(b"missing", b"g"), None)
+  @debug.assert_eq(resolver.get_global(b"missing", b"g"), None)
   match resolver.get_table(b"missing", b"t") {
     None => ()
     _ => abort("expected no table")
@@ -50,12 +50,12 @@ test "import resolver add/get and module access" {
 
 ///|
 test "spectest print helpers" {
-  assert_eq(spectest_print([]), [])
-  assert_eq(spectest_print_i32([Value::I32(12U)]), [])
-  assert_eq(spectest_print_i64([Value::I64(24UL)]), [])
-  assert_eq(spectest_print_f32([Value::F32(1.5)]), [])
-  assert_eq(spectest_print_f64([Value::F64(2.5)]), [])
-  assert_eq(spectest_print_i32_f32([Value::I32(3U), Value::F32(4.0)]), [])
-  assert_eq(spectest_print_f64_f64([Value::F64(5.0), Value::F64(6.0)]), [])
-  assert_eq(spectest_print_char([Value::I32(65U)]), [])
+  @debug.assert_eq(spectest_print([]), [])
+  @debug.assert_eq(spectest_print_i32([Value::I32(12U)]), [])
+  @debug.assert_eq(spectest_print_i64([Value::I64(24UL)]), [])
+  @debug.assert_eq(spectest_print_f32([Value::F32(1.5)]), [])
+  @debug.assert_eq(spectest_print_f64([Value::F64(2.5)]), [])
+  @debug.assert_eq(spectest_print_i32_f32([Value::I32(3U), Value::F32(4.0)]), [])
+  @debug.assert_eq(spectest_print_f64_f64([Value::F64(5.0), Value::F64(6.0)]), [])
+  @debug.assert_eq(spectest_print_char([Value::I32(65U)]), [])
 }

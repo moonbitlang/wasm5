@@ -4,7 +4,7 @@
 fn parse_element_section(parser : Parser) -> Array[@core.Elem] raise ParseError {
   let count = parser.read_u32_leb128()
   let elems = []
-  for i in 0U..<count {
+  for _ in 0U..<count {
     let flags = parser.read_u32_leb128()
     // Element segment format depends on flags:
     // flags=0: active, table 0, offset expr, vec of funcidx
@@ -55,7 +55,7 @@ fn parse_element_section(parser : Parser) -> Array[@core.Elem] raise ParseError 
     let init_count = parser.read_u32_leb128()
     let init : Array[@core.Expr] = []
     let uses_exprs = flags >= 4
-    for j in 0U..<init_count {
+    for _ in 0U..<init_count {
       if uses_exprs {
         // Parse expression (ref.func/ref.null/global.get)
         let expr = parse_expr(parser)

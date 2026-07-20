@@ -38,7 +38,7 @@ pub fn CompiledModule::new() -> CompiledModule {
     func_num_params: [],
     func_num_results: [],
     func_max_stack: [],
-    exports: {},
+    exports: Map([]),
     version: compiled_module_version,
   }
 }

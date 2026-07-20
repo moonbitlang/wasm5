@@ -5,4 +5,4 @@ pub suberror WatError {
   UnknownIdentifier(String)
   Unsupported(String)
   Encode(String)
-} derive(Show)
+} derive(Debug)

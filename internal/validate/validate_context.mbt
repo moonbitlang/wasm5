@@ -150,8 +150,8 @@ fn ValidationCtx::poly_pop_expect(
 
   // Type-check concrete values, or all values if not in unreachable mode
   // Use subtyping: actual must be a subtype of expected
-  if (not(self.is_unreachable) || is_concrete_value) &&
-    not(is_subtype(module_, actual, expected)) {
+  if (!self.is_unreachable || is_concrete_value) &&
+    !is_subtype(module_, actual, expected) {
     raise ValidationError::TypeMismatch(
       "\{op_name} requires \{expected}, got \{actual}",
     )

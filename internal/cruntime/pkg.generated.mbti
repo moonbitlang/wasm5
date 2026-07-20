@@ -2,6 +2,7 @@
 package "moonbitlang/wasm5/internal/cruntime"
 
 import {
+  "moonbitlang/core/debug",
   "moonbitlang/wasm5/internal/core",
   "moonbitlang/wasm5/internal/runtime",
 }
@@ -87,8 +88,7 @@ pub(all) struct ResolvedImport {
   target_func_idx : Int
   num_params : Int
   num_results : Int
-}
-pub impl Show for ResolvedImport
+} derive(@debug.Debug)
 
 pub enum TrapCode {
   None
@@ -111,9 +111,7 @@ pub enum TrapCode {
   NullI31Reference
   CastFailure
   NullStructReference
-}
-pub impl Eq for TrapCode
-pub impl Show for TrapCode
+} derive(Eq, @debug.Debug)
 
 // Type aliases
 

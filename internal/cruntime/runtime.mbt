@@ -369,7 +369,7 @@ fn build_runtime(
 /// Load a module and compile it for C runtime execution.
 pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
   let compiled = compile(module_)
-  build_runtime(module_, compiled, {}, {}, [])
+  build_runtime(module_, compiled, Map([]), Map([]), [])
 }
 
 ///|
@@ -492,10 +492,9 @@ pub fn CRuntime::get_output(self : CRuntime) -> Array[String] {
     bytes[i] = self.output_buffer[i]
   }
   let text = @utf8.decode(Bytes::from_array(bytes)) catch { _ => "" }
-  let lines = text.split("\n").map(fn(view) { view.to_string() }).to_array()
+  let lines = text.split("\n").map(fn(view) { view.to_owned() }).to_array()
   if lines.length() > 0 && lines[lines.length() - 1] == "" {
     let _ = lines.pop()
-
   }
   lines
 }

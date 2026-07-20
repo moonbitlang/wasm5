@@ -56,7 +56,7 @@ fn match_invalid_type_pattern(msg : String) -> InvalidTypePattern? {
   for pattern in invalid_type_patterns {
     let mut all_match = true
     for p in pattern.msg_patterns {
-      if not(msg.contains(p)) {
+      if !msg.contains(p) {
         all_match = false
         break
       }
@@ -279,7 +279,7 @@ fn check_trap_error_mismatch(
 ) -> String? {
   match get_trap_mapping(error_name) {
     Some(mapping) =>
-      if not(matches_any_pattern(expected, mapping.expected_patterns)) {
+      if !matches_any_pattern(expected, mapping.expected_patterns) {
         Some("expected '\{expected}' but got \{error_name}")
       } else {
         None
@@ -289,7 +289,7 @@ fn check_trap_error_mismatch(
       if error_name == "InvalidType" {
         match match_invalid_type_pattern(msg) {
           Some(pattern) =>
-            if not(expected.contains(pattern.expected_pattern)) {
+            if !expected.contains(pattern.expected_pattern) {
               Some("expected '\{expected}' but got \{pattern.expected_pattern}")
             } else {
               None

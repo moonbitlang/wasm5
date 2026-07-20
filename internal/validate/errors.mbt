@@ -31,4 +31,9 @@ pub(all) suberror ValidationError {
   InvalidElemIndex(Int) // Element segment index out of range
   UnknownDataSegment(Int) // Data segment index out of range
   InvalidSubtype(String) // Subtype declaration error (e.g., extending final type)
-} derive(Show)
+} derive(Debug)
+
+///|
+pub impl Show for ValidationError with fn output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}

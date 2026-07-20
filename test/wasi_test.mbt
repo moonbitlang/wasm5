@@ -27,7 +27,7 @@ fn get_wasi_temp_dir() -> String {
 /// Helper: compile WAT file to WASM bytes using wasm-tools
 async fn compile_wasi_wat(wat_path : String) -> Bytes raise Error {
   let base = match wat_path.strip_suffix(".wat") {
-    Some(s) => s.to_string()
+    Some(s) => s.to_owned()
     None => wat_path
   }
   let wasm_path = base + ".wasm"
@@ -60,7 +60,12 @@ async fn run_wasi_with_preopen(
 
   // Write initial content to temp file
   if initial_content.length() > 0 {
-    @fs.write_file(temp_path, initial_content, create=0o644, truncate=true)
+    @fs.write_file(
+      temp_path,
+      initial_content,
+      create_mode=CreateOrTruncate,
+      permission=0o644,
+    )
   } else {
     // Create empty file
     let temp_file = @fs.create(temp_path, permission=0o644)
@@ -123,7 +128,12 @@ async fn run_wasi_with_preopen_dir(
 
   // Write initial content to temp file
   if initial_content.length() > 0 {
-    @fs.write_file(temp_path, initial_content, create=0o644, truncate=true)
+    @fs.write_file(
+      temp_path,
+      initial_content,
+      create_mode=CreateOrTruncate,
+      permission=0o644,
+    )
   } else {
     let temp_file = @fs.create(temp_path, permission=0o644)
     temp_file.close()

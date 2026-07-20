@@ -1015,8 +1015,8 @@ fn op_br_on_cast_fail(rt : Instance) -> ReturnCode {
   let ref_value = rt.stack.unsafe_get(rt.sp - 1)
 
   // Check if cast fails using proper type checking
-  let cast_fails = not(
-    gc_ref_matches_type(rt, ref_value, target_type, target_nullable),
+  let cast_fails = !gc_ref_matches_type(
+    rt, ref_value, target_type, target_nullable,
   )
   if cast_fails {
     rt.pc = target_pc

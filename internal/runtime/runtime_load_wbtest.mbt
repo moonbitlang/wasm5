@@ -18,7 +18,7 @@ test "runtime load with resolver" {
     nullable: true,
     table64: false,
   }
-  let data_view = b"hi".sub()
+  let data_view = b"hi"[:]
   let module_ : @core.Module = {
     types: [func_type],
     type_groups: [],
@@ -137,7 +137,7 @@ test "runtime load fallback memory" {
   }
   let rt = Instance::new(module_, Imports::new())
   assert_eq(rt.ctx.memory.length(), 65536)
-  assert_eq(rt.ctx.memory_max, Some(2UL))
+  @debug.assert_eq(rt.ctx.memory_max, Some(2UL))
 }
 
 ///|
@@ -165,7 +165,7 @@ test "runtime load local memory" {
   }
   let rt = Instance::new(module_, Imports::new())
   assert_eq(rt.ctx.memory.length(), 65536)
-  assert_eq(rt.ctx.memory_max, None)
+  @debug.assert_eq(rt.ctx.memory_max, None)
 }
 
 ///|

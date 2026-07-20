@@ -86,8 +86,8 @@ pub fn compile(mod_ : @core.Module) -> @core.CompiledModule {
       ctx.code[patch_pos] = end_pc.to_int64()
     }
     for block in ctx.deferred_blocks {
-      if not(block.is_loop) &&
-        not(block.resolved) &&
+      if !block.is_loop &&
+        !block.resolved &&
         block.target_label == func_frame_idx {
         block.end_pc = end_pc
         block.resolved = true
@@ -108,7 +108,7 @@ pub fn compile(mod_ : @core.Module) -> @core.CompiledModule {
   }
 
   // Collect function exports
-  let exports : Map[String, Int] = {}
+  let exports : Map[String, Int] = Map([])
   for exp in mod_.exports {
     if exp.desc is Func(idx) {
       let abs_idx = idx.reinterpret_as_int()
@@ -538,7 +538,7 @@ fn compile_instr(
       ctx.push_control(Block, arity, 0)
       compile_expr(ctx, mod_info, { instrs: body })
       let frame = ctx.control_stack[ctx.control_stack.length() - 1]
-      let fallthrough_reachable = not(ctx.is_unreachable)
+      let fallthrough_reachable = !ctx.is_unreachable
       if fallthrough_reachable {
         ctx.emit_resolution(frame.result_slots, frame.sp_at_entry, false)
       }
@@ -585,12 +585,12 @@ fn compile_instr(
       let frame = ctx.control_stack[ctx.control_stack.length() - 1]
       compile_expr(ctx, mod_info, { instrs: then_body })
       let then_unreachable = ctx.is_unreachable
-      if not(then_unreachable) {
+      if !then_unreachable {
         ctx.emit_resolution(frame.result_slots, frame.sp_at_entry, false)
       }
       if else_body.length() > 0 {
         let mut end_patch = 0
-        if not(then_unreachable) {
+        if !then_unreachable {
           ctx.emit_op(@core.OpTag::Br)
           end_patch = ctx.code.length()
           ctx.emit_idx(0)
@@ -607,10 +607,10 @@ fn compile_instr(
         ctx.is_unreachable = false
         compile_expr(ctx, mod_info, { instrs: else_body })
         let else_unreachable = ctx.is_unreachable
-        if not(else_unreachable) {
+        if !else_unreachable {
           ctx.emit_resolution(frame.result_slots, frame.sp_at_entry, false)
         }
-        if not(then_unreachable) {
+        if !then_unreachable {
           ctx.code[end_patch] = ctx.code.length().to_int64()
         }
         ctx.is_unreachable = then_unreachable && else_unreachable

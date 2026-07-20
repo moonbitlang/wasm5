@@ -22,9 +22,9 @@ fn validate_instruction_variable(
         code.locals[local_idx - func_type.params.length()]
       }
       // Check initialization for non-defaultable types
-      if not(local_type.is_defaultable()) &&
+      if !local_type.is_defaultable() &&
         ctx.initialized_locals.length() > local_idx &&
-        not(ctx.initialized_locals[local_idx]) {
+        !ctx.initialized_locals[local_idx] {
         raise ValidationError::UninitializedLocal(local_idx)
       }
       stack.push(local_type)
@@ -134,7 +134,7 @@ fn validate_instruction_variable(
         )
       }
       // Check if global is mutable
-      if not(is_mutable) {
+      if !is_mutable {
         raise ValidationError::ImmutableGlobal(global_idx)
       }
       ctx.poly_pop_expect(module_, global_type, "global.set")

@@ -87,7 +87,7 @@ def generate_header() -> str:
 fn group_failures_by_type(
   failures : Array[TestFailure],
 ) -> Map[String, Array[TestFailure]] {
-  let grouped : Map[String, Array[TestFailure]] = {}
+  let grouped : Map[String, Array[TestFailure]] = Map([])
   for failure in failures {
     match grouped.get(failure.test_type) {
       Some(arr) => arr.push(failure)

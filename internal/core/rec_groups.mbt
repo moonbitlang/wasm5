@@ -109,9 +109,7 @@ fn rec_groups_equivalent(
   for i in 0..<types1.length() {
     let t1 = types1[i]
     let t2 = types2[i]
-    if not(
-        types_equivalent_in_context(module_, t1, t2, types1, types2, visited),
-      ) {
+    if !types_equivalent_in_context(module_, t1, t2, types1, types2, visited) {
       return false
     }
   }
@@ -147,29 +145,25 @@ fn types_equivalent_in_context(
         return false
       }
       for i in 0..<f1.params.length() {
-        if not(
-            valtypes_equivalent_in_context(
-              module_,
-              f1.params[i],
-              f2.params[i],
-              group1_types,
-              group2_types,
-              visited,
-            ),
+        if !valtypes_equivalent_in_context(
+            module_,
+            f1.params[i],
+            f2.params[i],
+            group1_types,
+            group2_types,
+            visited,
           ) {
           return false
         }
       }
       for i in 0..<f1.results.length() {
-        if not(
-            valtypes_equivalent_in_context(
-              module_,
-              f1.results[i],
-              f2.results[i],
-              group1_types,
-              group2_types,
-              visited,
-            ),
+        if !valtypes_equivalent_in_context(
+            module_,
+            f1.results[i],
+            f2.results[i],
+            group1_types,
+            group2_types,
+            visited,
           ) {
           return false
         }
@@ -181,15 +175,13 @@ fn types_equivalent_in_context(
         return false
       }
       for i in 0..<supers1.length() {
-        if not(
-            type_refs_equivalent_in_context(
-              module_,
-              supers1[i],
-              supers2[i],
-              group1_types,
-              group2_types,
-              visited,
-            ),
+        if !type_refs_equivalent_in_context(
+            module_,
+            supers1[i],
+            supers2[i],
+            group1_types,
+            group2_types,
+            visited,
           ) {
           return false
         }
@@ -207,15 +199,13 @@ fn types_equivalent_in_context(
         if s1.fields[i].mutable != s2.fields[i].mutable {
           return false
         }
-        if not(
-            storage_types_equivalent_in_context(
-              module_,
-              s1.fields[i].storage,
-              s2.fields[i].storage,
-              group1_types,
-              group2_types,
-              visited,
-            ),
+        if !storage_types_equivalent_in_context(
+            module_,
+            s1.fields[i].storage,
+            s2.fields[i].storage,
+            group1_types,
+            group2_types,
+            visited,
           ) {
           return false
         }
@@ -226,15 +216,13 @@ fn types_equivalent_in_context(
         return false
       }
       for i in 0..<supers1.length() {
-        if not(
-            type_refs_equivalent_in_context(
-              module_,
-              supers1[i],
-              supers2[i],
-              group1_types,
-              group2_types,
-              visited,
-            ),
+        if !type_refs_equivalent_in_context(
+            module_,
+            supers1[i],
+            supers2[i],
+            group1_types,
+            group2_types,
+            visited,
           ) {
           return false
         }
@@ -248,15 +236,13 @@ fn types_equivalent_in_context(
       if a1.element.mutable != a2.element.mutable {
         return false
       }
-      if not(
-          storage_types_equivalent_in_context(
-            module_,
-            a1.element.storage,
-            a2.element.storage,
-            group1_types,
-            group2_types,
-            visited,
-          ),
+      if !storage_types_equivalent_in_context(
+          module_,
+          a1.element.storage,
+          a2.element.storage,
+          group1_types,
+          group2_types,
+          visited,
         ) {
         return false
       }
@@ -266,15 +252,13 @@ fn types_equivalent_in_context(
         return false
       }
       for i in 0..<supers1.length() {
-        if not(
-            type_refs_equivalent_in_context(
-              module_,
-              supers1[i],
-              supers2[i],
-              group1_types,
-              group2_types,
-              visited,
-            ),
+        if !type_refs_equivalent_in_context(
+            module_,
+            supers1[i],
+            supers2[i],
+            group1_types,
+            group2_types,
+            visited,
           ) {
           return false
         }
@@ -302,7 +286,7 @@ fn type_refs_equivalent_in_context(
     let pos1 = get_position_in_group(group1_types, ref1)
     let pos2 = get_position_in_group(group2_types, ref2)
     pos1 == pos2
-  } else if not(in_group1) && not(in_group2) {
+  } else if !in_group1 && !in_group2 {
     // Both are external references - must point to equivalent types
     if ref1 == ref2 {
       return true

@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "moonbitlang/wasm5/test"
 
+import {
+  "moonbitlang/core/debug",
+}
+
 // Values
 pub async fn process_wast_file(String, String, runtime_type? : RuntimeType) -> (Array[TestFailure], Int, Array[String])
 
@@ -9,8 +13,7 @@ pub async fn process_wast_file_cruntime(String, String) -> (Array[TestFailure], 
 // Errors
 
 // Types and methods
-type ExpectedValue
-pub impl Show for ExpectedValue
+type ExpectedValue derive(@debug.Debug)
 
 pub(all) enum RuntimeType {
   MoonBit

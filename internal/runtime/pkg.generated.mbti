@@ -2,6 +2,7 @@
 package "moonbitlang/wasm5/internal/runtime"
 
 import {
+  "moonbitlang/core/debug",
   "moonbitlang/wasm5/internal/core",
 }
 
@@ -22,7 +23,7 @@ pub suberror RuntimeError {
   FunctionNotCompiled(String)
   UnsupportedInitExpression(String)
   StackOverflow
-}
+} derive(@debug.Debug)
 pub fn RuntimeError::from_detail(String) -> Self
 pub impl Show for RuntimeError
 
@@ -143,9 +144,7 @@ pub struct RuntimeContext {
 pub fn RuntimeContext::clear_output(Self) -> Unit
 pub fn RuntimeContext::get_output(Self) -> Array[String]
 
-type RuntimeStatus
-pub impl Eq for RuntimeStatus
-pub impl Show for RuntimeStatus
+type RuntimeStatus derive(Eq, @debug.Debug)
 
 type RuntimeTable
 pub fn RuntimeTable::add_external_funcref(Self, HostFunc) -> Int
