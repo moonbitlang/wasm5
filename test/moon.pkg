@@ -1,12 +1,11 @@
 import {
+  "moonbitlang/core/debug",
   "moonbitlang/async/fs",
-  "moonbitlang/async/io",
   "moonbitlang/async/process",
   "moonbitlang/async",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/test" @mbtest,
   "moonbitlang/core/string",
-  "moonbitlang/core/debug",
   "moonbitlang/wasm5/internal/runtime" @wasm5_runtime,
   "moonbitlang/wasm5/internal/cruntime" @wasm5_cruntime,
   "moonbitlang/wasm5/internal/core" @wasm5_core,

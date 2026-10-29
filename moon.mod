@@ -9,13 +9,13 @@ import {
 
 readme = "README.mbt.md"
 
-repository = ""
+repository = "https://github.com/moonbitlang/wasm5"
 
 license = "Apache-2.0"
 
 keywords = [ ]
 
-description = ""
+description = "A WebAssembly virtual machine implemented in MoonBit"
 
 source = "."
 
