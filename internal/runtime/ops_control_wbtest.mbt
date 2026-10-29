@@ -1,7 +1,7 @@
 ///|
 fn base_module(
   types : Array[@core.TypeDef],
-  funcs : Array[UInt],
+  funcs : Array[UInt32],
   codes : Array[@core.Code],
   imports : Array[@core.Import],
 ) -> @core.Module {
@@ -251,7 +251,7 @@ test "ops control table grow and globals" {
   }
   let rc = op_global_set(rt_global)
   assert_ok(rc, rt_global)
-  let rt_global = { ..rt_global, sp: 0, pc: 0 }
+  let rt_global = { ..rt_global, sp: 0, pc: 0, }
   let rc = op_global_get(rt_global)
   assert_ok(rc, rt_global)
   assert_ctrl_stack_eq(rt_global.stack.unsafe_get(0), Value::I32(9U))

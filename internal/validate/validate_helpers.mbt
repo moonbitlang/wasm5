@@ -38,9 +38,9 @@ fn get_import_counts(module_ : @core.Module) -> ImportCounts {
 /// Raises ValidationError for invalid function indices.
 fn get_func_type_index(
   module_ : @core.Module,
-  func_idx : Int,
+  func_idx : Int32,
   import_counts : ImportCounts,
-) -> Int raise ValidationError {
+) -> Int32 raise ValidationError {
   let type_idx = @core.get_func_type_idx(module_, func_idx, import_counts.funcs)
   if type_idx < 0 {
     raise ValidationError::InvalidFunctionIndex(func_idx)
@@ -52,9 +52,9 @@ fn get_func_type_index(
 /// Get the type index for a tag (imported or local)
 fn get_tag_type_index(
   module_ : @core.Module,
-  tag_idx : Int,
+  tag_idx : Int32,
   import_counts : ImportCounts,
-) -> Int raise ValidationError {
+) -> Int32 raise ValidationError {
   if tag_idx < import_counts.tags {
     // Imported tag - find type index from imports
     let mut current_import = 0
@@ -101,10 +101,10 @@ fn validate_load(
   ctx : ValidationCtx,
   module_ : @core.Module,
   import_counts : ImportCounts,
-  align : UInt,
-  mem_idx : UInt,
+  align : UInt32,
+  mem_idx : UInt32,
   addr_type : @core.ValType,
-  natural_align : Int,
+  natural_align : Int32,
   result_type : @core.ValType,
   op_name : String,
 ) -> Unit raise ValidationError {
@@ -120,10 +120,10 @@ fn validate_store(
   ctx : ValidationCtx,
   module_ : @core.Module,
   import_counts : ImportCounts,
-  align : UInt,
-  mem_idx : UInt,
+  align : UInt32,
+  mem_idx : UInt32,
   addr_type : @core.ValType,
-  natural_align : Int,
+  natural_align : Int32,
   value_type : @core.ValType,
   op_name : String,
 ) -> Unit raise ValidationError {
@@ -137,8 +137,8 @@ fn validate_store(
 /// Validate alignment - alignment must not be larger than natural alignment
 /// align parameter is stored as log2(alignment), natural is in bytes
 fn validate_alignment(
-  align : UInt,
-  natural : Int,
+  align : UInt32,
+  natural : Int32,
 ) -> Unit raise ValidationError {
   // align is log2 of alignment (e.g., align=2 means 2^2 = 4 byte alignment)
   // natural is the natural alignment in bytes
@@ -170,7 +170,7 @@ fn validate_alignment(
 fn validate_memory_index(
   module_ : @core.Module,
   import_counts : ImportCounts,
-  mem_idx : UInt,
+  mem_idx : UInt32,
 ) -> Unit raise ValidationError {
   let total_mems = import_counts.mems + module_.mems.length()
   let idx = mem_idx.reinterpret_as_int()
@@ -185,7 +185,7 @@ fn validate_memory_index(
 fn get_memtype(
   module_ : @core.Module,
   import_counts : ImportCounts,
-  mem_idx : UInt,
+  mem_idx : UInt32,
 ) -> @core.MemType raise ValidationError {
   let idx = mem_idx.reinterpret_as_int()
   match @core.get_mem_type(module_, idx, import_counts.mems) {
@@ -208,9 +208,9 @@ fn validate_load_mem(
   ctx : ValidationCtx,
   module_ : @core.Module,
   import_counts : ImportCounts,
-  align : UInt,
-  mem_idx : UInt,
-  natural_align : Int,
+  align : UInt32,
+  mem_idx : UInt32,
+  natural_align : Int32,
   result_type : @core.ValType,
   op_name : String,
 ) -> Unit raise ValidationError {
@@ -227,9 +227,9 @@ fn validate_store_mem(
   ctx : ValidationCtx,
   module_ : @core.Module,
   import_counts : ImportCounts,
-  align : UInt,
-  mem_idx : UInt,
-  natural_align : Int,
+  align : UInt32,
+  mem_idx : UInt32,
+  natural_align : Int32,
   value_type : @core.ValType,
   op_name : String,
 ) -> Unit raise ValidationError {
@@ -247,7 +247,7 @@ fn validate_store_mem(
 fn get_table_type(
   module_ : @core.Module,
   import_counts : ImportCounts,
-  table_idx : UInt,
+  table_idx : UInt32,
 ) -> @core.TableType raise ValidationError {
   let idx = table_idx.reinterpret_as_int()
   match @core.get_table_type(module_, idx, import_counts.tables) {
@@ -363,7 +363,7 @@ fn validate_const_expr_globals(
   m : @core.Module,
   expr : @core.Expr,
   import_counts : ImportCounts,
-  max_global_idx? : Int? = None,
+  max_global_idx~ : Int32? = None,
 ) -> Unit raise ValidationError {
   let total_globals = import_counts.globals + m.globals.length()
   for instr in expr.instrs {
@@ -532,21 +532,21 @@ fn validate_const_expr_type(
 ///|
 /// Check if a type index refers to a function type in the module.
 /// Delegates to core implementation.
-fn is_func_type_index(module_ : @core.Module, type_idx : Int) -> Bool {
+fn is_func_type_index(module_ : @core.Module, type_idx : Int32) -> Bool {
   @core.is_func_type_index(module_, type_idx)
 }
 
 ///|
 /// Check if a type index refers to a struct type in the module.
 /// Delegates to core implementation.
-fn is_struct_type_index(module_ : @core.Module, type_idx : Int) -> Bool {
+fn is_struct_type_index(module_ : @core.Module, type_idx : Int32) -> Bool {
   @core.is_struct_type_index(module_, type_idx)
 }
 
 ///|
 /// Check if a type index refers to an array type in the module.
 /// Delegates to core implementation.
-fn is_array_type_index(module_ : @core.Module, type_idx : Int) -> Bool {
+fn is_array_type_index(module_ : @core.Module, type_idx : Int32) -> Bool {
   @core.is_array_type_index(module_, type_idx)
 }
 
@@ -570,8 +570,8 @@ fn validate_valtype(
 /// This searches the supertype chain in type_groups and also checks structural subtyping
 fn is_type_index_subtype(
   module_ : @core.Module,
-  type_idx1 : Int,
-  type_idx2 : Int,
+  type_idx1 : Int32,
+  type_idx2 : Int32,
 ) -> Bool {
   // Same type is always a subtype of itself
   if type_idx1 == type_idx2 {
@@ -757,8 +757,8 @@ fn is_subtype(
 /// - An element segment (active or declarative)
 /// - An export
 /// - A global initializer containing ref.func
-fn collect_declared_funcs(m : @core.Module) -> Set[Int] {
-  let declared : Set[Int] = Set([])
+fn collect_declared_funcs(m : @core.Module) -> Set[Int32] {
+  let declared : Set[Int32] = Set([])
 
   // Collect from element segments
   for elem in m.elems {

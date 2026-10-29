@@ -25,7 +25,7 @@ test "import resolver add/get and module access" {
   }
   resolver.add_table(b"m", b"t", table)
   resolver.add_table(b"m", b"t2", table)
-  let mem = ImportedMemory::{ data: Array::make(4, b'\x00'), max: None }
+  let mem = ImportedMemory::{ data: Array::make(4, b'\x00'), max: None, }
   resolver.add_memory(b"m", b"mem", mem)
   resolver.add_memory(b"m", b"mem2", mem)
   match resolver.get_func(b"m", b"f") {

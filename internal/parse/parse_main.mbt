@@ -24,14 +24,14 @@ pub fn parse(b : Bytes) -> @core.Module raise ParseError {
   let mut types : Array[@core.TypeDef] = []
   let mut type_groups : Array[@core.TypeGroup] = []
   let customs : Array[@core.CustomSection] = []
-  let mut funcs : Array[UInt] = []
+  let mut funcs : Array[UInt32] = []
   let mut tables : Array[@core.TableType] = []
   let mut mems : Array[@core.MemType] = []
   let mut globals : Array[@core.Global] = []
   let mut tags : Array[@core.Tag] = []
   let mut elems : Array[@core.Elem] = []
   let mut datas : Array[@core.Data] = []
-  let mut start : UInt? = None
+  let mut start : UInt32? = None
   let mut imports : Array[@core.Import] = []
   let mut exports : Array[@core.Export] = []
   let mut codes : Array[@core.Code] = []
@@ -53,7 +53,7 @@ pub fn parse(b : Bytes) -> @core.Module raise ParseError {
           Some(kind) => @core.CustomPlacement::After(kind)
           None => @core.CustomPlacement::Start
         }
-        customs.push(@core.CustomSection::{ name, data, placement })
+        customs.push(@core.CustomSection::{ name, data, placement, })
         parser.pos = section_start + section_size.reinterpret_as_int()
       }
       1 => {
@@ -173,14 +173,14 @@ fn parse_skip_validation(b : Bytes) -> @core.Module raise ParseError {
   let mut types : Array[@core.TypeDef] = []
   let mut type_groups : Array[@core.TypeGroup] = []
   let customs : Array[@core.CustomSection] = []
-  let mut funcs : Array[UInt] = []
+  let mut funcs : Array[UInt32] = []
   let mut tables : Array[@core.TableType] = []
   let mut mems : Array[@core.MemType] = []
   let mut globals : Array[@core.Global] = []
   let mut tags : Array[@core.Tag] = []
   let mut elems : Array[@core.Elem] = []
   let mut datas : Array[@core.Data] = []
-  let mut start : UInt? = None
+  let mut start : UInt32? = None
   let mut imports : Array[@core.Import] = []
   let mut exports : Array[@core.Export] = []
   let mut codes : Array[@core.Code] = []
@@ -202,7 +202,7 @@ fn parse_skip_validation(b : Bytes) -> @core.Module raise ParseError {
           Some(kind) => @core.CustomPlacement::After(kind)
           None => @core.CustomPlacement::Start
         }
-        customs.push(@core.CustomSection::{ name, data, placement })
+        customs.push(@core.CustomSection::{ name, data, placement, })
         parser.pos = section_start + section_size.reinterpret_as_int()
       }
       1 => {

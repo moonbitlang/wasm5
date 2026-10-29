@@ -20,7 +20,7 @@ async test {
     defer file.close()
     let bytes = file.read_all().binary()
     // Use parse_novalidate for fuzzing - fuzz-generated files may not pass validation
-    let _ = parse_novalidate(bytes)
+    let _ = @parse.parse_novalidate(bytes)
 
     // Successfully parsed
   }

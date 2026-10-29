@@ -5,7 +5,7 @@ fn validate_function(
   func_type : @core.FuncType,
   code : @core.Code,
   import_counts : ImportCounts,
-  declared_funcs : Set[Int],
+  declared_funcs : Set[Int32],
 ) -> Unit raise ValidationError {
   // Validate type indices in function parameters
   for param in func_type.params {

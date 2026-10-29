@@ -10,43 +10,43 @@ priv enum ControlKind {
 /// Control frame for tracking nested blocks during compilation
 priv struct ControlFrame {
   kind : ControlKind
-  target_pc : Int // For loops: start PC. For blocks/ifs: patched at end
-  result_slots : Array[Int] // Pre-allocated result slot positions
-  sp_at_entry : Int // Stack pointer (slot) at block entry
-  slot_stack_len_at_entry : Int // slot_stack.length() at block entry
-  pending_patches : Array[Int] // Code positions that need patching
+  target_pc : Int32 // For loops: start PC. For blocks/ifs: patched at end
+  result_slots : Array[Int32] // Pre-allocated result slot positions
+  sp_at_entry : Int32 // Stack pointer (slot) at block entry
+  slot_stack_len_at_entry : Int32 // slot_stack.length() at block entry
+  pending_patches : Array[Int32] // Code positions that need patching
 }
 
 ///|
 /// Deferred resolution block (emitted at end of function for br_if/br_table)
 priv struct DeferredBlock {
-  patch_pos : Int // Position in code to patch with block address
-  src_slots : Array[Int] // Source slot positions (captured at branch time)
-  dst_slots : Array[Int] // Destination (pre-allocated) result slots
-  target_sp : Int // Stack pointer after branch
-  target_label : Int // Absolute control stack index at creation time
+  patch_pos : Int32 // Position in code to patch with block address
+  src_slots : Array[Int32] // Source slot positions (captured at branch time)
+  dst_slots : Array[Int32] // Destination (pre-allocated) result slots
+  target_sp : Int32 // Stack pointer after branch
+  target_label : Int32 // Absolute control stack index at creation time
   is_loop : Bool // Whether target is a loop (known PC) or block (needs patch)
-  loop_pc : Int // Loop PC if is_loop is true
-  mut end_pc : Int // Actual end PC (filled in by pop_control for non-loops)
+  loop_pc : Int32 // Loop PC if is_loop is true
+  mut end_pc : Int32 // Actual end PC (filled in by pop_control for non-loops)
   mut resolved : Bool // Whether end_pc has been set (prevents overwriting)
 }
 
 ///|
 /// Pending call patch (for forward calls to functions not yet compiled)
 priv struct CallPatch {
-  patch_pos : Int // Position in code to patch with callee entry
-  func_idx : Int // Local function index (0-based)
+  patch_pos : Int32 // Position in code to patch with callee entry
+  func_idx : Int32 // Local function index (0-based)
 }
 
 ///|
 /// Module info needed during compilation
 priv struct ModuleInfo {
   mod_ : @core.Module
-  func_entries : Array[Int] // Entry points for compiled functions
-  func_num_params : Array[Int] // Number of params per function
-  func_num_locals : Array[Int] // Number of locals per function
-  func_num_results : Array[Int] // Number of results per function
-  num_imported_funcs : Int
+  func_entries : Array[Int32] // Entry points for compiled functions
+  func_num_params : Array[Int32] // Number of params per function
+  func_num_locals : Array[Int32] // Number of locals per function
+  func_num_results : Array[Int32] // Number of results per function
+  num_imported_funcs : Int32
 }
 
 ///|
@@ -57,9 +57,9 @@ priv struct CompileCtx {
   control_stack : Array[ControlFrame]
   deferred_blocks : Array[DeferredBlock] // Resolution blocks to emit at end
   call_patches : Array[CallPatch] // Pending call patches
-  slot_stack : Array[Int] // Maps logical stack index to slot number
-  mut next_slot : Int // Next available slot for allocation
-  mut num_results : Int // Number of results for current function
+  slot_stack : Array[Int32] // Maps logical stack index to slot number
+  mut next_slot : Int32 // Next available slot for allocation
+  mut num_results : Int32 // Number of results for current function
   mut is_unreachable : Bool // True after unconditional branch until block end
 }
 
@@ -81,8 +81,8 @@ fn CompileCtx::new() -> CompileCtx {
 /// Initialize context for a function with given number of locals and results
 fn CompileCtx::init_function(
   self : CompileCtx,
-  num_locals : Int,
-  num_results : Int,
+  num_locals : Int32,
+  num_results : Int32,
 ) -> Unit {
   self.slot_stack.clear()
   self.num_results = num_results
@@ -92,13 +92,13 @@ fn CompileCtx::init_function(
 
 ///|
 /// Current stack pointer (next slot after top of stack)
-fn CompileCtx::current_sp(self : CompileCtx) -> Int {
+fn CompileCtx::current_sp(self : CompileCtx) -> Int32 {
   self.next_slot
 }
 
 ///|
 /// Push a value, allocating a new slot
-fn CompileCtx::push_slot(self : CompileCtx) -> Int {
+fn CompileCtx::push_slot(self : CompileCtx) -> Int32 {
   let slot = self.next_slot
   self.slot_stack.push(slot)
   self.next_slot += 1
@@ -107,7 +107,7 @@ fn CompileCtx::push_slot(self : CompileCtx) -> Int {
 
 ///|
 /// Pop a value, returning its slot (slot can be reused)
-fn CompileCtx::pop_slot(self : CompileCtx) -> Int {
+fn CompileCtx::pop_slot(self : CompileCtx) -> Int32 {
   guard self.slot_stack.length() > 0 else { return 0 }
   let slot = self.slot_stack.pop().unwrap()
   // Reclaim slot for reuse if it was the last allocated
@@ -119,7 +119,7 @@ fn CompileCtx::pop_slot(self : CompileCtx) -> Int {
 
 ///|
 /// Get slot at stack depth (0 = top)
-fn CompileCtx::slot_at(self : CompileCtx, depth : Int) -> Int {
+fn CompileCtx::slot_at(self : CompileCtx, depth : Int32) -> Int32 {
   let idx = self.slot_stack.length() - 1 - depth
   guard idx >= 0 else { return 0 }
   self.slot_stack[idx]
@@ -130,13 +130,13 @@ fn CompileCtx::slot_at(self : CompileCtx, depth : Int) -> Int {
 fn CompileCtx::push_control(
   self : CompileCtx,
   kind : ControlKind,
-  arity : Int,
-  target_pc : Int,
+  arity : Int32,
+  target_pc : Int32,
 ) -> Unit {
   // Save slot_stack length before allocating result slots
   let slot_stack_len = self.slot_stack.length()
   // Pre-allocate result slots (wasm3 style)
-  let result_slots : Array[Int] = []
+  let result_slots : Array[Int32] = []
   for _ in 0..<arity {
     result_slots.push(self.push_slot())
   }
@@ -178,8 +178,8 @@ fn CompileCtx::pop_control(self : CompileCtx) -> Unit {
 /// Get branch target info: (target_pc, result_slots, target_sp)
 fn CompileCtx::get_branch_target(
   self : CompileCtx,
-  label : Int,
-) -> (Int, Array[Int], Int) {
+  label : Int32,
+) -> (Int32, Array[Int32], Int32) {
   let idx = self.control_stack.length() - 1 - label
   guard idx >= 0 else { return (0, [], 0) }
   let frame = self.control_stack[idx]
@@ -192,8 +192,8 @@ fn CompileCtx::get_branch_target(
 /// Register a patch location for a forward branch
 fn CompileCtx::add_patch(
   self : CompileCtx,
-  label : Int,
-  patch_pos : Int,
+  label : Int32,
+  patch_pos : Int32,
 ) -> Unit {
   let idx = self.control_stack.length() - 1 - label
   guard idx >= 0 else { return }
@@ -202,7 +202,7 @@ fn CompileCtx::add_patch(
 
 ///|
 /// Check if branch target is a loop (backward branch)
-fn CompileCtx::is_loop_target(self : CompileCtx, label : Int) -> Bool {
+fn CompileCtx::is_loop_target(self : CompileCtx, label : Int32) -> Bool {
   let idx = self.control_stack.length() - 1 - label
   guard idx >= 0 else { return false }
   self.control_stack[idx].kind == Loop
@@ -216,7 +216,7 @@ fn CompileCtx::emit_op(self : CompileCtx, tag : @core.OpTag) -> Unit {
 
 ///|
 /// Emit an i32 immediate
-fn CompileCtx::emit_i32(self : CompileCtx, value : UInt) -> Unit {
+fn CompileCtx::emit_i32(self : CompileCtx, value : UInt32) -> Unit {
   self.code.push(value.to_int64())
 }
 
@@ -228,7 +228,7 @@ fn CompileCtx::emit_i64(self : CompileCtx, value : UInt64) -> Unit {
 
 ///|
 /// Emit an index immediate
-fn CompileCtx::emit_idx(self : CompileCtx, value : Int) -> Unit {
+fn CompileCtx::emit_idx(self : CompileCtx, value : Int32) -> Unit {
   self.code.push(value.to_int64())
 }
 
@@ -250,8 +250,8 @@ fn CompileCtx::emit_unary_op(self : CompileCtx, tag : @core.OpTag) -> Unit {
 fn CompileCtx::emit_load(
   self : CompileCtx,
   tag : @core.OpTag,
-  offset : UInt,
-  mem_idx : UInt,
+  offset : UInt32,
+  mem_idx : UInt32,
 ) -> Unit {
   self.emit_op(tag)
   self.emit_idx(offset.reinterpret_as_int())
@@ -263,8 +263,8 @@ fn CompileCtx::emit_load(
 fn CompileCtx::emit_store(
   self : CompileCtx,
   tag : @core.OpTag,
-  offset : UInt,
-  mem_idx : UInt,
+  offset : UInt32,
+  mem_idx : UInt32,
 ) -> Unit {
   self.emit_op(tag)
   self.emit_idx(offset.reinterpret_as_int())
@@ -277,8 +277,8 @@ fn CompileCtx::emit_store(
 /// Emit stack resolution: copy current top values to pre-allocated result slots, set sp
 fn CompileCtx::emit_resolution(
   self : CompileCtx,
-  result_slots : Array[Int],
-  target_sp : Int,
+  result_slots : Array[Int32],
+  target_sp : Int32,
   is_loop : Bool,
 ) -> Unit {
   let arity = result_slots.length()
@@ -305,9 +305,9 @@ fn CompileCtx::emit_resolution(
 /// Capture current slot positions for results
 fn CompileCtx::capture_result_slots(
   self : CompileCtx,
-  arity : Int,
-) -> Array[Int] {
-  let slots : Array[Int] = []
+  arity : Int32,
+) -> Array[Int32] {
+  let slots : Array[Int32] = []
   for i in 0..<arity {
     slots.push(self.slot_at(arity - 1 - i))
   }
@@ -318,13 +318,13 @@ fn CompileCtx::capture_result_slots(
 /// Add a deferred resolution block
 fn CompileCtx::defer_resolution(
   self : CompileCtx,
-  patch_pos : Int,
-  src_slots : Array[Int],
-  dst_slots : Array[Int],
-  target_sp : Int,
-  target_label : Int,
+  patch_pos : Int32,
+  src_slots : Array[Int32],
+  dst_slots : Array[Int32],
+  target_sp : Int32,
+  target_label : Int32,
   is_loop : Bool,
-  loop_pc : Int,
+  loop_pc : Int32,
 ) -> Unit {
   // Convert relative label to absolute control stack index
   let abs_label_idx = self.control_stack.length() - 1 - target_label
@@ -386,7 +386,7 @@ fn CompileCtx::emit_deferred_blocks(self : CompileCtx) -> Unit {
 
 ///|
 /// Get block result arity from block type
-fn get_block_arity(mod_ : @core.Module, bt : @core.BlockType) -> Int {
+fn get_block_arity(mod_ : @core.Module, bt : @core.BlockType) -> Int32 {
   match bt {
     Empty => 0
     Value(_) => 1
@@ -400,7 +400,10 @@ fn get_block_arity(mod_ : @core.Module, bt : @core.BlockType) -> Int {
 
 ///|
 /// Get param and result arity from block type
-fn get_block_arities(mod_ : @core.Module, bt : @core.BlockType) -> (Int, Int) {
+fn get_block_arities(
+  mod_ : @core.Module,
+  bt : @core.BlockType,
+) -> (Int32, Int32) {
   match bt {
     Empty => (0, 0)
     Value(_) => (0, 1)
@@ -414,7 +417,7 @@ fn get_block_arities(mod_ : @core.Module, bt : @core.BlockType) -> (Int, Int) {
 
 ///|
 /// Encode a reference type to an integer for the ref.null immediate
-fn encode_ref_type(ref_type : @core.RefType) -> Int {
+fn encode_ref_type(ref_type : @core.RefType) -> Int32 {
   match ref_type {
     Func => 0x70
     Extern => 0x6F
@@ -434,7 +437,7 @@ fn encode_ref_type(ref_type : @core.RefType) -> Int {
 
 ///|
 /// Encode a heap type to the runtime type code used by ref.test/ref.cast.
-fn encode_heap_type(ref_type : @core.RefType) -> Int {
+fn encode_heap_type(ref_type : @core.RefType) -> Int32 {
   match ref_type {
     Func => -7
     Extern => -8
@@ -454,31 +457,31 @@ fn encode_heap_type(ref_type : @core.RefType) -> Int {
 
 ///|
 /// Get struct type by index (returns empty struct on invalid index).
-fn get_struct_type(mod_ : @core.Module, type_idx : Int) -> @core.StructType {
+fn get_struct_type(mod_ : @core.Module, type_idx : Int32) -> @core.StructType {
   if type_idx < 0 || type_idx >= mod_.types.length() {
-    return { fields: [] }
+    return { fields: [], }
   }
   match mod_.types[type_idx] {
     Struct(struct_type) => struct_type
-    _ => { fields: [] }
+    _ => { fields: [], }
   }
 }
 
 ///|
 /// Get array type by index (returns default element type on invalid index).
-fn get_array_type(mod_ : @core.Module, type_idx : Int) -> @core.ArrayType {
+fn get_array_type(mod_ : @core.Module, type_idx : Int32) -> @core.ArrayType {
   if type_idx < 0 || type_idx >= mod_.types.length() {
-    return { element: { storage: Val(I32), mutable: false } }
+    return { element: { storage: Val(I32), mutable: false, }, }
   }
   match mod_.types[type_idx] {
     Array(array_type) => array_type
-    _ => { element: { storage: Val(I32), mutable: false } }
+    _ => { element: { storage: Val(I32), mutable: false, }, }
   }
 }
 
 ///|
 /// Encode packed storage type for struct/array get_s/get_u.
-fn storage_type_code(storage : @core.StorageType) -> Int {
+fn storage_type_code(storage : @core.StorageType) -> Int32 {
   match storage {
     I8 => 0
     I16 => 1
@@ -488,7 +491,7 @@ fn storage_type_code(storage : @core.StorageType) -> Int {
 
 ///|
 /// Get the byte size of a storage type.
-fn storage_byte_size(storage : @core.StorageType) -> Int {
+fn storage_byte_size(storage : @core.StorageType) -> Int32 {
   match storage {
     I8 => 1
     I16 => 2

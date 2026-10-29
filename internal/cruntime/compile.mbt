@@ -9,7 +9,7 @@ pub fn compile(mod_ : @core.Module) -> CompiledModule {
 /// Resolved imports are handled at runtime; compilation is identical.
 pub fn compile_with_imports(
   mod_ : @core.Module,
-  resolved_imports : Map[Int, ResolvedImport],
+  resolved_imports : Map[Int32, ResolvedImport],
 ) -> CompiledModule {
   let _ = resolved_imports
   let universal = @compile.compile(mod_)

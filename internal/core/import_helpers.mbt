@@ -1,6 +1,6 @@
 ///|
 /// Count imported functions in the module
-pub fn count_imported_funcs(module_ : Module) -> Int {
+pub fn count_imported_funcs(module_ : Module) -> Int32 {
   let mut count = 0
   for imp in module_.imports {
     match imp.desc {
@@ -13,7 +13,7 @@ pub fn count_imported_funcs(module_ : Module) -> Int {
 
 ///|
 /// Count imported globals in the module
-pub fn count_imported_globals(module_ : Module) -> Int {
+pub fn count_imported_globals(module_ : Module) -> Int32 {
   let mut count = 0
   for imp in module_.imports {
     match imp.desc {
@@ -26,7 +26,7 @@ pub fn count_imported_globals(module_ : Module) -> Int {
 
 ///|
 /// Count imported tables in the module
-pub fn count_imported_tables(module_ : Module) -> Int {
+pub fn count_imported_tables(module_ : Module) -> Int32 {
   let mut count = 0
   for imp in module_.imports {
     match imp.desc {
@@ -39,7 +39,7 @@ pub fn count_imported_tables(module_ : Module) -> Int {
 
 ///|
 /// Count imported memories in the module
-pub fn count_imported_mems(module_ : Module) -> Int {
+pub fn count_imported_mems(module_ : Module) -> Int32 {
   let mut count = 0
   for imp in module_.imports {
     match imp.desc {
@@ -53,13 +53,13 @@ pub fn count_imported_mems(module_ : Module) -> Int {
 ///|
 /// Get function type from type index.
 /// Returns an empty function type if the type index doesn't refer to a function type.
-pub fn get_func_type(module_ : Module, type_idx : Int) -> FuncType {
+pub fn get_func_type(module_ : Module, type_idx : Int32) -> FuncType {
   if type_idx < 0 || type_idx >= module_.types.length() {
-    return { params: [], results: [] }
+    return { params: [], results: [], }
   }
   match module_.types[type_idx] {
     Func(ft) => ft
-    _ => { params: [], results: [] }
+    _ => { params: [], results: [], }
   }
 }
 
@@ -67,11 +67,11 @@ pub fn get_func_type(module_ : Module, type_idx : Int) -> FuncType {
 /// Cached counts of imported resources.
 /// Computing all counts in a single pass is more efficient than counting each type separately.
 pub struct ImportCounts {
-  funcs : Int
-  tables : Int
-  mems : Int
-  globals : Int
-  tags : Int
+  funcs : Int32
+  tables : Int32
+  mems : Int32
+  globals : Int32
+  tags : Int32
 }
 
 ///|
@@ -91,7 +91,7 @@ pub fn get_import_counts(module_ : Module) -> ImportCounts {
       Tag(_) => tags += 1
     }
   }
-  { funcs, tables, mems, globals, tags }
+  { funcs, tables, mems, globals, tags, }
 }
 
 ///|
@@ -99,9 +99,9 @@ pub fn get_import_counts(module_ : Module) -> ImportCounts {
 /// Returns -1 if the function index is invalid.
 pub fn get_func_type_idx(
   module_ : Module,
-  func_idx : Int,
-  num_imported : Int,
-) -> Int {
+  func_idx : Int32,
+  num_imported : Int32,
+) -> Int32 {
   if func_idx < num_imported {
     // Imported function - find type index from imports
     let mut import_idx = 0
@@ -132,7 +132,7 @@ pub fn get_func_type_idx(
 
 ///|
 /// Check if a type index refers to a function type in the module
-pub fn is_func_type_index(module_ : Module, type_idx : Int) -> Bool {
+pub fn is_func_type_index(module_ : Module, type_idx : Int32) -> Bool {
   if type_idx < 0 || type_idx >= module_.types.length() {
     return false
   }
@@ -144,7 +144,7 @@ pub fn is_func_type_index(module_ : Module, type_idx : Int) -> Bool {
 
 ///|
 /// Check if a type index refers to a struct type in the module
-pub fn is_struct_type_index(module_ : Module, type_idx : Int) -> Bool {
+pub fn is_struct_type_index(module_ : Module, type_idx : Int32) -> Bool {
   if type_idx < 0 || type_idx >= module_.types.length() {
     return false
   }
@@ -156,7 +156,7 @@ pub fn is_struct_type_index(module_ : Module, type_idx : Int) -> Bool {
 
 ///|
 /// Check if a type index refers to an array type in the module
-pub fn is_array_type_index(module_ : Module, type_idx : Int) -> Bool {
+pub fn is_array_type_index(module_ : Module, type_idx : Int32) -> Bool {
   if type_idx < 0 || type_idx >= module_.types.length() {
     return false
   }
@@ -171,8 +171,8 @@ pub fn is_array_type_index(module_ : Module, type_idx : Int) -> Bool {
 /// Returns None if the table index is invalid.
 pub fn get_table_type(
   module_ : Module,
-  table_idx : Int,
-  num_imported_tables : Int,
+  table_idx : Int32,
+  num_imported_tables : Int32,
 ) -> TableType? {
   if table_idx < num_imported_tables {
     // Imported table - find type from imports
@@ -205,8 +205,8 @@ pub fn get_table_type(
 /// Returns None if the global index is invalid.
 pub fn get_global_type(
   module_ : Module,
-  global_idx : Int,
-  num_imported_globals : Int,
+  global_idx : Int32,
+  num_imported_globals : Int32,
 ) -> GlobalType? {
   if global_idx < num_imported_globals {
     // Imported global - find type from imports
@@ -239,8 +239,8 @@ pub fn get_global_type(
 /// Returns None if the memory index is invalid.
 pub fn get_mem_type(
   module_ : Module,
-  mem_idx : Int,
-  num_imported_mems : Int,
+  mem_idx : Int32,
+  num_imported_mems : Int32,
 ) -> MemType? {
   if mem_idx < num_imported_mems {
     // Imported memory - find type from imports

@@ -20,13 +20,13 @@ fn empty_module() -> @core.Module {
 
 ///|
 /// Convert Int to UInt64 for immediate index values in tests
-fn idx(value : Int) -> UInt64 {
+fn idx(value : Int32) -> UInt64 {
   value.to_int64().reinterpret_as_uint64()
 }
 
 ///|
 /// Convert UInt to UInt64 for immediate i32 values in tests
-fn imm(value : UInt) -> UInt64 {
+fn imm(value : UInt32) -> UInt64 {
   value.to_uint64()
 }
 
@@ -40,7 +40,7 @@ fn imm64(value : UInt64) -> UInt64 {
 fn make_runtime(
   stack : Array[Value],
   ops : Array[UInt64],
-  memory_size : Int,
+  memory_size : Int32,
 ) -> Instance {
   // Convert Value array to UInt64 array and allocate fixed buffer
   let stack64 = stack.map(value_to_stack)
@@ -111,7 +111,7 @@ fn assert_trap(rc : ReturnCode) -> Unit {
 }
 
 ///|
-fn rotl32(value : UInt, shift : UInt) -> UInt {
+fn rotl32(value : UInt32, shift : UInt32) -> UInt32 {
   let s = (shift & 31U).reinterpret_as_int()
   if s == 0 {
     value
@@ -121,7 +121,7 @@ fn rotl32(value : UInt, shift : UInt) -> UInt {
 }
 
 ///|
-fn rotr32(value : UInt, shift : UInt) -> UInt {
+fn rotr32(value : UInt32, shift : UInt32) -> UInt32 {
   let s = (shift & 31U).reinterpret_as_int()
   if s == 0 {
     value
@@ -151,7 +151,7 @@ fn rotr64(value : UInt64, shift : UInt64) -> UInt64 {
 }
 
 ///|
-fn clz32(value : UInt) -> UInt {
+fn clz32(value : UInt32) -> UInt32 {
   let mut count = 0
   let mut mask = 0x80000000U
   while mask != 0U && (value & mask) == 0U {
@@ -162,7 +162,7 @@ fn clz32(value : UInt) -> UInt {
 }
 
 ///|
-fn ctz32(value : UInt) -> UInt {
+fn ctz32(value : UInt32) -> UInt32 {
   let mut count = 0
   let mut mask = 1U
   while mask != 0U && (value & mask) == 0U {
@@ -173,7 +173,7 @@ fn ctz32(value : UInt) -> UInt {
 }
 
 ///|
-fn popcnt32(value : UInt) -> UInt {
+fn popcnt32(value : UInt32) -> UInt32 {
   let mut count = 0
   let mut v = value
   while v != 0U {
@@ -184,7 +184,7 @@ fn popcnt32(value : UInt) -> UInt {
 }
 
 ///|
-fn clz64(value : UInt64) -> UInt {
+fn clz64(value : UInt64) -> UInt32 {
   let mut count = 0
   let mut mask = 0x8000000000000000UL
   while mask != 0UL && (value & mask) == 0UL {
@@ -195,7 +195,7 @@ fn clz64(value : UInt64) -> UInt {
 }
 
 ///|
-fn ctz64(value : UInt64) -> UInt {
+fn ctz64(value : UInt64) -> UInt32 {
   let mut count = 0
   let mut mask = 1UL
   while mask != 0UL && (value & mask) == 0UL {
@@ -206,7 +206,7 @@ fn ctz64(value : UInt64) -> UInt {
 }
 
 ///|
-fn popcnt64(value : UInt64) -> UInt {
+fn popcnt64(value : UInt64) -> UInt32 {
   let mut count = 0
   let mut v = value
   while v != 0UL {
@@ -217,7 +217,7 @@ fn popcnt64(value : UInt64) -> UInt {
 }
 
 ///|
-fn f32_bits(value : Float) -> UInt {
+fn f32_bits(value : Float) -> UInt32 {
   value.reinterpret_as_uint()
 }
 
@@ -232,7 +232,7 @@ test "ops i32 const and arithmetic" {
   let rc = op_i32_const(rt_const)
   assert_ok(rc, rt_const)
   assert_stack_elem_eq(rt_const.stack[0], Value::I32(123U))
-  let cases : Array[((Instance) -> ReturnCode, UInt)] = [
+  let cases : Array[((Instance) -> ReturnCode, UInt32)] = [
     (op_i32_add, 9U),
     (op_i32_sub, 3U),
     (op_i32_mul, 18U),
@@ -260,7 +260,7 @@ test "ops i32 const and arithmetic" {
 
 ///|
 test "ops i32 compare and unary" {
-  let compare_cases : Array[((Instance) -> ReturnCode, UInt, UInt, UInt)] = [
+  let compare_cases : Array[((Instance) -> ReturnCode, UInt32, UInt32, UInt32)] = [
     (op_i32_eq, 7U, 7U, 1U),
     (op_i32_ne, 7U, 6U, 1U),
     (op_i32_lt_s, 0xFFFFFFFFU, 1U, 1U),
@@ -353,7 +353,7 @@ test "ops i64 const and arithmetic" {
 
 ///|
 test "ops i64 compare and unary" {
-  let compare_cases : Array[((Instance) -> ReturnCode, UInt64, UInt64, UInt)] = [
+  let compare_cases : Array[((Instance) -> ReturnCode, UInt64, UInt64, UInt32)] = [
     (op_i64_eq, 7UL, 7UL, 1U),
     (op_i64_ne, 7UL, 6UL, 1U),
     (op_i64_lt_s, 0xFFFFFFFFFFFFFFFFUL, 1UL, 1U),
@@ -469,7 +469,7 @@ test "ops float const and arithmetic" {
   let rc = op_f32_copysign(rt_f32_copysign)
   assert_ok(rc, rt_f32_copysign)
   assert_stack_elem_eq(rt_f32_copysign.stack[0], Value::F32(-3.0))
-  let f32_cmp_cases : Array[((Instance) -> ReturnCode, Float, Float, UInt)] = [
+  let f32_cmp_cases : Array[((Instance) -> ReturnCode, Float, Float, UInt32)] = [
     (op_f32_eq, 3.0, 3.0, 1U),
     (op_f32_ne, 3.0, 2.0, 1U),
     (op_f32_lt, 2.0, 3.0, 1U),
@@ -531,7 +531,7 @@ test "ops float const and arithmetic" {
   let rc = op_f64_copysign(rt_f64_copysign)
   assert_ok(rc, rt_f64_copysign)
   assert_stack_elem_eq(rt_f64_copysign.stack[0], Value::F64(-3.0))
-  let f64_cmp_cases : Array[((Instance) -> ReturnCode, Double, Double, UInt)] = [
+  let f64_cmp_cases : Array[((Instance) -> ReturnCode, Double, Double, UInt32)] = [
     (op_f64_eq, 3.0, 3.0, 1U),
     (op_f64_ne, 3.0, 2.0, 1U),
     (op_f64_lt, 2.0, 3.0, 1U),
@@ -744,30 +744,30 @@ test "ops memory load/store and size" {
   let rt = push_value(rt, Value::I32(0x11223344U))
   let rc = op_i32_store(rt)
   assert_ok(rc, rt)
-  let rt = { ..rt, sp: 0, pc: 0 }
+  let rt = { ..rt, sp: 0, pc: 0, }
   let rt = push_value(rt, Value::I32(0U))
   let rc = op_i32_load(rt)
   assert_ok(rc, rt)
   assert_stack_elem_eq(rt.stack.unsafe_get(0), Value::I32(0x11223344U))
   rt.ctx.memory[0] = 0xFFU.to_byte()
-  let rt = { ..rt, sp: 0, pc: 0 }
+  let rt = { ..rt, sp: 0, pc: 0, }
   let rt = push_value(rt, Value::I32(0U))
   let rc = op_i32_load8_s(rt)
   assert_ok(rc, rt)
   assert_stack_elem_eq(rt.stack.unsafe_get(0), Value::I32(0xFFFFFFFFU))
-  let rt = { ..rt, sp: 0, pc: 0 }
+  let rt = { ..rt, sp: 0, pc: 0, }
   let rt = push_value(rt, Value::I32(0U))
   let rc = op_i32_load8_u(rt)
   assert_ok(rc, rt)
   assert_stack_elem_eq(rt.stack.unsafe_get(0), Value::I32(255U))
   rt.ctx.memory[0] = 0x00U.to_byte()
   rt.ctx.memory[1] = 0x80U.to_byte()
-  let rt = { ..rt, sp: 0, pc: 0 }
+  let rt = { ..rt, sp: 0, pc: 0, }
   let rt = push_value(rt, Value::I32(0U))
   let rc = op_i32_load16_s(rt)
   assert_ok(rc, rt)
   assert_stack_elem_eq(rt.stack.unsafe_get(0), Value::I32(0xFFFF8000U))
-  let rt = { ..rt, sp: 0, pc: 0 }
+  let rt = { ..rt, sp: 0, pc: 0, }
   let rt = push_value(rt, Value::I32(0U))
   let rc = op_i32_load16_u(rt)
   assert_ok(rc, rt)
@@ -818,7 +818,7 @@ test "ops memory out of bounds and bulk ops" {
   let rt_i64 = push_value(rt_i64, Value::I64(0x1122334455667788UL))
   let rc = op_i64_store(rt_i64)
   assert_ok(rc, rt_i64)
-  let rt_i64 = { ..rt_i64, sp: 0, pc: 0 }
+  let rt_i64 = { ..rt_i64, sp: 0, pc: 0, }
   let rt_i64 = push_value(rt_i64, Value::I32(0U))
   let rc = op_i64_load(rt_i64)
   assert_ok(rc, rt_i64)
@@ -915,12 +915,12 @@ test "compile helpers canonicalize and counts" {
     datas: [],
     start: None,
     imports: [
-      { module_: b"m", name: b"f", desc: Func(0U) },
+      { module_: b"m", name: b"f", desc: Func(0U), },
       {
         module_: b"m",
         name: b"mem",
         desc: Mem({
-          limits: { min: 1UL, max: None },
+          limits: { min: 1UL, max: None, },
           shared: false,
           memory64: false,
         }),
@@ -954,8 +954,8 @@ test "compile helpers canonicalize and counts" {
 ///|
 test "compile helpers pop arguments" {
   let rt = make_runtime([Value::I32(1U), Value::I32(2U), Value::I32(3U)], [], 0)
-  let func_type : @core.FuncType = { params: [I32, I32], results: [] }
-  let { rt, args } = pop_arguments(rt, func_type)
+  let func_type : @core.FuncType = { params: [I32, I32], results: [], }
+  let { rt, args, } = pop_arguments(rt, func_type)
   assert_eq(args[0], Value::I32(2U))
   assert_eq(args[1], Value::I32(3U))
   assert_eq(rt.sp, 1)

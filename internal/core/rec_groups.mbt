@@ -1,7 +1,7 @@
 ///|
 /// Get rec group info for a type index: returns (group_index, position_in_group)
 /// Returns (-1, -1) if type not found in any group
-fn get_rec_group_info(module_ : Module, type_idx : Int) -> (Int, Int) {
+fn get_rec_group_info(module_ : Module, type_idx : Int32) -> (Int32, Int32) {
   for i, group in module_.type_groups {
     for j, subtype_def in group.subtypes {
       if subtype_def.type_idx.reinterpret_as_int() == type_idx {
@@ -14,8 +14,8 @@ fn get_rec_group_info(module_ : Module, type_idx : Int) -> (Int, Int) {
 
 ///|
 /// Get all type indices in a rec group
-fn get_rec_group_types(module_ : Module, group_idx : Int) -> Array[Int] {
-  let result : Array[Int] = []
+fn get_rec_group_types(module_ : Module, group_idx : Int32) -> Array[Int32] {
+  let result : Array[Int32] = []
   if group_idx >= 0 && group_idx < module_.type_groups.length() {
     let group = module_.type_groups[group_idx]
     for subtype_def in group.subtypes {
@@ -27,7 +27,7 @@ fn get_rec_group_types(module_ : Module, group_idx : Int) -> Array[Int] {
 
 ///|
 /// Check if a type index is within a given rec group
-fn is_in_rec_group(types : Array[Int], type_idx : Int) -> Bool {
+fn is_in_rec_group(types : Array[Int32], type_idx : Int32) -> Bool {
   for t in types {
     if t == type_idx {
       return true
@@ -38,7 +38,7 @@ fn is_in_rec_group(types : Array[Int], type_idx : Int) -> Bool {
 
 ///|
 /// Get the position of a type within its rec group
-fn get_position_in_group(types : Array[Int], type_idx : Int) -> Int {
+fn get_position_in_group(types : Array[Int32], type_idx : Int32) -> Int32 {
   for i, t in types {
     if t == type_idx {
       return i
@@ -49,7 +49,7 @@ fn get_position_in_group(types : Array[Int], type_idx : Int) -> Int {
 
 ///|
 /// Check if a type index is final (cannot be extended)
-fn is_type_final(module_ : Module, type_idx : Int) -> Bool {
+fn is_type_final(module_ : Module, type_idx : Int32) -> Bool {
   for group in module_.type_groups {
     for subtype_def in group.subtypes {
       if subtype_def.type_idx.reinterpret_as_int() == type_idx {
@@ -62,8 +62,8 @@ fn is_type_final(module_ : Module, type_idx : Int) -> Bool {
 
 ///|
 /// Get the list of supertypes for a type index
-fn get_supertypes(module_ : Module, type_idx : Int) -> Array[Int] {
-  let result : Array[Int] = []
+fn get_supertypes(module_ : Module, type_idx : Int32) -> Array[Int32] {
+  let result : Array[Int32] = []
   for group in module_.type_groups {
     for subtype_def in group.subtypes {
       if subtype_def.type_idx.reinterpret_as_int() == type_idx {
@@ -82,9 +82,9 @@ fn get_supertypes(module_ : Module, type_idx : Int) -> Array[Int] {
 /// This handles the recursive type equivalence rules in WebAssembly GC
 fn rec_groups_equivalent(
   module_ : Module,
-  group1_idx : Int,
-  group2_idx : Int,
-  visited : Array[(Int, Int)],
+  group1_idx : Int32,
+  group2_idx : Int32,
+  visited : Array[(Int32, Int32)],
 ) -> Bool {
   // Same group is equivalent
   if group1_idx == group2_idx {
@@ -120,11 +120,11 @@ fn rec_groups_equivalent(
 /// Check if two types are equivalent in the context of their rec groups
 fn types_equivalent_in_context(
   module_ : Module,
-  type_idx1 : Int,
-  type_idx2 : Int,
-  group1_types : Array[Int],
-  group2_types : Array[Int],
-  visited : Array[(Int, Int)],
+  type_idx1 : Int32,
+  type_idx2 : Int32,
+  group1_types : Array[Int32],
+  group2_types : Array[Int32],
+  visited : Array[(Int32, Int32)],
 ) -> Bool {
   if type_idx1 < 0 ||
     type_idx1 >= module_.types.length() ||
@@ -273,11 +273,11 @@ fn types_equivalent_in_context(
 /// Check if two type references are equivalent considering rec group context
 fn type_refs_equivalent_in_context(
   module_ : Module,
-  ref1 : Int,
-  ref2 : Int,
-  group1_types : Array[Int],
-  group2_types : Array[Int],
-  visited : Array[(Int, Int)],
+  ref1 : Int32,
+  ref2 : Int32,
+  group1_types : Array[Int32],
+  group2_types : Array[Int32],
+  visited : Array[(Int32, Int32)],
 ) -> Bool {
   let in_group1 = is_in_rec_group(group1_types, ref1)
   let in_group2 = is_in_rec_group(group2_types, ref2)
@@ -306,9 +306,9 @@ fn valtypes_equivalent_in_context(
   module_ : Module,
   vt1 : ValType,
   vt2 : ValType,
-  group1_types : Array[Int],
-  group2_types : Array[Int],
-  visited : Array[(Int, Int)],
+  group1_types : Array[Int32],
+  group2_types : Array[Int32],
+  visited : Array[(Int32, Int32)],
 ) -> Bool {
   match (vt1, vt2) {
     (Ref(TypeIndex(idx1), n1), Ref(TypeIndex(idx2), n2)) =>
@@ -326,9 +326,9 @@ fn storage_types_equivalent_in_context(
   module_ : Module,
   st1 : StorageType,
   st2 : StorageType,
-  group1_types : Array[Int],
-  group2_types : Array[Int],
-  visited : Array[(Int, Int)],
+  group1_types : Array[Int32],
+  group2_types : Array[Int32],
+  visited : Array[(Int32, Int32)],
 ) -> Bool {
   match (st1, st2) {
     (Val(vt1), Val(vt2)) =>
@@ -343,14 +343,14 @@ fn storage_types_equivalent_in_context(
 /// Check if two GC types are equivalent considering rec group membership
 pub fn gc_types_equivalent(
   module_ : Module,
-  type_idx1 : Int,
-  type_idx2 : Int,
+  type_idx1 : Int32,
+  type_idx2 : Int32,
 ) -> Bool {
   if type_idx1 == type_idx2 {
     return true
   }
   let (group1_idx, _) = get_rec_group_info(module_, type_idx1)
   let (group2_idx, _) = get_rec_group_info(module_, type_idx2)
-  let visited : Array[(Int, Int)] = []
+  let visited : Array[(Int32, Int32)] = []
   rec_groups_equivalent(module_, group1_idx, group2_idx, visited)
 }

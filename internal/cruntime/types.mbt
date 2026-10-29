@@ -31,11 +31,11 @@ pub(all) struct ResolvedImport {
   /// Pointer to the target CRuntime's context (as Int64)
   target_context_ptr : Int64
   /// Function index in the target module
-  target_func_idx : Int
+  target_func_idx : Int32
   /// Number of parameters the function takes
-  num_params : Int
+  num_params : Int32
   /// Number of results the function returns
-  num_results : Int
+  num_results : Int32
 } derive(Debug)
 
 ///|
@@ -45,11 +45,11 @@ pub struct CompiledModule {
   /// Threaded code: function pointers (as UInt64) and immediates interleaved
   code : FixedArray[UInt64]
   /// Entry point (code index) for each function in the module
-  func_entries : FixedArray[Int]
+  func_entries : FixedArray[Int32]
   /// Number of locals for each function (including parameters)
-  func_num_locals : FixedArray[Int]
+  func_num_locals : FixedArray[Int32]
   /// Maximum stack height for each function
-  func_max_stack : FixedArray[Int]
+  func_max_stack : FixedArray[Int32]
   /// Exported functions: name -> function index (into func_entries)
-  exports : Map[String, Int]
+  exports : Map[String, Int32]
 }

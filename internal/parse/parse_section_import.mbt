@@ -27,7 +27,7 @@ fn parse_import_section(
       0x03 => {
         let val_type = parser.read_valtype()
         let mutable = parser.read_byte() == 0x01
-        Global(@core.GlobalType::{ val_type, mutable })
+        Global(@core.GlobalType::{ val_type, mutable, })
       }
       // Exception handling: tag import
       0x04 => {
@@ -45,7 +45,7 @@ fn parse_import_section(
           "invalid import descriptor tag: 0x\{desc_tag.to_string()}",
         )
     }
-    imports.push(@core.Import::{ module_, name, desc })
+    imports.push(@core.Import::{ module_, name, desc, })
   }
   imports
 }

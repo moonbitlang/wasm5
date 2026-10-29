@@ -20,7 +20,7 @@ fn get_block_type(
 ///|
 fn get_func_type_by_index(
   module_ : @core.Module,
-  type_idx : Int,
+  type_idx : Int32,
   context : String,
 ) -> @core.FuncType raise ValidationError {
   if type_idx < 0 || type_idx >= module_.types.length() {
@@ -67,7 +67,7 @@ fn validate_instruction_control(
   ctx : ValidationCtx,
   instr : @core.Instr,
   import_counts : ImportCounts,
-  declared_funcs : Set[Int],
+  declared_funcs : Set[Int32],
 ) -> Bool raise ValidationError {
   let stack = ctx.stack
   match instr {

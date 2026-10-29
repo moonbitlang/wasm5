@@ -59,13 +59,13 @@ struct RuntimeTable {
 
 ///|
 /// Get table data length
-pub fn RuntimeTable::data_length(self : RuntimeTable) -> Int {
+pub fn RuntimeTable::data_length(self : RuntimeTable) -> Int32 {
   self.data.length()
 }
 
 ///|
 /// Get table element at index (returns 64-bit tagged ref)
-pub fn RuntimeTable::get_data(self : RuntimeTable, idx : Int) -> UInt64 {
+pub fn RuntimeTable::get_data(self : RuntimeTable, idx : Int32) -> UInt64 {
   self.data[idx]
 }
 
@@ -73,7 +73,7 @@ pub fn RuntimeTable::get_data(self : RuntimeTable, idx : Int) -> UInt64 {
 /// Set table element at index (value is 64-bit tagged ref)
 pub fn RuntimeTable::set_data(
   self : RuntimeTable,
-  idx : Int,
+  idx : Int32,
   value : UInt64,
 ) -> Unit {
   self.data[idx] = value
@@ -84,7 +84,7 @@ pub fn RuntimeTable::set_data(
 pub fn RuntimeTable::add_external_funcref(
   self : RuntimeTable,
   func : HostFunc,
-) -> Int {
+) -> Int32 {
   let idx = self.external_funcrefs.length()
   self.external_funcrefs.push(func)
   idx
@@ -94,14 +94,14 @@ pub fn RuntimeTable::add_external_funcref(
 /// Create a new runtime table for host imports.
 pub fn RuntimeTable::new(
   data : Array[UInt64],
-  max? : UInt64? = None,
+  max~ : UInt64? = None,
 ) -> RuntimeTable {
-  { data, max, external_funcrefs: [] }
+  { data, max, external_funcrefs: [], }
 }
 
 ///|
 pub struct HostFunc {
-  arity : UInt
+  arity : UInt32
   func : (Array[Value]) -> Array[Value]
 }
 
@@ -110,9 +110,9 @@ pub struct HostFunc {
 /// `arity` is optional and used mainly for tests and validation.
 pub fn HostFunc::new(
   func : (Array[Value]) -> Array[Value],
-  arity? : UInt = 0U,
+  arity~ : UInt32 = 0U,
 ) -> HostFunc {
-  { arity, func }
+  { arity, func, }
 }
 
 ///|
@@ -126,9 +126,9 @@ pub struct ImportedMemory {
 /// Create an imported memory with optional max pages.
 pub fn ImportedMemory::new(
   data : Array[Byte],
-  max? : UInt64? = None,
+  max~ : UInt64? = None,
 ) -> ImportedMemory {
-  { data, max }
+  { data, max, }
 }
 
 ///|
@@ -152,7 +152,7 @@ pub struct Imports {
 ///|
 /// Create a new empty imports set
 pub fn Imports::new() -> Imports {
-  { modules: Map([]) }
+  { modules: Map([]), }
 }
 
 ///|
@@ -413,7 +413,7 @@ fn Imports::get_funcref_wrapper(
 
 ///|
 /// Initial stack capacity (can grow as needed)
-let initial_stack_capacity : Int = 1024
+let initial_stack_capacity : Int32 = 1024
 
 ///|
 /// Instance structure for WebAssembly execution.
@@ -422,10 +422,10 @@ let initial_stack_capacity : Int = 1024
 pub struct Instance {
   ops : FixedArray[UInt64] // Compiled instructions (tagless: fn ptrs and immediates as UInt64)
   stack : FixedArray[UInt64] // Unified stack for locals and operand stack (tagless)
-  mut sp : Int // Current top of stack (next push position)
-  mut bp : Int // Base pointer: index of first local in unified stack
-  mut num_locals : Int // Number of locals for current function
-  mut pc : Int // Program counter
+  mut sp : Int32 // Current top of stack (next push position)
+  mut bp : Int32 // Base pointer: index of first local in unified stack
+  mut num_locals : Int32 // Number of locals for current function
+  mut pc : Int32 // Program counter
   ctx : RuntimeContext // Reference to cold data (module, memory, globals, etc.)
 }
 
@@ -472,7 +472,7 @@ pub fn Instance::clear_output(self : Instance) -> Unit {
 /// Typed function export.
 pub struct Func {
   instance : Instance
-  func_idx : Int
+  func_idx : Int32
   func_type : @core.FuncType
 }
 
@@ -480,14 +480,14 @@ pub struct Func {
 /// Typed memory export.
 pub struct Memory {
   instance : Instance
-  mem_idx : Int
+  mem_idx : Int32
 }
 
 ///|
 /// Typed table export.
 pub struct Table {
   instance : Instance
-  table_idx : Int
+  table_idx : Int32
   table_type : @core.TableType
 }
 
@@ -495,7 +495,7 @@ pub struct Table {
 /// Typed global export.
 pub struct Global {
   instance : Instance
-  global_idx : Int
+  global_idx : Int32
   global_type : @core.GlobalType
 }
 
@@ -621,8 +621,8 @@ fn require_value_type(
 ///|
 fn get_func_type_for_index(
   module_ : @core.Module,
-  func_idx : Int,
-  num_imported_funcs : Int,
+  func_idx : Int32,
+  num_imported_funcs : Int32,
 ) -> @core.FuncType? {
   let type_idx = @core.get_func_type_idx(module_, func_idx, num_imported_funcs)
   if type_idx < 0 || type_idx >= module_.types.length() {
@@ -638,7 +638,7 @@ fn get_func_type_for_index(
 /// Get table type for index. Delegates to core implementation.
 fn get_table_type_for_index(
   module_ : @core.Module,
-  table_idx : Int,
+  table_idx : Int32,
 ) -> @core.TableType? {
   let num_imported = @core.count_imported_tables(module_)
   @core.get_table_type(module_, table_idx, num_imported)
@@ -648,7 +648,7 @@ fn get_table_type_for_index(
 /// Get global type for index. Delegates to core implementation.
 fn get_global_type_for_index(
   module_ : @core.Module,
-  global_idx : Int,
+  global_idx : Int32,
 ) -> @core.GlobalType? {
   let num_imported = @core.count_imported_globals(module_)
   @core.get_global_type(module_, global_idx, num_imported)
@@ -674,7 +674,7 @@ fn get_table_val_type(table_type : @core.TableType) -> @core.ValType {
 }
 
 ///|
-fn encode_tagged_ref(idx : Int, tag : UInt64) -> UInt64 {
+fn encode_tagged_ref(idx : Int32, tag : UInt64) -> UInt64 {
   let raw = idx.to_int64().reinterpret_as_uint64()
   let masked = raw & 0x3FFFFFFFFFFFFFFFUL
   masked | tag
@@ -737,7 +737,7 @@ pub fn Instance::get_func(self : Instance, name : String) -> Func? {
             Some(ft) => ft
             None => return None
           }
-          return Some({ instance: self, func_idx, func_type })
+          return Some({ instance: self, func_idx, func_type, })
         }
         _ => return None
       }
@@ -760,7 +760,7 @@ pub fn Instance::get_memory(self : Instance, name : String) -> Memory? {
           if mem_idx < 0 || mem_idx >= total_mems || mem_idx != 0 {
             return None
           }
-          return Some({ instance: self, mem_idx })
+          return Some({ instance: self, mem_idx, })
         }
         _ => return None
       }
@@ -783,7 +783,7 @@ pub fn Instance::get_table(self : Instance, name : String) -> Table? {
             Some(found) => found
             None => return None
           }
-          return Some({ instance: self, table_idx, table_type })
+          return Some({ instance: self, table_idx, table_type, })
         }
         _ => return None
       }
@@ -806,7 +806,7 @@ pub fn Instance::get_global(self : Instance, name : String) -> Global? {
             Some(found) => found
             None => return None
           }
-          return Some({ instance: self, global_idx, global_type })
+          return Some({ instance: self, global_idx, global_type, })
         }
         _ => return None
       }
@@ -840,8 +840,8 @@ pub fn Func::type_(self : Func) -> @core.FuncType {
 /// Read memory bytes.
 pub fn Memory::read(
   self : Memory,
-  offset : Int,
-  len : Int,
+  offset : Int32,
+  len : Int32,
 ) -> Bytes raise RuntimeError {
   if self.mem_idx != 0 {
     raise RuntimeError::InvalidType("memory.read: unsupported memory index")
@@ -864,7 +864,7 @@ pub fn Memory::read(
 /// Write bytes into memory.
 pub fn Memory::write(
   self : Memory,
-  offset : Int,
+  offset : Int32,
   data : Bytes,
 ) -> Unit raise RuntimeError {
   if self.mem_idx != 0 {
@@ -885,7 +885,7 @@ pub fn Memory::write(
 
 ///|
 /// Get memory size in pages.
-pub fn Memory::size(self : Memory) -> Int {
+pub fn Memory::size(self : Memory) -> Int32 {
   if self.mem_idx != 0 {
     return 0
   }
@@ -894,7 +894,7 @@ pub fn Memory::size(self : Memory) -> Int {
 
 ///|
 /// Grow memory by the given number of pages, returning previous size.
-pub fn Memory::grow(self : Memory, pages : Int) -> Int raise RuntimeError {
+pub fn Memory::grow(self : Memory, pages : Int32) -> Int32 raise RuntimeError {
   if self.mem_idx != 0 {
     raise RuntimeError::InvalidType("memory.grow: unsupported memory index")
   }
@@ -920,7 +920,7 @@ pub fn Memory::grow(self : Memory, pages : Int) -> Int raise RuntimeError {
 
 ///|
 /// Get a table element by index.
-pub fn Table::get(self : Table, idx : Int) -> Value? raise RuntimeError {
+pub fn Table::get(self : Table, idx : Int32) -> Value? raise RuntimeError {
   if self.table_idx < 0 || self.table_idx >= self.instance.ctx.tables.length() {
     raise RuntimeError::TableOutOfBounds
   }
@@ -941,7 +941,7 @@ pub fn Table::get(self : Table, idx : Int) -> Value? raise RuntimeError {
 /// Set a table element by index.
 pub fn Table::set(
   self : Table,
-  idx : Int,
+  idx : Int32,
   value : Value,
 ) -> Unit raise RuntimeError {
   if self.table_idx < 0 || self.table_idx >= self.instance.ctx.tables.length() {
@@ -957,7 +957,7 @@ pub fn Table::set(
 
 ///|
 /// Get the table size.
-pub fn Table::size(self : Table) -> Int {
+pub fn Table::size(self : Table) -> Int32 {
   if self.table_idx < 0 || self.table_idx >= self.instance.ctx.tables.length() {
     return 0
   }
@@ -1340,7 +1340,7 @@ fn eval_const_expr(
   globals : Array[Value],
 ) -> Value raise RuntimeError {
   // Create empty GC heap for simple cases that don't need it
-  let ctx = ConstExprContext::{ gc_heap: [], module_: None }
+  let ctx = ConstExprContext::{ gc_heap: [], module_: None, }
   eval_const_expr_with_context(expr, globals, ctx)
 }
 
@@ -1351,7 +1351,7 @@ fn eval_const_expr_with_gc(
   gc_heap : Array[GcObject],
   module_ : @core.Module,
 ) -> Value raise RuntimeError {
-  let ctx = ConstExprContext::{ gc_heap, module_: Some(module_) }
+  let ctx = ConstExprContext::{ gc_heap, module_: Some(module_), }
   eval_const_expr_with_context(expr, globals, ctx)
 }
 
@@ -1492,7 +1492,7 @@ fn eval_const_expr_with_context(
               }
           }
         }
-        let obj = GcObject::Struct({ type_idx: type_idx_int, fields })
+        let obj = GcObject::Struct({ type_idx: type_idx_int, fields, })
         ctx.gc_heap.push(obj)
         // Encode as (1-based-index << 1) to distinguish from i31refs
         let ref_value = ctx.gc_heap.length() << 1
@@ -1509,7 +1509,7 @@ fn eval_const_expr_with_context(
           None => 0
         }
         let fields : Array[UInt64] = Array::make(num_fields, 0UL)
-        let obj = GcObject::Struct({ type_idx: type_idx_int, fields })
+        let obj = GcObject::Struct({ type_idx: type_idx_int, fields, })
         ctx.gc_heap.push(obj)
         // Encode as (1-based-index << 1) to distinguish from i31refs
         let ref_value = ctx.gc_heap.length() << 1
@@ -1543,7 +1543,7 @@ fn eval_const_expr_with_context(
             }
         }
         let elements = Array::make(length, init_value)
-        let obj = GcObject::Array({ type_idx: type_idx_int, elements })
+        let obj = GcObject::Array({ type_idx: type_idx_int, elements, })
         ctx.gc_heap.push(obj)
         // Encode as (1-based-index << 1) to distinguish from i31refs
         let ref_value = ctx.gc_heap.length() << 1
@@ -1575,7 +1575,7 @@ fn eval_const_expr_with_context(
           None => 0UL
         }
         let elements : Array[UInt64] = Array::make(length, default_value)
-        let obj = GcObject::Array({ type_idx: type_idx_int, elements })
+        let obj = GcObject::Array({ type_idx: type_idx_int, elements, })
         ctx.gc_heap.push(obj)
         // Encode as (1-based-index << 1) to distinguish from i31refs
         let ref_value = ctx.gc_heap.length() << 1
@@ -1608,7 +1608,7 @@ fn eval_const_expr_with_context(
               }
           }
         }
-        let obj = GcObject::Array({ type_idx: type_idx_int, elements })
+        let obj = GcObject::Array({ type_idx: type_idx_int, elements, })
         ctx.gc_heap.push(obj)
         // Encode as (1-based-index << 1) to distinguish from i31refs
         let ref_value = ctx.gc_heap.length() << 1

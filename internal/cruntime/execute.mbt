@@ -4,57 +4,57 @@
 #borrow(code, args, result_out, globals, memory, memory_pages, tables_flat, tables_flat_u64, table_offsets, table_sizes, table_max_sizes, table_elem_is_funcref, func_entries, func_num_locals, func_type_idxs, type_sig_hash1, type_sig_hash2, type_subtype_matrix, import_num_params, import_num_results, import_handler_ids, output_buffer, output_length, import_context_ptrs, import_target_func_idxs, data_segments_flat, data_segment_offsets, data_segment_sizes, elem_segments_flat, elem_segments_flat_u64, elem_segment_offsets, elem_segment_sizes, elem_segment_dropped)
 extern "C" fn c_execute_ffi(
   code : FixedArray[UInt64],
-  entry : Int,
-  num_locals : Int,
+  entry : Int32,
+  num_locals : Int32,
   args : FixedArray[UInt64],
-  num_args : Int,
+  num_args : Int32,
   result_out : FixedArray[UInt64],
-  num_results : Int,
+  num_results : Int32,
   globals : FixedArray[UInt64],
   memory : FixedArray[Byte],
-  mem_size : Int,
-  mem_max_size : Int,
-  memory_pages : FixedArray[Int],
-  tables_flat : FixedArray[Int], // All tables flattened into one array
+  mem_size : Int32,
+  mem_max_size : Int32,
+  memory_pages : FixedArray[Int32],
+  tables_flat : FixedArray[Int32], // All tables flattened into one array
   tables_flat_u64 : FixedArray[UInt64], // All tables flattened (full refs)
-  table_offsets : FixedArray[Int], // Offset of each table in tables_flat
-  table_sizes : FixedArray[Int], // Current size of each table
-  table_max_sizes : FixedArray[Int], // Max size (capacity) of each table for table.grow
-  table_elem_is_funcref : FixedArray[Int], // 1 for funcref tables, 0 for externref
-  num_tables : Int,
-  func_entries : FixedArray[Int], // Entry points for local functions
-  func_num_locals : FixedArray[Int], // Number of locals per local function
-  num_funcs : Int, // Number of local functions
-  num_imported_funcs : Int, // Number of imported functions (for index offset)
-  func_type_idxs : FixedArray[Int], // Type index for each function (imported + local)
-  type_sig_hash1 : FixedArray[Int], // Primary signature hash for each type
-  type_sig_hash2 : FixedArray[Int], // Secondary signature hash for each type
-  type_subtype_matrix : FixedArray[Int], // type_idx -> target_idx subtype matrix
-  num_types : Int,
-  import_num_params : FixedArray[Int], // Number of params for each imported function
-  import_num_results : FixedArray[Int], // Number of results for each imported function
-  import_handler_ids : FixedArray[Int], // Host handler id for each imported function
+  table_offsets : FixedArray[Int32], // Offset of each table in tables_flat
+  table_sizes : FixedArray[Int32], // Current size of each table
+  table_max_sizes : FixedArray[Int32], // Max size (capacity) of each table for table.grow
+  table_elem_is_funcref : FixedArray[Int32], // 1 for funcref tables, 0 for externref
+  num_tables : Int32,
+  func_entries : FixedArray[Int32], // Entry points for local functions
+  func_num_locals : FixedArray[Int32], // Number of locals per local function
+  num_funcs : Int32, // Number of local functions
+  num_imported_funcs : Int32, // Number of imported functions (for index offset)
+  func_type_idxs : FixedArray[Int32], // Type index for each function (imported + local)
+  type_sig_hash1 : FixedArray[Int32], // Primary signature hash for each type
+  type_sig_hash2 : FixedArray[Int32], // Secondary signature hash for each type
+  type_subtype_matrix : FixedArray[Int32], // type_idx -> target_idx subtype matrix
+  num_types : Int32,
+  import_num_params : FixedArray[Int32], // Number of params for each imported function
+  import_num_results : FixedArray[Int32], // Number of results for each imported function
+  import_handler_ids : FixedArray[Int32], // Host handler id for each imported function
   output_buffer : FixedArray[Byte], // Output buffer for spectest handlers
-  output_length : FixedArray[Int], // Current output length
-  output_capacity : Int, // Output buffer capacity in bytes
+  output_length : FixedArray[Int32], // Current output length
+  output_capacity : Int32, // Output buffer capacity in bytes
   import_context_ptrs : FixedArray[Int64], // Target context pointers for cross-module calls
-  import_target_func_idxs : FixedArray[Int], // Target function indices for cross-module calls
+  import_target_func_idxs : FixedArray[Int32], // Target function indices for cross-module calls
   data_segments_flat : FixedArray[Byte], // All data segments flattened
-  data_segment_offsets : FixedArray[Int], // Offset of each segment in data_segments_flat
-  data_segment_sizes : FixedArray[Int], // Size of each segment (mutable for data.drop)
-  num_data_segments : Int, // Number of data segments
-  elem_segments_flat : FixedArray[Int], // All element segments flattened (func indices, -1 for null)
+  data_segment_offsets : FixedArray[Int32], // Offset of each segment in data_segments_flat
+  data_segment_sizes : FixedArray[Int32], // Size of each segment (mutable for data.drop)
+  num_data_segments : Int32, // Number of data segments
+  elem_segments_flat : FixedArray[Int32], // All element segments flattened (func indices, -1 for null)
   elem_segments_flat_u64 : FixedArray[UInt64], // All element segments flattened (GC refs)
-  elem_segment_offsets : FixedArray[Int], // Offset of each segment in elem_segments_flat
-  elem_segment_sizes : FixedArray[Int], // Size of each segment
-  elem_segment_dropped : FixedArray[Int], // Whether each segment has been dropped
-  num_elem_segments : Int, // Number of element segments
-  num_external_funcrefs : Int, // Number of external funcref entries
-) -> Int = "execute"
+  elem_segment_offsets : FixedArray[Int32], // Offset of each segment in elem_segments_flat
+  elem_segment_sizes : FixedArray[Int32], // Size of each segment
+  elem_segment_dropped : FixedArray[Int32], // Whether each segment has been dropped
+  num_elem_segments : Int32, // Number of element segments
+  num_external_funcrefs : Int32, // Number of external funcref entries
+) -> Int32 = "execute"
 
 ///|
 /// Convert trap code integer to TrapCode enum
-fn trap_code_from_int(code : Int) -> TrapCode {
+fn trap_code_from_int(code : Int32) -> TrapCode {
   match code {
     0 => TrapCode::None
     1 => TrapCode::Unreachable

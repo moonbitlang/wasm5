@@ -107,7 +107,7 @@ pub fn encode(module_ : @core.Module) -> Bytes raise EncodeError {
 }
 
 ///|
-fn push_section(out : Array[Byte], id : UInt, payload : Array[Byte]) -> Unit {
+fn push_section(out : Array[Byte], id : UInt32, payload : Array[Byte]) -> Unit {
   guard payload.length() > 0 else { return }
   out.push(id.to_byte())
   append_bytes(out, encode_u32_leb128(payload.length().reinterpret_as_uint()))
@@ -117,7 +117,7 @@ fn push_section(out : Array[Byte], id : UInt, payload : Array[Byte]) -> Unit {
 ///|
 priv struct SectionEntry {
   kind : @core.SectionId
-  id : UInt
+  id : UInt32
   payload : Array[Byte]
 }
 
@@ -125,11 +125,11 @@ priv struct SectionEntry {
 fn add_section(
   sections : Array[SectionEntry],
   kind : @core.SectionId,
-  id : UInt,
+  id : UInt32,
   payload : Array[Byte],
 ) -> Unit {
   if payload.length() > 0 {
-    sections.push({ kind, id, payload })
+    sections.push({ kind, id, payload, })
   }
 }
 
@@ -140,7 +140,7 @@ fn emit_sections_with_customs(
   customs : Array[@core.CustomSection],
 ) -> Unit {
   let order = section_order()
-  let present_positions : Array[Int?] = Array::make(order.length(), None)
+  let present_positions : Array[Int32?] = Array::make(order.length(), None)
   for i in 0..<sections.length() {
     let kind = sections[i].kind
     let order_index = section_index(kind, order)
@@ -190,7 +190,10 @@ fn section_order() -> Array[@core.SectionId] {
 }
 
 ///|
-fn section_index(kind : @core.SectionId, order : Array[@core.SectionId]) -> Int {
+fn section_index(
+  kind : @core.SectionId,
+  order : Array[@core.SectionId],
+) -> Int32 {
   for i in 0..<order.length() {
     if order[i] == kind {
       return i
@@ -202,10 +205,10 @@ fn section_index(kind : @core.SectionId, order : Array[@core.SectionId]) -> Int 
 ///|
 fn custom_slot(
   placement : @core.CustomPlacement,
-  present_positions : Array[Int?],
+  present_positions : Array[Int32?],
   order : Array[@core.SectionId],
-  section_count : Int,
-) -> Int {
+  section_count : Int32,
+) -> Int32 {
   match placement {
     @core.CustomPlacement::Start => 0
     @core.CustomPlacement::End => section_count
@@ -220,9 +223,9 @@ fn custom_slot(
 fn slot_before_after(
   target : @core.SectionId,
   after : Bool,
-  present_positions : Array[Int?],
+  present_positions : Array[Int32?],
   order : Array[@core.SectionId],
-) -> Int {
+) -> Int32 {
   let target_index = section_index(target, order)
   match present_positions[target_index] {
     Some(pos) => if after { pos + 1 } else { pos }
@@ -232,9 +235,9 @@ fn slot_before_after(
 
 ///|
 fn slot_after_last_before(
-  target_index : Int,
-  present_positions : Array[Int?],
-) -> Int {
+  target_index : Int32,
+  present_positions : Array[Int32?],
+) -> Int32 {
   let mut slot = 0
   for i in 0..<target_index {
     match present_positions[i] {
@@ -272,7 +275,7 @@ fn append_bytesview(dst : Array[Byte], src : BytesView) -> Unit {
 }
 
 ///|
-fn append_u32_le(dst : Array[Byte], value : UInt) -> Unit {
+fn append_u32_le(dst : Array[Byte], value : UInt32) -> Unit {
   dst.push((value & 0xFFU).to_byte())
   dst.push(((value >> 8) & 0xFFU).to_byte())
   dst.push(((value >> 16) & 0xFFU).to_byte())
@@ -462,7 +465,7 @@ fn encode_import_section(
 }
 
 ///|
-fn encode_function_section(funcs : Array[UInt]) -> Array[Byte] {
+fn encode_function_section(funcs : Array[UInt32]) -> Array[Byte] {
   guard funcs.length() > 0 else { return [] }
   let payload : Array[Byte] = []
   append_bytes(payload, encode_u32_leb128(funcs.length().reinterpret_as_uint()))
@@ -574,7 +577,7 @@ fn encode_export_section(exports : Array[@core.Export]) -> Array[Byte] {
 }
 
 ///|
-fn encode_start_section(start : UInt?) -> Array[Byte] {
+fn encode_start_section(start : UInt32?) -> Array[Byte] {
   match start {
     Some(idx) => encode_u32_leb128(idx)
     None => []
@@ -589,7 +592,7 @@ fn encode_element_section(
   let payload : Array[Byte] = []
   append_bytes(payload, encode_u32_leb128(elems.length().reinterpret_as_uint()))
   for elem in elems {
-    let init_indices : Array[UInt] = []
+    let init_indices : Array[UInt32] = []
     let mut can_use_indices = elem.elem_type == @core.RefType::Func &&
       elem.elem_nullable
     if can_use_indices {
@@ -864,7 +867,7 @@ fn encode_locals(locals : Array[@core.ValType]) -> Array[Byte] {
     append_bytes(payload, encode_u32_leb128(0U))
     return payload
   }
-  let groups : Array[(UInt, @core.ValType)] = []
+  let groups : Array[(UInt32, @core.ValType)] = []
   let mut current = locals[0]
   let mut count = 1U
   for i in 1..<locals.length() {
@@ -913,7 +916,11 @@ fn encode_block_type(block_type : @core.BlockType) -> Array[Byte] {
 }
 
 ///|
-fn encode_memarg(align : UInt, offset : UInt, memory_idx : UInt) -> Array[Byte] {
+fn encode_memarg(
+  align : UInt32,
+  offset : UInt32,
+  memory_idx : UInt32,
+) -> Array[Byte] {
   let payload : Array[Byte] = []
   let flags = if memory_idx == 0U { align } else { align | 0x40U }
   append_bytes(payload, encode_u32_leb128(flags))
@@ -1798,7 +1805,7 @@ fn append_name(dst : Array[Byte], name : Bytes) -> Unit {
 }
 
 ///|
-fn encode_u32_leb128(value : UInt) -> Array[Byte] {
+fn encode_u32_leb128(value : UInt32) -> Array[Byte] {
   let mut v = value
   let out : Array[Byte] = []
   while true {
@@ -1834,7 +1841,7 @@ fn encode_u64_leb128(value : UInt64) -> Array[Byte] {
 }
 
 ///|
-fn encode_i32_leb128(value : Int) -> Array[Byte] {
+fn encode_i32_leb128(value : Int32) -> Array[Byte] {
   let mut v = value
   let out : Array[Byte] = []
   while true {

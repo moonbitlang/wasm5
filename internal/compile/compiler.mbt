@@ -5,11 +5,11 @@ pub fn compile(mod_ : @core.Module) -> @core.CompiledModule {
   let num_imported_funcs = @core.count_imported_funcs(mod_)
 
   // Pre-compute function info
-  let func_entries : Array[Int] = []
-  let func_num_locals : Array[Int] = []
-  let func_num_params : Array[Int] = []
-  let func_num_results : Array[Int] = []
-  let func_max_stack : Array[Int] = []
+  let func_entries : Array[Int32] = []
+  let func_num_locals : Array[Int32] = []
+  let func_num_params : Array[Int32] = []
+  let func_num_results : Array[Int32] = []
+  let func_max_stack : Array[Int32] = []
   for i, code in mod_.codes {
     let type_idx = mod_.funcs[i].reinterpret_as_int()
     let func_type = @core.get_func_type(mod_, type_idx)
@@ -50,7 +50,7 @@ pub fn compile(mod_ : @core.Module) -> @core.CompiledModule {
     ctx.emit_idx(num_non_arg_locals)
 
     // Push implicit function block
-    let func_result_slots : Array[Int] = []
+    let func_result_slots : Array[Int32] = []
     for j in 0..<num_results {
       func_result_slots.push(j)
     }
@@ -108,7 +108,7 @@ pub fn compile(mod_ : @core.Module) -> @core.CompiledModule {
   }
 
   // Collect function exports
-  let exports : Map[String, Int] = Map([])
+  let exports : Map[String, Int32] = Map([])
   for exp in mod_.exports {
     if exp.desc is Func(idx) {
       let abs_idx = idx.reinterpret_as_int()
@@ -536,7 +536,7 @@ fn compile_instr(
     Block(bt, body) => {
       let arity = get_block_arity(mod_info.mod_, bt)
       ctx.push_control(Block, arity, 0)
-      compile_expr(ctx, mod_info, { instrs: body })
+      compile_expr(ctx, mod_info, { instrs: body, })
       let frame = ctx.control_stack[ctx.control_stack.length() - 1]
       let fallthrough_reachable = !ctx.is_unreachable
       if fallthrough_reachable {
@@ -560,7 +560,7 @@ fn compile_instr(
       let (param_arity, _result_arity) = get_block_arities(mod_info.mod_, bt)
       let loop_start = ctx.code.length()
       let slot_stack_len = ctx.slot_stack.length()
-      let param_slots : Array[Int] = []
+      let param_slots : Array[Int32] = []
       for i in 0..<param_arity {
         param_slots.push(ctx.slot_at(param_arity - 1 - i))
       }
@@ -572,7 +572,7 @@ fn compile_instr(
         slot_stack_len_at_entry: slot_stack_len,
         pending_patches: [],
       })
-      compile_expr(ctx, mod_info, { instrs: body })
+      compile_expr(ctx, mod_info, { instrs: body, })
       ctx.pop_control()
     }
     If(bt, then_body, else_body) => {
@@ -583,7 +583,7 @@ fn compile_instr(
       ctx.emit_idx(0)
       ctx.push_control(If, arity, 0)
       let frame = ctx.control_stack[ctx.control_stack.length() - 1]
-      compile_expr(ctx, mod_info, { instrs: then_body })
+      compile_expr(ctx, mod_info, { instrs: then_body, })
       let then_unreachable = ctx.is_unreachable
       if !then_unreachable {
         ctx.emit_resolution(frame.result_slots, frame.sp_at_entry, false)
@@ -605,7 +605,7 @@ fn compile_instr(
         }
         ctx.next_slot = frame.sp_at_entry
         ctx.is_unreachable = false
-        compile_expr(ctx, mod_info, { instrs: else_body })
+        compile_expr(ctx, mod_info, { instrs: else_body, })
         let else_unreachable = ctx.is_unreachable
         if !else_unreachable {
           ctx.emit_resolution(frame.result_slots, frame.sp_at_entry, false)
@@ -681,7 +681,7 @@ fn compile_instr(
       let src_slots = ctx.capture_result_slots(arity)
       ctx.emit_op(@core.OpTag::BrTable)
       ctx.emit_idx(labels.length())
-      let patches : Array[Int] = []
+      let patches : Array[Int32] = []
       for _ in labels {
         let patch_pos = ctx.code.length()
         ctx.emit_idx(0)
@@ -740,7 +740,7 @@ fn compile_instr(
         let patch_pos = ctx.code.length()
         ctx.emit_idx(0) // callee_pc placeholder
         ctx.emit_idx(frame_offset)
-        ctx.call_patches.push({ patch_pos, func_idx: local_idx })
+        ctx.call_patches.push({ patch_pos, func_idx: local_idx, })
         for i in 0..<num_results {
           ctx.slot_stack.push(frame_offset + i)
         }
@@ -1004,7 +1004,7 @@ fn compile_instr(
       )
       let arity = result_slots.length()
       ctx.emit_op(@core.OpTag::BrOnNull)
-      let src_slots : Array[Int] = []
+      let src_slots : Array[Int32] = []
       for i in 0..<arity {
         src_slots.push(ctx.slot_at(arity - i))
       }
@@ -1140,7 +1140,7 @@ fn compile_instr(
         ctx.emit_idx(0) // callee_pc placeholder
         ctx.emit_idx(num_params)
         ctx.emit_idx(num_locals)
-        ctx.call_patches.push({ patch_pos, func_idx: local_idx })
+        ctx.call_patches.push({ patch_pos, func_idx: local_idx, })
       } else if func_idx >= 0 && func_idx < mod_info.num_imported_funcs {
         let type_idx = @core.get_func_type_idx(
           mod_info.mod_,

@@ -4,16 +4,16 @@ async test "runtime parse imported wasm file with host side effects" {
   defer file.close()
   let bytes = file.read_all().binary()
   let module_ = @parse.parse(bytes)
-  let resolver = Imports::new()
-  let calls : Array[UInt] = []
+  let resolver = @runtime.Imports::new()
+  let calls : Array[UInt32] = []
   resolver.add_func(
     b"host",
     b"log",
-    HostFunc::new(
+    @runtime.HostFunc::new(
       fn(args) {
         if args.length() == 1 {
           match args[0] {
-            Value::I32(v) => calls.push(v)
+            @runtime.Value::I32(v) => calls.push(v)
             _ => ()
           }
         }
@@ -22,8 +22,8 @@ async test "runtime parse imported wasm file with host side effects" {
       arity=1U,
     ),
   )
-  resolver.add_global(b"host", b"g", Value::I32(42U))
-  let rt = Instance::new(module_, resolver)
+  resolver.add_global(b"host", b"g", @runtime.Value::I32(42U))
+  let rt = @runtime.Instance::new(module_, resolver)
   rt.run_start()
   let results = rt.call_compiled(b"run", [])
   assert_eq(results.length(), 0)

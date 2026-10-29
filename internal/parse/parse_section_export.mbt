@@ -21,7 +21,7 @@ fn parse_export_section(
           "invalid export descriptor tag: 0x\{desc_tag.to_string()}",
         )
     }
-    exports.push(@core.Export::{ name, desc })
+    exports.push(@core.Export::{ name, desc, })
   }
   exports
 }

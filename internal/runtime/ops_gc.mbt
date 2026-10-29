@@ -24,14 +24,14 @@ let ref_null : UInt64 = 0xFFFFFFFFFFFFFFFFUL
 ///|
 /// GC Struct instance - stores field values as UInt64 array
 pub(all) struct GcStruct {
-  type_idx : Int
+  type_idx : Int32
   fields : Array[UInt64]
 }
 
 ///|
 /// GC Array instance - stores element values as UInt64 array
 pub(all) struct GcArray {
-  type_idx : Int
+  type_idx : Int32
   elements : Array[UInt64]
 }
 
@@ -40,7 +40,7 @@ pub(all) struct GcArray {
 pub(all) enum GcObject {
   Struct(GcStruct)
   Array(GcArray)
-  I31(Int) // i31ref - 31-bit integer as reference
+  I31(Int32) // i31ref - 31-bit integer as reference
 }
 
 // =============================================================================
@@ -51,10 +51,10 @@ pub(all) enum GcObject {
 /// Allocate a new struct on the GC heap
 fn gc_alloc_struct(
   rt : Instance,
-  type_idx : Int,
+  type_idx : Int32,
   fields : Array[UInt64],
-) -> Int {
-  let obj = GcObject::Struct({ type_idx, fields })
+) -> Int32 {
+  let obj = GcObject::Struct({ type_idx, fields, })
   rt.ctx.gc_heap.push(obj)
   // Encode as (index << 1) to distinguish from i31refs which have low bit set
   rt.ctx.gc_heap.length() << 1
@@ -64,10 +64,10 @@ fn gc_alloc_struct(
 /// Allocate a new array on the GC heap
 fn gc_alloc_array(
   rt : Instance,
-  type_idx : Int,
+  type_idx : Int32,
   elements : Array[UInt64],
-) -> Int {
-  let obj = GcObject::Array({ type_idx, elements })
+) -> Int32 {
+  let obj = GcObject::Array({ type_idx, elements, })
   rt.ctx.gc_heap.push(obj)
   // Encode as (index << 1) to distinguish from i31refs which have low bit set
   rt.ctx.gc_heap.length() << 1
@@ -75,7 +75,10 @@ fn gc_alloc_array(
 
 ///|
 /// Get the element storage type of an array type
-fn get_array_element_type(rt : Instance, type_idx : Int) -> @core.StorageType? {
+fn get_array_element_type(
+  rt : Instance,
+  type_idx : Int32,
+) -> @core.StorageType? {
   if type_idx < 0 || type_idx >= rt.ctx.module_.types.length() {
     return None
   }
@@ -100,7 +103,7 @@ fn storage_default_value(storage : @core.StorageType) -> UInt64 {
 ///|
 /// Get a GC object by reference
 /// GC refs are encoded as (1-based-index << 1), so we decode by right-shifting
-fn gc_get_object(rt : Instance, ref_value : Int) -> GcObject? {
+fn gc_get_object(rt : Instance, ref_value : Int32) -> GcObject? {
   // Decode: right shift to get 1-based index
   let index = ref_value >> 1
   if index <= 0 {
@@ -703,7 +706,7 @@ fn op_i31_get_s(rt : Instance) -> ReturnCode {
 
   // Decode: (encoded >> 1) with sign extension from bit 30
   let raw = encoded_u32 >> 1
-  let signed : UInt = if (raw & 0x40000000U) != 0U {
+  let signed : UInt32 = if (raw & 0x40000000U) != 0U {
     raw | 0x80000000U
   } else { // Sign extend from bit 30
     raw
@@ -792,7 +795,7 @@ fn op_extern_convert_any(rt : Instance) -> ReturnCode {
 fn gc_ref_matches_type(
   rt : Instance,
   ref_value : UInt64,
-  target_type : Int,
+  target_type : Int32,
   target_nullable : Bool,
 ) -> Bool {
   // Check for null reference (stored as -1, i.e., 0xFFFFFFFFFFFFFFFF)
@@ -884,8 +887,8 @@ fn gc_ref_matches_type(
 /// This mirrors the validation-time is_type_index_subtype function
 fn gc_is_type_subtype(
   rt : Instance,
-  type_idx : Int,
-  target_type_idx : Int,
+  type_idx : Int32,
+  target_type_idx : Int32,
 ) -> Bool {
   if type_idx == target_type_idx {
     return true
@@ -937,7 +940,11 @@ fn gc_is_type_subtype(
 
 ///|
 /// Check if two types (by index) are equivalent
-fn gc_types_equivalent(rt : Instance, type_idx1 : Int, type_idx2 : Int) -> Bool {
+fn gc_types_equivalent(
+  rt : Instance,
+  type_idx1 : Int32,
+  type_idx2 : Int32,
+) -> Bool {
   @core.gc_types_equivalent(rt.ctx.module_, type_idx1, type_idx2)
 }
 

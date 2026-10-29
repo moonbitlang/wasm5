@@ -68,7 +68,7 @@ fn ValidationCtx::pop_control(
 ///|
 fn ValidationCtx::get_label_types(
   self : ValidationCtx,
-  label : UInt,
+  label : UInt32,
 ) -> Array[@core.ValType] raise ValidationError {
   // Labels are relative depth: 0 is innermost, 1 is next outer, etc.
   let idx = self.control_stack.length() - 1 - label.reinterpret_as_int()

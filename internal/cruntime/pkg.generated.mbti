@@ -10,15 +10,15 @@ import {
 // Values
 pub fn compile(@core.Module) -> CompiledModule
 
-pub fn compile_with_imports(@core.Module, Map[Int, ResolvedImport]) -> CompiledModule
+pub fn compile_with_imports(@core.Module, Map[Int32, ResolvedImport]) -> CompiledModule
 
 pub fn init_wasi() -> Unit
 
 pub fn transform_to_c_runtime(Array[Int64]) -> FixedArray[UInt64]
 
-pub fn wasi_add_preopen_file(Int) -> Int
+pub fn wasi_add_preopen_file(Int32) -> Int32
 
-pub fn wasi_exit_code() -> Int
+pub fn wasi_exit_code() -> Int32
 
 pub fn wasi_has_exited() -> Bool
 
@@ -32,38 +32,38 @@ pub struct CRuntime {
   compiled : CompiledModule
   globals : FixedArray[UInt64]
   memory : FixedArray[Byte]
-  memory_pages : FixedArray[Int]
-  memory_max_size : Int
+  memory_pages : FixedArray[Int32]
+  memory_max_size : Int32
   output_buffer : FixedArray[Byte]
-  output_length : FixedArray[Int]
-  output_capacity : Int
-  tables : FixedArray[FixedArray[Int]]
-  tables_flat : FixedArray[Int]
+  output_length : FixedArray[Int32]
+  output_capacity : Int32
+  tables : FixedArray[FixedArray[Int32]]
+  tables_flat : FixedArray[Int32]
   tables_flat_u64 : FixedArray[UInt64]
-  table_offsets : FixedArray[Int]
-  table_sizes : FixedArray[Int]
-  table_max_sizes : FixedArray[Int]
-  table_elem_is_funcref : FixedArray[Int]
-  func_type_idxs : FixedArray[Int]
-  type_param_counts : FixedArray[Int]
-  type_result_counts : FixedArray[Int]
-  type_subtype_matrix : FixedArray[Int]
-  import_num_params : FixedArray[Int]
-  import_num_results : FixedArray[Int]
-  import_handler_ids : FixedArray[Int]
+  table_offsets : FixedArray[Int32]
+  table_sizes : FixedArray[Int32]
+  table_max_sizes : FixedArray[Int32]
+  table_elem_is_funcref : FixedArray[Int32]
+  func_type_idxs : FixedArray[Int32]
+  type_param_counts : FixedArray[Int32]
+  type_result_counts : FixedArray[Int32]
+  type_subtype_matrix : FixedArray[Int32]
+  import_num_params : FixedArray[Int32]
+  import_num_results : FixedArray[Int32]
+  import_handler_ids : FixedArray[Int32]
   import_context_ptrs : FixedArray[Int64]
-  import_target_func_idxs : FixedArray[Int]
+  import_target_func_idxs : FixedArray[Int32]
   data_segments_flat : FixedArray[Byte]
-  data_segment_offsets : FixedArray[Int]
-  data_segment_sizes : FixedArray[Int]
-  elem_segments_flat : FixedArray[Int]
+  data_segment_offsets : FixedArray[Int32]
+  data_segment_sizes : FixedArray[Int32]
+  elem_segments_flat : FixedArray[Int32]
   elem_segments_flat_u64 : FixedArray[UInt64]
-  elem_segment_offsets : FixedArray[Int]
-  elem_segment_sizes : FixedArray[Int]
-  elem_segment_dropped : FixedArray[Int]
-  external_funcref_count : Int
+  elem_segment_offsets : FixedArray[Int32]
+  elem_segment_sizes : FixedArray[Int32]
+  elem_segment_dropped : FixedArray[Int32]
+  external_funcref_count : Int32
   mut context_ptr : Int64
-  resolved_imports : Map[Int, ResolvedImport]
+  resolved_imports : Map[Int32, ResolvedImport]
 }
 pub fn CRuntime::call_compiled(Self, Bytes, Array[@core.Value]) -> Array[@core.Value] raise @runtime.RuntimeError
 pub fn CRuntime::clear_output(Self) -> Unit
@@ -72,23 +72,24 @@ pub fn CRuntime::get_globals(Self) -> Array[@core.Value]
 pub fn CRuntime::get_module(Self) -> @core.Module
 pub fn CRuntime::get_output(Self) -> Array[String]
 pub fn CRuntime::load(@core.Module) -> Self
-pub fn CRuntime::load_with_imports_globals_and_funcrefs(@core.Module, Map[Int, ResolvedImport], Map[Int, UInt64], Array[ResolvedImport]) -> Self
+pub fn CRuntime::load_with_imports_globals_and_funcrefs(@core.Module, Map[Int32, ResolvedImport], Map[Int32, UInt64], Array[ResolvedImport]) -> Self
 pub fn CRuntime::run_start(Self) -> Unit raise @runtime.RuntimeError
 
 pub struct CompiledModule {
   code : FixedArray[UInt64]
-  func_entries : FixedArray[Int]
-  func_num_locals : FixedArray[Int]
-  func_max_stack : FixedArray[Int]
-  exports : Map[String, Int]
+  func_entries : FixedArray[Int32]
+  func_num_locals : FixedArray[Int32]
+  func_max_stack : FixedArray[Int32]
+  exports : Map[String, Int32]
 }
 
 pub(all) struct ResolvedImport {
   target_context_ptr : Int64
-  target_func_idx : Int
-  num_params : Int
-  num_results : Int
+  target_func_idx : Int32
+  num_params : Int32
+  num_results : Int32
 } derive(@debug.Debug)
+pub fn ResolvedImport::to_repr(Self) -> @debug.Repr
 
 pub enum TrapCode {
   None
@@ -112,8 +113,10 @@ pub enum TrapCode {
   CastFailure
   NullStructReference
 } derive(Eq, @debug.Debug)
+pub fn TrapCode::equal(Self, Self) -> Bool
+pub fn TrapCode::not_equal(Self, Self) -> Bool
+pub fn TrapCode::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 
 // Traits
-

@@ -23,6 +23,7 @@ pub suberror WatError {
   Unsupported(String)
   Encode(String)
 } derive(@debug.Debug)
+pub fn WatError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
 pub enum SExpr {
@@ -39,4 +40,3 @@ pub enum WastCommand {
 // Type aliases
 
 // Traits
-

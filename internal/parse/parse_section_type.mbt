@@ -19,7 +19,7 @@ fn parse_type_def_with_tag(
       for _ in 0U..<result_count {
         results.push(parser.read_valtype())
       }
-      @core.TypeDef::Func(@core.FuncType::{ params, results })
+      @core.TypeDef::Func(@core.FuncType::{ params, results, })
     }
     // struct type (GC proposal)
     0x5F => {
@@ -36,7 +36,7 @@ fn parse_type_def_with_tag(
               "invalid mutability byte: 0x\{mut_byte.to_string()}",
             )
         }
-        fields.push({ storage, mutable })
+        fields.push({ storage, mutable, })
       }
       @core.TypeDef::Struct(@core.StructType::{ fields, })
     }
@@ -53,7 +53,7 @@ fn parse_type_def_with_tag(
           )
       }
       @core.TypeDef::Array(@core.ArrayType::{
-        element: @core.FieldType::{ storage, mutable },
+        element: @core.FieldType::{ storage, mutable, },
       })
     }
     _ =>
@@ -72,12 +72,12 @@ fn parse_type_def(parser : Parser) -> @core.TypeDef raise ParseError {
 fn parse_subtype_entry_with_tag(
   parser : Parser,
   tag : Byte,
-) -> (Array[UInt], Bool, @core.TypeDef) raise ParseError {
+) -> (Array[UInt32], Bool, @core.TypeDef) raise ParseError {
   match tag {
     0x4F | 0x50 => {
       let is_final = tag == 0x4F
       let supertype_count = parser.read_u32_leb128()
-      let supertypes : Array[UInt] = []
+      let supertypes : Array[UInt32] = []
       for _ in 0U..<supertype_count {
         supertypes.push(parser.read_u32_leb128())
       }
@@ -98,7 +98,7 @@ fn parse_subtype_entry_with_tag(
 ///|
 fn parse_subtype_entry(
   parser : Parser,
-) -> (Array[UInt], Bool, @core.TypeDef) raise ParseError {
+) -> (Array[UInt32], Bool, @core.TypeDef) raise ParseError {
   parse_subtype_entry_with_tag(parser, parser.read_byte())
 }
 
@@ -119,9 +119,9 @@ fn parse_type_section(
           let (supertypes, is_final, type_def) = parse_subtype_entry(parser)
           let type_idx = types.length().reinterpret_as_uint()
           types.push(type_def)
-          subtypes.push(@core.SubTypeDef::{ type_idx, supertypes, is_final })
+          subtypes.push(@core.SubTypeDef::{ type_idx, supertypes, is_final, })
         }
-        type_groups.push(@core.TypeGroup::{ subtypes, explicit: true })
+        type_groups.push(@core.TypeGroup::{ subtypes, explicit: true, })
       }
       _ => {
         let (supertypes, is_final, type_def) = parse_subtype_entry_with_tag(
@@ -130,7 +130,7 @@ fn parse_type_section(
         let type_idx = types.length().reinterpret_as_uint()
         types.push(type_def)
         type_groups.push(@core.TypeGroup::{
-          subtypes: [@core.SubTypeDef::{ type_idx, supertypes, is_final }],
+          subtypes: [@core.SubTypeDef::{ type_idx, supertypes, is_final, }],
           explicit: false,
         })
       }

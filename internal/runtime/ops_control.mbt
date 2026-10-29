@@ -101,7 +101,7 @@ fn op_set_sp(rt : Instance) -> ReturnCode {
 ///|
 fn get_func_type_or_error(
   rt : Instance,
-  type_idx : Int,
+  type_idx : Int32,
   context : String,
 ) -> @core.FuncType? {
   if type_idx < 0 || type_idx >= rt.ctx.module_.types.length() {
@@ -259,7 +259,7 @@ fn op_call_import(rt : Instance) -> ReturnCode {
     Some(found) => found
     None => return Trap
   }
-  let { rt, args } = pop_arguments(rt, func_type)
+  let { rt, args, } = pop_arguments(rt, func_type)
   let rt = call_imported_function(
     rt,
     func_idx,
@@ -279,7 +279,7 @@ fn op_call_external(rt : Instance) -> ReturnCode {
 
 ///|
 /// Copy results to bp and return a return code.
-fn finish_function_return(rt : Instance, num_results : Int) -> ReturnCode {
+fn finish_function_return(rt : Instance, num_results : Int32) -> ReturnCode {
   let return_start = rt.sp - num_results
   for i = 0; i < num_results; i = i + 1 {
     rt.stack.unsafe_set(rt.bp + i, rt.stack.unsafe_get(return_start + i))
@@ -379,7 +379,7 @@ fn op_call_indirect(rt : Instance) -> ReturnCode {
       return Trap
     }
     // Pop arguments and call external function
-    let { rt, args } = pop_arguments(rt, expected_type)
+    let { rt, args, } = pop_arguments(rt, expected_type)
     let results = (ext_func.func)(args)
     // Push results back onto the stack
     let rt = push_results(rt, results)
@@ -411,7 +411,7 @@ fn op_call_indirect(rt : Instance) -> ReturnCode {
       rt.ctx.error_detail = "indirect call type mismatch"
       return Trap
     }
-    let { rt, args } = pop_arguments(rt, actual_type)
+    let { rt, args, } = pop_arguments(rt, actual_type)
     let rt = call_imported_function(
       rt,
       func_idx,
@@ -515,7 +515,7 @@ fn op_return_call_import(rt : Instance) -> ReturnCode {
     Some(found) => found
     None => return Trap
   }
-  let { rt, args } = pop_arguments(rt, func_type)
+  let { rt, args, } = pop_arguments(rt, func_type)
   let rt = call_imported_function(
     rt,
     func_idx,
@@ -591,7 +591,7 @@ fn op_return_call_indirect(rt : Instance) -> ReturnCode {
     if check_code == Trap {
       return Trap
     }
-    let { rt, args } = pop_arguments(rt, actual_type)
+    let { rt, args, } = pop_arguments(rt, actual_type)
     let rt = call_imported_function(
       rt,
       func_idx,
@@ -699,7 +699,7 @@ fn op_call_ref(rt : Instance) -> ReturnCode {
     if check_code == Trap {
       return Trap
     }
-    let { rt, args } = pop_arguments(rt, func_type)
+    let { rt, args, } = pop_arguments(rt, func_type)
     let rt = call_imported_function(
       rt,
       func_idx,
@@ -804,7 +804,7 @@ fn op_return_call_ref(rt : Instance) -> ReturnCode {
     if check_code == Trap {
       return Trap
     }
-    let { rt, args } = pop_arguments(rt, func_type)
+    let { rt, args, } = pop_arguments(rt, func_type)
     let rt = call_imported_function(
       rt,
       func_idx,

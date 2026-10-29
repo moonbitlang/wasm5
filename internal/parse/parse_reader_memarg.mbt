@@ -7,7 +7,9 @@
 /// - bits 0-5: alignment (log2)
 /// - bit 6: if set, memory index follows
 /// If bit 6 is not set, memory index defaults to 0
-fn Parser::read_memarg(self : Parser) -> (UInt, UInt, UInt) raise ParseError {
+fn Parser::read_memarg(
+  self : Parser,
+) -> (UInt32, UInt32, UInt32) raise ParseError {
   let flags_and_align = self.read_u32_leb128()
   let align = flags_and_align & 0x3F // bits 0-5
   let has_memory_index = (flags_and_align & 0x40) != 0 // bit 6

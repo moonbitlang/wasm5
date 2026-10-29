@@ -18,6 +18,9 @@ pub suberror ParseError {
   UnsupportedVersion
   InvalidFormat(String)
 } derive(@debug.Debug)
+pub fn ParseError::output(Self, &Logger) -> Unit
+pub fn ParseError::to_repr(Self) -> @debug.Repr
+pub fn ParseError::to_string(Self) -> String
 pub impl Show for ParseError
 
 // Types and methods
@@ -25,4 +28,3 @@ pub impl Show for ParseError
 // Type aliases
 
 // Traits
-

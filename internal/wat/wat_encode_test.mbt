@@ -5,7 +5,7 @@ async fn ensure_dir(path : String) -> Unit {
 
 ///|
 /// Keep child-process output away from the Moon test driver's JSON stream.
-async fn run_wasm_tools(args : ArrayView[String]) -> Int {
+async fn run_wasm_tools(args : ArrayView[String]) -> Int32 {
   let (exit_code, _, _) = @process.collect_output("wasm-tools", args)
   exit_code
 }
@@ -74,7 +74,7 @@ async fn assert_wat_matches(name : String, wat : String) -> Unit {
   let wat_file = @fs.create(wat_path, permission=0o644)
   defer wat_file.close()
   wat_file.write(wat)
-  let ours = wat_to_wasm(wat)
+  let ours = @wat.wat_to_wasm(wat)
   let ours_file = @fs.create(ours_path, permission=0o644)
   defer ours_file.close()
   ours_file.write(ours)
@@ -112,7 +112,7 @@ async fn assert_wat_matches_custom(name : String, wat : String) -> Unit {
   let wat_file = @fs.create(wat_path, permission=0o644)
   defer wat_file.close()
   wat_file.write(wat)
-  let ours = wat_to_wasm(wat)
+  let ours = @wat.wat_to_wasm(wat)
   let ours_file = @fs.create(ours_path, permission=0o644)
   defer ours_file.close()
   ours_file.write(ours)
@@ -148,7 +148,7 @@ async fn assert_wat_matches_with_names(name : String, wat : String) -> Unit {
   let wat_file = @fs.create(wat_path, permission=0o644)
   defer wat_file.close()
   wat_file.write(wat)
-  let ours = wat_to_wasm(wat)
+  let ours = @wat.wat_to_wasm(wat)
   let ours_file = @fs.create(ours_path, permission=0o644)
   defer ours_file.close()
   ours_file.write(ours)
@@ -316,7 +316,7 @@ test "wat parser rejects i32 offset for memory64 data" {
   let wat =
     #|(module (memory i64 1) (data (i32.const 0) "hi"))
   let mut saw_error = false
-  let _ = wat_to_module(wat) catch {
+  let _ = @wat.wat_to_module(wat) catch {
     _ => {
       saw_error = true
       empty_module()
@@ -330,7 +330,7 @@ test "wat parser rejects i32 offset for table64 elem" {
   let wat =
     #|(module (table i64 1 funcref) (elem (i32.const 0) funcref (ref.null func)))
   let mut saw_error = false
-  let _ = wat_to_module(wat) catch {
+  let _ = @wat.wat_to_module(wat) catch {
     _ => {
       saw_error = true
       empty_module()
@@ -877,7 +877,7 @@ test "wast parser exposes script commands" {
     #|  (module (func (export "f") (result i32) i32.const 1))
     #|  (register "m")
     #|  (assert_return (invoke "f") (i32.const 1)))
-  let commands = wast_to_script(wast)
+  let commands = @wat.wast_to_script(wast)
   assert_eq(commands.length(), 3)
   match commands[0] {
     Module(_) => ()
@@ -909,7 +909,7 @@ async test "wast parser extracts modules from script" {
     #|  (module quote "(func (export \"a\") (result i32) i32.const 1)")
     #|  (module (func (export "b") (result i32) i32.const 2))
     #|  (assert_return (invoke "b") (i32.const 2)))
-  let wasms = wast_to_wasm(wast)
+  let wasms = @wat.wast_to_wasm(wast)
   assert_eq(wasms.length(), 3)
   let binary_wat =
     #|(module)
@@ -926,7 +926,7 @@ async test "wast parser extracts modules from script" {
 async test "wast parser extracts modules from asserts" {
   let wast =
     #|(assert_invalid (module (func)) "msg")
-  let wasms = wast_to_wasm(wast)
+  let wasms = @wat.wast_to_wasm(wast)
   assert_eq(wasms.length(), 1)
   let wat =
     #|(module (func))

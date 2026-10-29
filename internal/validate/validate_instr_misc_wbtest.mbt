@@ -6,7 +6,9 @@ fn test_module_with_memory() -> @core.Module {
     customs: [],
     funcs: [],
     tables: [],
-    mems: [{ limits: { min: 0UL, max: None }, shared: false, memory64: false }],
+    mems: [
+      { limits: { min: 0UL, max: None, }, shared: false, memory64: false, },
+    ],
     globals: [],
     tags: [],
     elems: [],
@@ -28,7 +30,7 @@ fn test_module_with_table(elem_type : @core.RefType) -> @core.Module {
     tables: [
       {
         elem_type,
-        limits: { min: 0UL, max: None },
+        limits: { min: 0UL, max: None, },
         init: None,
         nullable: true,
         table64: false,
@@ -49,7 +51,7 @@ fn test_module_with_table(elem_type : @core.RefType) -> @core.Module {
 ///|
 test "validate variable instruction errors" {
   let module_empty = test_empty_module()
-  let func_type : @core.FuncType = { params: [], results: [] }
+  let func_type : @core.FuncType = { params: [], results: [], }
   let code = test_make_code([], [])
   let ctx = ValidationCtx::new_with_locals(func_type, code)
   let mut saw_error = false
@@ -109,8 +111,8 @@ test "validate variable instruction errors" {
     mems: [],
     globals: [
       {
-        type_: { val_type: I32, mutable: false },
-        init: { instrs: [I32Const(0U)] },
+        type_: { val_type: I32, mutable: false, },
+        init: { instrs: [I32Const(0U)], },
       },
     ],
     tags: [],
@@ -137,7 +139,7 @@ test "validate variable instruction errors" {
     }
   }
   assert_eq(saw_error, true)
-  let func_type_params : @core.FuncType = { params: [I32], results: [] }
+  let func_type_params : @core.FuncType = { params: [I32], results: [], }
   let code_params = test_make_code([], [])
   let ctx_param_get = ValidationCtx::new_with_locals(
     func_type_params, code_params,
@@ -224,7 +226,7 @@ test "validate variable instruction errors" {
       {
         module_: Bytes::from_array([b'i']),
         name: Bytes::from_array([b'g']),
-        desc: Global({ val_type: I64, mutable: false }),
+        desc: Global({ val_type: I64, mutable: false, }),
       },
     ],
     exports: [],
@@ -257,7 +259,7 @@ test "validate variable instruction errors" {
       {
         module_: Bytes::from_array([b'i']),
         name: Bytes::from_array([b'g']),
-        desc: Global({ val_type: I32, mutable: true }),
+        desc: Global({ val_type: I32, mutable: true, }),
       },
     ],
     exports: [],
@@ -295,7 +297,7 @@ test "validate variable instruction errors" {
       {
         module_: Bytes::from_array([b'i']),
         name: Bytes::from_array([b'g']),
-        desc: Global({ val_type: I32, mutable: true }),
+        desc: Global({ val_type: I32, mutable: true, }),
       },
     ],
     exports: [],
@@ -633,7 +635,7 @@ test "validate memory instruction errors" {
 test "validate reference instruction errors" {
   let module_empty = test_empty_module()
   let counts = get_import_counts(module_empty)
-  let declared_funcs : Set[Int] = Set([])
+  let declared_funcs : Set[Int32] = Set([])
   let mut saw_error = false
   let ctx_ref_func = ValidationCtx::new()
   let _ = validate_instruction_reference(
@@ -831,8 +833,8 @@ test "validate table instruction errors" {
 
 ///|
 test "validate control instruction branches" {
-  let declared_funcs : Set[Int] = Set([])
-  let func_type : @core.FuncType = { params: [I32], results: [I32] }
+  let declared_funcs : Set[Int32] = Set([])
+  let func_type : @core.FuncType = { params: [I32], results: [I32], }
   let module_funcs : @core.Module = {
     types: [Func(func_type)],
     type_groups: [],
@@ -841,7 +843,7 @@ test "validate control instruction branches" {
     tables: [
       {
         elem_type: Func,
-        limits: { min: 0UL, max: None },
+        limits: { min: 0UL, max: None, },
         init: None,
         nullable: true,
         table64: false,
@@ -870,8 +872,8 @@ test "validate control instruction branches" {
   saw_error = false
   let _ = validate_tail_call_return_type(
     test_empty_module(),
-    { params: [], results: [I32] },
-    { params: [], results: [] },
+    { params: [], results: [I32], },
+    { params: [], results: [], },
     "return_call",
   ) catch {
     _ => {
@@ -883,8 +885,8 @@ test "validate control instruction branches" {
   saw_error = false
   let _ = validate_tail_call_return_type(
     test_empty_module(),
-    { params: [], results: [I64] },
-    { params: [], results: [I32] },
+    { params: [], results: [I64], },
+    { params: [], results: [I32], },
     "return_call",
   ) catch {
     _ => {
@@ -896,7 +898,7 @@ test "validate control instruction branches" {
   let ctx_block = ValidationCtx::new()
   let ok = validate_instruction_control(
     test_empty_module(),
-    { params: [], results: [] },
+    { params: [], results: [], },
     code,
     ctx_block,
     Block(Empty, []),
@@ -907,7 +909,7 @@ test "validate control instruction branches" {
   let ctx_loop = ValidationCtx::new()
   let ok = validate_instruction_control(
     test_empty_module(),
-    { params: [], results: [] },
+    { params: [], results: [], },
     code,
     ctx_loop,
     Loop(Empty, []),
@@ -919,7 +921,7 @@ test "validate control instruction branches" {
   ctx_if.stack.push(I32)
   let ok = validate_instruction_control(
     test_empty_module(),
-    { params: [], results: [] },
+    { params: [], results: [], },
     code,
     ctx_if,
     If(Empty, [], []),
@@ -932,7 +934,7 @@ test "validate control instruction branches" {
   ctx_br.stack.push(I32)
   let ok = validate_instruction_control(
     test_empty_module(),
-    { params: [], results: [] },
+    { params: [], results: [], },
     code,
     ctx_br,
     Br(0U),
@@ -947,7 +949,7 @@ test "validate control instruction branches" {
   ctx_br_if.stack.push(I32)
   let ok = validate_instruction_control(
     test_empty_module(),
-    { params: [], results: [] },
+    { params: [], results: [], },
     code,
     ctx_br_if,
     BrIf(0U),
@@ -962,7 +964,7 @@ test "validate control instruction branches" {
   ctx_br_table.stack.push(I32)
   let ok = validate_instruction_control(
     test_empty_module(),
-    { params: [], results: [] },
+    { params: [], results: [], },
     code,
     ctx_br_table,
     BrTable([], 0U),
@@ -977,7 +979,7 @@ test "validate control instruction branches" {
   ctx_br_on_null.stack.push(FuncRef)
   let ok = validate_instruction_control(
     test_empty_module(),
-    { params: [], results: [] },
+    { params: [], results: [], },
     code,
     ctx_br_on_null,
     BrOnNull(0U),
@@ -992,7 +994,7 @@ test "validate control instruction branches" {
   ctx_br_on_non_null.stack.push(FuncRef)
   let ok = validate_instruction_control(
     test_empty_module(),
-    { params: [], results: [] },
+    { params: [], results: [], },
     code,
     ctx_br_on_non_null,
     BrOnNonNull(0U),
@@ -1005,7 +1007,7 @@ test "validate control instruction branches" {
   let ctx_return = ValidationCtx::new()
   let _ = validate_instruction_control(
     module_funcs,
-    { params: [], results: [I32] },
+    { params: [], results: [I32], },
     code,
     ctx_return,
     Return,
@@ -1022,7 +1024,7 @@ test "validate control instruction branches" {
   ctx_call.stack.push(I32)
   let ok = validate_instruction_control(
     module_funcs,
-    { params: [], results: [] },
+    { params: [], results: [], },
     code,
     ctx_call,
     Call(0U),
@@ -1036,7 +1038,7 @@ test "validate control instruction branches" {
   ctx_call_indirect.stack.push(I32)
   let ok = validate_instruction_control(
     module_funcs,
-    { params: [], results: [] },
+    { params: [], results: [], },
     code,
     ctx_call_indirect,
     CallIndirect(0U, 0U),
@@ -1049,7 +1051,7 @@ test "validate control instruction branches" {
   ctx_return_call.stack.push(I32)
   let ok = validate_instruction_control(
     module_funcs,
-    { params: [I32], results: [I32] },
+    { params: [I32], results: [I32], },
     code,
     ctx_return_call,
     ReturnCall(0U),
@@ -1063,7 +1065,7 @@ test "validate control instruction branches" {
   ctx_return_call_indirect.stack.push(I32)
   let ok = validate_instruction_control(
     module_funcs,
-    { params: [I32], results: [I32] },
+    { params: [I32], results: [I32], },
     code,
     ctx_return_call_indirect,
     ReturnCallIndirect(0U, 0U),
@@ -1077,7 +1079,7 @@ test "validate control instruction branches" {
   ctx_call_ref.stack.push(Ref(TypeIndex(0), true))
   let ok = validate_instruction_control(
     module_funcs,
-    { params: [], results: [] },
+    { params: [], results: [], },
     code,
     ctx_call_ref,
     CallRef(0U),
@@ -1091,7 +1093,7 @@ test "validate control instruction branches" {
   ctx_return_call_ref.stack.push(Ref(TypeIndex(0), true))
   let ok = validate_instruction_control(
     module_funcs,
-    { params: [I32], results: [I32] },
+    { params: [I32], results: [I32], },
     code,
     ctx_return_call_ref,
     ReturnCallRef(0U),
@@ -1104,8 +1106,8 @@ test "validate control instruction branches" {
 
 ///|
 test "validate control block loop if branches" {
-  let declared_funcs : Set[Int] = Set([])
-  let block_type : @core.FuncType = { params: [I32], results: [I64] }
+  let declared_funcs : Set[Int32] = Set([])
+  let block_type : @core.FuncType = { params: [I32], results: [I64], }
   let module_block : @core.Module = {
     types: [Func(block_type)],
     type_groups: [],
@@ -1124,7 +1126,7 @@ test "validate control block loop if branches" {
   }
   let counts = get_import_counts(module_block)
   let code = test_make_code([], [])
-  let empty_func : @core.FuncType = { params: [], results: [] }
+  let empty_func : @core.FuncType = { params: [], results: [], }
   let ctx_block = ValidationCtx::new()
   ctx_block.stack.push(I32)
   let ok = validate_instruction_control(
@@ -1275,11 +1277,11 @@ test "validate control block loop if branches" {
 
 ///|
 test "validate control branch errors" {
-  let declared_funcs : Set[Int] = Set([])
+  let declared_funcs : Set[Int32] = Set([])
   let module_empty = test_empty_module()
   let counts = get_import_counts(module_empty)
   let code = test_make_code([], [])
-  let func_type_ret : @core.FuncType = { params: [], results: [I32] }
+  let func_type_ret : @core.FuncType = { params: [], results: [I32], }
   let mut saw_error = false
   let ctx_return_bad = ValidationCtx::new()
   ctx_return_bad.stack.push(I64)
@@ -1461,14 +1463,14 @@ test "validate control branch errors" {
 
 ///|
 test "validate control loop results" {
-  let declared_funcs : Set[Int] = Set([])
+  let declared_funcs : Set[Int32] = Set([])
   let module_empty = test_empty_module()
   let counts = get_import_counts(module_empty)
   let code = test_make_code([], [])
   let ctx_loop_result = ValidationCtx::new()
   let ok = validate_instruction_control(
     module_empty,
-    { params: [], results: [] },
+    { params: [], results: [], },
     code,
     ctx_loop_result,
     Loop(Value(I32), [I32Const(0U)]),
@@ -1482,8 +1484,8 @@ test "validate control loop results" {
 
 ///|
 test "validate control if branch coverage" {
-  let declared_funcs : Set[Int] = Set([])
-  let block_type : @core.FuncType = { params: [I32], results: [I32] }
+  let declared_funcs : Set[Int32] = Set([])
+  let block_type : @core.FuncType = { params: [I32], results: [I32], }
   let module_if : @core.Module = {
     types: [Func(block_type)],
     type_groups: [],
@@ -1502,7 +1504,7 @@ test "validate control if branch coverage" {
   }
   let counts = get_import_counts(module_if)
   let code = test_make_code([], [])
-  let empty_func : @core.FuncType = { params: [], results: [] }
+  let empty_func : @core.FuncType = { params: [], results: [], }
   let ctx_then_unreachable = ValidationCtx::new()
   ctx_then_unreachable.stack.push(I32)
   ctx_then_unreachable.stack.push(I32)
@@ -1572,14 +1574,14 @@ test "validate control if branch coverage" {
 
 ///|
 test "validate control returns false on non-control" {
-  let declared_funcs : Set[Int] = Set([])
+  let declared_funcs : Set[Int32] = Set([])
   let module_empty = test_empty_module()
   let counts = get_import_counts(module_empty)
   let code = test_make_code([], [])
   let ctx = ValidationCtx::new()
   let ok = validate_instruction_control(
     module_empty,
-    { params: [], results: [] },
+    { params: [], results: [], },
     code,
     ctx,
     I32Const(0U),
@@ -1591,11 +1593,11 @@ test "validate control returns false on non-control" {
 
 ///|
 test "validate control br_on_null conversions" {
-  let declared_funcs : Set[Int] = Set([])
+  let declared_funcs : Set[Int32] = Set([])
   let module_empty = test_empty_module()
   let counts = get_import_counts(module_empty)
   let code = test_make_code([], [])
-  let empty_func : @core.FuncType = { params: [], results: [] }
+  let empty_func : @core.FuncType = { params: [], results: [], }
   // All BrOnNull tests need a control frame to branch to
   let ctx_ref_nullable = ValidationCtx::new()
   ctx_ref_nullable.push_control([], [])
@@ -1713,11 +1715,11 @@ test "validate control br_on_null conversions" {
 
 ///|
 test "validate control call errors" {
-  let declared_funcs : Set[Int] = Set([])
+  let declared_funcs : Set[Int32] = Set([])
   let module_empty = test_empty_module()
   let counts_empty = get_import_counts(module_empty)
   let code = test_make_code([], [])
-  let empty_func : @core.FuncType = { params: [], results: [] }
+  let empty_func : @core.FuncType = { params: [], results: [], }
   let mut saw_error = false
   let ctx_call_bad = ValidationCtx::new()
   let _ = validate_instruction_control(
@@ -1753,7 +1755,7 @@ test "validate control call errors" {
   }
   assert_eq(saw_error, true)
   let module_import_table : @core.Module = {
-    types: [Func({ params: [], results: [] })],
+    types: [Func({ params: [], results: [], })],
     type_groups: [],
     customs: [],
     funcs: [],
@@ -1770,7 +1772,7 @@ test "validate control call errors" {
         name: Bytes::from_array([b't']),
         desc: Table({
           elem_type: Func,
-          limits: { min: 0UL, max: None },
+          limits: { min: 0UL, max: None, },
           init: None,
           nullable: true,
           table64: false,
@@ -1794,7 +1796,7 @@ test "validate control call errors" {
   )
   assert_eq(ok, true)
   let module_import_scan : @core.Module = {
-    types: [Func({ params: [], results: [] })],
+    types: [Func({ params: [], results: [], })],
     type_groups: [],
     customs: [],
     funcs: [],
@@ -1816,7 +1818,7 @@ test "validate control call errors" {
         name: Bytes::from_array([b't']),
         desc: Table({
           elem_type: Func,
-          limits: { min: 0UL, max: None },
+          limits: { min: 0UL, max: None, },
           init: None,
           nullable: true,
           table64: false,
@@ -1853,14 +1855,14 @@ test "validate control call errors" {
   assert_eq(ok, true)
   saw_error = false
   let module_table_bad : @core.Module = {
-    types: [Func({ params: [], results: [] })],
+    types: [Func({ params: [], results: [], })],
     type_groups: [],
     customs: [],
     funcs: [],
     tables: [
       {
         elem_type: Extern,
-        limits: { min: 0UL, max: None },
+        limits: { min: 0UL, max: None, },
         init: None,
         nullable: true,
         table64: false,
@@ -1901,7 +1903,7 @@ test "validate control call errors" {
     tables: [
       {
         elem_type: Func,
-        limits: { min: 0UL, max: None },
+        limits: { min: 0UL, max: None, },
         init: None,
         nullable: true,
         table64: false,
@@ -1935,7 +1937,7 @@ test "validate control call errors" {
   assert_eq(saw_error, true)
   saw_error = false
   let module_return_call : @core.Module = {
-    types: [Func({ params: [], results: [] })],
+    types: [Func({ params: [], results: [], })],
     type_groups: [],
     customs: [],
     funcs: [1U],
@@ -2067,9 +2069,9 @@ test "validate control call errors" {
 
 ///|
 test "validate function stack mismatch" {
-  let declared_funcs : Set[Int] = Set([])
+  let declared_funcs : Set[Int32] = Set([])
   let module_empty = test_empty_module()
-  let func_type : @core.FuncType = { params: [], results: [] }
+  let func_type : @core.FuncType = { params: [], results: [], }
   let code = test_make_code([], [I32Const(0U)])
   let mut saw_error = false
   let _ = validate_function(
@@ -2086,7 +2088,7 @@ test "validate function stack mismatch" {
   }
   assert_eq(saw_error, true)
   let module_types : @core.Module = {
-    types: [Func({ params: [], results: [] })],
+    types: [Func({ params: [], results: [], })],
     type_groups: [],
     customs: [],
     funcs: [],
@@ -2114,7 +2116,7 @@ test "validate function stack mismatch" {
     declared_funcs,
   )
   saw_error = false
-  let func_type_result : @core.FuncType = { params: [], results: [I32] }
+  let func_type_result : @core.FuncType = { params: [], results: [I32], }
   let code_result = test_make_code([], [I64Const(0UL)])
   let _ = validate_function(
     module_empty,

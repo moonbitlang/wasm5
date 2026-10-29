@@ -21,7 +21,10 @@ let invalid_type_patterns : Array[InvalidTypePattern] = [
     msg_patterns: ["array", "out of bounds"],
     expected_pattern: "out of bounds array access",
   },
-  { msg_patterns: ["undefined element"], expected_pattern: "undefined element" },
+  {
+    msg_patterns: ["undefined element"],
+    expected_pattern: "undefined element",
+  },
   {
     msg_patterns: ["uninitialized element"],
     expected_pattern: "uninitialized element",
@@ -46,8 +49,8 @@ let invalid_type_patterns : Array[InvalidTypePattern] = [
     msg_patterns: ["null array reference"],
     expected_pattern: "null array reference",
   },
-  { msg_patterns: ["cast failed"], expected_pattern: "cast failure" },
-  { msg_patterns: ["null reference"], expected_pattern: "null reference" },
+  { msg_patterns: ["cast failed"], expected_pattern: "cast failure", },
+  { msg_patterns: ["null reference"], expected_pattern: "null reference", },
 ]
 
 ///|
@@ -78,7 +81,7 @@ priv struct TrapErrorMapping {
 ///|
 /// Standard trap error mappings (non-InvalidType errors)
 let trap_error_mappings : Array[TrapErrorMapping] = [
-  { error_name: "DivisionByZero", expected_patterns: ["divide by zero"] },
+  { error_name: "DivisionByZero", expected_patterns: ["divide by zero"], },
   {
     error_name: "IntegerOverflow",
     expected_patterns: ["overflow", "invalid conversion"],
@@ -91,7 +94,7 @@ let trap_error_mappings : Array[TrapErrorMapping] = [
     error_name: "TableOutOfBounds",
     expected_patterns: ["out of bounds table access"],
   },
-  { error_name: "Unreachable", expected_patterns: ["unreachable"] },
+  { error_name: "Unreachable", expected_patterns: ["unreachable"], },
 ]
 
 ///|
@@ -275,7 +278,7 @@ fn check_validation_error_match(
 fn check_trap_error_mismatch(
   error_name : String,
   expected : String,
-  msg? : String = "",
+  msg~ : String = "",
 ) -> String? {
   match get_trap_mapping(error_name) {
     Some(mapping) =>

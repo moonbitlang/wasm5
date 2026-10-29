@@ -8,45 +8,45 @@ import {
 // Values
 pub fn atomic_spec_by_name(Bytes) -> AtomicSpec?
 
-pub fn atomic_spec_by_opcode(UInt) -> AtomicSpec?
+pub fn atomic_spec_by_opcode(UInt32) -> AtomicSpec?
 
 pub fn atomic_stack_effect(Bytes) -> AtomicStackEffect
 
-pub let compiled_module_version : Int
+pub let compiled_module_version : Int32
 
-pub fn count_imported_funcs(Module) -> Int
+pub fn count_imported_funcs(Module) -> Int32
 
-pub fn count_imported_globals(Module) -> Int
+pub fn count_imported_globals(Module) -> Int32
 
-pub fn count_imported_mems(Module) -> Int
+pub fn count_imported_mems(Module) -> Int32
 
-pub fn count_imported_tables(Module) -> Int
+pub fn count_imported_tables(Module) -> Int32
 
-pub fn gc_types_equivalent(Module, Int, Int) -> Bool
+pub fn gc_types_equivalent(Module, Int32, Int32) -> Bool
 
-pub fn get_func_type(Module, Int) -> FuncType
+pub fn get_func_type(Module, Int32) -> FuncType
 
-pub fn get_func_type_idx(Module, Int, Int) -> Int
+pub fn get_func_type_idx(Module, Int32, Int32) -> Int32
 
-pub fn get_global_type(Module, Int, Int) -> GlobalType?
+pub fn get_global_type(Module, Int32, Int32) -> GlobalType?
 
-pub fn get_immediate_count(Int64) -> Int
+pub fn get_immediate_count(Int64) -> Int32
 
 pub fn get_import_counts(Module) -> ImportCounts
 
-pub fn get_mem_type(Module, Int, Int) -> MemType?
+pub fn get_mem_type(Module, Int32, Int32) -> MemType?
 
-pub fn get_table_type(Module, Int, Int) -> TableType?
+pub fn get_table_type(Module, Int32, Int32) -> TableType?
 
-pub fn is_array_type_index(Module, Int) -> Bool
+pub fn is_array_type_index(Module, Int32) -> Bool
 
-pub fn is_func_type_index(Module, Int) -> Bool
+pub fn is_func_type_index(Module, Int32) -> Bool
 
-pub fn is_struct_type_index(Module, Int) -> Bool
+pub fn is_struct_type_index(Module, Int32) -> Bool
 
 pub fn simd_spec_by_name(Bytes) -> SimdSpec?
 
-pub fn simd_spec_by_opcode(UInt) -> SimdSpec?
+pub fn simd_spec_by_opcode(UInt32) -> SimdSpec?
 
 pub fn simd_stack_effect(Bytes) -> SimdStackEffect
 
@@ -56,27 +56,35 @@ pub fn simd_stack_effect(Bytes) -> SimdStackEffect
 pub(all) struct ArrayType {
   element : FieldType
 } derive(Eq, @debug.Debug)
+pub fn ArrayType::equal(Self, Self) -> Bool
+pub fn ArrayType::not_equal(Self, Self) -> Bool
+pub fn ArrayType::to_repr(Self) -> @debug.Repr
 
 pub(all) enum AtomicImmKind {
   None
   MemArg
   Fence
 } derive(Eq, @debug.Debug)
+pub fn AtomicImmKind::equal(Self, Self) -> Bool
+pub fn AtomicImmKind::not_equal(Self, Self) -> Bool
+pub fn AtomicImmKind::to_repr(Self) -> @debug.Repr
 
 pub(all) enum AtomicImmediate {
   None
-  MemArg(UInt, UInt, UInt)
-  Fence(UInt)
+  MemArg(UInt32, UInt32, UInt32)
+  Fence(UInt32)
 } derive(@debug.Debug)
+pub fn AtomicImmediate::to_repr(Self) -> @debug.Repr
 
 pub(all) struct AtomicInstr {
-  opcode : UInt
+  opcode : UInt32
   imm : AtomicImmediate
 } derive(@debug.Debug)
+pub fn AtomicInstr::to_repr(Self) -> @debug.Repr
 
 pub(all) struct AtomicSpec {
   name : Bytes
-  opcode : UInt
+  opcode : UInt32
   imm : AtomicImmKind
 }
 
@@ -85,41 +93,44 @@ pub(all) enum AtomicStackEffect {
   Notify
   Wait32
   Wait64
-  Load(ValType, Int)
-  Store(ValType, Int)
-  Rmw(ValType, Int)
-  Cmpxchg(ValType, Int)
+  Load(ValType, Int32)
+  Store(ValType, Int32)
+  Rmw(ValType, Int32)
+  Cmpxchg(ValType, Int32)
 } derive(@debug.Debug)
+pub fn AtomicStackEffect::to_repr(Self) -> @debug.Repr
 
 pub(all) enum BlockType {
   Empty
   Value(ValType)
-  TypeIndex(Int)
+  TypeIndex(Int32)
 } derive(@debug.Debug)
+pub fn BlockType::to_repr(Self) -> @debug.Repr
 
 pub(all) enum CatchClause {
-  Catch(UInt, UInt)
-  CatchRef(UInt, UInt)
-  CatchAll(UInt)
-  CatchAllRef(UInt)
+  Catch(UInt32, UInt32)
+  CatchRef(UInt32, UInt32)
+  CatchAll(UInt32)
+  CatchAllRef(UInt32)
 } derive(@debug.Debug)
+pub fn CatchClause::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Code {
   locals : Array[ValType]
   body : Expr
-  mut compiled : Int?
-  mut max_stack_height : Int
+  mut compiled : Int32?
+  mut max_stack_height : Int32
 }
 
 pub(all) struct CompiledModule {
   code : Array[Int64]
-  func_entries : Array[Int]
-  func_num_locals : Array[Int]
-  func_num_params : Array[Int]
-  func_num_results : Array[Int]
-  func_max_stack : Array[Int]
-  exports : Map[String, Int]
-  version : Int
+  func_entries : Array[Int32]
+  func_num_locals : Array[Int32]
+  func_num_params : Array[Int32]
+  func_num_results : Array[Int32]
+  func_max_stack : Array[Int32]
+  exports : Map[String, Int32]
+  version : Int32
 }
 pub fn CompiledModule::new() -> Self
 
@@ -129,22 +140,28 @@ pub(all) enum CustomPlacement {
   After(SectionId)
   End
 } derive(Eq, @debug.Debug)
+pub fn CustomPlacement::equal(Self, Self) -> Bool
+pub fn CustomPlacement::not_equal(Self, Self) -> Bool
+pub fn CustomPlacement::to_repr(Self) -> @debug.Repr
 
 pub(all) struct CustomSection {
   name : Bytes
   data : Bytes
   placement : CustomPlacement
 } derive(Eq, @debug.Debug)
+pub fn CustomSection::equal(Self, Self) -> Bool
+pub fn CustomSection::not_equal(Self, Self) -> Bool
+pub fn CustomSection::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Data {
-  mem_idx : UInt
+  mem_idx : UInt32
   offset : Expr
   init : BytesView
   is_active : Bool
 }
 
 pub(all) struct Elem {
-  table_idx : UInt
+  table_idx : UInt32
   offset : Expr
   init : Array[Expr]
   is_active : Bool
@@ -160,11 +177,11 @@ pub(all) struct Export {
 }
 
 pub(all) enum ExportDesc {
-  Func(UInt)
-  Table(UInt)
-  Mem(UInt)
-  Global(UInt)
-  Tag(UInt)
+  Func(UInt32)
+  Table(UInt32)
+  Mem(UInt32)
+  Global(UInt32)
+  Tag(UInt32)
 }
 
 pub(all) struct Expr {
@@ -175,11 +192,17 @@ pub(all) struct FieldType {
   storage : StorageType
   mutable : Bool
 } derive(Eq, @debug.Debug)
+pub fn FieldType::equal(Self, Self) -> Bool
+pub fn FieldType::not_equal(Self, Self) -> Bool
+pub fn FieldType::to_repr(Self) -> @debug.Repr
 
 pub(all) struct FuncType {
   params : Array[ValType]
   results : Array[ValType]
 } derive(Eq, @debug.Debug)
+pub fn FuncType::equal(Self, Self) -> Bool
+pub fn FuncType::not_equal(Self, Self) -> Bool
+pub fn FuncType::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Global {
   type_ : GlobalType
@@ -198,19 +221,19 @@ pub(all) struct Import {
 }
 
 pub struct ImportCounts {
-  funcs : Int
-  tables : Int
-  mems : Int
-  globals : Int
-  tags : Int
+  funcs : Int32
+  tables : Int32
+  mems : Int32
+  globals : Int32
+  tags : Int32
 }
 
 pub(all) enum ImportDesc {
-  Func(UInt)
+  Func(UInt32)
   Table(TableType)
   Mem(MemType)
   Global(GlobalType)
-  Tag(UInt)
+  Tag(UInt32)
 }
 
 pub(all) enum Instr {
@@ -220,102 +243,102 @@ pub(all) enum Instr {
   Loop(BlockType, Array[Instr])
   If(BlockType, Array[Instr], Array[Instr])
   TryTable(BlockType, Array[CatchClause], Array[Instr])
-  Br(UInt)
-  BrIf(UInt)
-  BrTable(Array[UInt], UInt)
-  BrOnNull(UInt)
-  BrOnNonNull(UInt)
+  Br(UInt32)
+  BrIf(UInt32)
+  BrTable(Array[UInt32], UInt32)
+  BrOnNull(UInt32)
+  BrOnNonNull(UInt32)
   Return
-  Call(UInt)
-  CallIndirect(UInt, UInt)
-  ReturnCall(UInt)
-  ReturnCallIndirect(UInt, UInt)
-  CallRef(UInt)
-  ReturnCallRef(UInt)
-  Throw(UInt)
-  Rethrow(UInt)
+  Call(UInt32)
+  CallIndirect(UInt32, UInt32)
+  ReturnCall(UInt32)
+  ReturnCallIndirect(UInt32, UInt32)
+  CallRef(UInt32)
+  ReturnCallRef(UInt32)
+  Throw(UInt32)
+  Rethrow(UInt32)
   Simd(SimdInstr)
   Atomic(AtomicInstr)
   Drop
   Select
   SelectTyped(Array[ValType])
-  LocalGet(UInt)
-  LocalSet(UInt)
-  LocalTee(UInt)
-  GlobalGet(UInt)
-  GlobalSet(UInt)
-  I32Load(UInt, UInt, UInt)
-  I64Load(UInt, UInt, UInt)
-  F32Load(UInt, UInt, UInt)
-  F64Load(UInt, UInt, UInt)
-  I32Load8S(UInt, UInt, UInt)
-  I32Load8U(UInt, UInt, UInt)
-  I32Load16S(UInt, UInt, UInt)
-  I32Load16U(UInt, UInt, UInt)
-  I64Load8S(UInt, UInt, UInt)
-  I64Load8U(UInt, UInt, UInt)
-  I64Load16S(UInt, UInt, UInt)
-  I64Load16U(UInt, UInt, UInt)
-  I64Load32S(UInt, UInt, UInt)
-  I64Load32U(UInt, UInt, UInt)
-  I32Store(UInt, UInt, UInt)
-  I64Store(UInt, UInt, UInt)
-  F32Store(UInt, UInt, UInt)
-  F64Store(UInt, UInt, UInt)
-  I32Store8(UInt, UInt, UInt)
-  I32Store16(UInt, UInt, UInt)
-  I64Store8(UInt, UInt, UInt)
-  I64Store16(UInt, UInt, UInt)
-  I64Store32(UInt, UInt, UInt)
-  MemorySize(UInt)
-  MemoryGrow(UInt)
-  TableGet(UInt)
-  TableSet(UInt)
-  TableSize(UInt)
-  TableGrow(UInt)
-  TableInit(UInt, UInt)
-  TableCopy(UInt, UInt)
-  TableFill(UInt)
-  ElemDrop(UInt)
-  MemoryInit(UInt, UInt)
-  DataDrop(UInt)
-  MemoryCopy(UInt, UInt)
-  MemoryFill(UInt)
+  LocalGet(UInt32)
+  LocalSet(UInt32)
+  LocalTee(UInt32)
+  GlobalGet(UInt32)
+  GlobalSet(UInt32)
+  I32Load(UInt32, UInt32, UInt32)
+  I64Load(UInt32, UInt32, UInt32)
+  F32Load(UInt32, UInt32, UInt32)
+  F64Load(UInt32, UInt32, UInt32)
+  I32Load8S(UInt32, UInt32, UInt32)
+  I32Load8U(UInt32, UInt32, UInt32)
+  I32Load16S(UInt32, UInt32, UInt32)
+  I32Load16U(UInt32, UInt32, UInt32)
+  I64Load8S(UInt32, UInt32, UInt32)
+  I64Load8U(UInt32, UInt32, UInt32)
+  I64Load16S(UInt32, UInt32, UInt32)
+  I64Load16U(UInt32, UInt32, UInt32)
+  I64Load32S(UInt32, UInt32, UInt32)
+  I64Load32U(UInt32, UInt32, UInt32)
+  I32Store(UInt32, UInt32, UInt32)
+  I64Store(UInt32, UInt32, UInt32)
+  F32Store(UInt32, UInt32, UInt32)
+  F64Store(UInt32, UInt32, UInt32)
+  I32Store8(UInt32, UInt32, UInt32)
+  I32Store16(UInt32, UInt32, UInt32)
+  I64Store8(UInt32, UInt32, UInt32)
+  I64Store16(UInt32, UInt32, UInt32)
+  I64Store32(UInt32, UInt32, UInt32)
+  MemorySize(UInt32)
+  MemoryGrow(UInt32)
+  TableGet(UInt32)
+  TableSet(UInt32)
+  TableSize(UInt32)
+  TableGrow(UInt32)
+  TableInit(UInt32, UInt32)
+  TableCopy(UInt32, UInt32)
+  TableFill(UInt32)
+  ElemDrop(UInt32)
+  MemoryInit(UInt32, UInt32)
+  DataDrop(UInt32)
+  MemoryCopy(UInt32, UInt32)
+  MemoryFill(UInt32)
   RefNull(RefType)
-  RefFunc(UInt)
+  RefFunc(UInt32)
   RefIsNull
   RefEq
   RefAsNonNull
   RefTest(RefType, Bool)
   RefCast(RefType, Bool)
-  StructNew(UInt)
-  StructNewDefault(UInt)
-  StructGet(UInt, UInt)
-  StructGetS(UInt, UInt)
-  StructGetU(UInt, UInt)
-  StructSet(UInt, UInt)
-  ArrayNew(UInt)
-  ArrayNewDefault(UInt)
-  ArrayNewFixed(UInt, UInt)
-  ArrayNewData(UInt, UInt)
-  ArrayNewElem(UInt, UInt)
-  ArrayGet(UInt)
-  ArrayGetS(UInt)
-  ArrayGetU(UInt)
-  ArraySet(UInt)
+  StructNew(UInt32)
+  StructNewDefault(UInt32)
+  StructGet(UInt32, UInt32)
+  StructGetS(UInt32, UInt32)
+  StructGetU(UInt32, UInt32)
+  StructSet(UInt32, UInt32)
+  ArrayNew(UInt32)
+  ArrayNewDefault(UInt32)
+  ArrayNewFixed(UInt32, UInt32)
+  ArrayNewData(UInt32, UInt32)
+  ArrayNewElem(UInt32, UInt32)
+  ArrayGet(UInt32)
+  ArrayGetS(UInt32)
+  ArrayGetU(UInt32)
+  ArraySet(UInt32)
   ArrayLen
-  ArrayFill(UInt)
-  ArrayCopy(UInt, UInt)
-  ArrayInitData(UInt, UInt)
-  ArrayInitElem(UInt, UInt)
-  BrOnCast(UInt, RefType, Bool, RefType, Bool)
-  BrOnCastFail(UInt, RefType, Bool, RefType, Bool)
+  ArrayFill(UInt32)
+  ArrayCopy(UInt32, UInt32)
+  ArrayInitData(UInt32, UInt32)
+  ArrayInitElem(UInt32, UInt32)
+  BrOnCast(UInt32, RefType, Bool, RefType, Bool)
+  BrOnCastFail(UInt32, RefType, Bool, RefType, Bool)
   AnyConvertExtern
   ExternConvertAny
   RefI31
   I31GetS
   I31GetU
-  I32Const(UInt)
+  I32Const(UInt32)
   I64Const(UInt64)
   F32Const(Float)
   F64Const(Double)
@@ -456,6 +479,9 @@ pub(all) enum Instr {
   I64TruncSatF64S
   I64TruncSatF64U
 } derive(@debug.Debug)
+pub fn Instr::output(Self, &Logger) -> Unit
+pub fn Instr::to_repr(Self) -> @debug.Repr
+pub fn Instr::to_string(Self) -> String
 pub impl Show for Instr
 
 pub(all) struct Limits {
@@ -473,14 +499,14 @@ pub(all) struct Module {
   types : Array[TypeDef]
   type_groups : Array[TypeGroup]
   customs : Array[CustomSection]
-  funcs : Array[UInt]
+  funcs : Array[UInt32]
   tables : Array[TableType]
   mems : Array[MemType]
   globals : Array[Global]
   tags : Array[Tag]
   elems : Array[Elem]
   datas : Array[Data]
-  start : UInt?
+  start : UInt32?
   imports : Array[Import]
   exports : Array[Export]
   codes : Array[Code]
@@ -729,8 +755,11 @@ pub(all) enum OpTag {
   ReturnCallIndirect
   ReturnCallRef
 } derive(Eq, @debug.Debug)
+pub fn OpTag::equal(Self, Self) -> Bool
 pub fn OpTag::from_int64(Int64) -> Self?
+pub fn OpTag::not_equal(Self, Self) -> Bool
 pub fn OpTag::to_int64(Self) -> Int64
+pub fn OpTag::to_repr(Self) -> @debug.Repr
 
 pub(all) enum RefType {
   Func
@@ -745,8 +774,13 @@ pub(all) enum RefType {
   NoFunc
   NoExtern
   NoExn
-  TypeIndex(Int)
+  TypeIndex(Int32)
 } derive(Eq, @debug.Debug)
+pub fn RefType::equal(Self, Self) -> Bool
+pub fn RefType::not_equal(Self, Self) -> Bool
+pub fn RefType::output(Self, &Logger) -> Unit
+pub fn RefType::to_repr(Self) -> @debug.Repr
+pub fn RefType::to_string(Self) -> String
 pub impl Show for RefType
 
 pub(all) enum SectionId {
@@ -764,6 +798,9 @@ pub(all) enum SectionId {
   Code
   Data
 } derive(Eq, @debug.Debug)
+pub fn SectionId::equal(Self, Self) -> Bool
+pub fn SectionId::not_equal(Self, Self) -> Bool
+pub fn SectionId::to_repr(Self) -> @debug.Repr
 
 pub(all) enum SimdImmKind {
   None
@@ -773,24 +810,29 @@ pub(all) enum SimdImmKind {
   Shuffle
   V128Const
 } derive(Eq, @debug.Debug)
+pub fn SimdImmKind::equal(Self, Self) -> Bool
+pub fn SimdImmKind::not_equal(Self, Self) -> Bool
+pub fn SimdImmKind::to_repr(Self) -> @debug.Repr
 
 pub(all) enum SimdImmediate {
   None
-  MemArg(UInt, UInt, UInt)
-  Lane(UInt)
-  MemArgLane(UInt, UInt, UInt, UInt)
+  MemArg(UInt32, UInt32, UInt32)
+  Lane(UInt32)
+  MemArgLane(UInt32, UInt32, UInt32, UInt32)
   Shuffle(Array[Byte])
   V128Const(Array[Byte])
 } derive(@debug.Debug)
+pub fn SimdImmediate::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SimdInstr {
-  opcode : UInt
+  opcode : UInt32
   imm : SimdImmediate
 } derive(@debug.Debug)
+pub fn SimdInstr::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SimdSpec {
   name : Bytes
-  opcode : UInt
+  opcode : UInt32
   imm : SimdImmKind
 }
 
@@ -809,22 +851,32 @@ pub(all) enum SimdStackEffect {
   Extract(ValType)
   Replace(ValType)
 } derive(@debug.Debug)
+pub fn SimdStackEffect::to_repr(Self) -> @debug.Repr
 
 pub(all) enum StorageType {
   Val(ValType)
   I8
   I16
 } derive(Eq, @debug.Debug)
+pub fn StorageType::equal(Self, Self) -> Bool
+pub fn StorageType::not_equal(Self, Self) -> Bool
+pub fn StorageType::to_repr(Self) -> @debug.Repr
 
 pub(all) struct StructType {
   fields : Array[FieldType]
 } derive(Eq, @debug.Debug)
+pub fn StructType::equal(Self, Self) -> Bool
+pub fn StructType::not_equal(Self, Self) -> Bool
+pub fn StructType::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SubTypeDef {
-  type_idx : UInt
-  supertypes : Array[UInt]
+  type_idx : UInt32
+  supertypes : Array[UInt32]
   is_final : Bool
 } derive(Eq, @debug.Debug)
+pub fn SubTypeDef::equal(Self, Self) -> Bool
+pub fn SubTypeDef::not_equal(Self, Self) -> Bool
+pub fn SubTypeDef::to_repr(Self) -> @debug.Repr
 
 pub(all) struct TableType {
   elem_type : RefType
@@ -835,7 +887,7 @@ pub(all) struct TableType {
 }
 
 pub(all) struct Tag {
-  type_idx : UInt
+  type_idx : UInt32
 }
 
 pub(all) enum TypeDef {
@@ -843,11 +895,17 @@ pub(all) enum TypeDef {
   Struct(StructType)
   Array(ArrayType)
 } derive(Eq, @debug.Debug)
+pub fn TypeDef::equal(Self, Self) -> Bool
+pub fn TypeDef::not_equal(Self, Self) -> Bool
+pub fn TypeDef::to_repr(Self) -> @debug.Repr
 
 pub(all) struct TypeGroup {
   subtypes : Array[SubTypeDef]
   explicit : Bool
 } derive(Eq, @debug.Debug)
+pub fn TypeGroup::equal(Self, Self) -> Bool
+pub fn TypeGroup::not_equal(Self, Self) -> Bool
+pub fn TypeGroup::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ValType {
   I32
@@ -869,23 +927,32 @@ pub(all) enum ValType {
   ArrayRef
   Ref(RefType, Bool)
 } derive(Eq, @debug.Debug)
+pub fn ValType::equal(Self, Self) -> Bool
 pub fn ValType::is_defaultable(Self) -> Bool
 pub fn ValType::is_ref_type(Self) -> Bool
+pub fn ValType::not_equal(Self, Self) -> Bool
+pub fn ValType::output(Self, &Logger) -> Unit
 pub fn ValType::to_non_nullable(Self) -> Self
+pub fn ValType::to_repr(Self) -> @debug.Repr
+pub fn ValType::to_string(Self) -> String
 pub impl Show for ValType
 
 pub(all) enum Value {
-  I32(UInt)
+  I32(UInt32)
   I64(UInt64)
   F32(Float)
   F64(Double)
-  Ref(Int?)
-  Funcref(Int?)
-  Externref(Int?)
+  Ref(Int32?)
+  Funcref(Int32?)
+  Externref(Int32?)
 } derive(Eq, @debug.Debug)
+pub fn Value::equal(Self, Self) -> Bool
+pub fn Value::not_equal(Self, Self) -> Bool
+pub fn Value::output(Self, &Logger) -> Unit
+pub fn Value::to_repr(Self) -> @debug.Repr
+pub fn Value::to_string(Self) -> String
 pub impl Show for Value
 
 // Type aliases
 
 // Traits
-

@@ -12,36 +12,39 @@ pub fn validate_module(@core.Module) -> Unit raise ValidationError
 // Errors
 pub(all) suberror ValidationError {
   TypeMismatch(String)
-  InvalidFunctionIndex(Int)
-  InvalidTypeIndex(Int)
-  InvalidLocalIndex(Int)
-  InvalidGlobalIndex(Int)
-  UnknownGlobal(Int)
+  InvalidFunctionIndex(Int32)
+  InvalidTypeIndex(Int32)
+  InvalidLocalIndex(Int32)
+  InvalidGlobalIndex(Int32)
+  UnknownGlobal(Int32)
   StackSizeMismatch(String)
   InvalidResultArity(String)
   InvalidAlignment(String)
-  UnknownLabel(Int)
+  UnknownLabel(Int32)
   InvalidStartFunction(String)
-  UnknownMemory(Int)
+  UnknownMemory(Int32)
   InvalidMemorySize(String)
-  ImmutableGlobal(Int)
+  ImmutableGlobal(Int32)
   DuplicateExport(String)
-  UnknownExportedFunction(Int)
-  UnknownExportedMemory(Int)
-  UnknownExportedTable(Int)
-  UnknownExportedGlobal(Int)
-  UnknownTag(Int)
-  UnknownExportedTag(Int)
+  UnknownExportedFunction(Int32)
+  UnknownExportedMemory(Int32)
+  UnknownExportedTable(Int32)
+  UnknownExportedGlobal(Int32)
+  UnknownTag(Int32)
+  UnknownExportedTag(Int32)
   InvalidTableSize(String)
-  UnknownTable(Int)
+  UnknownTable(Int32)
   ConstantExpressionRequired(String)
-  UninitializedLocal(Int)
-  UnknownType(Int)
-  UndeclaredFunctionReference(Int)
-  InvalidElemIndex(Int)
-  UnknownDataSegment(Int)
+  UninitializedLocal(Int32)
+  UnknownType(Int32)
+  UndeclaredFunctionReference(Int32)
+  InvalidElemIndex(Int32)
+  UnknownDataSegment(Int32)
   InvalidSubtype(String)
 } derive(@debug.Debug)
+pub fn ValidationError::output(Self, &Logger) -> Unit
+pub fn ValidationError::to_repr(Self) -> @debug.Repr
+pub fn ValidationError::to_string(Self) -> String
 pub impl Show for ValidationError
 
 // Types and methods
@@ -49,4 +52,3 @@ pub impl Show for ValidationError
 // Type aliases
 
 // Traits
-

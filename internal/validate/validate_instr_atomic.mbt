@@ -17,7 +17,7 @@ fn validate_instruction_atomic(
       }
       fn expect_memarg(
         imm : @core.AtomicImmediate,
-      ) -> (UInt, UInt) raise ValidationError {
+      ) -> (UInt32, UInt32) raise ValidationError {
         match imm {
           MemArg(value_align, _, value_mem_idx) => (value_align, value_mem_idx)
           _ =>
