@@ -1,0 +1,41 @@
+name: Publish Mooncakes
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: publish-mooncakes
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      MOON_WORK: "off"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache wasm-tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/wasm-tools
+          key: ${{ runner.os }}-wasm-tools-1.243.0
+      - name: Install wasm-tools
+        run: |
+          if ! command -v wasm-tools >/dev/null; then
+            cargo install wasm-tools@1.243.0 --locked
+          fi
+          wasm-tools --version
+      - name: Setup MoonBit
+        uses: ./.github/actions/setup
+        with:
+          version: nightly
+      - run: moon check --target native
+      - run: moon test --target native --release
+      - name: Publish verified module
+        env:
+          MOONCAKES_CREDENTIALS: ${{ secrets.MOONCAKES_MOONBITLANG_TOKEN }}
+        run: |
+          test -n "$MOONCAKES_CREDENTIALS" || { echo "Missing organization Mooncakes publishing credentials"; exit 1; }
+          trap 'rm -f "$HOME/.moon/credentials.json"' EXIT
+          printf '%s' "$MOONCAKES_CREDENTIALS" > "$HOME/.moon/credentials.json"
+          moon publish --dry-run
+          moon publish
