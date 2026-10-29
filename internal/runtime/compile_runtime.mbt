@@ -351,11 +351,11 @@ fn dispatch(rt : Instance) -> ReturnCode {
 /// Returns the runtime with results on the stack after callee returns.
 fn execute_call(
   rt : Instance,
-  callee_pc : Int,
-  caller_bp : Int,
-  caller_num_locals : Int,
-  caller_sp : Int,
-  return_pc : Int,
+  callee_pc : Int32,
+  caller_bp : Int32,
+  caller_num_locals : Int32,
+  caller_sp : Int32,
+  return_pc : Int32,
 ) -> Instance raise RuntimeError {
   // Execute callee
   let rt = rt
@@ -379,7 +379,7 @@ pub fn Instance::call_compiled(
   func_name : Bytes,
   args : Array[Value],
 ) -> Array[Value] raise RuntimeError {
-  let mut func_idx : Int? = None
+  let mut func_idx : Int32? = None
   for exp in self.ctx.module_.exports {
     if exp.name == func_name {
       match exp.desc {
@@ -440,7 +440,7 @@ pub fn Instance::call_compiled(
 /// This allows calling functions that may not be exported by name.
 pub fn Instance::call_by_index(
   self : Instance,
-  func_idx : Int,
+  func_idx : Int32,
   args : Array[Value],
 ) -> Array[Value] raise RuntimeError {
   let num_imported_funcs = @core.count_imported_funcs(self.ctx.module_)

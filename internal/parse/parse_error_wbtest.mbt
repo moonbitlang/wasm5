@@ -11,7 +11,7 @@ fn append_bytes(dst : Array[Byte], src : Array[Byte]) -> Unit {
 }
 
 ///|
-fn push_u32_leb(dst : Array[Byte], value : UInt) -> Unit {
+fn push_u32_leb(dst : Array[Byte], value : UInt32) -> Unit {
   let mut remaining = value
   while true {
     let mut byte_val = remaining & 0x7FU
@@ -42,7 +42,7 @@ fn encode_func_type(params : Array[Byte], results : Array[Byte]) -> Array[Byte] 
 }
 
 ///|
-fn emit_i32_const(buf : Array[Byte], value : UInt) -> Unit {
+fn emit_i32_const(buf : Array[Byte], value : UInt32) -> Unit {
   buf.push(b'\x41')
   push_u32_leb(buf, value)
 }
@@ -54,7 +54,7 @@ test "parse expr invalid end marker" {
   let _ = parse_expr(parser) catch {
     _ => {
       saw_error = true
-      { instrs: [] }
+      { instrs: [], }
     }
   }
   assert_eq(saw_error, true)

@@ -16,21 +16,21 @@ test "validate helper ref type conversions" {
 
 ///|
 test "validate helper counts and type lookup" {
-  let func_type0 : @core.FuncType = { params: [], results: [] }
-  let func_type1 : @core.FuncType = { params: [I32], results: [I32] }
+  let func_type0 : @core.FuncType = { params: [], results: [], }
+  let func_type1 : @core.FuncType = { params: [I32], results: [I32], }
   let table_type : @core.TableType = {
     elem_type: Func,
-    limits: { min: 0UL, max: None },
+    limits: { min: 0UL, max: None, },
     init: None,
     nullable: true,
     table64: false,
   }
   let mem_type : @core.MemType = {
-    limits: { min: 0UL, max: None },
+    limits: { min: 0UL, max: None, },
     shared: false,
     memory64: false,
   }
-  let global_type : @core.GlobalType = { val_type: I32, mutable: false }
+  let global_type : @core.GlobalType = { val_type: I32, mutable: false, }
   let imports : Array[@core.Import] = [
     {
       module_: Bytes::from_array([b'm']),
@@ -90,10 +90,10 @@ test "validate helper counts and type lookup" {
 
 ///|
 test "validate helper import scan in func lookup" {
-  let func_type : @core.FuncType = { params: [], results: [] }
+  let func_type : @core.FuncType = { params: [], results: [], }
   let table_type : @core.TableType = {
     elem_type: Func,
-    limits: { min: 0UL, max: None },
+    limits: { min: 0UL, max: None, },
     init: None,
     nullable: true,
     table64: false,
@@ -132,10 +132,12 @@ test "validate helper import scan in func lookup" {
 
 ///|
 test "validate const expr checks" {
-  let valid_expr : @core.Expr = { instrs: [I32Const(0U), I32Const(1U), I32Add] }
+  let valid_expr : @core.Expr = {
+    instrs: [I32Const(0U), I32Const(1U), I32Add],
+  }
   validate_const_expr_instructions(valid_expr)
   let mut saw_error = false
-  let _ = validate_const_expr_instructions({ instrs: [Nop] }) catch {
+  let _ = validate_const_expr_instructions({ instrs: [Nop], }) catch {
     _ => {
       saw_error = true
       ()
@@ -143,7 +145,7 @@ test "validate const expr checks" {
   }
   assert_eq(saw_error, true)
   let module_empty = test_empty_module()
-  let expr_global : @core.Expr = { instrs: [GlobalGet(0U)] }
+  let expr_global : @core.Expr = { instrs: [GlobalGet(0U)], }
   saw_error = false
   let _ = validate_table_init_expr(
     module_empty,
@@ -172,7 +174,7 @@ test "validate const expr checks" {
       {
         module_: Bytes::from_array([b'i']),
         name: Bytes::from_array([b'g']),
-        desc: Global({ val_type: I32, mutable: true }),
+        desc: Global({ val_type: I32, mutable: true, }),
       },
     ],
     exports: [],
@@ -208,7 +210,7 @@ test "validate const expr checks" {
         name: Bytes::from_array([b't']),
         desc: Table({
           elem_type: Func,
-          limits: { min: 0UL, max: None },
+          limits: { min: 0UL, max: None, },
           init: None,
           nullable: true,
           table64: false,
@@ -217,7 +219,7 @@ test "validate const expr checks" {
       {
         module_: Bytes::from_array([b'i']),
         name: Bytes::from_array([b'g']),
-        desc: Global({ val_type: I32, mutable: false }),
+        desc: Global({ val_type: I32, mutable: false, }),
       },
     ],
     exports: [],
@@ -237,8 +239,8 @@ test "validate const expr checks" {
     mems: [],
     globals: [
       {
-        type_: { val_type: I32, mutable: true },
-        init: { instrs: [I32Const(0U)] },
+        type_: { val_type: I32, mutable: true, },
+        init: { instrs: [I32Const(0U)], },
       },
     ],
     tags: [],
@@ -277,7 +279,7 @@ test "validate const expr checks" {
       {
         module_: Bytes::from_array([b'i']),
         name: Bytes::from_array([b'g']),
-        desc: Global({ val_type: I32, mutable: false }),
+        desc: Global({ val_type: I32, mutable: false, }),
       },
     ],
     exports: [],
@@ -309,7 +311,7 @@ test "validate const expr checks" {
       {
         module_: Bytes::from_array([b'i']),
         name: Bytes::from_array([b'g']),
-        desc: Global({ val_type: I32, mutable: false }),
+        desc: Global({ val_type: I32, mutable: false, }),
       },
     ],
     exports: [],
@@ -334,7 +336,7 @@ test "validate valtype and subtype" {
   }
   assert_eq(saw_error, true)
   let module_types : @core.Module = {
-    types: [Func({ params: [], results: [] })],
+    types: [Func({ params: [], results: [], })],
     type_groups: [],
     customs: [],
     funcs: [],
@@ -432,7 +434,7 @@ test "validation context pop errors" {
   ctx.stack.push(I64)
   ctx.poly_pop_expect(module_empty, I64, "pop ok")
   assert_eq(ctx.stack.length(), 0)
-  let func_type : @core.FuncType = { params: [I32], results: [] }
+  let func_type : @core.FuncType = { params: [I32], results: [], }
   let code = test_make_code([], [])
   let ctx_locals = ValidationCtx::new_with_locals(func_type, code)
   assert_eq(ctx_locals.initialized_locals.length(), 1)

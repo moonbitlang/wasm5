@@ -9,12 +9,12 @@ priv enum Token {
 ///|
 priv struct Lexer {
   input : Bytes
-  mut pos : Int
+  mut pos : Int32
 }
 
 ///|
 fn Lexer::new(text : String) -> Lexer {
-  { input: @utf8.encode(text), pos: 0 }
+  { input: @utf8.encode(text), pos: 0, }
 }
 
 ///|
@@ -183,7 +183,7 @@ fn is_hex(b : Byte) -> Bool {
 }
 
 ///|
-fn hex_value(b : Byte) -> UInt raise WatError {
+fn hex_value(b : Byte) -> UInt32 raise WatError {
   if b >= b'0' && b <= b'9' {
     return b.to_uint() - b'0'.to_uint()
   }

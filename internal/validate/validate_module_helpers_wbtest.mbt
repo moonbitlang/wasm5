@@ -1,14 +1,14 @@
 ///|
 test "validate module type index errors" {
   let module_table : @core.Module = {
-    types: [Func({ params: [], results: [] })],
+    types: [Func({ params: [], results: [], })],
     type_groups: [],
     customs: [],
     funcs: [],
     tables: [
       {
         elem_type: TypeIndex(1),
-        limits: { min: 0UL, max: None },
+        limits: { min: 0UL, max: None, },
         init: None,
         nullable: true,
         table64: false,
@@ -33,7 +33,7 @@ test "validate module type index errors" {
   }
   assert_eq(saw_error, true)
   let module_elem : @core.Module = {
-    types: [Func({ params: [], results: [] })],
+    types: [Func({ params: [], results: [], })],
     type_groups: [],
     customs: [],
     funcs: [],
@@ -68,7 +68,7 @@ test "validate module type index errors" {
   }
   assert_eq(saw_error, true)
   let module_import : @core.Module = {
-    types: [Func({ params: [], results: [] })],
+    types: [Func({ params: [], results: [], })],
     type_groups: [],
     customs: [],
     funcs: [],
@@ -98,7 +98,7 @@ test "validate module type index errors" {
   }
   assert_eq(saw_error, true)
   let module_funcs : @core.Module = {
-    types: [Func({ params: [], results: [] })],
+    types: [Func({ params: [], results: [], })],
     type_groups: [],
     customs: [],
     funcs: [1U],
@@ -122,7 +122,7 @@ test "validate module type index errors" {
   }
   assert_eq(saw_error, true)
   let module_globals : @core.Module = {
-    types: [Func({ params: [], results: [] })],
+    types: [Func({ params: [], results: [], })],
     type_groups: [],
     customs: [],
     funcs: [],
@@ -130,8 +130,8 @@ test "validate module type index errors" {
     mems: [],
     globals: [
       {
-        type_: { val_type: Ref(TypeIndex(1), true), mutable: false },
-        init: { instrs: [RefNull(Func)] },
+        type_: { val_type: Ref(TypeIndex(1), true), mutable: false, },
+        init: { instrs: [RefNull(Func)], },
       },
     ],
     tags: [],
@@ -155,7 +155,7 @@ test "validate module type index errors" {
 ///|
 test "validate module type results" {
   let module_results : @core.Module = {
-    types: [Func({ params: [], results: [I32] })],
+    types: [Func({ params: [], results: [I32], })],
     type_groups: [],
     customs: [],
     funcs: [],
@@ -203,7 +203,7 @@ test "validate module start function errors" {
   }
   assert_eq(saw_error, true)
   let module_params : @core.Module = {
-    types: [Func({ params: [I32], results: [] })],
+    types: [Func({ params: [I32], results: [], })],
     type_groups: [],
     customs: [],
     funcs: [0U],
@@ -230,7 +230,7 @@ test "validate module start function errors" {
   }
   assert_eq(saw_error, true)
   let module_results : @core.Module = {
-    types: [Func({ params: [], results: [I32] })],
+    types: [Func({ params: [], results: [I32], })],
     type_groups: [],
     customs: [],
     funcs: [0U],
@@ -267,7 +267,11 @@ test "validate module memory limit errors" {
     funcs: [],
     tables: [],
     mems: [
-      { limits: { min: 10UL, max: Some(5UL) }, shared: false, memory64: false },
+      {
+        limits: { min: 10UL, max: Some(5UL), },
+        shared: false,
+        memory64: false,
+      },
     ],
     globals: [],
     tags: [],
@@ -294,7 +298,7 @@ test "validate module memory limit errors" {
     tables: [],
     mems: [
       {
-        limits: { min: 0UL, max: Some(70000UL) },
+        limits: { min: 0UL, max: Some(70000UL), },
         shared: false,
         memory64: false,
       },
@@ -323,7 +327,7 @@ test "validate module memory limit errors" {
     funcs: [],
     tables: [],
     mems: [
-      { limits: { min: 70000UL, max: None }, shared: false, memory64: false },
+      { limits: { min: 70000UL, max: None, }, shared: false, memory64: false, },
     ],
     globals: [],
     tags: [],
@@ -363,7 +367,7 @@ test "validate module imported memory limit errors" {
         module_: Bytes::from_array([b'i']),
         name: Bytes::from_array([b'm']),
         desc: Mem({
-          limits: { min: 10UL, max: Some(5UL) },
+          limits: { min: 10UL, max: Some(5UL), },
           shared: false,
           memory64: false,
         }),
@@ -397,7 +401,7 @@ test "validate module imported memory limit errors" {
         module_: Bytes::from_array([b'i']),
         name: Bytes::from_array([b'm']),
         desc: Mem({
-          limits: { min: 0UL, max: Some(70000UL) },
+          limits: { min: 0UL, max: Some(70000UL), },
           shared: false,
           memory64: false,
         }),
@@ -431,7 +435,7 @@ test "validate module imported memory limit errors" {
         module_: Bytes::from_array([b'i']),
         name: Bytes::from_array([b'm']),
         desc: Mem({
-          limits: { min: 70000UL, max: None },
+          limits: { min: 70000UL, max: None, },
           shared: false,
           memory64: false,
         }),
@@ -460,7 +464,7 @@ test "validate module table errors" {
     tables: [
       {
         elem_type: Func,
-        limits: { min: 0UL, max: None },
+        limits: { min: 0UL, max: None, },
         init: None,
         nullable: false,
         table64: false,
@@ -495,7 +499,7 @@ test "validate module table errors" {
     tables: [
       {
         elem_type: Func,
-        limits: { min: 5UL, max: Some(1UL) },
+        limits: { min: 5UL, max: Some(1UL), },
         init: None,
         nullable: true,
         table64: false,
@@ -530,7 +534,7 @@ test "validate module table errors" {
     tables: [
       {
         elem_type: Func,
-        limits: { min: 4294967296UL, max: None },
+        limits: { min: 4294967296UL, max: None, },
         init: None,
         nullable: true,
         table64: false,
@@ -565,7 +569,7 @@ test "validate module table errors" {
     tables: [
       {
         elem_type: Func,
-        limits: { min: 4294967296UL, max: None },
+        limits: { min: 4294967296UL, max: None, },
         init: None,
         nullable: true,
         table64: true,
@@ -600,8 +604,8 @@ test "validate module table errors" {
     tables: [
       {
         elem_type: Func,
-        limits: { min: 0UL, max: None },
-        init: Some({ instrs: [] }),
+        limits: { min: 0UL, max: None, },
+        init: Some({ instrs: [], }),
         nullable: false,
         table64: false,
       },
@@ -635,8 +639,8 @@ test "validate module table errors" {
     tables: [
       {
         elem_type: Func,
-        limits: { min: 0UL, max: None },
-        init: Some({ instrs: [RefNull(Func)] }),
+        limits: { min: 0UL, max: None, },
+        init: Some({ instrs: [RefNull(Func)], }),
         nullable: false,
         table64: false,
       },
@@ -667,8 +671,8 @@ test "validate module table errors" {
     tables: [
       {
         elem_type: Func,
-        limits: { min: 0UL, max: None },
-        init: Some({ instrs: [I32Const(0U)] }),
+        limits: { min: 0UL, max: None, },
+        init: Some({ instrs: [I32Const(0U)], }),
         nullable: false,
         table64: false,
       },
@@ -702,8 +706,8 @@ test "validate module table errors" {
     tables: [
       {
         elem_type: Func,
-        limits: { min: 0UL, max: None },
-        init: Some({ instrs: [] }),
+        limits: { min: 0UL, max: None, },
+        init: Some({ instrs: [], }),
         nullable: true,
         table64: false,
       },
@@ -737,8 +741,8 @@ test "validate module table errors" {
     tables: [
       {
         elem_type: Func,
-        limits: { min: 0UL, max: None },
-        init: Some({ instrs: [I32Const(0U)] }),
+        limits: { min: 0UL, max: None, },
+        init: Some({ instrs: [I32Const(0U)], }),
         nullable: true,
         table64: false,
       },
@@ -765,15 +769,15 @@ test "validate module table errors" {
   }
   assert_eq(saw_error, true)
   let module_nullable_typed : @core.Module = {
-    types: [Func({ params: [], results: [] })],
+    types: [Func({ params: [], results: [], })],
     type_groups: [],
     customs: [],
     funcs: [],
     tables: [
       {
         elem_type: Func,
-        limits: { min: 0UL, max: None },
-        init: Some({ instrs: [RefNull(TypeIndex(0))] }),
+        limits: { min: 0UL, max: None, },
+        init: Some({ instrs: [RefNull(TypeIndex(0))], }),
         nullable: true,
         table64: false,
       },
@@ -793,15 +797,15 @@ test "validate module table errors" {
     get_import_counts(module_nullable_typed),
   )
   let module_typed_init : @core.Module = {
-    types: [Func({ params: [], results: [] })],
+    types: [Func({ params: [], results: [], })],
     type_groups: [],
     customs: [],
     funcs: [0U],
     tables: [
       {
         elem_type: TypeIndex(0),
-        limits: { min: 0UL, max: None },
-        init: Some({ instrs: [RefFunc(0U)] }),
+        limits: { min: 0UL, max: None, },
+        init: Some({ instrs: [RefFunc(0U)], }),
         nullable: false,
         table64: false,
       },
@@ -835,8 +839,8 @@ test "validate module table errors" {
     tables: [
       {
         elem_type: Extern,
-        limits: { min: 0UL, max: None },
-        init: Some({ instrs: [RefNull(NoExtern)] }),
+        limits: { min: 0UL, max: None, },
+        init: Some({ instrs: [RefNull(NoExtern)], }),
         nullable: true,
         table64: false,
       },
@@ -863,8 +867,8 @@ test "validate module table errors" {
     tables: [
       {
         elem_type: Extern,
-        limits: { min: 0UL, max: None },
-        init: Some({ instrs: [RefNull(Func)] }),
+        limits: { min: 0UL, max: None, },
+        init: Some({ instrs: [RefNull(Func)], }),
         nullable: true,
         table64: false,
       },
@@ -898,8 +902,8 @@ test "validate module table errors" {
     tables: [
       {
         elem_type: Func,
-        limits: { min: 0UL, max: None },
-        init: Some({ instrs: [RefNull(Extern)] }),
+        limits: { min: 0UL, max: None, },
+        init: Some({ instrs: [RefNull(Extern)], }),
         nullable: true,
         table64: false,
       },
@@ -943,7 +947,7 @@ test "validate module table errors" {
         name: Bytes::from_array([b't']),
         desc: Table({
           elem_type: Func,
-          limits: { min: 10UL, max: Some(5UL) },
+          limits: { min: 10UL, max: Some(5UL), },
           init: None,
           nullable: true,
           table64: false,
@@ -1019,7 +1023,7 @@ test "validate module element segment errors" {
       {
         table_idx: 0U,
         offset: test_empty_expr(),
-        init: [{ instrs: [RefFunc(0U)] }],
+        init: [{ instrs: [RefFunc(0U)], }],
         is_active: false,
         is_declarative: false,
         elem_type: Func,
@@ -1088,11 +1092,13 @@ test "validate module data segment errors" {
     customs: [],
     funcs: [],
     tables: [],
-    mems: [{ limits: { min: 0UL, max: None }, shared: false, memory64: false }],
+    mems: [
+      { limits: { min: 0UL, max: None, }, shared: false, memory64: false, },
+    ],
     globals: [
       {
-        type_: { val_type: I32, mutable: true },
-        init: { instrs: [I32Const(0U)] },
+        type_: { val_type: I32, mutable: true, },
+        init: { instrs: [I32Const(0U)], },
       },
     ],
     tags: [],
@@ -1100,7 +1106,7 @@ test "validate module data segment errors" {
     datas: [
       {
         mem_idx: 0U,
-        offset: { instrs: [GlobalGet(0U)] },
+        offset: { instrs: [GlobalGet(0U)], },
         init: Bytes::from_array([])[:],
         is_active: true,
       },
@@ -1127,7 +1133,7 @@ test "validate module data segment errors" {
 test "validate module exports errors" {
   let dup_name = Bytes::from_array([b'x'])
   let module_dup : @core.Module = {
-    types: [Func({ params: [], results: [] })],
+    types: [Func({ params: [], results: [], })],
     type_groups: [],
     customs: [],
     funcs: [0U],
@@ -1140,8 +1146,8 @@ test "validate module exports errors" {
     start: None,
     imports: [],
     exports: [
-      { name: dup_name, desc: Func(0U) },
-      { name: dup_name, desc: Func(0U) },
+      { name: dup_name, desc: Func(0U), },
+      { name: dup_name, desc: Func(0U), },
     ],
     codes: [],
   }
@@ -1171,7 +1177,7 @@ test "validate module exports errors" {
     datas: [],
     start: None,
     imports: [],
-    exports: [{ name: Bytes::from_array([b'm']), desc: Mem(0U) }],
+    exports: [{ name: Bytes::from_array([b'm']), desc: Mem(0U), }],
     codes: [],
   }
   saw_error = false
@@ -1195,7 +1201,7 @@ test "validate module exports errors" {
     datas: [],
     start: None,
     imports: [],
-    exports: [{ name: Bytes::from_array([b't']), desc: Table(0U) }],
+    exports: [{ name: Bytes::from_array([b't']), desc: Table(0U), }],
     codes: [],
   }
   saw_error = false
@@ -1222,7 +1228,7 @@ test "validate module exports errors" {
     datas: [],
     start: None,
     imports: [],
-    exports: [{ name: Bytes::from_array([b'g']), desc: Global(0U) }],
+    exports: [{ name: Bytes::from_array([b'g']), desc: Global(0U), }],
     codes: [],
   }
   saw_error = false
@@ -1249,7 +1255,7 @@ test "validate module exports errors" {
     datas: [],
     start: None,
     imports: [],
-    exports: [{ name: Bytes::from_array([b'f']), desc: Func(1U) }],
+    exports: [{ name: Bytes::from_array([b'f']), desc: Func(1U), }],
     codes: [],
   }
   saw_error = false
@@ -1280,8 +1286,8 @@ test "validate module global initializers" {
     mems: [],
     globals: [
       {
-        type_: { val_type: I32, mutable: false },
-        init: { instrs: [I32Const(0U)] },
+        type_: { val_type: I32, mutable: false, },
+        init: { instrs: [I32Const(0U)], },
       },
     ],
     tags: [],
@@ -1301,7 +1307,7 @@ test "validate module global initializers" {
     tables: [],
     mems: [],
     globals: [
-      { type_: { val_type: I32, mutable: false }, init: test_empty_expr() },
+      { type_: { val_type: I32, mutable: false, }, init: test_empty_expr(), },
     ],
     tags: [],
     elems: [],
@@ -1331,8 +1337,8 @@ test "validate module global initializers" {
     mems: [],
     globals: [
       {
-        type_: { val_type: I64, mutable: false },
-        init: { instrs: [I32Const(0U)] },
+        type_: { val_type: I64, mutable: false, },
+        init: { instrs: [I32Const(0U)], },
       },
     ],
     tags: [],
@@ -1358,7 +1364,7 @@ test "validate module global initializers" {
 
 ///|
 test "validate module function bodies" {
-  let func_type : @core.TypeDef = Func({ params: [], results: [] })
+  let func_type : @core.TypeDef = Func({ params: [], results: [], })
   let code = test_make_code([], [])
   let module_funcs : @core.Module = {
     types: [func_type],

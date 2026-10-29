@@ -1,12 +1,12 @@
 ///|
 priv struct Parser {
   bytes : Bytes
-  mut pos : Int
+  mut pos : Int32
 }
 
 ///|
 fn Parser::new(bytes : Bytes) -> Parser {
-  { bytes, pos: 0 }
+  { bytes, pos: 0, }
 }
 
 ///|
@@ -26,8 +26,8 @@ fn Parser::read_byte(self : Parser) -> Byte raise ParseError {
 }
 
 ///|
-fn Parser::read_bytes(self : Parser, n : UInt) -> BytesView raise ParseError {
-  let n_int = UInt::reinterpret_as_int(n)
+fn Parser::read_bytes(self : Parser, n : UInt32) -> BytesView raise ParseError {
+  let n_int = UInt32::reinterpret_as_int(n)
   guard n_int >= 0 else {
     raise ParseError::InvalidFormat("bytes length beyond Int max value")
   }

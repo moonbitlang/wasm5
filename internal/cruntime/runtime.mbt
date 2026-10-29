@@ -5,47 +5,47 @@ pub struct CRuntime {
   compiled : CompiledModule
   globals : FixedArray[UInt64] // Global variables
   memory : FixedArray[Byte] // Linear memory (pre-allocated to max size)
-  memory_pages : FixedArray[Int] // Current size in pages (single element array for FFI mutability)
-  memory_max_size : Int // Maximum memory size in bytes (for memory.grow bounds)
+  memory_pages : FixedArray[Int32] // Current size in pages (single element array for FFI mutability)
+  memory_max_size : Int32 // Maximum memory size in bytes (for memory.grow bounds)
   output_buffer : FixedArray[Byte] // Collected spectest output bytes
-  output_length : FixedArray[Int] // Current output length (single element array for FFI mutability)
-  output_capacity : Int // Output buffer capacity in bytes
-  tables : FixedArray[FixedArray[Int]] // Tables of function indices
+  output_length : FixedArray[Int32] // Current output length (single element array for FFI mutability)
+  output_capacity : Int32 // Output buffer capacity in bytes
+  tables : FixedArray[FixedArray[Int32]] // Tables of function indices
   // Flattened table data for C FFI
-  tables_flat : FixedArray[Int] // All tables concatenated
+  tables_flat : FixedArray[Int32] // All tables concatenated
   tables_flat_u64 : FixedArray[UInt64] // All tables concatenated (full refs)
-  table_offsets : FixedArray[Int] // Offset of each table in tables_flat
-  table_sizes : FixedArray[Int] // Current size of each table
-  table_max_sizes : FixedArray[Int] // Max size (capacity) of each table for table.grow
-  table_elem_is_funcref : FixedArray[Int] // 1 for funcref tables, 0 for externref
+  table_offsets : FixedArray[Int32] // Offset of each table in tables_flat
+  table_sizes : FixedArray[Int32] // Current size of each table
+  table_max_sizes : FixedArray[Int32] // Max size (capacity) of each table for table.grow
+  table_elem_is_funcref : FixedArray[Int32] // 1 for funcref tables, 0 for externref
   // Type information for call_indirect type checking
-  func_type_idxs : FixedArray[Int] // Type index for each function (imported + local)
-  type_param_counts : FixedArray[Int] // Primary signature hash for each type
-  type_result_counts : FixedArray[Int] // Secondary signature hash for each type
-  type_subtype_matrix : FixedArray[Int] // type_idx -> target_idx subtype matrix
+  func_type_idxs : FixedArray[Int32] // Type index for each function (imported + local)
+  type_param_counts : FixedArray[Int32] // Primary signature hash for each type
+  type_result_counts : FixedArray[Int32] // Secondary signature hash for each type
+  type_subtype_matrix : FixedArray[Int32] // type_idx -> target_idx subtype matrix
   // Import function metadata for op_call_import
-  import_num_params : FixedArray[Int] // Number of params for each imported function
-  import_num_results : FixedArray[Int] // Number of results for each imported function
-  import_handler_ids : FixedArray[Int] // Host handler id for each imported function
+  import_num_params : FixedArray[Int32] // Number of params for each imported function
+  import_num_results : FixedArray[Int32] // Number of results for each imported function
+  import_handler_ids : FixedArray[Int32] // Host handler id for each imported function
   // Cross-module import resolution for call_indirect
   import_context_ptrs : FixedArray[Int64] // Target context pointer for each import (-1 if not resolved)
-  import_target_func_idxs : FixedArray[Int] // Target function index for each import
+  import_target_func_idxs : FixedArray[Int32] // Target function index for each import
   // Data segments for bulk memory operations
   data_segments_flat : FixedArray[Byte] // All data segments concatenated
-  data_segment_offsets : FixedArray[Int] // Offset of each segment in data_segments_flat
-  data_segment_sizes : FixedArray[Int] // Size of each segment (mutable for data.drop)
+  data_segment_offsets : FixedArray[Int32] // Offset of each segment in data_segments_flat
+  data_segment_sizes : FixedArray[Int32] // Size of each segment (mutable for data.drop)
   // Element segments for bulk table operations
-  elem_segments_flat : FixedArray[Int] // All element segments flattened (func indices, -1 for null)
+  elem_segments_flat : FixedArray[Int32] // All element segments flattened (func indices, -1 for null)
   elem_segments_flat_u64 : FixedArray[UInt64] // All element segments flattened (GC refs)
-  elem_segment_offsets : FixedArray[Int] // Offset of each segment in elem_segments_flat
-  elem_segment_sizes : FixedArray[Int] // Size of each segment
-  elem_segment_dropped : FixedArray[Int] // Whether each segment has been dropped (0 or 1)
+  elem_segment_offsets : FixedArray[Int32] // Offset of each segment in elem_segments_flat
+  elem_segment_sizes : FixedArray[Int32] // Size of each segment
+  elem_segment_dropped : FixedArray[Int32] // Whether each segment has been dropped (0 or 1)
   // External funcref imports (encoded after local functions)
-  external_funcref_count : Int
+  external_funcref_count : Int32
   // Cross-module call support: pointer to C-allocated CRuntimeContext
   mut context_ptr : Int64
   // Resolved imports for exported-import calls
-  resolved_imports : Map[Int, ResolvedImport]
+  resolved_imports : Map[Int32, ResolvedImport]
 }
 
 // Import Value type from core
@@ -62,7 +62,7 @@ pub fn init_wasi() -> Unit {
 
 ///|
 /// Get the WASI exit code after proc_exit was called.
-pub fn wasi_exit_code() -> Int {
+pub fn wasi_exit_code() -> Int32 {
   c_wasi_get_exit_code()
 }
 
@@ -75,7 +75,7 @@ pub fn wasi_has_exited() -> Bool {
 ///|
 /// Add a preopened file to the WASI environment.
 /// Returns the WASI fd number (3+) or -1 on error.
-pub fn wasi_add_preopen_file(host_fd : Int) -> Int {
+pub fn wasi_add_preopen_file(host_fd : Int32) -> Int32 {
   c_wasi_add_preopen_file(host_fd)
 }
 
@@ -92,8 +92,8 @@ extern "C" fn c_gc_init() -> Unit = "gc_init"
 ///|
 /// Allocate a GC array with all elements initialized to init_val.
 extern "C" fn c_gc_alloc_array_const(
-  type_idx : Int,
-  length : Int,
+  type_idx : Int32,
+  length : Int32,
   init_val : UInt64,
 ) -> UInt64 = "gc_alloc_array_const"
 
@@ -101,24 +101,24 @@ extern "C" fn c_gc_alloc_array_const(
 /// Allocate a GC array from a fixed array of values.
 #borrow(values)
 extern "C" fn c_gc_alloc_array_from_values(
-  type_idx : Int,
-  length : Int,
+  type_idx : Int32,
+  length : Int32,
   values : FixedArray[UInt64],
 ) -> UInt64 = "gc_alloc_array_from_values"
 
 ///|
 /// Allocate a GC struct with all fields default-initialized (zeros).
 extern "C" fn c_gc_alloc_struct_default(
-  type_idx : Int,
-  field_count : Int,
+  type_idx : Int32,
+  field_count : Int32,
 ) -> UInt64 = "gc_alloc_struct_default"
 
 ///|
 /// Allocate a GC struct from a fixed array of values.
 #borrow(values)
 extern "C" fn c_gc_alloc_struct_from_values(
-  type_idx : Int,
-  field_count : Int,
+  type_idx : Int32,
+  field_count : Int32,
   values : FixedArray[UInt64],
 ) -> UInt64 = "gc_alloc_struct_from_values"
 
@@ -153,9 +153,9 @@ fn trap_to_error(trap : TrapCode) -> @runtime.RuntimeError {
 ///|
 /// Build import context arrays for cross-module calls
 fn build_import_context_arrays(
-  num_imported : Int,
-  resolved_imports : Map[Int, ResolvedImport],
-) -> (FixedArray[Int64], FixedArray[Int]) {
+  num_imported : Int32,
+  resolved_imports : Map[Int32, ResolvedImport],
+) -> (FixedArray[Int64], FixedArray[Int32]) {
   let import_context_ptrs : FixedArray[Int64] = FixedArray::make(
     if num_imported > 0 {
       num_imported
@@ -164,7 +164,7 @@ fn build_import_context_arrays(
     },
     -1L, // -1 means not resolved
   )
-  let import_target_func_idxs : FixedArray[Int] = FixedArray::make(
+  let import_target_func_idxs : FixedArray[Int32] = FixedArray::make(
     if num_imported > 0 {
       num_imported
     } else {
@@ -190,8 +190,8 @@ fn is_funcref_table(table_type : @core.TableType) -> Bool {
 }
 
 ///|
-fn build_table_elem_types(module_ : @core.Module) -> FixedArray[Int] {
-  let elem_types : Array[Int] = []
+fn build_table_elem_types(module_ : @core.Module) -> FixedArray[Int32] {
+  let elem_types : Array[Int32] = []
   for imp in module_.imports {
     match imp.desc {
       Table(table_type) =>
@@ -211,20 +211,20 @@ fn build_table_elem_types(module_ : @core.Module) -> FixedArray[Int] {
 ///|
 /// Extend import metadata arrays with external funcref entries.
 fn extend_import_metadata(
-  num_imported : Int,
-  import_num_params : FixedArray[Int],
-  import_num_results : FixedArray[Int],
-  import_handler_ids : FixedArray[Int],
+  num_imported : Int32,
+  import_num_params : FixedArray[Int32],
+  import_num_results : FixedArray[Int32],
+  import_handler_ids : FixedArray[Int32],
   import_context_ptrs : FixedArray[Int64],
-  import_target_func_idxs : FixedArray[Int],
+  import_target_func_idxs : FixedArray[Int32],
   external_funcrefs : Array[ResolvedImport],
 ) -> (
-  FixedArray[Int],
-  FixedArray[Int],
-  FixedArray[Int],
+  FixedArray[Int32],
+  FixedArray[Int32],
+  FixedArray[Int32],
   FixedArray[Int64],
-  FixedArray[Int],
-  Int,
+  FixedArray[Int32],
+  Int32,
 ) {
   let num_external = external_funcrefs.length()
   if num_external == 0 {
@@ -268,8 +268,8 @@ fn extend_import_metadata(
 fn build_runtime(
   module_ : @core.Module,
   compiled : CompiledModule,
-  resolved_imports : Map[Int, ResolvedImport],
-  resolved_imported_globals : Map[Int, UInt64],
+  resolved_imports : Map[Int32, ResolvedImport],
+  resolved_imported_globals : Map[Int32, UInt64],
   external_funcrefs : Array[ResolvedImport],
 ) -> CRuntime {
   c_gc_init()
@@ -278,7 +278,7 @@ fn build_runtime(
   // Initialize memory from module (pre-allocated to max size)
   let (memory, memory_pages, memory_max_size) = init_memory(module_, globals)
   let output_buffer = FixedArray::make(default_output_capacity, b'\x00')
-  let output_length : FixedArray[Int] = [0]
+  let output_length : FixedArray[Int32] = [0]
   let output_capacity = default_output_capacity
   // Initialize tables from module (needs globals for element offset evaluation)
   let (tables, table_logical_sizes, table_max_sizes) = init_tables(
@@ -376,8 +376,8 @@ pub fn CRuntime::load(module_ : @core.Module) -> CRuntime {
 /// Load a module with resolved imports, imported globals, and external funcrefs.
 pub fn CRuntime::load_with_imports_globals_and_funcrefs(
   module_ : @core.Module,
-  resolved_imports : Map[Int, ResolvedImport],
-  resolved_imported_globals : Map[Int, UInt64],
+  resolved_imports : Map[Int32, ResolvedImport],
+  resolved_imported_globals : Map[Int32, UInt64],
   external_funcrefs : Array[ResolvedImport],
 ) -> CRuntime {
   let compiled = compile_with_imports(module_, resolved_imports)
@@ -509,20 +509,20 @@ pub fn CRuntime::clear_output(self : CRuntime) -> Unit {
 /// Flatten tables into a single array for C FFI
 /// Returns (tables_flat, tables_flat_u64, table_offsets, table_sizes, table_max_sizes)
 fn flatten_tables(
-  tables : FixedArray[FixedArray[Int]],
-  logical_sizes : FixedArray[Int],
-  max_sizes : FixedArray[Int],
-  table_elem_is_funcref : FixedArray[Int],
+  tables : FixedArray[FixedArray[Int32]],
+  logical_sizes : FixedArray[Int32],
+  max_sizes : FixedArray[Int32],
+  table_elem_is_funcref : FixedArray[Int32],
 ) -> (
-  FixedArray[Int],
+  FixedArray[Int32],
   FixedArray[UInt64],
-  FixedArray[Int],
-  FixedArray[Int],
-  FixedArray[Int],
+  FixedArray[Int32],
+  FixedArray[Int32],
+  FixedArray[Int32],
 ) {
   let num_tables = tables.length()
   // Calculate total size and offsets
-  let table_offsets : Array[Int] = []
+  let table_offsets : Array[Int32] = []
   let mut total_size = 0
   for i in 0..<num_tables {
     table_offsets.push(total_size)
@@ -531,7 +531,7 @@ fn flatten_tables(
     total_size += max_size
   }
   // Flatten into single array (allocate to max capacity)
-  let tables_flat : FixedArray[Int] = FixedArray::make(
+  let tables_flat : FixedArray[Int32] = FixedArray::make(
     if total_size > 0 {
       total_size
     } else {
@@ -549,7 +549,7 @@ fn flatten_tables(
   )
   let funcref_tag = 0x4000_0000_0000_0000UL
   let null_ref = 0xFFFF_FFFF_FFFF_FFFFUL
-  fn encode_table_ref(value : Int, is_funcref : Bool) -> UInt64 {
+  fn encode_table_ref(value : Int32, is_funcref : Bool) -> UInt64 {
     if value < 0 {
       return null_ref
     }
@@ -602,15 +602,15 @@ fn flatten_tables(
 /// Returns (data_flat, offsets, sizes) where sizes is mutable for data.drop
 fn flatten_data_segments(
   module_ : @core.Module,
-) -> (FixedArray[Byte], FixedArray[Int], FixedArray[Int]) {
+) -> (FixedArray[Byte], FixedArray[Int32], FixedArray[Int32]) {
   let num_segments = module_.datas.length()
   if num_segments == 0 {
     // Return minimal arrays to avoid empty array issues
     return (FixedArray::make(1, b'\x00'), [0], [0])
   }
   // Calculate total size and offsets
-  let segment_sizes : Array[Int] = []
-  let segment_offsets : Array[Int] = []
+  let segment_sizes : Array[Int32] = []
+  let segment_offsets : Array[Int32] = []
   let mut total_size = 0
   for data in module_.datas {
     segment_offsets.push(total_size)
@@ -648,11 +648,11 @@ fn flatten_elem_segments(
   module_ : @core.Module,
   globals : FixedArray[UInt64],
 ) -> (
-  FixedArray[Int],
+  FixedArray[Int32],
   FixedArray[UInt64],
-  FixedArray[Int],
-  FixedArray[Int],
-  FixedArray[Int],
+  FixedArray[Int32],
+  FixedArray[Int32],
+  FixedArray[Int32],
 ) {
   let num_segments = module_.elems.length()
   if num_segments == 0 {
@@ -660,9 +660,9 @@ fn flatten_elem_segments(
     return (FixedArray::make(1, -1), FixedArray::make(1, 0UL), [0], [0], [0])
   }
   // Calculate total size and offsets
-  let segment_sizes : Array[Int] = []
-  let segment_offsets : Array[Int] = []
-  let segment_dropped : Array[Int] = []
+  let segment_sizes : Array[Int32] = []
+  let segment_offsets : Array[Int32] = []
+  let segment_dropped : Array[Int32] = []
   let mut total_size = 0
   for elem in module_.elems {
     segment_offsets.push(total_size)
@@ -679,7 +679,7 @@ fn flatten_elem_segments(
     total_size += size
   }
   // Flatten into single int array
-  let elem_flat : FixedArray[Int] = FixedArray::make(
+  let elem_flat : FixedArray[Int32] = FixedArray::make(
     if total_size > 0 {
       total_size
     } else {
@@ -726,9 +726,9 @@ fn flatten_elem_segments(
 
 ///|
 /// Build equivalence class ids for function types
-fn build_func_type_equiv_ids(module_ : @core.Module) -> Array[Int] {
+fn build_func_type_equiv_ids(module_ : @core.Module) -> Array[Int32] {
   let count = module_.types.length()
-  let ids : Array[Int] = Array::make(count, -1)
+  let ids : Array[Int32] = Array::make(count, -1)
   let mut next_id = 0
   for i in 0..<count {
     if ids[i] != -1 {
@@ -758,12 +758,12 @@ fn build_func_type_equiv_ids(module_ : @core.Module) -> Array[Int] {
 
 ///|
 /// Build subtype matrix for GC type checks (num_types x num_types).
-fn build_type_subtype_matrix(module_ : @core.Module) -> FixedArray[Int] {
+fn build_type_subtype_matrix(module_ : @core.Module) -> FixedArray[Int32] {
   let n = module_.types.length()
   if n <= 0 {
     return FixedArray::make(1, 0)
   }
-  let supers : Array[Array[Int]] = Array::make(n, [])
+  let supers : Array[Array[Int32]] = Array::make(n, [])
   for i in 0..<n {
     supers[i] = []
   }
@@ -771,7 +771,7 @@ fn build_type_subtype_matrix(module_ : @core.Module) -> FixedArray[Int] {
     for subtype_def in group.subtypes {
       let idx = subtype_def.type_idx.reinterpret_as_int()
       if idx >= 0 && idx < n {
-        let list : Array[Int] = []
+        let list : Array[Int32] = []
         for sup in subtype_def.supertypes {
           list.push(sup.reinterpret_as_int())
         }
@@ -781,9 +781,9 @@ fn build_type_subtype_matrix(module_ : @core.Module) -> FixedArray[Int] {
   }
   fn is_subtype(
     module_ : @core.Module,
-    supers : Array[Array[Int]],
-    type_idx : Int,
-    target_idx : Int,
+    supers : Array[Array[Int32]],
+    type_idx : Int32,
+    target_idx : Int32,
   ) -> Bool {
     if type_idx == target_idx {
       return true
@@ -792,7 +792,7 @@ fn build_type_subtype_matrix(module_ : @core.Module) -> FixedArray[Int] {
       return true
     }
     let visited : Array[Bool] = Array::make(supers.length(), false)
-    let stack : Array[Int] = [type_idx]
+    let stack : Array[Int32] = [type_idx]
     while stack.length() > 0 {
       let cur = stack.pop().unwrap()
       if cur < 0 || cur >= supers.length() {
@@ -832,9 +832,9 @@ fn build_type_subtype_matrix(module_ : @core.Module) -> FixedArray[Int] {
 /// Build type information for call_indirect type checking
 fn build_type_info(
   module_ : @core.Module,
-) -> (FixedArray[Int], FixedArray[Int], FixedArray[Int]) {
+) -> (FixedArray[Int32], FixedArray[Int32], FixedArray[Int32]) {
   // Build func_type_idxs: type index for each function
-  let func_type_idxs : Array[Int] = []
+  let func_type_idxs : Array[Int32] = []
   // First, imported function types
   for imp in module_.imports {
     match imp.desc {
@@ -849,8 +849,8 @@ fn build_type_info(
   let func_type_equiv_ids = build_func_type_equiv_ids(module_)
   // Build type signature hashes for each type
   // We use two arrays to store equivalence id and param/result count
-  let type_sig_hash1 : Array[Int] = [] // Primary hash
-  let type_sig_hash2 : Array[Int] = [] // Secondary hash (param count << 16 | result count)
+  let type_sig_hash1 : Array[Int32] = [] // Primary hash
+  let type_sig_hash2 : Array[Int32] = [] // Secondary hash (param count << 16 | result count)
   for i, type_def in module_.types {
     match type_def {
       Func(ft) => {
@@ -884,9 +884,9 @@ fn build_type_info(
 /// Returns (import_num_params, import_num_results) arrays
 fn build_import_info(
   module_ : @core.Module,
-) -> (FixedArray[Int], FixedArray[Int]) {
-  let import_num_params : Array[Int] = []
-  let import_num_results : Array[Int] = []
+) -> (FixedArray[Int32], FixedArray[Int32]) {
+  let import_num_params : Array[Int32] = []
+  let import_num_results : Array[Int32] = []
   for imp in module_.imports {
     match imp.desc {
       Func(type_idx) => {
@@ -925,160 +925,160 @@ fn build_import_info(
 
 ///|
 /// Host import handler ids for C runtime
-let host_import_none : Int = -1
+let host_import_none : Int32 = -1
 
 ///|
-let host_import_spectest_print : Int = 0
+let host_import_spectest_print : Int32 = 0
 
 ///|
-let host_import_spectest_print_i32 : Int = 1
+let host_import_spectest_print_i32 : Int32 = 1
 
 ///|
-let host_import_spectest_print_i64 : Int = 2
+let host_import_spectest_print_i64 : Int32 = 2
 
 ///|
-let host_import_spectest_print_f32 : Int = 3
+let host_import_spectest_print_f32 : Int32 = 3
 
 ///|
-let host_import_spectest_print_f64 : Int = 4
+let host_import_spectest_print_f64 : Int32 = 4
 
 ///|
-let host_import_spectest_print_i32_f32 : Int = 5
+let host_import_spectest_print_i32_f32 : Int32 = 5
 
 ///|
-let host_import_spectest_print_f64_f64 : Int = 6
+let host_import_spectest_print_f64_f64 : Int32 = 6
 
 ///|
-let host_import_spectest_print_char : Int = 7
+let host_import_spectest_print_char : Int32 = 7
 
 // WASI handler IDs (starting from 8)
 
 ///|
-let host_import_wasi_args_get : Int = 8
+let host_import_wasi_args_get : Int32 = 8
 
 ///|
-let host_import_wasi_args_sizes_get : Int = 9
+let host_import_wasi_args_sizes_get : Int32 = 9
 
 ///|
-let host_import_wasi_environ_get : Int = 10
+let host_import_wasi_environ_get : Int32 = 10
 
 ///|
-let host_import_wasi_environ_sizes_get : Int = 11
+let host_import_wasi_environ_sizes_get : Int32 = 11
 
 ///|
-let host_import_wasi_fd_write : Int = 12
+let host_import_wasi_fd_write : Int32 = 12
 
 ///|
-let host_import_wasi_fd_read : Int = 13
+let host_import_wasi_fd_read : Int32 = 13
 
 ///|
-let host_import_wasi_fd_close : Int = 14
+let host_import_wasi_fd_close : Int32 = 14
 
 ///|
-let host_import_wasi_fd_prestat_get : Int = 15
+let host_import_wasi_fd_prestat_get : Int32 = 15
 
 ///|
-let host_import_wasi_fd_prestat_dir_name : Int = 16
+let host_import_wasi_fd_prestat_dir_name : Int32 = 16
 
 ///|
-let host_import_wasi_fd_fdstat_get : Int = 17
+let host_import_wasi_fd_fdstat_get : Int32 = 17
 
 ///|
-let host_import_wasi_proc_exit : Int = 18
+let host_import_wasi_proc_exit : Int32 = 18
 
 ///|
-let host_import_wasi_clock_time_get : Int = 19
+let host_import_wasi_clock_time_get : Int32 = 19
 
 ///|
-let host_import_wasi_random_get : Int = 20
+let host_import_wasi_random_get : Int32 = 20
 
 ///|
-let host_import_wasi_path_open : Int = 21
+let host_import_wasi_path_open : Int32 = 21
 
 ///|
-let host_import_wasi_fd_seek : Int = 22
+let host_import_wasi_fd_seek : Int32 = 22
 
 ///|
-let host_import_wasi_fd_tell : Int = 23
+let host_import_wasi_fd_tell : Int32 = 23
 
 ///|
-let host_import_wasi_fd_filestat_get : Int = 24
+let host_import_wasi_fd_filestat_get : Int32 = 24
 
 ///|
-let host_import_wasi_path_filestat_get : Int = 25
+let host_import_wasi_path_filestat_get : Int32 = 25
 
 ///|
-let host_import_wasi_fd_sync : Int = 26
+let host_import_wasi_fd_sync : Int32 = 26
 
 ///|
-let host_import_wasi_fd_datasync : Int = 27
+let host_import_wasi_fd_datasync : Int32 = 27
 
 ///|
-let host_import_wasi_sched_yield : Int = 28
+let host_import_wasi_sched_yield : Int32 = 28
 
 ///|
-let host_import_wasi_path_create_directory : Int = 29
+let host_import_wasi_path_create_directory : Int32 = 29
 
 ///|
-let host_import_wasi_path_remove_directory : Int = 30
+let host_import_wasi_path_remove_directory : Int32 = 30
 
 ///|
-let host_import_wasi_path_unlink_file : Int = 31
+let host_import_wasi_path_unlink_file : Int32 = 31
 
 ///|
-let host_import_wasi_path_rename : Int = 32
+let host_import_wasi_path_rename : Int32 = 32
 
 ///|
-let host_import_wasi_fd_fdstat_set_flags : Int = 33
+let host_import_wasi_fd_fdstat_set_flags : Int32 = 33
 
 ///|
-let host_import_wasi_fd_pread : Int = 34
+let host_import_wasi_fd_pread : Int32 = 34
 
 ///|
-let host_import_wasi_fd_pwrite : Int = 35
+let host_import_wasi_fd_pwrite : Int32 = 35
 
 ///|
-let host_import_wasi_fd_readdir : Int = 36
+let host_import_wasi_fd_readdir : Int32 = 36
 
 ///|
-let host_import_wasi_fd_filestat_set_size : Int = 37
+let host_import_wasi_fd_filestat_set_size : Int32 = 37
 
 ///|
-let host_import_wasi_fd_filestat_set_times : Int = 38
+let host_import_wasi_fd_filestat_set_times : Int32 = 38
 
 ///|
-let host_import_wasi_fd_advise : Int = 39
+let host_import_wasi_fd_advise : Int32 = 39
 
 ///|
-let host_import_wasi_fd_allocate : Int = 40
+let host_import_wasi_fd_allocate : Int32 = 40
 
 ///|
-let host_import_wasi_fd_fdstat_set_rights : Int = 41
+let host_import_wasi_fd_fdstat_set_rights : Int32 = 41
 
 ///|
-let host_import_wasi_clock_res_get : Int = 42
+let host_import_wasi_clock_res_get : Int32 = 42
 
 ///|
-let host_import_wasi_fd_renumber : Int = 43
+let host_import_wasi_fd_renumber : Int32 = 43
 
 ///|
-let host_import_wasi_path_filestat_set_times : Int = 44
+let host_import_wasi_path_filestat_set_times : Int32 = 44
 
 ///|
-let host_import_wasi_path_link : Int = 45
+let host_import_wasi_path_link : Int32 = 45
 
 ///|
-let host_import_wasi_path_readlink : Int = 46
+let host_import_wasi_path_readlink : Int32 = 46
 
 ///|
-let host_import_wasi_proc_raise : Int = 47
+let host_import_wasi_proc_raise : Int32 = 47
 
 ///|
-let host_import_wasi_path_symlink : Int = 48
+let host_import_wasi_path_symlink : Int32 = 48
 
 ///|
 /// Match a WASI import name to its handler ID
-fn match_wasi_import(name : Bytes) -> Int {
+fn match_wasi_import(name : Bytes) -> Int32 {
   if name == b"args_get" {
     return host_import_wasi_args_get
   }
@@ -1207,8 +1207,8 @@ fn match_wasi_import(name : Bytes) -> Int {
 
 ///|
 /// Build host import handler ids for imported functions
-fn build_import_handlers(module_ : @core.Module) -> FixedArray[Int] {
-  let handlers : Array[Int] = []
+fn build_import_handlers(module_ : @core.Module) -> FixedArray[Int32] {
+  let handlers : Array[Int32] = []
   for imp in module_.imports {
     match imp.desc {
       Func(_) => {
@@ -1248,17 +1248,17 @@ fn build_import_handlers(module_ : @core.Module) -> FixedArray[Int] {
 
 ///|
 /// Default spectest output buffer capacity in bytes
-let default_output_capacity : Int = 65536
+let default_output_capacity : Int32 = 65536
 
 ///|
 /// Page size in bytes (64KB)
-let page_size : Int = 65536
+let page_size : Int32 = 65536
 
 ///|
 /// Default max memory pages when no max is specified (1024 pages = 64MB)
 /// Note: Memory is pre-allocated to max size, so this affects memory usage
 /// WASM spec allows 65536 pages (4GB) but we use a smaller default for practicality
-let default_memory_max_pages : Int = 1024
+let default_memory_max_pages : Int32 = 1024
 
 ///|
 /// Initialize memory from module's memory section
@@ -1266,7 +1266,7 @@ let default_memory_max_pages : Int = 1024
 fn init_memory(
   module_ : @core.Module,
   globals : FixedArray[UInt64],
-) -> (FixedArray[Byte], FixedArray[Int], Int) {
+) -> (FixedArray[Byte], FixedArray[Int32], Int32) {
   // Check for imported memory (first import only)
   let mut import_mem_type : @core.MemType? = None
   let mut import_module : Bytes? = None
@@ -1332,7 +1332,7 @@ fn init_memory(
     }
   }
   // Use single-element array for memory_pages so it can be mutated by C
-  let memory_pages_arr : FixedArray[Int] = [initial_pages]
+  let memory_pages_arr : FixedArray[Int32] = [initial_pages]
   (memory, memory_pages_arr, max_size)
 }
 
@@ -1340,7 +1340,7 @@ fn init_memory(
 /// Initialize globals from module's global section
 fn init_globals(
   module_ : @core.Module,
-  resolved_imported_globals : Map[Int, UInt64],
+  resolved_imported_globals : Map[Int32, UInt64],
 ) -> FixedArray[UInt64] {
   let num_imported = @core.count_imported_globals(module_)
   let num_local = module_.globals.length()
@@ -1389,7 +1389,7 @@ fn init_globals(
 ///|
 /// Default max table size when no max is specified
 /// This is a reasonable limit for our implementation
-let default_table_max_size : Int = 65536
+let default_table_max_size : Int32 = 65536
 
 ///|
 /// Initialize tables from module's table and elem sections
@@ -1400,7 +1400,7 @@ let default_table_max_size : Int = 65536
 fn init_tables(
   module_ : @core.Module,
   globals : FixedArray[UInt64],
-) -> (FixedArray[FixedArray[Int]], FixedArray[Int], FixedArray[Int]) {
+) -> (FixedArray[FixedArray[Int32]], FixedArray[Int32], FixedArray[Int32]) {
   let num_imported_tables = @core.count_imported_tables(module_)
   let num_local_tables = module_.tables.length()
   let num_tables = num_imported_tables + num_local_tables
@@ -1409,10 +1409,10 @@ fn init_tables(
     return ([[-1]], [0], [1])
   }
   // Allocate tables and track sizes
-  let tables : FixedArray[FixedArray[Int]] = FixedArray::make(num_tables, [-1])
-  let logical_sizes_arr : Array[Int] = []
-  let max_sizes_arr : Array[Int] = []
-  fn table_init_value(table_type : @core.TableType) -> Int {
+  let tables : FixedArray[FixedArray[Int32]] = FixedArray::make(num_tables, [-1])
+  let logical_sizes_arr : Array[Int32] = []
+  let max_sizes_arr : Array[Int32] = []
+  fn table_init_value(table_type : @core.TableType) -> Int32 {
     match table_type.init {
       Some(expr) => eval_elem_expr_with_globals(expr, globals, module_)
       None => -1
@@ -1492,7 +1492,7 @@ fn eval_elem_expr_with_globals(
   expr : @core.Expr,
   globals : FixedArray[UInt64],
   module_ : @core.Module,
-) -> Int {
+) -> Int32 {
   let raw = eval_const_expr_with_globals(expr, globals, module_)
   if raw == 0xFFFFFFFF_FFFFFFFFUL {
     -1
@@ -1508,7 +1508,7 @@ fn eval_const_expr_with_globals(
   globals : FixedArray[UInt64],
   module_ : @core.Module,
 ) -> UInt64 {
-  fn array_default_value(type_idx : Int) -> UInt64 {
+  fn array_default_value(type_idx : Int32) -> UInt64 {
     if type_idx < 0 || type_idx >= module_.types.length() {
       return 0UL
     }
@@ -1527,7 +1527,7 @@ fn eval_const_expr_with_globals(
     }
   }
 
-  fn struct_field_count(type_idx : Int) -> Int {
+  fn struct_field_count(type_idx : Int32) -> Int32 {
     if type_idx < 0 || type_idx >= module_.types.length() {
       return 0
     }

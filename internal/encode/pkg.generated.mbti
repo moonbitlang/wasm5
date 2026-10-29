@@ -13,6 +13,9 @@ pub fn encode(@core.Module) -> Bytes raise EncodeError
 pub suberror EncodeError {
   Unsupported(String)
 } derive(@debug.Debug)
+pub fn EncodeError::output(Self, &Logger) -> Unit
+pub fn EncodeError::to_repr(Self) -> @debug.Repr
+pub fn EncodeError::to_string(Self) -> String
 pub impl Show for EncodeError
 
 // Types and methods
@@ -20,4 +23,3 @@ pub impl Show for EncodeError
 // Type aliases
 
 // Traits
-

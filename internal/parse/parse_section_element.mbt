@@ -19,7 +19,7 @@ fn parse_element_section(parser : Parser) -> Array[@core.Elem] raise ParseError 
     // Passive/declarative segments (flags 1,3,5,7) don't
     let is_active = flags == 0 || flags == 2 || flags == 4 || flags == 6
     let is_declarative = flags == 3 || flags == 7
-    let table_idx : UInt = match flags {
+    let table_idx : UInt32 = match flags {
       0 | 4 => 0U // implicit table 0
       2 | 6 => parser.read_u32_leb128() // explicit table index
       _ => 0U // passive/declarative segments have no table
@@ -27,7 +27,7 @@ fn parse_element_section(parser : Parser) -> Array[@core.Elem] raise ParseError 
     let explicit_table = flags == 2 || flags == 6
     let offset : @core.Expr = match flags {
       0 | 2 | 4 | 6 => parse_expr(parser) // active segments have offset
-      _ => @core.Expr::{ instrs: [I32Const(0U)] } // dummy offset for passive/declarative
+      _ => @core.Expr::{ instrs: [I32Const(0U)], } // dummy offset for passive/declarative
     }
     // Read elemkind or reftype for certain flags
     // For funcidx form (flags 0-3), elem type is non-nullable because ref.func produces non-null
@@ -62,7 +62,7 @@ fn parse_element_section(parser : Parser) -> Array[@core.Elem] raise ParseError 
         init.push(expr)
       } else {
         let idx = parser.read_u32_leb128()
-        init.push(@core.Expr::{ instrs: [RefFunc(idx)] })
+        init.push(@core.Expr::{ instrs: [RefFunc(idx)], })
       }
     }
     elems.push(@core.Elem::{

@@ -883,7 +883,7 @@ pub fn OpTag::from_int64(v : Int64) -> OpTag? {
 ///|
 /// Returns the number of Int64 immediates that follow this opcode in the code array.
 /// Used for iterating through the code array and for C runtime transformation.
-pub fn get_immediate_count(opcode : Int64) -> Int {
+pub fn get_immediate_count(opcode : Int64) -> Int32 {
   match opcode {
     // Control flow with immediates
     0L => 0 // Unreachable
@@ -924,10 +924,10 @@ pub fn get_immediate_count(opcode : Int64) -> Int {
     30L => 0 // Select
 
     // All arithmetic/comparison/unary ops (31-128) have 0 immediates
-    31L..=128L => 0
+    31L..<=128L => 0
 
     // All conversions (129-166) have 0 immediates
-    129L..=166L => 0
+    129L..<=166L => 0
 
     // Memory operations
     167L => 1 // MemoryGrow: mem_idx

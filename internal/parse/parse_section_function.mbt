@@ -1,7 +1,7 @@
 // Section parsers: function section
 
 ///|
-fn parse_function_section(parser : Parser) -> Array[UInt] raise ParseError {
+fn parse_function_section(parser : Parser) -> Array[UInt32] raise ParseError {
   let count = parser.read_u32_leb128()
   let funcs = []
   for _ in 0U..<count {

@@ -2,7 +2,7 @@
 fn make_code(locals : Array[@core.ValType]) -> @core.Code {
   {
     locals,
-    body: @core.Expr::{ instrs: [] },
+    body: @core.Expr::{ instrs: [], },
     compiled: None,
     max_stack_height: 0,
   }
@@ -22,8 +22,8 @@ test "compile helpers initialize entry locals" {
 
 ///|
 test "compile helpers type signature mismatch" {
-  let expected : @core.FuncType = { params: [I32], results: [] }
-  let actual : @core.FuncType = { params: [], results: [] }
+  let expected : @core.FuncType = { params: [I32], results: [], }
+  let actual : @core.FuncType = { params: [], results: [], }
   let rt = make_runtime([], [], 0)
   let rc = check_type_signature_match(expected, actual, "bad", rt)
   assert_trap(rc)
@@ -48,12 +48,12 @@ test "compile helpers func type lookup with non func imports" {
         module_: b"m",
         name: b"mem",
         desc: Mem({
-          limits: { min: 1UL, max: None },
+          limits: { min: 1UL, max: None, },
           shared: false,
           memory64: false,
         }),
       },
-      { module_: b"m", name: b"f", desc: Func(0U) },
+      { module_: b"m", name: b"f", desc: Func(0U), },
     ],
     exports: [],
     codes: [],
@@ -91,14 +91,14 @@ test "compile helpers imported func result truncation" {
 test "compile helpers tail call return branches" {
   // Test nested call (bp != 0) - should return Returned
   let rt = make_runtime([], [], 0)
-  let rt = { ..rt, bp: 5, num_locals: 3 }
+  let rt = { ..rt, bp: 5, num_locals: 3, }
   let rc = handle_tail_call_return(rt)
   @debug.assert_eq(rc, Returned)
   assert_eq(rt.bp, 5) // bp unchanged - caller's execute_call will restore
 
   // Test entry function (bp == 0) - should return Terminated
   let rt_entry = make_runtime([], [], 0)
-  let rt_entry = { ..rt_entry, bp: 0 }
+  let rt_entry = { ..rt_entry, bp: 0, }
   let rc_entry = handle_tail_call_return(rt_entry)
   @debug.assert_eq(rc_entry, Terminated)
 }

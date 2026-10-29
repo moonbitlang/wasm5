@@ -1,7 +1,7 @@
 ///|
 /// Test failure record
 pub struct TestFailure {
-  line : Int
+  line : Int32
   test_type : String
   message : String
   source_file : String
@@ -117,14 +117,14 @@ priv struct TestContext {
   mut executor : &Executor?
   registry : ModuleRegistry
   resolver : @wasm5_runtime.Imports
-  mut skipped_count : Int
+  mut skipped_count : Int32
   output_lines : Array[String]
 }
 
 ///|
 fn TestContext::fail(
   self : TestContext,
-  line : Int,
+  line : Int32,
   test_type : String,
   message : String,
 ) -> Unit {
@@ -139,7 +139,12 @@ fn TestContext::fail(
       return
     }
   }
-  self.failures.push({ line, test_type, message, source_file: self.source_file })
+  self.failures.push({
+    line,
+    test_type,
+    message,
+    source_file: self.source_file,
+  })
 }
 
 ///|
@@ -223,7 +228,7 @@ async fn parse_and_compile(ctx : TestContext, file_name : String) -> &Executor {
 fn make_import_wrapper(
   registered : RegisteredModule,
   export_name : String,
-  arity : UInt,
+  arity : UInt32,
 ) -> @wasm5_runtime.HostFunc {
   // Create a wrapper that calls the registered module's function
   let func : (Array[@wasm5_runtime.Value]) -> Array[@wasm5_runtime.Value] = fn(
@@ -246,8 +251,8 @@ fn make_import_wrapper(
 /// This is used for funcref globals where the function may not be exported by name.
 fn make_funcref_wrapper(
   registered : RegisteredModule,
-  func_idx : Int,
-  arity : UInt,
+  func_idx : Int32,
+  arity : UInt32,
 ) -> @wasm5_runtime.HostFunc {
   let func : (Array[@wasm5_runtime.Value]) -> Array[@wasm5_runtime.Value] = fn(
     args,
@@ -263,7 +268,7 @@ fn make_funcref_wrapper(
 
 ///|
 /// Count imported functions in a module
-fn count_imported_funcs(module_ : @wasm5_core.Module) -> Int {
+fn count_imported_funcs(module_ : @wasm5_core.Module) -> Int32 {
   let mut count = 0
   for imp in module_.imports {
     match imp.desc {
@@ -276,7 +281,7 @@ fn count_imported_funcs(module_ : @wasm5_core.Module) -> Int {
 
 ///|
 /// Get function arity (number of parameters) for a function by index
-fn get_func_arity(module_ : @wasm5_core.Module, func_idx : Int) -> UInt {
+fn get_func_arity(module_ : @wasm5_core.Module, func_idx : Int32) -> UInt32 {
   let num_imported = count_imported_funcs(module_)
   let type_idx = if func_idx < num_imported {
     // Imported function - find its type index
@@ -435,8 +440,8 @@ fn register_cruntime(
 fn resolve_imports_for_cruntime(
   ctx : TestContext,
   module_ : @wasm5_core.Module,
-) -> Map[Int, @wasm5_cruntime.ResolvedImport] {
-  let resolved : Map[Int, @wasm5_cruntime.ResolvedImport] = Map([])
+) -> Map[Int32, @wasm5_cruntime.ResolvedImport] {
+  let resolved : Map[Int32, @wasm5_cruntime.ResolvedImport] = Map([])
   let mut import_func_idx = 0
   for imp in module_.imports {
     match imp.desc {
@@ -497,8 +502,8 @@ fn is_funcref_val_type(ty : @wasm5_core.ValType) -> Bool {
 fn resolve_globals_for_cruntime(
   ctx : TestContext,
   module_ : @wasm5_core.Module,
-) -> (Map[Int, UInt64], Array[@wasm5_cruntime.ResolvedImport]) {
-  let resolved : Map[Int, UInt64] = Map([])
+) -> (Map[Int32, UInt64], Array[@wasm5_cruntime.ResolvedImport]) {
+  let resolved : Map[Int32, UInt64] = Map([])
   let external_funcrefs : Array[@wasm5_cruntime.ResolvedImport] = []
   let num_imported_funcs = count_imported_funcs(module_)
   let external_base = num_imported_funcs + module_.funcs.length()
@@ -569,7 +574,10 @@ fn resolve_globals_for_cruntime(
 
 ///|
 /// Find the function index for an exported function name in a module.
-fn find_exported_func_idx(module_ : @wasm5_core.Module, name : String) -> Int? {
+fn find_exported_func_idx(
+  module_ : @wasm5_core.Module,
+  name : String,
+) -> Int32? {
   let name_bytes = @utf8.encode(name)
   for exp in module_.exports {
     if exp.name == name_bytes {
@@ -588,7 +596,7 @@ fn find_exported_func_idx(module_ : @wasm5_core.Module, name : String) -> Int? {
 fn find_exported_global_idx(
   module_ : @wasm5_core.Module,
   name : String,
-) -> Int? {
+) -> Int32? {
   let name_bytes = @utf8.encode(name)
   for exp in module_.exports {
     if exp.name == name_bytes {
@@ -623,8 +631,8 @@ fn cruntime_value_to_u64(v : @wasm5_runtime.Value) -> UInt64 {
 /// Get the number of params and results for a function in a module.
 fn get_func_type_info(
   module_ : @wasm5_core.Module,
-  func_idx : Int,
-) -> (Int, Int) {
+  func_idx : Int32,
+) -> (Int32, Int32) {
   // Count imported functions
   let mut num_imported_funcs = 0
   for imp in module_.imports {
@@ -732,7 +740,7 @@ fn fix_shared_table_elements(
                     0
                   }
                 }
-                let arity : UInt = match module_.types.get(type_idx) {
+                let arity : UInt32 = match module_.types.get(type_idx) {
                   Some(@wasm5_core.TypeDef::Func(ft)) =>
                     ft.params.length().reinterpret_as_uint()
                   _ => 0U
@@ -765,7 +773,7 @@ fn fix_shared_table_elements(
 fn eval_elem_offset(
   elem : @wasm5_core.Elem,
   runtime : @wasm5_runtime.Instance,
-) -> Int? {
+) -> Int32? {
   // Simple evaluation for common cases
   for instr in elem.offset.instrs {
     match instr {
@@ -790,8 +798,8 @@ fn eval_elem_offset(
 /// Get the type index for an imported function
 fn get_import_func_type_idx(
   module_ : @wasm5_core.Module,
-  func_idx : Int,
-) -> Int {
+  func_idx : Int32,
+) -> Int32 {
   let mut import_idx = 0
   for imp in module_.imports {
     match imp.desc {
@@ -865,7 +873,7 @@ enum ExpectedValue {
 ///|
 /// Parse i32 value string, handling both signed and unsigned representations
 /// wasm-tools outputs signed numbers (e.g., "-1") while wabt outputs unsigned (e.g., "4294967295")
-fn parse_i32_value(v : String) -> UInt {
+fn parse_i32_value(v : String) -> UInt32 {
   if v.has_prefix("-") {
     // Signed value - parse as signed and reinterpret as unsigned
     try {
@@ -1216,8 +1224,8 @@ fn values_match(
 async fn handle_module(
   ctx : TestContext,
   filename : String,
-  line : Int,
-  name? : String? = None,
+  line : Int32,
+  name~ : String? = None,
 ) -> Unit {
   try {
     let executor = parse_and_compile(ctx, filename)
@@ -1242,7 +1250,7 @@ async fn handle_module(
 
 ///|
 /// Handle "register" command - register the current module with a name
-fn handle_register(ctx : TestContext, name : String, line : Int) -> Unit {
+fn handle_register(ctx : TestContext, name : String, line : Int32) -> Unit {
   guard ctx.executor is Some(executor) else {
     ctx.fail(line, "register", "no module loaded to register")
     return
@@ -1295,8 +1303,8 @@ fn handle_assert_return(
   fn_name : String,
   args : Array[Json],
   expected : Array[Json],
-  line : Int,
-  module_name? : String? = None,
+  line : Int32,
+  module_name~ : String? = None,
 ) -> Unit {
   try {
     let runtime_args = parse_args(args)
@@ -1341,8 +1349,8 @@ fn handle_assert_trap(
   fn_name : String,
   args : Array[Json],
   expected_error : String,
-  line : Int,
-  module_name? : String? = None,
+  line : Int32,
+  module_name~ : String? = None,
 ) -> Unit {
   let runtime_args = parse_args(args) catch {
     e => {
@@ -1412,7 +1420,7 @@ async fn handle_assert_invalid(
   ctx : TestContext,
   filename : String,
   expected_error : String,
-  line : Int,
+  line : Int32,
 ) -> Unit {
   try {
     let _ = parse_and_compile(ctx, filename)
@@ -1545,7 +1553,7 @@ fn handle_action(
   ctx : TestContext,
   fn_name : String,
   args : Array[Json],
-  line : Int,
+  line : Int32,
 ) -> Unit {
   try {
     let runtime_args = parse_args(args)
@@ -1568,8 +1576,8 @@ fn handle_assert_return_get(
   ctx : TestContext,
   field : String,
   expected : Array[Json],
-  line : Int,
-  module_name? : String? = None,
+  line : Int32,
+  module_name~ : String? = None,
 ) -> Unit {
   try {
     let rt : @wasm5_runtime.Instance? = match module_name {
@@ -1611,7 +1619,7 @@ fn handle_assert_return_get(
       crt.unwrap().get_module()
     }
     let field_bytes = @utf8.encode(field)
-    let mut global_idx : Int? = None
+    let mut global_idx : Int32? = None
     for exp in module_.exports {
       if exp.name == field_bytes {
         match exp.desc {
@@ -1810,8 +1818,8 @@ async fn process_meta(
   json_file : String,
   failures : Array[TestFailure],
   source_file : String,
-  runtime_type? : RuntimeType = MoonBit,
-) -> (Int, Array[String]) {
+  runtime_type~ : RuntimeType = MoonBit,
+) -> (Int32, Array[String]) {
   let file = @fs.open(dir + json_file, mode=ReadOnly)
   defer file.close()
   let meta = file.read_all().json()
@@ -1857,8 +1865,8 @@ async fn process_meta(
 pub async fn process_wast_file(
   wast_dir : String,
   wast_file : String,
-  runtime_type? : RuntimeType = MoonBit,
-) -> (Array[TestFailure], Int, Array[String]) {
+  runtime_type~ : RuntimeType = MoonBit,
+) -> (Array[TestFailure], Int32, Array[String]) {
   guard wast_file.strip_suffix(".wast") is Some(base_name) else {
     abort("Invalid wast file name: \{wast_file}")
   }
@@ -1904,7 +1912,7 @@ pub async fn process_wast_file(
 pub async fn process_wast_file_cruntime(
   wast_dir : String,
   wast_file : String,
-) -> (Array[TestFailure], Int, Array[String]) {
+) -> (Array[TestFailure], Int32, Array[String]) {
   process_wast_file(wast_dir, wast_file, runtime_type=CRuntime)
 }
 
@@ -1914,7 +1922,7 @@ pub async fn process_wast_file_cruntime(
 /// exports.wast, global.wast: global imports/get not supported (now enabled)
 /// elem.wast: module registration and some trap handling
 /// memory_grow.wast: cross-module memory imports not fully supported
-let cruntime_whitelisted_tests : Array[(String, Set[Int])] = [
+let cruntime_whitelisted_tests : Array[(String, Set[Int32])] = [
   ("memory_grow.wast", Set::from_array([330, 336])),
   ("elem.wast", Set::from_array([959, 960, 972, 973, 974, 1029])),
 ]
@@ -1924,4 +1932,4 @@ let cruntime_whitelisted_tests : Array[(String, Set[Int])] = [
 /// These are known failing tests due to missing features
 // Whitelisted tests that are skipped due to missing validation/features
 // Currently all GC tests pass!
-let whitelisted_tests : Array[(String, Set[Int])] = []
+let whitelisted_tests : Array[(String, Set[Int32])] = []

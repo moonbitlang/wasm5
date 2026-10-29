@@ -6,14 +6,15 @@ import {
 }
 
 // Values
-pub async fn process_wast_file(String, String, runtime_type? : RuntimeType) -> (Array[TestFailure], Int, Array[String])
+pub async fn process_wast_file(String, String, runtime_type? : RuntimeType) -> (Array[TestFailure], Int32, Array[String])
 
-pub async fn process_wast_file_cruntime(String, String) -> (Array[TestFailure], Int, Array[String])
+pub async fn process_wast_file_cruntime(String, String) -> (Array[TestFailure], Int32, Array[String])
 
 // Errors
 
 // Types and methods
 type ExpectedValue derive(@debug.Debug)
+pub fn ExpectedValue::to_repr(Self) -> @debug.Repr
 
 pub(all) enum RuntimeType {
   MoonBit
@@ -21,15 +22,16 @@ pub(all) enum RuntimeType {
 }
 
 pub struct TestFailure {
-  line : Int
+  line : Int32
   test_type : String
   message : String
   source_file : String
 }
+pub fn TestFailure::output(Self, &Logger) -> Unit
+pub fn TestFailure::to_string(Self) -> String
 pub impl Show for TestFailure
 
 // Type aliases
 pub using @moonbitlang/core/test {type Test}
 
 // Traits
-

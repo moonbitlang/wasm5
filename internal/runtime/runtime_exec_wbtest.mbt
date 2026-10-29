@@ -1,11 +1,11 @@
 ///|
 fn module_with(
   types : Array[@core.TypeDef],
-  funcs : Array[UInt],
+  funcs : Array[UInt32],
   codes : Array[@core.Code],
   imports : Array[@core.Import],
   exports : Array[@core.Export],
-  start : UInt?,
+  start : UInt32?,
 ) -> @core.Module {
   {
     types,
@@ -27,10 +27,10 @@ fn module_with(
 
 ///|
 test "runtime compile start function" {
-  let func_type : @core.TypeDef = Func({ params: [], results: [] })
+  let func_type : @core.TypeDef = Func({ params: [], results: [], })
   let code : @core.Code = {
     locals: [I32],
-    body: @core.Expr::{ instrs: [] },
+    body: @core.Expr::{ instrs: [], },
     compiled: None,
     max_stack_height: 0,
   }
@@ -58,13 +58,13 @@ test "runtime execute error branches" {
 
 ///|
 test "runtime call compiled imported func" {
-  let func_type : @core.TypeDef = Func({ params: [], results: [I32] })
+  let func_type : @core.TypeDef = Func({ params: [], results: [I32], })
   let module_ = module_with(
     [func_type],
     [],
     [],
-    [{ module_: b"m", name: b"f", desc: Func(0U) }],
-    [{ name: b"f", desc: Func(0U) }],
+    [{ module_: b"m", name: b"f", desc: Func(0U), }],
+    [{ name: b"f", desc: Func(0U), }],
     None,
   )
   let resolver = Imports::new()
@@ -77,7 +77,7 @@ test "runtime call compiled imported func" {
 ///|
 test "runtime call compiled non func export" {
   let mem_type : @core.MemType = {
-    limits: { min: 1UL, max: None },
+    limits: { min: 1UL, max: None, },
     shared: false,
     memory64: false,
   }
@@ -94,7 +94,7 @@ test "runtime call compiled non func export" {
     datas: [],
     start: None,
     imports: [],
-    exports: [{ name: b"mem", desc: Mem(0U) }],
+    exports: [{ name: b"mem", desc: Mem(0U), }],
     codes: [],
   }
   let rt = Instance::new(module_, Imports::new())
@@ -111,10 +111,10 @@ test "runtime call compiled non func export" {
 ///|
 test "runtime call compiled local errors" {
   // V128 locals are valid even if SIMD ops are unimplemented.
-  let func_type : @core.FuncType = { params: [], results: [] }
+  let func_type : @core.FuncType = { params: [], results: [], }
   let code_bad : @core.Code = {
     locals: [V128],
-    body: @core.Expr::{ instrs: [] },
+    body: @core.Expr::{ instrs: [], },
     compiled: None,
     max_stack_height: 0,
   }
@@ -123,7 +123,7 @@ test "runtime call compiled local errors" {
     [0U],
     [code_bad],
     [],
-    [{ name: b"bad", desc: Func(0U) }],
+    [{ name: b"bad", desc: Func(0U), }],
     None,
   )
   let rt_bad = Instance::new(module_bad, Imports::new())

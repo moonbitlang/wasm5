@@ -805,44 +805,44 @@ extern "C" fn c_create_runtime_context(
   code : FixedArray[UInt64],
   globals : FixedArray[UInt64],
   memory : FixedArray[Byte],
-  memory_size : Int,
-  memory_max_size : Int,
-  memory_pages : FixedArray[Int],
-  tables_flat : FixedArray[Int],
+  memory_size : Int32,
+  memory_max_size : Int32,
+  memory_pages : FixedArray[Int32],
+  tables_flat : FixedArray[Int32],
   tables_flat_u64 : FixedArray[UInt64],
-  table_offsets : FixedArray[Int],
-  table_sizes : FixedArray[Int],
-  table_max_sizes : FixedArray[Int],
-  table_elem_is_funcref : FixedArray[Int],
-  num_tables : Int,
-  func_entries : FixedArray[Int],
-  func_num_locals : FixedArray[Int],
-  num_funcs : Int,
-  num_imported_funcs : Int,
-  func_type_idxs : FixedArray[Int],
-  type_sig_hash1 : FixedArray[Int],
-  type_sig_hash2 : FixedArray[Int],
-  type_subtype_matrix : FixedArray[Int],
-  num_types : Int,
-  import_num_params : FixedArray[Int],
-  import_num_results : FixedArray[Int],
-  import_handler_ids : FixedArray[Int],
+  table_offsets : FixedArray[Int32],
+  table_sizes : FixedArray[Int32],
+  table_max_sizes : FixedArray[Int32],
+  table_elem_is_funcref : FixedArray[Int32],
+  num_tables : Int32,
+  func_entries : FixedArray[Int32],
+  func_num_locals : FixedArray[Int32],
+  num_funcs : Int32,
+  num_imported_funcs : Int32,
+  func_type_idxs : FixedArray[Int32],
+  type_sig_hash1 : FixedArray[Int32],
+  type_sig_hash2 : FixedArray[Int32],
+  type_subtype_matrix : FixedArray[Int32],
+  num_types : Int32,
+  import_num_params : FixedArray[Int32],
+  import_num_results : FixedArray[Int32],
+  import_handler_ids : FixedArray[Int32],
   output_buffer : FixedArray[Byte],
-  output_length : FixedArray[Int],
-  output_capacity : Int,
+  output_length : FixedArray[Int32],
+  output_capacity : Int32,
   import_context_ptrs : FixedArray[Int64],
-  import_target_func_idxs : FixedArray[Int],
+  import_target_func_idxs : FixedArray[Int32],
   data_segments_flat : FixedArray[Byte],
-  data_segment_offsets : FixedArray[Int],
-  data_segment_sizes : FixedArray[Int],
-  num_data_segments : Int,
-  elem_segments_flat : FixedArray[Int],
+  data_segment_offsets : FixedArray[Int32],
+  data_segment_sizes : FixedArray[Int32],
+  num_data_segments : Int32,
+  elem_segments_flat : FixedArray[Int32],
   elem_segments_flat_u64 : FixedArray[UInt64],
-  elem_segment_offsets : FixedArray[Int],
-  elem_segment_sizes : FixedArray[Int],
-  elem_segment_dropped : FixedArray[Int],
-  num_elem_segments : Int,
-  num_external_funcrefs : Int,
+  elem_segment_offsets : FixedArray[Int32],
+  elem_segment_sizes : FixedArray[Int32],
+  elem_segment_dropped : FixedArray[Int32],
+  num_elem_segments : Int32,
+  num_external_funcrefs : Int32,
 ) -> Int64 = "create_runtime_context"
 
 ///|
@@ -851,12 +851,12 @@ extern "C" fn c_create_runtime_context(
 #borrow(args, result_out)
 extern "C" fn c_call_external_ffi(
   target_context_ptr : Int64,
-  func_idx : Int,
+  func_idx : Int32,
   args : FixedArray[UInt64],
-  num_args : Int,
+  num_args : Int32,
   result_out : FixedArray[UInt64],
-  num_results : Int,
-) -> Int = "call_external_ffi"
+  num_results : Int32,
+) -> Int32 = "call_external_ffi"
 
 ///|
 /// Initialize WASI context (with empty arguments for now).
@@ -865,16 +865,16 @@ extern "C" fn c_wasi_init_empty() -> Unit = "wasi_init_empty"
 
 ///|
 /// Get the WASI exit code after proc_exit was called.
-extern "C" fn c_wasi_get_exit_code() -> Int = "wasi_get_exit_code"
+extern "C" fn c_wasi_get_exit_code() -> Int32 = "wasi_get_exit_code"
 
 ///|
 /// Check if WASI has exited (proc_exit was called).
-extern "C" fn c_wasi_has_exited() -> Int = "wasi_has_exited"
+extern "C" fn c_wasi_has_exited() -> Int32 = "wasi_has_exited"
 
 ///|
 /// Add a preopened file to the WASI environment.
 /// Returns the WASI fd number (3+) or -1 on error.
-extern "C" fn c_wasi_add_preopen_file(host_fd : Int) -> Int = "wasi_add_preopen_file_ffi"
+extern "C" fn c_wasi_add_preopen_file(host_fd : Int32) -> Int32 = "wasi_add_preopen_file_ffi"
 
 ///|
 /// Reset preopens to just stdin/stdout/stderr.

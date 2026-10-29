@@ -35,7 +35,7 @@ fn parse_instr_prefix_fd(parser : Parser) -> @core.Instr raise ParseError {
           @core.SimdImmediate::V128Const(bytes)
         }
       }
-      @core.Instr::Simd(@core.SimdInstr::{ opcode: sub_opcode, imm })
+      @core.Instr::Simd(@core.SimdInstr::{ opcode: sub_opcode, imm, })
     }
     None =>
       raise ParseError::InvalidFormat("unknown 0xFD sub-opcode: \{sub_opcode}")

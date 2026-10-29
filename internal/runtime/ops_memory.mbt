@@ -597,7 +597,7 @@ fn op_i64_store32(rt : Instance) -> ReturnCode {
 // WebAssembly memory is measured in pages of 64KB (65536 bytes)
 
 ///|
-let wasm_page_size : Int = 65536
+let wasm_page_size : Int32 = 65536
 
 ///|
 fn op_memory_size(rt : Instance) -> ReturnCode {

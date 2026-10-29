@@ -9,24 +9,24 @@ pub(all) struct CompiledModule {
   /// The number of immediates per opcode is determined by get_immediate_count().
   code : Array[Int64]
   /// Entry point (code index) for each function.
-  func_entries : Array[Int]
+  func_entries : Array[Int32]
   /// Number of locals for each function (includes parameters).
-  func_num_locals : Array[Int]
+  func_num_locals : Array[Int32]
   /// Number of parameters for each function.
-  func_num_params : Array[Int]
+  func_num_params : Array[Int32]
   /// Number of results for each function.
-  func_num_results : Array[Int]
+  func_num_results : Array[Int32]
   /// Maximum stack slots needed for each function (for stack overflow checks).
-  func_max_stack : Array[Int]
+  func_max_stack : Array[Int32]
   /// Export name to function index mapping.
-  exports : Map[String, Int]
+  exports : Map[String, Int32]
   /// Format version for compatibility checking.
-  version : Int
+  version : Int32
 }
 
 ///|
 /// Current version of the compiled module format.
-pub let compiled_module_version : Int = 1
+pub let compiled_module_version : Int32 = 1
 
 ///|
 /// Create an empty CompiledModule.

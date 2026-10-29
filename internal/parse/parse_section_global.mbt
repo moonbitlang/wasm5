@@ -11,7 +11,7 @@ fn parse_global_section(
     let mutable = parser.read_byte() == 0x01
     let init = parse_expr(parser)
     globals.push(@core.Global::{
-      type_: @core.GlobalType::{ val_type, mutable },
+      type_: @core.GlobalType::{ val_type, mutable, },
       init,
     })
   }

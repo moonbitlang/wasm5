@@ -497,7 +497,7 @@ fn validate_instruction_gc(
 ///|
 fn require_struct_type(
   module_ : @core.Module,
-  type_idx : Int,
+  type_idx : Int32,
   context : String,
 ) -> @core.StructType raise ValidationError {
   if type_idx < 0 || type_idx >= module_.types.length() {
@@ -512,7 +512,7 @@ fn require_struct_type(
 ///|
 fn require_array_type(
   module_ : @core.Module,
-  type_idx : Int,
+  type_idx : Int32,
   context : String,
 ) -> @core.ArrayType raise ValidationError {
   if type_idx < 0 || type_idx >= module_.types.length() {
@@ -527,7 +527,7 @@ fn require_array_type(
 ///|
 fn get_field(
   struct_type : @core.StructType,
-  field_idx : UInt,
+  field_idx : UInt32,
   context : String,
 ) -> @core.FieldType raise ValidationError {
   let idx = field_idx.reinterpret_as_int()
@@ -580,7 +580,7 @@ fn heap_type_valtype(
 ///|
 fn validate_data_index(
   module_ : @core.Module,
-  data_idx : UInt,
+  data_idx : UInt32,
   context : String,
 ) -> Unit raise ValidationError {
   let idx = data_idx.reinterpret_as_int()
@@ -592,7 +592,7 @@ fn validate_data_index(
 ///|
 fn validate_elem_index(
   module_ : @core.Module,
-  elem_idx : UInt,
+  elem_idx : UInt32,
   context : String,
 ) -> Unit raise ValidationError {
   let idx = elem_idx.reinterpret_as_int()

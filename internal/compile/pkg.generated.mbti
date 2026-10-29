@@ -15,4 +15,3 @@ pub fn compile(@core.Module) -> @core.CompiledModule
 // Type aliases
 
 // Traits
-

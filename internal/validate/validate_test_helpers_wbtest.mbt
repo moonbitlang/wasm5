@@ -1,6 +1,6 @@
 ///|
 fn test_empty_expr() -> @core.Expr {
-  { instrs: [] }
+  { instrs: [], }
 }
 
 ///|
@@ -28,5 +28,5 @@ fn test_make_code(
   locals : Array[@core.ValType],
   instrs : Array[@core.Instr],
 ) -> @core.Code {
-  { locals, body: { instrs, }, compiled: None, max_stack_height: 0 }
+  { locals, body: { instrs, }, compiled: None, max_stack_height: 0, }
 }

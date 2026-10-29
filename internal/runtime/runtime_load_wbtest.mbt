@@ -5,15 +5,15 @@ fn make_expr(instrs : Array[@core.Instr]) -> @core.Expr {
 
 ///|
 test "runtime load with resolver" {
-  let func_type : @core.TypeDef = Func({ params: [], results: [] })
+  let func_type : @core.TypeDef = Func({ params: [], results: [], })
   let mem_type : @core.MemType = {
-    limits: { min: 1UL, max: Some(2UL) },
+    limits: { min: 1UL, max: Some(2UL), },
     shared: false,
     memory64: false,
   }
   let table_type : @core.TableType = {
     elem_type: Func,
-    limits: { min: 1UL, max: Some(2UL) },
+    limits: { min: 1UL, max: Some(2UL), },
     init: None,
     nullable: true,
     table64: false,
@@ -28,7 +28,7 @@ test "runtime load with resolver" {
     mems: [],
     globals: [
       {
-        type_: { val_type: I32, mutable: false },
+        type_: { val_type: I32, mutable: false, },
         init: make_expr([I32Const(7U)]),
       },
     ],
@@ -55,20 +55,20 @@ test "runtime load with resolver" {
     ],
     start: None,
     imports: [
-      { module_: b"m", name: b"f", desc: Func(0U) },
-      { module_: b"m", name: b"mem", desc: Mem(mem_type) },
+      { module_: b"m", name: b"f", desc: Func(0U), },
+      { module_: b"m", name: b"mem", desc: Mem(mem_type), },
       {
         module_: b"m",
         name: b"g0",
-        desc: Global({ val_type: I32, mutable: false }),
+        desc: Global({ val_type: I32, mutable: false, }),
       },
       {
         module_: b"m",
         name: b"g1",
-        desc: Global({ val_type: F64, mutable: false }),
+        desc: Global({ val_type: F64, mutable: false, }),
       },
-      { module_: b"m", name: b"t0", desc: Table(table_type) },
-      { module_: b"m", name: b"t1", desc: Table(table_type) },
+      { module_: b"m", name: b"t0", desc: Table(table_type), },
+      { module_: b"m", name: b"t1", desc: Table(table_type), },
     ],
     exports: [],
     codes: [make_code([])],
@@ -115,7 +115,7 @@ test "runtime load with resolver" {
 ///|
 test "runtime load fallback memory" {
   let mem_type : @core.MemType = {
-    limits: { min: 1UL, max: Some(2UL) },
+    limits: { min: 1UL, max: Some(2UL), },
     shared: false,
     memory64: false,
   }
@@ -131,7 +131,7 @@ test "runtime load fallback memory" {
     elems: [],
     datas: [],
     start: None,
-    imports: [{ module_: b"m", name: b"mem", desc: Mem(mem_type) }],
+    imports: [{ module_: b"m", name: b"mem", desc: Mem(mem_type), }],
     exports: [],
     codes: [],
   }
@@ -143,7 +143,7 @@ test "runtime load fallback memory" {
 ///|
 test "runtime load local memory" {
   let mem_type : @core.MemType = {
-    limits: { min: 1UL, max: None },
+    limits: { min: 1UL, max: None, },
     shared: false,
     memory64: false,
   }
@@ -170,7 +170,7 @@ test "runtime load local memory" {
 
 ///|
 test "runtime load missing imported function" {
-  let func_type : @core.TypeDef = Func({ params: [], results: [] })
+  let func_type : @core.TypeDef = Func({ params: [], results: [], })
   let module_ : @core.Module = {
     types: [func_type],
     type_groups: [],
@@ -183,7 +183,7 @@ test "runtime load missing imported function" {
     elems: [],
     datas: [],
     start: None,
-    imports: [{ module_: b"m", name: b"f", desc: Func(0U) }],
+    imports: [{ module_: b"m", name: b"f", desc: Func(0U), }],
     exports: [],
     codes: [],
   }

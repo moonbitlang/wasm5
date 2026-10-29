@@ -26,7 +26,7 @@ fn Parser::read_limits(self : Parser) -> (@core.Limits, Bool) raise ParseError {
   } else {
     None
   }
-  ({ min, max }, table64)
+  ({ min, max, }, table64)
 }
 
 ///|
@@ -59,5 +59,5 @@ fn Parser::read_memtype(self : Parser) -> @core.MemType raise ParseError {
   } else {
     None
   }
-  @core.MemType::{ limits: { min, max }, shared, memory64 }
+  @core.MemType::{ limits: { min, max, }, shared, memory64, }
 }

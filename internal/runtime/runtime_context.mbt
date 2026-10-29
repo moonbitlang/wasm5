@@ -20,7 +20,7 @@ pub struct RuntimeContext {
   // Active segments are dropped after instantiation, declarative segments are always dropped.
   dropped_elems : Array[Bool]
   // Cached count of imported functions (avoids linear scan at runtime)
-  num_imported_funcs : Int
+  num_imported_funcs : Int32
   mut error_detail : String
 }
 
@@ -35,10 +35,10 @@ fn RuntimeContext::new_with_gc_heap(
   imported_funcs : Array[HostFunc],
   data_segments : Array[Array[Byte]],
   gc_heap : Array[GcObject],
-  output? : Array[String] = [],
-  compiled? : @core.CompiledModule = @core.CompiledModule::new(),
-  external_funcrefs? : Array[HostFunc] = [],
-  dropped_elems? : Array[Bool] = [],
+  output~ : Array[String] = [],
+  compiled~ : @core.CompiledModule = @core.CompiledModule::new(),
+  external_funcrefs~ : Array[HostFunc] = [],
+  dropped_elems~ : Array[Bool] = [],
 ) -> RuntimeContext {
   {
     module_,

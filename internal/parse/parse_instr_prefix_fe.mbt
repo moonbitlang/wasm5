@@ -14,7 +14,7 @@ fn parse_instr_prefix_fe(parser : Parser) -> @core.Instr raise ParseError {
           @core.AtomicImmediate::Fence(flags)
         }
       }
-      @core.Instr::Atomic(@core.AtomicInstr::{ opcode: sub_opcode, imm })
+      @core.Instr::Atomic(@core.AtomicInstr::{ opcode: sub_opcode, imm, })
     }
     None =>
       raise ParseError::InvalidFormat("unknown 0xFE sub-opcode: \{sub_opcode}")

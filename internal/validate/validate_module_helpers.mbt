@@ -87,7 +87,7 @@ fn is_typedef_subtype(
 /// A type is final if:
 /// - It has no SubTypeDef in type_groups (implicitly final), OR
 /// - Its SubTypeDef has is_final=true
-fn is_type_final(m : @core.Module, type_idx : Int) -> Bool {
+fn is_type_final(m : @core.Module, type_idx : Int32) -> Bool {
   let tidx = type_idx.reinterpret_as_uint()
   // Search through all type groups for this type's subtype definition
   for group in m.type_groups {
@@ -108,9 +108,9 @@ fn is_type_final(m : @core.Module, type_idx : Int) -> Bool {
 /// - `ref_idx` is within the current rec group (forward reference within group allowed)
 fn validate_type_ref_in_context(
   m : @core.Module,
-  ref_idx : Int,
-  group_start : Int,
-  group_end : Int,
+  ref_idx : Int32,
+  group_start : Int32,
+  group_end : Int32,
 ) -> Unit raise ValidationError {
   if ref_idx < 0 || ref_idx >= m.types.length() {
     raise ValidationError::UnknownType(ref_idx)
@@ -126,8 +126,8 @@ fn validate_type_ref_in_context(
 fn validate_valtype_in_context(
   m : @core.Module,
   val_type : @core.ValType,
-  group_start : Int,
-  group_end : Int,
+  group_start : Int32,
+  group_end : Int32,
 ) -> Unit raise ValidationError {
   match val_type {
     Ref(TypeIndex(idx), _) =>
@@ -141,8 +141,8 @@ fn validate_valtype_in_context(
 fn validate_storage_type_in_context(
   m : @core.Module,
   storage_type : @core.StorageType,
-  group_start : Int,
-  group_end : Int,
+  group_start : Int32,
+  group_end : Int32,
 ) -> Unit raise ValidationError {
   match storage_type {
     Val(val_type) =>
@@ -156,8 +156,8 @@ fn validate_storage_type_in_context(
 fn validate_typedef_in_context(
   m : @core.Module,
   type_def : @core.TypeDef,
-  group_start : Int,
-  group_end : Int,
+  group_start : Int32,
+  group_end : Int32,
 ) -> Unit raise ValidationError {
   match type_def {
     Func(func_type) => {
@@ -390,8 +390,8 @@ fn validate_module_start_function(
 fn all_function_indices(
   m : @core.Module,
   import_counts : ImportCounts,
-) -> Set[Int] {
-  let all_funcs : Set[Int] = Set([])
+) -> Set[Int32] {
+  let all_funcs : Set[Int32] = Set([])
   let total_funcs = import_counts.funcs + m.funcs.length()
   for i in 0..<total_funcs {
     all_funcs.add(i)
@@ -688,7 +688,7 @@ fn validate_module_tables(
 /// Raises ValidationError for invalid global indices.
 fn get_global_type_and_mutable(
   m : @core.Module,
-  global_idx : Int,
+  global_idx : Int32,
   import_counts : ImportCounts,
 ) -> (@core.ValType, Bool) raise ValidationError {
   match @core.get_global_type(m, global_idx, import_counts.globals) {

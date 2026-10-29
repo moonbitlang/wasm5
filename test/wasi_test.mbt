@@ -3,11 +3,11 @@
 /// Tests WASI functions using preopened files for I/O verification
 
 // Counter for unique temp file names
-let wasi_temp_counter : Ref[Int] = { val: 0 }
+let wasi_temp_counter : Ref[Int32] = { val: 0, }
 // Counter for unique temp dir names
 
 ///|
-let wasi_temp_dir_counter : Ref[Int] = { val: 0 }
+let wasi_temp_dir_counter : Ref[Int32] = { val: 0, }
 
 ///|
 /// Generate unique temp file path
@@ -54,7 +54,7 @@ async fn compile_wasi_wat(wat_path : String) -> Bytes raise Error {
 async fn run_wasi_with_preopen(
   wasm : Bytes,
   initial_content : String,
-) -> (String, Int) raise Error {
+) -> (String, Int32) raise Error {
   // Create temp file
   let temp_path = get_wasi_temp_path()
 
@@ -118,7 +118,7 @@ async fn run_wasi_with_preopen(
 async fn run_wasi_with_preopen_dir(
   wasm : Bytes,
   initial_content : String,
-) -> (String, Int) raise Error {
+) -> (String, Int32) raise Error {
   // Create temp file (output)
   let temp_path = get_wasi_temp_path()
 

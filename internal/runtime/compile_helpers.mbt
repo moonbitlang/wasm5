@@ -162,7 +162,7 @@ fn f32_to_uint64(x : Float) -> UInt64 {
 ///|
 fn require_func_type(
   module_ : @core.Module,
-  type_idx : Int,
+  type_idx : Int32,
   context : String,
 ) -> @core.FuncType raise RuntimeError {
   if type_idx < 0 || type_idx >= module_.types.length() {
@@ -195,7 +195,7 @@ fn pop_arguments(rt : Instance, func_type : @core.FuncType) -> PopArgs {
     args[i] = stack_to_value(raw, func_type.params[i])
   }
   rt.sp = stack_top
-  { rt, args }
+  { rt, args, }
 }
 
 ///|
@@ -260,9 +260,9 @@ fn check_type_signature_match(
 /// Returns Instance with updated sp.
 fn call_imported_function(
   rt : Instance,
-  func_idx : Int,
+  func_idx : Int32,
   args : Array[Value],
-  expected_results : Int,
+  expected_results : Int32,
 ) -> Instance {
   let imported_func = rt.ctx.imported_funcs[func_idx]
   let results = (imported_func.func)(args)

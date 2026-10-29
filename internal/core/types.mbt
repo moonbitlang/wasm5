@@ -45,7 +45,7 @@ pub(all) enum RefType {
   NoFunc // 0x73 - bottom type for func
   NoExtern // 0x72 - bottom type for extern
   NoExn // 0x74 - bottom type for exn
-  TypeIndex(Int) // typed reference (ref null $t)
+  TypeIndex(Int32) // typed reference (ref null $t)
 } derive(Debug, Eq)
 
 ///|
@@ -161,8 +161,8 @@ pub(all) enum TypeDef {
 
 ///|
 pub(all) struct SubTypeDef {
-  type_idx : UInt
-  supertypes : Array[UInt]
+  type_idx : UInt32
+  supertypes : Array[UInt32]
   is_final : Bool
 } derive(Debug, Eq)
 
@@ -210,7 +210,7 @@ pub(all) struct CustomSection {
 pub(all) enum BlockType {
   Empty // no params, no results
   Value(ValType) // no params, single result
-  TypeIndex(Int) // index into types section (can have params and/or multiple results)
+  TypeIndex(Int32) // index into types section (can have params and/or multiple results)
 } derive(Debug)
 
 // Limits for tables and memories
@@ -253,11 +253,11 @@ pub(all) struct GlobalType {
 
 ///|
 pub(all) enum ImportDesc {
-  Func(UInt) // type index
+  Func(UInt32) // type index
   Table(TableType)
   Mem(MemType)
   Global(GlobalType)
-  Tag(UInt) // type index for exception handling tags
+  Tag(UInt32) // type index for exception handling tags
 }
 
 // Import
@@ -273,11 +273,11 @@ pub(all) struct Import {
 
 ///|
 pub(all) enum ExportDesc {
-  Func(UInt) // function index
-  Table(UInt) // table index
-  Mem(UInt) // memory index
-  Global(UInt) // global index
-  Tag(UInt) // tag index for exception handling
+  Func(UInt32) // function index
+  Table(UInt32) // table index
+  Mem(UInt32) // memory index
+  Global(UInt32) // global index
+  Tag(UInt32) // tag index for exception handling
 }
 
 // Export
@@ -298,14 +298,14 @@ pub(all) struct Global {
 
 ///|
 pub(all) struct Tag {
-  type_idx : UInt
+  type_idx : UInt32
 }
 
 // Element segment (for table initialization)
 
 ///|
 pub(all) struct Elem {
-  table_idx : UInt
+  table_idx : UInt32
   offset : Expr
   init : Array[Expr] // element init expressions
   is_active : Bool // True for active segments (flags 0,2,4,6), false for passive/declarative
@@ -319,7 +319,7 @@ pub(all) struct Elem {
 
 ///|
 pub(all) struct Data {
-  mem_idx : UInt
+  mem_idx : UInt32
   offset : Expr
   init : BytesView
   is_active : Bool // Only active segments reference memory
@@ -330,29 +330,29 @@ pub(all) struct Data {
 ///|
 pub(all) enum SimdImmediate {
   None
-  MemArg(UInt, UInt, UInt) // align, offset, memory index
-  Lane(UInt) // lane index
-  MemArgLane(UInt, UInt, UInt, UInt) // align, offset, memory index, lane
+  MemArg(UInt32, UInt32, UInt32) // align, offset, memory index
+  Lane(UInt32) // lane index
+  MemArgLane(UInt32, UInt32, UInt32, UInt32) // align, offset, memory index, lane
   Shuffle(Array[Byte]) // 16 bytes
   V128Const(Array[Byte]) // 16 bytes
 } derive(Debug)
 
 ///|
 pub(all) struct SimdInstr {
-  opcode : UInt
+  opcode : UInt32
   imm : SimdImmediate
 } derive(Debug)
 
 ///|
 pub(all) enum AtomicImmediate {
   None
-  MemArg(UInt, UInt, UInt) // align, offset, memory index
-  Fence(UInt) // reserved byte (must be 0)
+  MemArg(UInt32, UInt32, UInt32) // align, offset, memory index
+  Fence(UInt32) // reserved byte (must be 0)
 } derive(Debug)
 
 ///|
 pub(all) struct AtomicInstr {
-  opcode : UInt
+  opcode : UInt32
   imm : AtomicImmediate
 } derive(Debug)
 
@@ -365,20 +365,20 @@ pub(all) enum Instr {
   Loop(BlockType, Array[Instr])
   If(BlockType, Array[Instr], Array[Instr])
   TryTable(BlockType, Array[CatchClause], Array[Instr]) // Exception handling
-  Br(UInt)
-  BrIf(UInt)
-  BrTable(Array[UInt], UInt)
-  BrOnNull(UInt) // GC proposal: branch if null
-  BrOnNonNull(UInt) // GC proposal: branch if not null
+  Br(UInt32)
+  BrIf(UInt32)
+  BrTable(Array[UInt32], UInt32)
+  BrOnNull(UInt32) // GC proposal: branch if null
+  BrOnNonNull(UInt32) // GC proposal: branch if not null
   Return
-  Call(UInt)
-  CallIndirect(UInt, UInt)
-  ReturnCall(UInt) // tail call proposal
-  ReturnCallIndirect(UInt, UInt) // tail call proposal
-  CallRef(UInt) // typed function references
-  ReturnCallRef(UInt) // typed function references
-  Throw(UInt) // exception handling
-  Rethrow(UInt) // exception handling
+  Call(UInt32)
+  CallIndirect(UInt32, UInt32)
+  ReturnCall(UInt32) // tail call proposal
+  ReturnCallIndirect(UInt32, UInt32) // tail call proposal
+  CallRef(UInt32) // typed function references
+  ReturnCallRef(UInt32) // typed function references
+  Throw(UInt32) // exception handling
+  Rethrow(UInt32) // exception handling
   Simd(SimdInstr) // SIMD instructions
   Atomic(AtomicInstr) // Atomic instructions (threads)
 
@@ -388,86 +388,86 @@ pub(all) enum Instr {
   SelectTyped(Array[ValType]) // 0x1C - typed select (any type)
 
   // Variable instructions
-  LocalGet(UInt)
-  LocalSet(UInt)
-  LocalTee(UInt)
-  GlobalGet(UInt)
-  GlobalSet(UInt)
+  LocalGet(UInt32)
+  LocalSet(UInt32)
+  LocalTee(UInt32)
+  GlobalGet(UInt32)
+  GlobalSet(UInt32)
 
   // Memory instructions
-  I32Load(UInt, UInt, UInt) // align, offset, memory index
-  I64Load(UInt, UInt, UInt)
-  F32Load(UInt, UInt, UInt)
-  F64Load(UInt, UInt, UInt)
-  I32Load8S(UInt, UInt, UInt)
-  I32Load8U(UInt, UInt, UInt)
-  I32Load16S(UInt, UInt, UInt)
-  I32Load16U(UInt, UInt, UInt)
-  I64Load8S(UInt, UInt, UInt)
-  I64Load8U(UInt, UInt, UInt)
-  I64Load16S(UInt, UInt, UInt)
-  I64Load16U(UInt, UInt, UInt)
-  I64Load32S(UInt, UInt, UInt)
-  I64Load32U(UInt, UInt, UInt)
-  I32Store(UInt, UInt, UInt)
-  I64Store(UInt, UInt, UInt)
-  F32Store(UInt, UInt, UInt)
-  F64Store(UInt, UInt, UInt)
-  I32Store8(UInt, UInt, UInt)
-  I32Store16(UInt, UInt, UInt)
-  I64Store8(UInt, UInt, UInt)
-  I64Store16(UInt, UInt, UInt)
-  I64Store32(UInt, UInt, UInt)
-  MemorySize(UInt) // memory index (usually 0)
-  MemoryGrow(UInt) // memory index (usually 0)
+  I32Load(UInt32, UInt32, UInt32) // align, offset, memory index
+  I64Load(UInt32, UInt32, UInt32)
+  F32Load(UInt32, UInt32, UInt32)
+  F64Load(UInt32, UInt32, UInt32)
+  I32Load8S(UInt32, UInt32, UInt32)
+  I32Load8U(UInt32, UInt32, UInt32)
+  I32Load16S(UInt32, UInt32, UInt32)
+  I32Load16U(UInt32, UInt32, UInt32)
+  I64Load8S(UInt32, UInt32, UInt32)
+  I64Load8U(UInt32, UInt32, UInt32)
+  I64Load16S(UInt32, UInt32, UInt32)
+  I64Load16U(UInt32, UInt32, UInt32)
+  I64Load32S(UInt32, UInt32, UInt32)
+  I64Load32U(UInt32, UInt32, UInt32)
+  I32Store(UInt32, UInt32, UInt32)
+  I64Store(UInt32, UInt32, UInt32)
+  F32Store(UInt32, UInt32, UInt32)
+  F64Store(UInt32, UInt32, UInt32)
+  I32Store8(UInt32, UInt32, UInt32)
+  I32Store16(UInt32, UInt32, UInt32)
+  I64Store8(UInt32, UInt32, UInt32)
+  I64Store16(UInt32, UInt32, UInt32)
+  I64Store32(UInt32, UInt32, UInt32)
+  MemorySize(UInt32) // memory index (usually 0)
+  MemoryGrow(UInt32) // memory index (usually 0)
 
   // Table instructions
-  TableGet(UInt) // table index
-  TableSet(UInt) // table index
-  TableSize(UInt) // table index
-  TableGrow(UInt) // table index
-  TableInit(UInt, UInt) // table index, elem segment index
-  TableCopy(UInt, UInt) // dest table index, src table index
-  TableFill(UInt) // table index
-  ElemDrop(UInt) // elem segment index
+  TableGet(UInt32) // table index
+  TableSet(UInt32) // table index
+  TableSize(UInt32) // table index
+  TableGrow(UInt32) // table index
+  TableInit(UInt32, UInt32) // table index, elem segment index
+  TableCopy(UInt32, UInt32) // dest table index, src table index
+  TableFill(UInt32) // table index
+  ElemDrop(UInt32) // elem segment index
 
   // Bulk memory instructions
-  MemoryInit(UInt, UInt) // data segment index, memory index
-  DataDrop(UInt) // data segment index
-  MemoryCopy(UInt, UInt) // memory.copy (dst memory, src memory)
-  MemoryFill(UInt) // memory.fill (memory index)
+  MemoryInit(UInt32, UInt32) // data segment index, memory index
+  DataDrop(UInt32) // data segment index
+  MemoryCopy(UInt32, UInt32) // memory.copy (dst memory, src memory)
+  MemoryFill(UInt32) // memory.fill (memory index)
 
   // Reference instructions
   RefNull(RefType) // ref.null with heap type
-  RefFunc(UInt) // ref.func with function index
+  RefFunc(UInt32) // ref.func with function index
   RefIsNull // ref.is_null - check if reference is null
   RefEq // ref.eq - reference equality
   RefAsNonNull // ref.as_non_null - trap if reference is null
   RefTest(RefType, Bool) // ref.test (heap type, nullable)
   RefCast(RefType, Bool) // ref.cast (heap type, nullable)
   // GC instructions (struct/array, casts, i31)
-  StructNew(UInt)
-  StructNewDefault(UInt)
-  StructGet(UInt, UInt)
-  StructGetS(UInt, UInt)
-  StructGetU(UInt, UInt)
-  StructSet(UInt, UInt)
-  ArrayNew(UInt)
-  ArrayNewDefault(UInt)
-  ArrayNewFixed(UInt, UInt)
-  ArrayNewData(UInt, UInt)
-  ArrayNewElem(UInt, UInt)
-  ArrayGet(UInt)
-  ArrayGetS(UInt)
-  ArrayGetU(UInt)
-  ArraySet(UInt)
+  StructNew(UInt32)
+  StructNewDefault(UInt32)
+  StructGet(UInt32, UInt32)
+  StructGetS(UInt32, UInt32)
+  StructGetU(UInt32, UInt32)
+  StructSet(UInt32, UInt32)
+  ArrayNew(UInt32)
+  ArrayNewDefault(UInt32)
+  ArrayNewFixed(UInt32, UInt32)
+  ArrayNewData(UInt32, UInt32)
+  ArrayNewElem(UInt32, UInt32)
+  ArrayGet(UInt32)
+  ArrayGetS(UInt32)
+  ArrayGetU(UInt32)
+  ArraySet(UInt32)
   ArrayLen
-  ArrayFill(UInt)
-  ArrayCopy(UInt, UInt)
-  ArrayInitData(UInt, UInt)
-  ArrayInitElem(UInt, UInt)
-  BrOnCast(UInt, RefType, Bool, RefType, Bool)
-  BrOnCastFail(UInt, RefType, Bool, RefType, Bool)
+  ArrayFill(UInt32)
+  ArrayCopy(UInt32, UInt32)
+  ArrayInitData(UInt32, UInt32)
+  ArrayInitElem(UInt32, UInt32)
+  BrOnCast(UInt32, RefType, Bool, RefType, Bool)
+  BrOnCastFail(UInt32, RefType, Bool, RefType, Bool)
   AnyConvertExtern
   ExternConvertAny
   RefI31
@@ -475,7 +475,7 @@ pub(all) enum Instr {
   I31GetU
 
   // Numeric instructions - constants
-  I32Const(UInt)
+  I32Const(UInt32)
   I64Const(UInt64)
   F32Const(Float)
   F64Const(Double)
@@ -638,10 +638,10 @@ pub impl Show for Instr with fn output(self, logger) {
 
 ///|
 pub(all) enum CatchClause {
-  Catch(UInt, UInt) // tag index, label index
-  CatchRef(UInt, UInt) // tag index, label index
-  CatchAll(UInt) // label index
-  CatchAllRef(UInt) // label index
+  Catch(UInt32, UInt32) // tag index, label index
+  CatchRef(UInt32, UInt32) // tag index, label index
+  CatchAll(UInt32) // label index
+  CatchAllRef(UInt32) // label index
 } derive(Debug)
 
 // Expression (sequence of instructions)
@@ -657,8 +657,8 @@ pub(all) struct Expr {
 pub(all) struct Code {
   locals : Array[ValType]
   body : Expr
-  mut compiled : Int?
-  mut max_stack_height : Int // Max stack usage from sp: num_locals + max_operand_depth
+  mut compiled : Int32?
+  mut max_stack_height : Int32 // Max stack usage from sp: num_locals + max_operand_depth
 }
 
 // Function (combines type index with code)
@@ -669,14 +669,14 @@ pub(all) struct Module {
   types : Array[TypeDef] // type section
   type_groups : Array[TypeGroup] // recursive type groups
   customs : Array[CustomSection] // custom sections
-  funcs : Array[UInt] // function section (type indices)
+  funcs : Array[UInt32] // function section (type indices)
   tables : Array[TableType] // table section
   mems : Array[MemType] // memory section
   globals : Array[Global] // global section
   tags : Array[Tag] // tag section (exception handling)
   elems : Array[Elem] // element section
   datas : Array[Data] // data section
-  start : UInt? // start section (optional function index)
+  start : UInt32? // start section (optional function index)
   imports : Array[Import] // import section
   exports : Array[Export] // export section
   codes : Array[Code] // code section (function bodies)

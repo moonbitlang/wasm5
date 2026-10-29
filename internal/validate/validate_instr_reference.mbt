@@ -3,7 +3,7 @@ fn validate_instruction_reference(
   module_ : @core.Module,
   ctx : ValidationCtx,
   import_counts : ImportCounts,
-  declared_funcs : Set[Int],
+  declared_funcs : Set[Int32],
   instr : @core.Instr,
 ) -> Bool raise ValidationError {
   let stack = ctx.stack
