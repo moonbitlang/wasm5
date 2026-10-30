@@ -85,9 +85,9 @@ def generate_header() -> str:
 ///|
 /// Group failures by test type for better reporting
 fn group_failures_by_type(
-  failures : Array[TestFailure],
-) -> Map[String, Array[TestFailure]] {
-  let grouped : Map[String, Array[TestFailure]] = Map([])
+  failures : Array[@test.TestFailure],
+) -> Map[String, Array[@test.TestFailure]] {
+  let grouped : Map[String, Array[@test.TestFailure]] = Map([])
   for failure in failures {
     match grouped.get(failure.test_type) {
       Some(arr) => arr.push(failure)
@@ -99,7 +99,7 @@ fn group_failures_by_type(
 
 ///|
 /// Format a single failure with additional context
-fn format_failure_detail(failure : TestFailure) -> String {
+fn format_failure_detail(failure : @test.TestFailure) -> String {
   let location = if failure.line >= 0 {
     "\\{failure.source_file}:\\{failure.line}"
   } else {
@@ -112,7 +112,7 @@ fn format_failure_detail(failure : TestFailure) -> String {
 async fn run_test_harness(
   subdir : String,
   filename : String,
-  runtime_type? : RuntimeType = MoonBit,
+  runtime_type? : @test.RuntimeType = MoonBit,
 ) -> Array[String] {
   let path = "test/reference_tests/\\{subdir}"
   let runtime_suffix = match runtime_type {
@@ -124,7 +124,7 @@ async fn run_test_harness(
   } else {
     "\\{filename}\\{runtime_suffix}"
   }
-  let (file_failures, file_skipped, output_lines) = process_wast_file(
+  let (file_failures, file_skipped, output_lines) = @test.process_wast_file(
     path,
     filename,
     runtime_type~,
